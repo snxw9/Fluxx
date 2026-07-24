@@ -1,0 +1,2 @@
+# Local media directory for testing (videos, audios, fonts, etc.).
+# Content inside this directory will be ignored by Git to keep the repository lightweight.

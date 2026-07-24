@@ -1,0 +1,2 @@
+# Precompiled static binaries (.a / .so) for the native C++ engine.
+# Large libraries should be tracked via Git LFS.

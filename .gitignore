@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# IDEs and Editors
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.DS_Store
+
+# Local properties (SDK paths, etc.)
+local.properties
+
+# C++ Build / CMake
+.cxx/
+**/CMakeCache.txt
+**/CMakeFiles/
+**/cmake_install.cmake
+**/Makefile
+**/cmake-build-*/
+**/*.so
+**/*.o
+**/*.a
+
+# Project specific exclusions
+/local_testing_media/*
+!/local_testing_media/.gitkeep
