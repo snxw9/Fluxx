@@ -76,9 +76,9 @@ class ExportService : Service() {
         // Run dummy export simulation representing walking skeleton export loop
         executor.execute {
             try {
-                for (progress in 0..100 step 5) {
+                for (progress in 0..100) {
                     if (!isExporting) break
-                    Thread.sleep(500) // Simulating rendering work
+                    Thread.sleep(600) // 100 * 600ms = 60s
                     Log.d(TAG, "Export progress: $progress%")
                     updateNotification(progress)
                 }
@@ -86,21 +86,39 @@ class ExportService : Service() {
             } catch (e: InterruptedException) {
                 Log.w(TAG, "Export interrupted")
             } finally {
-                stopSelf()
+                if (isExporting) {
+                    isExporting = false
+                    releaseWakeLock()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        stopForeground(true)
+                    }
+                    stopSelf()
+                }
             }
         }
     }
 
     private fun stopExport() {
         Log.i(TAG, "Stopping export service")
-        isExporting = false
-        releaseWakeLock()
-        stopSelf()
+        if (isExporting) {
+            isExporting = false
+            releaseWakeLock()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+            stopSelf()
+        }
     }
 
     // Android 15+ Timeout handling to avoid ANR
-    // Note: The method signature onTimeout(startId) is added in API 35
-    override fun onTimeout(startId: Int) {
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        super.onTimeout(startId, fgsType)
         Log.e(TAG, "Foreground service timed out (mediaProcessing 6-hour limit reached). Stopping export.")
         stopExport()
     }

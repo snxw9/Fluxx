@@ -35,6 +35,11 @@ The complete Fluxx feature set, across all versions, encompasses the following c
 - **Timeline Interactions:** Unlimited layers, parenting, solo/hide/lock toggles, layer labels, and motion blur switches. Touch-optimized gestures (zoom, pan, drag-to-trim).
 - **Animation System:** Bezier interpolation, dual Graph Editor (Value and Speed), motion paths, and custom easing curves.
 - **Layer Types:** Video, Image, Audio, Shape, Text, Solid, Null, Adjustment, and Pre-composition.
+  > **Precomp sizing rule (confirmed against After Effects behavior):** When precomposing, the new precomp's stored width/height is determined at precompose-time, not inherited dynamically from wherever it's nested later.
+  > - Precomposing a single layer → new precomp's resolution matches that layer's native pixel dimensions (e.g. the video's decoded resolution, or the image's pixel size).
+  > - Precomposing multiple layers → new precomp's resolution matches the original parent composition's resolution.
+  > 
+  > Once created, a precomp is just another composition — it gets its own offscreen render target at its own fixed resolution (per the offscreen-target architecture used for the top-level comp), and functions as an ordinary layer (with its own aspect) when nested inside a parent comp. Nesting a precomp into a differently-shaped parent comp never resizes or reshapes the precomp itself.
 - **Built-in Effects:** Gaussian Blur, Glow, Curves, Levels, Tint, Fill, Hue/Saturation, Exposure, Sharpen, Chaos Displace, Ripple Distort, Mosaic, Posterize, Tile Repeater, Procedural Noise.
   *(Renamed from the original Turbulent Displace, Wave Warp, CC RepeTile, and Fractal Noise — those mirror Adobe's own effect naming closely enough to be worth avoiding in a from-scratch build, especially "CC RepeTile," which keeps Adobe/Cycore's own branding prefix. Functionally identical; rename further to taste.)*
 - **Professional Features:** Masks, Track Mattes, Blend Modes, Time Stretch/Remap, Adjustment Layers, Hardware-Accelerated playback, and 4K Export (device-capability dependent).
@@ -60,7 +65,7 @@ To guarantee real-time performance and prevent Android's Garbage Collector from 
 
 ## 4. Data Schema & File System
 Projects are non-destructive and highly modular. Media is securely referenced via Android's scoped storage APIs.
-- **File Format (.fluxx):** Project files are bundled, uncompressed ZIP archives containing a master JSON instruction file, referenced assets, and custom fonts.
+- **File Format (.fluxx):** Project files are currently raw FlatBuffers binaries (.fluxx) — no ZIP container is used yet. The ZIP wrapper (bundling referenced assets/fonts) is deferred until later phases require embedding files like custom fonts or thumbnails alongside the instruction data. This is a deliberate deviation from the original JSON-in-ZIP design to optimize for zero-copy load and direct native bridge compatibility using FlatBuffers.
 - **Asset Referencing:** The Kotlin layer acquires persistable `content://` URIs upon import. It extracts raw integer file descriptors (fd) and passes them to the C++ engine to bypass native C++ I/O permission restrictions.
   *Note: persistable URI grants behave inconsistently across OEM skins — some Samsung/Xiaomi builds revoke or mishandle grants in ways that don't reproduce on an emulator. Build a "relink this file" recovery flow into the UI from the start, and budget real device-lab testing time here specifically.*
 - **Crash Recovery:** A memory-mapped Write-Ahead Log (WAL) records the user's latest interactions. If the operating system terminates the app in the background, the log instantly reapplies the unsaved command queue upon reboot.

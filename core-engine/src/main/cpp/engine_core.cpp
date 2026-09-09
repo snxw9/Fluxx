@@ -12,10 +12,17 @@ EngineCore* EngineCore::getInstance() {
     return sInstance;
 }
 
-bool EngineCore::init(ANativeWindow* window, int width, int height) {
-    LOGI("EngineCore: Initializing engine with dimensions %dx%d", width, height);
+bool EngineCore::init(ANativeWindow* window, int width, int height, AAssetManager* assetManager) {
+    std::lock_guard<std::mutex> lock(sMutex);
     
-    if (!mRenderer.init(window)) {
+    if (mInitialized) {
+        LOGW("EngineCore is already initialized");
+        return true;
+    }
+
+    LOGI("Initializing EngineCore with size %dx%d", width, height);
+
+    if (!mRenderer.init(window, assetManager)) {
         LOGE("EngineCore: Vulkan renderer initialization failed");
         return false;
     }
@@ -59,8 +66,12 @@ void EngineCore::setPlayState(bool playing) {
     }
 }
 
-bool EngineCore::bindHardwareBuffer(AHardwareBuffer* buffer) {
-    return mRenderer.bindHardwareBuffer(buffer);
+void EngineCore::stageHardwareBuffer(AHardwareBuffer* buffer, int64_t generationId, int cropWidth, int cropHeight) {
+    mRenderer.stageHardwareBuffer(buffer, generationId, cropWidth, cropHeight);
+}
+
+int64_t EngineCore::getLastConsumedGeneration() {
+    return mRenderer.getLastConsumedGeneration();
 }
 
 bool EngineCore::setupAudio() {
@@ -77,4 +88,24 @@ void EngineCore::stopAudio() {
 
 int64_t EngineCore::getAudioPositionMs() {
     return mAudioProcessor.getCurrentAudioTimestamp();
+}
+
+void EngineCore::setLayerTransform(float matrix[16], float opacity) {
+    mRenderer.setLayerTransform(matrix, opacity);
+}
+
+int EngineCore::getCompWidth() {
+    return mRenderer.getCompWidth();
+}
+
+int EngineCore::getCompHeight() {
+    return mRenderer.getCompHeight();
+}
+
+bool EngineCore::renderExportFrame() {
+    return mRenderer.renderExportFrame();
+}
+
+bool EngineCore::readbackOffscreenPixels(void* outputBuffer, uint32_t bufferSize) {
+    return mRenderer.readbackOffscreenPixels(outputBuffer, bufferSize);
 }

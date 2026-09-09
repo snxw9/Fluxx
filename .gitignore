@@ -28,3 +28,10 @@ local.properties
 # Project specific exclusions
 /local_testing_media/*
 !/local_testing_media/.gitkeep
+
+# Kotlin & Compiler artifacts
+.kotlin/
+flatc_dir/
+*.zip
+*.log
+

@@ -1,17 +1,37 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
 }
 
 android {
     namespace = "com.fluxx.android.engine"
-    compileSdk = 35
+    compileSdk = 37
+    ndkVersion = "26.1.10909125"
 
     defaultConfig {
         minSdk = 29
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
+
+        externalNativeBuild {
+            cmake {
+                cppFlags("-std=c++17", "-Wall", "-Werror")
+                arguments("-DANDROID_STL=c++_shared")
+                abiFilters("arm64-v8a", "x86_64")
+            }
+        }
+        ndk {
+            abiFilters.addAll(setOf("arm64-v8a", "x86_64"))
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildTypes {
@@ -29,9 +49,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
 
-    kotlinOptions {
-        jvmTarget = "17"
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
@@ -43,5 +65,5 @@ dependencies {
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso-core)
+    androidTestImplementation(libs.androidx.espresso.core)
 }

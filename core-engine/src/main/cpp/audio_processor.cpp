@@ -28,7 +28,7 @@ bool AudioProcessor::init() {
     }
 
     LOGI("Audio stream opened. Sample rate: %d, Channels: %d, Format: %d",
-         mStream->getSampleRate(), mStream->getChannelCount(), mStream->getAudioFormat());
+         mStream->getSampleRate(), mStream->getChannelCount(), static_cast<int>(mStream->getFormat()));
     return true;
 }
 
