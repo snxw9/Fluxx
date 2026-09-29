@@ -78,7 +78,7 @@ oboe::DataCallbackResult AudioProcessor::onAudioReady(
     int32_t numFrames) {
     
     // Fill with silence (zeroes) for the skeleton
-    float* floatData = static_cast<float*>(audioData);
+    auto* floatData = static_cast<float*>(audioData);
     int numChannels = audioStream->getChannelCount();
     
     for (int i = 0; i < numFrames * numChannels; ++i) {

@@ -58,11 +58,14 @@ kotlin {
 
 dependencies {
     implementation(project(":core-engine"))
+    implementation("androidx.media3:media3-transformer:1.11.1")
+    implementation("androidx.media3:media3-effect:1.11.1")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
-    implementation("com.google.flatbuffers:flatbuffers-java:23.5.26")
+    implementation(libs.flatbuffers)
 
     // Compose Multiplatform / Jetpack Compose UI
     implementation(platform(libs.androidx.compose.bom))

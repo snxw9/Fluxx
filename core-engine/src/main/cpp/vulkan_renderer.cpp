@@ -3,12 +3,9 @@
 #include <vulkan/vulkan_android.h>
 #include <stdexcept>
 #include <string>
+#include <algorithm>
 
 VulkanRenderer::VulkanRenderer() {
-    for (int i = 0; i < 16; i++) {
-        mLayerTransform.matrix[i] = (i % 5 == 0) ? 1.0f : 0.0f;
-    }
-    mLayerTransform.opacity = 1.0f;
     LOGI("VulkanRenderer created");
 }
 
@@ -24,27 +21,36 @@ bool VulkanRenderer::init(ANativeWindow* window, AAssetManager* assetManager) {
     }
 
     mWindow = window;
+    if (window) { mWidth = ANativeWindow_getWidth(window); mHeight = ANativeWindow_getHeight(window); }
     mAssetManager = assetManager;
     LOGI("Initializing Vulkan for window: %p", window);
 
     try {
-        if (!createInstance()) return false;
+        if (!createInstance()) { cleanup(); return false; }
 
     VkAndroidSurfaceCreateInfoKHR surfaceInfo{};
     surfaceInfo.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
     surfaceInfo.window = mWindow;
-    if (vkCreateAndroidSurfaceKHR(mInstance, &surfaceInfo, nullptr, &mSurface) != VK_SUCCESS) {
+    if (window && vkCreateAndroidSurfaceKHR(mInstance, &surfaceInfo, nullptr, &mSurface) != VK_SUCCESS) {
         LOGE("Failed to create Android surface");
-        return false;
+        { cleanup(); return false; }
     }
 
-    if (!selectPhysicalDevice()) return false;
-        if (!createDevice()) return false;
-        if (!createOffscreenTarget()) return false;
-        if (!createSwapchain()) return false;
-        if (!createCommandPool()) return false;
-        if (!createCommandBuffers()) return false;
-        if (!createSyncObjects()) return false;
+    if (!selectPhysicalDevice()) { cleanup(); return false; }
+        if (!createDevice()) { cleanup(); return false; }
+        VkPipelineCacheCreateInfo cacheInfo{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
+        if (vkCreatePipelineCache(mDevice, &cacheInfo, nullptr, &mPipelineCache) != VK_SUCCESS) { cleanup(); return false; }
+        if (!createOffscreenTarget()) { cleanup(); return false; }
+        if (window && !createSwapchain()) { cleanup(); return false; }
+        if (!createCommandPool()) { cleanup(); return false; }
+        if (window && !createCommandBuffers()) { cleanup(); return false; }
+        if (!createSyncObjects()) { cleanup(); return false; }
+        VkCommandBufferAllocateInfo alloc{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+        alloc.commandPool = mCommandPool; alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; alloc.commandBufferCount = 1;
+        if (vkAllocateCommandBuffers(mDevice, &alloc, &mWorkCommand) != VK_SUCCESS) { cleanup(); return false; }
+        VkFenceCreateInfo fence{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+        fence.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        if (vkCreateFence(mDevice, &fence, nullptr, &mWorkFence) != VK_SUCCESS) { cleanup(); return false; }
 
         mInitialized = true;
         LOGI("VulkanRenderer initialized successfully");
@@ -57,68 +63,41 @@ bool VulkanRenderer::init(ANativeWindow* window, AAssetManager* assetManager) {
 }
 
 void VulkanRenderer::resize(int width, int height) {
-    if (!mInitialized || width == 0 || height == 0) return;
+    if (!mInitialized || !mWindow || width <= 0 || height <= 0) return;
     LOGI("VulkanRenderer resize to: %dx%d", width, height);
     mWidth = width;
     mHeight = height;
-    
+
     if (mDevice != VK_NULL_HANDLE && mDevice != (VkDevice)1) {
         vkDeviceWaitIdle(mDevice);
         cleanupSwapchain();
-        createSwapchain();
-        if (mCommandBuffers.size() > 0) {
+        if (!mCommandBuffers.empty()) {
             vkFreeCommandBuffers(mDevice, mCommandPool, (uint32_t)mCommandBuffers.size(), mCommandBuffers.data());
+            mCommandBuffers.clear();
         }
-        createCommandBuffers();
+        if (!createSwapchain() || !createCommandBuffers()) cleanupSwapchain();
+        else LOGI("Preview surface requested %dx%d, swapchain extent %ux%u, composition %dx%d",
+                  width, height, mSwapchainExtent.width, mSwapchainExtent.height, mCompWidth, mCompHeight);
     }
 }
 
-void VulkanRenderer::render() {
-    LOGI("VulkanRenderer::render() executing. mInitialized=%d, mDevice=%p", mInitialized, mDevice);
-    if (!mInitialized || mDevice == VK_NULL_HANDLE || mDevice == (VkDevice)1) return;
+bool VulkanRenderer::render(int resizeRetries) {
+    if (!mInitialized || mDevice == VK_NULL_HANDLE || mDevice == (VkDevice)1 || !mSwapchain || mWidth <= 0 || mHeight <= 0) return false;
 
-    vkWaitForFences(mDevice, 1, &mInFlightFence, VK_TRUE, UINT64_MAX);
+    if (vkWaitForFences(mDevice, 1, &mInFlightFence, VK_TRUE, 1000000000ULL) != VK_SUCCESS) return false;
 
     uint32_t imageIndex;
-    VkResult result = vkAcquireNextImageKHR(mDevice, mSwapchain, UINT64_MAX, mImageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+    VkResult result = vkAcquireNextImageKHR(mDevice, mSwapchain, 1000000000ULL, mImageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         resize(mWidth, mHeight);
-        return;
+        // A paused preview has no next playback frame to repair a resize.
+        return resizeRetries > 0 && render(resizeRetries - 1);
     } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
         LOGE("Failed to acquire swapchain image!");
-        return;
+        return false;
     }
 
-    vkResetFences(mDevice, 1, &mInFlightFence);
-
-    AHardwareBuffer* newBuffer = mStagedBuffer.exchange(nullptr);
-    int64_t newGeneration = mStagedGeneration.load();
-    int newCropWidth = mStagedCropWidth.load();
-    int newCropHeight = mStagedCropHeight.load();
-
-    if (newBuffer) {
-        if (mCurrentRenderingBuffer) {
-            cleanupVideoImage();
-            AHardwareBuffer_release(mCurrentRenderingBuffer);
-            // Advance mLastConsumedGeneration for the buffer we just finished rendering
-            if (mCurrentRenderingGeneration >= 0) {
-                int64_t currentLast = mLastConsumedGeneration.load();
-                while (mCurrentRenderingGeneration > currentLast) {
-                    if (mLastConsumedGeneration.compare_exchange_weak(currentLast, mCurrentRenderingGeneration)) {
-                        break;
-                    }
-                }
-            }
-        }
-
-        mCurrentRenderingBuffer = newBuffer;
-        mCurrentRenderingGeneration = newGeneration;
-        mCurrentCropWidth = newCropWidth;
-        mCurrentCropHeight = newCropHeight;
-        
-        createHardwareBufferImage(mCurrentRenderingBuffer);
-    }
 
     VkCommandBuffer commandBuffer = mCommandBuffers[imageIndex];
     vkResetCommandBuffer(commandBuffer, 0);
@@ -128,75 +107,10 @@ void VulkanRenderer::render() {
 
     if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
         LOGE("Failed to begin recording command buffer!");
-        return;
+        return false;
     }
 
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = mOffscreenRenderPass;
-    renderPassInfo.framebuffer = mOffscreenFramebuffer;
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = {(uint32_t)mCompWidth, (uint32_t)mCompHeight};
 
-    VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
-    renderPassInfo.clearValueCount = 1;
-    renderPassInfo.pClearValues = &clearColor;
-
-    if (mVideoImage != VK_NULL_HANDLE) {
-        VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = mVideoImage;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-        vkCmdPipelineBarrier(
-            commandBuffer,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            0,
-            0, nullptr,
-            0, nullptr,
-            1, &barrier
-        );
-    }
-
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-    if (mVideoPipelineCreated && mVideoDescriptorSet != VK_NULL_HANDLE) {
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mVideoPipeline);
-        
-        VkViewport viewport{};
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = (float)mCompWidth;
-        viewport.height = (float)mCompHeight;
-
-        VkRect2D scissor{};
-        scissor.offset.x = (int32_t)viewport.x;
-        scissor.offset.y = (int32_t)viewport.y;
-        scissor.extent.width = (uint32_t)viewport.width;
-        scissor.extent.height = (uint32_t)viewport.height;
-
-        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mVideoPipelineLayout, 0, 1, &mVideoDescriptorSet, 0, nullptr);
-        vkCmdPushConstants(commandBuffer, mVideoPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(mLayerTransform), &mLayerTransform);
-        vkCmdDraw(commandBuffer, 6, 1, 0, 0);
-    }
-
-    vkCmdEndRenderPass(commandBuffer);
 
     VkImageMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -222,19 +136,20 @@ void VulkanRenderer::render() {
     range.layerCount = 1;
     vkCmdClearColorImage(commandBuffer, mSwapchainImages[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearVal, 1, &range);
 
-    float compAspect = (float)mCompWidth / (float)mCompHeight;
-    float screenAspect = (float)mSwapchainExtent.width / (float)mSwapchainExtent.height;
-    int dstW = mSwapchainExtent.width;
-    int dstH = mSwapchainExtent.height;
-    int dstX = 0;
-    int dstY = 0;
-    if (compAspect > screenAspect) {
-        dstH = mSwapchainExtent.width / compAspect;
-        dstY = (mSwapchainExtent.height - dstH) / 2;
-    } else {
-        dstW = mSwapchainExtent.height * compAspect;
-        dstX = (mSwapchainExtent.width - dstW) / 2;
-    }
+    // Fit in displayed workspace pixels, then map into the acquired buffer.
+    // During resize Android may display a buffer with a different extent; fitting
+    // to that buffer's aspect instead would stretch the composition on screen.
+    const double displayScale = std::min(static_cast<double>(mWidth) / mPresentationWidth,
+                                         static_cast<double>(mHeight) / mPresentationHeight);
+    const int dstW = std::max(1, std::min(static_cast<int>(mSwapchainExtent.width),
+        static_cast<int>(mPresentationWidth * displayScale * mSwapchainExtent.width / mWidth + 0.5)));
+    const int dstH = std::max(1, std::min(static_cast<int>(mSwapchainExtent.height),
+        static_cast<int>(mPresentationHeight * displayScale * mSwapchainExtent.height / mHeight + 0.5)));
+    const int dstX = (static_cast<int>(mSwapchainExtent.width) - dstW) / 2;
+    const int dstY = (static_cast<int>(mSwapchainExtent.height) - dstH) / 2;
+    // Single source for eyedropper coordinates: the exact integer blit rectangle.
+    mPreviewX=dstX; mPreviewY=dstY; mPreviewW=dstW; mPreviewH=dstH;
+    mPreviewBufferW=mSwapchainExtent.width; mPreviewBufferH=mSwapchainExtent.height;
 
     VkImageBlit blit{};
     blit.srcOffsets[0] = {0, 0, 0};
@@ -261,14 +176,14 @@ void VulkanRenderer::render() {
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
         LOGE("Failed to record command buffer!");
-        return;
+        return false;
     }
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
     VkSemaphore waitSemaphores[] = {mImageAvailableSemaphore};
-    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_TRANSFER_BIT};
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
@@ -280,9 +195,10 @@ void VulkanRenderer::render() {
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
+    vkResetFences(mDevice, 1, &mInFlightFence);
     if (vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, mInFlightFence) != VK_SUCCESS) {
         LOGE("Failed to submit draw command buffer!");
-        return;
+        return false;
     }
 
     VkPresentInfoKHR presentInfo{};
@@ -299,52 +215,19 @@ void VulkanRenderer::render() {
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         resize(mWidth, mHeight);
+        if (result == VK_ERROR_OUT_OF_DATE_KHR) return resizeRetries > 0 && render(resizeRetries - 1);
     } else if (result != VK_SUCCESS) {
         LOGE("Failed to present swapchain image!");
+        return false;
     }
-}
-
-void VulkanRenderer::stageHardwareBuffer(AHardwareBuffer* buffer, int64_t generationId, int cropWidth, int cropHeight) {
-    if (!mInitialized) {
-        LOGE("Cannot stage hardware buffer: Vulkan not initialized");
-        return;
-    }
-    
-    if (buffer) {
-        AHardwareBuffer_acquire(buffer);
-    }
-    
-    AHardwareBuffer* oldStaged = mStagedBuffer.exchange(buffer);
-    int64_t oldGeneration = mStagedGeneration.exchange(generationId);
-    
-    mStagedCropWidth.store(cropWidth);
-    mStagedCropHeight.store(cropHeight);
-    
-    if (oldStaged) {
-        AHardwareBuffer_release(oldStaged);
-        
-        // Atomically advance mLastConsumedGeneration if we dropped a frame
-        int64_t currentLast = mLastConsumedGeneration.load();
-        while (oldGeneration > currentLast) {
-            if (mLastConsumedGeneration.compare_exchange_weak(currentLast, oldGeneration)) {
-                break;
-            }
-        }
-    }
-    
-    LOGI("VulkanRenderer: Successfully staged AHardwareBuffer (gen: %lld) crop: %dx%d", (long long)generationId, cropWidth, cropHeight);
-}
-
-int64_t VulkanRenderer::getLastConsumedGeneration() const {
-    return mLastConsumedGeneration.load();
+    return true;
 }
 
 void VulkanRenderer::cleanup() {
-    if (!mInitialized) return;
+    if (mDevice != VK_NULL_HANDLE) vkDeviceWaitIdle(mDevice);
     LOGI("Cleaning up Vulkan resources");
 
-    cleanupVideoImage();
-    cleanupVideoPipeline();
+    releaseLayers();
     cleanupSwapchain();
     cleanupOffscreenTarget();
 
@@ -360,11 +243,15 @@ void VulkanRenderer::cleanup() {
         vkDestroyFence(mDevice, mInFlightFence, nullptr);
         mInFlightFence = VK_NULL_HANDLE;
     }
+    if (mWorkFence) vkDestroyFence(mDevice,mWorkFence,nullptr);
+    mWorkFence=VK_NULL_HANDLE; mWorkCommand=VK_NULL_HANDLE;
     if (mCommandPool != VK_NULL_HANDLE) {
         vkDestroyCommandPool(mDevice, mCommandPool, nullptr);
         mCommandPool = VK_NULL_HANDLE;
     }
     if (mDevice != VK_NULL_HANDLE) {
+        if (mPipelineCache) vkDestroyPipelineCache(mDevice,mPipelineCache,nullptr);
+        mPipelineCache=VK_NULL_HANDLE;
         vkDestroyDevice(mDevice, nullptr);
         mDevice = VK_NULL_HANDLE;
     }
@@ -372,13 +259,14 @@ void VulkanRenderer::cleanup() {
         if (mSurface != VK_NULL_HANDLE) {
             // Android extensions: vkDestroySurfaceKHR
             // Normally load via vkGetInstanceProcAddr or standard link
-            // vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
+            vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
             mSurface = VK_NULL_HANDLE;
         }
         vkDestroyInstance(mInstance, nullptr);
         mInstance = VK_NULL_HANDLE;
     }
 
+    if (mWindow) ANativeWindow_release(mWindow);
     mWindow = nullptr;
     mInitialized = false;
     LOGI("Vulkan cleanup complete");
@@ -437,7 +325,8 @@ bool VulkanRenderer::createInstance() {
     if (result != VK_SUCCESS) {
         LOGE("vkCreateInstance failed with code: %d", result);
         // On emulator/test devices without Vulkan, log it. For Phase 0, we can fall back to mock init if hardware Vulkan init fails.
-        mInstance = (VkInstance)1; // Mock handle for skeleton testing on non-Vulkan compile targets if needed
+        mInstance = VK_NULL_HANDLE;
+        return false;
     } else {
         LOGI("VkInstance created successfully at %p", mInstance);
     }
@@ -446,18 +335,11 @@ bool VulkanRenderer::createInstance() {
 
 bool VulkanRenderer::selectPhysicalDevice() {
     LOGI("Vulkan: Selecting VkPhysicalDevice...");
-    if (mInstance == (VkInstance)1) {
-        mPhysicalDevice = (VkPhysicalDevice)1;
-        LOGI("Vulkan: Selected mock PhysicalDevice");
-        return true;
-    }
-
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(mInstance, &deviceCount, nullptr);
     if (deviceCount == 0) {
         LOGW("No physical devices with Vulkan support found. Using mock physical device.");
-        mPhysicalDevice = (VkPhysicalDevice)1;
-        return true;
+        return false;
     }
 
     std::vector<VkPhysicalDevice> devices(deviceCount);
@@ -469,16 +351,31 @@ bool VulkanRenderer::selectPhysicalDevice() {
 
 bool VulkanRenderer::createDevice() {
     LOGI("Vulkan: Creating VkDevice...");
-    if (mPhysicalDevice == (VkPhysicalDevice)1) {
-        mDevice = (VkDevice)1;
-        LOGI("Vulkan: Created mock logical Device");
-        return true;
+    uint32_t familyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(mPhysicalDevice, &familyCount, nullptr);
+    std::vector<VkQueueFamilyProperties> families(familyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(mPhysicalDevice, &familyCount, families.data());
+    bool found = false;
+    for (uint32_t i = 0; i < familyCount; ++i) {
+        VkBool32 present = VK_FALSE;
+        if ((mSurface == VK_NULL_HANDLE || (vkGetPhysicalDeviceSurfaceSupportKHR(mPhysicalDevice, i, mSurface, &present) == VK_SUCCESS && present)) && (families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+            mGraphicsQueueFamilyIndex = mPresentQueueFamilyIndex = i;
+            found = true;
+            break;
+        }
     }
-
+    if (!found) return false;
+    VkPhysicalDeviceSamplerYcbcrConversionFeatures ycbcr{};
+    ycbcr.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES;
+    VkPhysicalDeviceFeatures2 features{};
+    features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    features.pNext = &ycbcr;
+    vkGetPhysicalDeviceFeatures2(mPhysicalDevice, &features);
+    if (!ycbcr.samplerYcbcrConversion) return false;
     float queuePriority = 1.0f;
     VkDeviceQueueCreateInfo queueCreateInfo{};
     queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueCreateInfo.queueFamilyIndex = 0;
+    queueCreateInfo.queueFamilyIndex = mGraphicsQueueFamilyIndex;
     queueCreateInfo.queueCount = 1;
     queueCreateInfo.pQueuePriorities = &queuePriority;
 
@@ -492,6 +389,7 @@ bool VulkanRenderer::createDevice() {
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    createInfo.pNext = &ycbcr;
     createInfo.queueCreateInfoCount = 1;
     createInfo.pQueueCreateInfos = &queueCreateInfo;
     createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
@@ -500,21 +398,22 @@ bool VulkanRenderer::createDevice() {
     VkResult result = vkCreateDevice(mPhysicalDevice, &createInfo, nullptr, &mDevice);
     if (result != VK_SUCCESS) {
         LOGE("vkCreateDevice failed with code: %d", result);
-        mDevice = (VkDevice)1; // Mock
+        mDevice = VK_NULL_HANDLE;
+        return false;
     } else {
         LOGI("VkDevice created successfully at %p", mDevice);
-        vkGetDeviceQueue(mDevice, 0, 0, &mGraphicsQueue);
+        vkGetDeviceQueue(mDevice, mGraphicsQueueFamilyIndex, 0, &mGraphicsQueue);
         mPresentQueue = mGraphicsQueue;
     }
     return true;
 }
 
 bool VulkanRenderer::createSwapchain() {
-    VkSurfaceCapabilitiesKHR capabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(mPhysicalDevice, mSurface, &capabilities);
+    VkSurfaceCapabilitiesKHR capabilities{};
+    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(mPhysicalDevice, mSurface, &capabilities) != VK_SUCCESS) return false;
 
-    uint32_t formatCount;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(mPhysicalDevice, mSurface, &formatCount, nullptr);
+    uint32_t formatCount = 0;
+    if (vkGetPhysicalDeviceSurfaceFormatsKHR(mPhysicalDevice, mSurface, &formatCount, nullptr) != VK_SUCCESS || formatCount == 0) return false;
     std::vector<VkSurfaceFormatKHR> formats(formatCount);
     vkGetPhysicalDeviceSurfaceFormatsKHR(mPhysicalDevice, mSurface, &formatCount, formats.data());
 
@@ -537,13 +436,13 @@ bool VulkanRenderer::createSwapchain() {
     createInfo.minImageCount = imageCount;
     createInfo.imageFormat = surfaceFormat.format;
     createInfo.imageColorSpace = surfaceFormat.colorSpace;
-    
+
     if (capabilities.currentExtent.width != 0xFFFFFFFF) {
         createInfo.imageExtent = capabilities.currentExtent;
     } else {
         createInfo.imageExtent = { (uint32_t)mWidth, (uint32_t)mHeight };
     }
-    
+
     createInfo.imageArrayLayers = 1;
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
@@ -630,6 +529,8 @@ bool VulkanRenderer::createRenderPass() {
     renderPassInfo.pAttachments = &colorAttachment;
     renderPassInfo.subpassCount = 1;
     renderPassInfo.pSubpasses = &subpass;
+
+
     renderPassInfo.dependencyCount = 1;
     renderPassInfo.pDependencies = &dependency;
 
@@ -669,7 +570,7 @@ bool VulkanRenderer::createCommandPool() {
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfo.queueFamilyIndex = 0;
+    poolInfo.queueFamilyIndex = mGraphicsQueueFamilyIndex;
 
     if (vkCreateCommandPool(mDevice, &poolInfo, nullptr, &mCommandPool) != VK_SUCCESS) {
         LOGE("Failed to create command pool!");
@@ -711,27 +612,27 @@ bool VulkanRenderer::createSyncObjects() {
     return true;
 }
 
-void VulkanRenderer::cleanupVideoImage() {
+void VulkanRenderer::cleanupVideoImage(VideoLayerState& layer) {
     if (mDevice == VK_NULL_HANDLE || mDevice == (VkDevice)1) return;
 
-    if (mVideoImageView != VK_NULL_HANDLE) {
-        vkDestroyImageView(mDevice, mVideoImageView, nullptr);
-        mVideoImageView = VK_NULL_HANDLE;
+    if (layer.mVideoImageView != VK_NULL_HANDLE) {
+        vkDestroyImageView(mDevice, layer.mVideoImageView, nullptr);
+        layer.mVideoImageView = VK_NULL_HANDLE;
     }
-    if (mVideoImage != VK_NULL_HANDLE) {
-        vkDestroyImage(mDevice, mVideoImage, nullptr);
-        mVideoImage = VK_NULL_HANDLE;
+    if (layer.mVideoImage != VK_NULL_HANDLE) {
+        vkDestroyImage(mDevice, layer.mVideoImage, nullptr);
+        layer.mVideoImage = VK_NULL_HANDLE;
     }
-    if (mVideoMemory != VK_NULL_HANDLE) {
-        vkFreeMemory(mDevice, mVideoMemory, nullptr);
-        mVideoMemory = VK_NULL_HANDLE;
+    if (layer.mVideoMemory != VK_NULL_HANDLE) {
+        vkFreeMemory(mDevice, layer.mVideoMemory, nullptr);
+        layer.mVideoMemory = VK_NULL_HANDLE;
     }
 }
 
-bool VulkanRenderer::createHardwareBufferImage(AHardwareBuffer* buffer) {
+bool VulkanRenderer::createHardwareBufferImage(VideoLayerState& layer, AHardwareBuffer* buffer) {
     if (mDevice == VK_NULL_HANDLE || mDevice == (VkDevice)1) return false;
 
-    auto vkGetAndroidHardwareBufferPropertiesANDROID = 
+    auto vkGetAndroidHardwareBufferPropertiesANDROID =
         (PFN_vkGetAndroidHardwareBufferPropertiesANDROID)vkGetDeviceProcAddr(
             mDevice, "vkGetAndroidHardwareBufferPropertiesANDROID");
 
@@ -745,11 +646,10 @@ bool VulkanRenderer::createHardwareBufferImage(AHardwareBuffer* buffer) {
     props.pNext = &formatProps;
 
     if (vkGetAndroidHardwareBufferPropertiesANDROID(mDevice, buffer, &props) != VK_SUCCESS) return false;
-    if (formatProps.format != VK_FORMAT_UNDEFINED) {
-        LOGW("Hardware buffer format is not UNDEFINED (is %d). Attempting to use external format anyway.", formatProps.format);
-    }
 
-    if (!createVideoPipelineOnce(formatProps)) return false;
+    if (layer.format != formatProps.format || layer.externalFormat != formatProps.externalFormat) cleanupVideoPipeline(layer);
+    layer.format=formatProps.format; layer.externalFormat=formatProps.externalFormat;
+    if (!createVideoPipelineOnce(layer, formatProps)) { cleanupVideoPipeline(layer); return false; }
 
     // Create Image
     AHardwareBuffer_Desc desc;
@@ -761,7 +661,7 @@ bool VulkanRenderer::createHardwareBufferImage(AHardwareBuffer* buffer) {
 
     VkExternalMemoryImageCreateInfo extMemImageInfo{};
     extMemImageInfo.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
-    extMemImageInfo.pNext = &externalFormat;
+    extMemImageInfo.pNext = formatProps.format == VK_FORMAT_UNDEFINED ? &externalFormat : nullptr;
     extMemImageInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID;
 
     VkImageCreateInfo imageInfo{};
@@ -778,18 +678,21 @@ bool VulkanRenderer::createHardwareBufferImage(AHardwareBuffer* buffer) {
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    if (vkCreateImage(mDevice, &imageInfo, nullptr, &mVideoImage) != VK_SUCCESS) return false;
+    if (vkCreateImage(mDevice, &imageInfo, nullptr, &layer.mVideoImage) != VK_SUCCESS) return false;
 
     // Import Memory
     VkImportAndroidHardwareBufferInfoANDROID importInfo{};
     importInfo.sType = VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID;
     importInfo.buffer = buffer;
+    VkMemoryDedicatedAllocateInfo dedicated{VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO};
+    dedicated.image=layer.mVideoImage;
+    importInfo.pNext=&dedicated;
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.pNext = &importInfo;
     allocInfo.allocationSize = props.allocationSize;
-    
+
     VkPhysicalDeviceMemoryProperties memProps;
     vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &memProps);
     allocInfo.memoryTypeIndex = 0;
@@ -801,21 +704,21 @@ bool VulkanRenderer::createHardwareBufferImage(AHardwareBuffer* buffer) {
             break;
         }
     }
-    
+
     if (!foundMemoryType) return false;
 
-    if (vkAllocateMemory(mDevice, &allocInfo, nullptr, &mVideoMemory) != VK_SUCCESS) return false;
-    if (vkBindImageMemory(mDevice, mVideoImage, mVideoMemory, 0) != VK_SUCCESS) return false;
+    if (vkAllocateMemory(mDevice, &allocInfo, nullptr, &layer.mVideoMemory) != VK_SUCCESS) return false;
+    if (vkBindImageMemory(mDevice, layer.mVideoImage, layer.mVideoMemory, 0) != VK_SUCCESS) return false;
 
     // Create Image View
     VkSamplerYcbcrConversionInfo ycbcrConversionInfo{};
     ycbcrConversionInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_INFO;
-    ycbcrConversionInfo.conversion = mYcbcrConversion;
+    ycbcrConversionInfo.conversion = layer.mYcbcrConversion;
 
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewInfo.pNext = &ycbcrConversionInfo;
-    viewInfo.image = mVideoImage;
+    viewInfo.pNext = layer.mYcbcrConversion != VK_NULL_HANDLE ? &ycbcrConversionInfo : nullptr;
+    viewInfo.image = layer.mVideoImage;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
     viewInfo.format = formatProps.format;
     viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -828,17 +731,17 @@ bool VulkanRenderer::createHardwareBufferImage(AHardwareBuffer* buffer) {
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = 1;
 
-    if (vkCreateImageView(mDevice, &viewInfo, nullptr, &mVideoImageView) != VK_SUCCESS) return false;
+    if (vkCreateImageView(mDevice, &viewInfo, nullptr, &layer.mVideoImageView) != VK_SUCCESS) return false;
 
     // Update Descriptor Set
     VkDescriptorImageInfo descImageInfo{};
-    descImageInfo.sampler = mVideoSampler;
-    descImageInfo.imageView = mVideoImageView;
+    descImageInfo.sampler = layer.mVideoSampler;
+    descImageInfo.imageView = layer.mVideoImageView;
     descImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     VkWriteDescriptorSet writeSet{};
     writeSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    writeSet.dstSet = mVideoDescriptorSet;
+    writeSet.dstSet = layer.mVideoDescriptorSet;
     writeSet.dstBinding = 0;
     writeSet.dstArrayElement = 0;
     writeSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -873,41 +776,41 @@ static VkShaderModule createShaderModule(VkDevice device, const std::vector<char
     return shaderModule;
 }
 
-void VulkanRenderer::cleanupVideoPipeline() {
+void VulkanRenderer::cleanupVideoPipeline(VideoLayerState& layer) {
     if (mDevice == VK_NULL_HANDLE || mDevice == (VkDevice)1) return;
-    if (mVideoPipeline != VK_NULL_HANDLE) {
-        vkDestroyPipeline(mDevice, mVideoPipeline, nullptr);
-        mVideoPipeline = VK_NULL_HANDLE;
+    if (layer.mVideoPipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(mDevice, layer.mVideoPipeline, nullptr);
+        layer.mVideoPipeline = VK_NULL_HANDLE;
     }
-    if (mVideoPipelineLayout != VK_NULL_HANDLE) {
-        vkDestroyPipelineLayout(mDevice, mVideoPipelineLayout, nullptr);
-        mVideoPipelineLayout = VK_NULL_HANDLE;
+    if (layer.mVideoPipelineLayout != VK_NULL_HANDLE) {
+        vkDestroyPipelineLayout(mDevice, layer.mVideoPipelineLayout, nullptr);
+        layer.mVideoPipelineLayout = VK_NULL_HANDLE;
     }
-    if (mVideoDescriptorSetLayout != VK_NULL_HANDLE) {
-        vkDestroyDescriptorSetLayout(mDevice, mVideoDescriptorSetLayout, nullptr);
-        mVideoDescriptorSetLayout = VK_NULL_HANDLE;
+    if (layer.mVideoDescriptorSetLayout != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(mDevice, layer.mVideoDescriptorSetLayout, nullptr);
+        layer.mVideoDescriptorSetLayout = VK_NULL_HANDLE;
     }
-    if (mVideoDescriptorPool != VK_NULL_HANDLE) {
-        vkDestroyDescriptorPool(mDevice, mVideoDescriptorPool, nullptr);
-        mVideoDescriptorPool = VK_NULL_HANDLE;
+    if (layer.mVideoDescriptorPool != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(mDevice, layer.mVideoDescriptorPool, nullptr);
+        layer.mVideoDescriptorPool = VK_NULL_HANDLE;
     }
-    if (mVideoSampler != VK_NULL_HANDLE) {
-        vkDestroySampler(mDevice, mVideoSampler, nullptr);
-        mVideoSampler = VK_NULL_HANDLE;
+    if (layer.mVideoSampler != VK_NULL_HANDLE) {
+        vkDestroySampler(mDevice, layer.mVideoSampler, nullptr);
+        layer.mVideoSampler = VK_NULL_HANDLE;
     }
-    if (mYcbcrConversion != VK_NULL_HANDLE) {
-        vkDestroySamplerYcbcrConversion(mDevice, mYcbcrConversion, nullptr);
-        mYcbcrConversion = VK_NULL_HANDLE;
+    if (layer.mYcbcrConversion != VK_NULL_HANDLE) {
+        vkDestroySamplerYcbcrConversion(mDevice, layer.mYcbcrConversion, nullptr);
+        layer.mYcbcrConversion = VK_NULL_HANDLE;
     }
-    mVideoPipelineCreated = false;
+    layer.mVideoPipelineCreated = false;
 }
 
-bool VulkanRenderer::createVideoPipelineOnce(VkAndroidHardwareBufferFormatPropertiesANDROID& formatProps) {
-    if (mVideoPipelineCreated) return true;
+bool VulkanRenderer::createVideoPipelineOnce(VideoLayerState& layer, VkAndroidHardwareBufferFormatPropertiesANDROID& formatProps) {
+    if (layer.mVideoPipelineCreated) return true;
 
-    if (mYcbcrConversion != VK_NULL_HANDLE) {
-        vkDestroySamplerYcbcrConversion(mDevice, mYcbcrConversion, nullptr);
-        mYcbcrConversion = VK_NULL_HANDLE;
+    if (layer.mYcbcrConversion != VK_NULL_HANDLE) {
+        vkDestroySamplerYcbcrConversion(mDevice, layer.mYcbcrConversion, nullptr);
+        layer.mYcbcrConversion = VK_NULL_HANDLE;
     }
 
     // 1. Create YCbCr Conversion
@@ -917,7 +820,7 @@ bool VulkanRenderer::createVideoPipelineOnce(VkAndroidHardwareBufferFormatProper
 
     VkSamplerYcbcrConversionCreateInfo ycbcrCreateInfo{};
     ycbcrCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_CREATE_INFO;
-    ycbcrCreateInfo.pNext = &externalFormat;
+    ycbcrCreateInfo.pNext = formatProps.format == VK_FORMAT_UNDEFINED ? &externalFormat : nullptr;
     ycbcrCreateInfo.format = formatProps.format;
     ycbcrCreateInfo.ycbcrModel = formatProps.suggestedYcbcrModel;
     ycbcrCreateInfo.ycbcrRange = formatProps.suggestedYcbcrRange;
@@ -927,7 +830,8 @@ bool VulkanRenderer::createVideoPipelineOnce(VkAndroidHardwareBufferFormatProper
     ycbcrCreateInfo.chromaFilter = VK_FILTER_LINEAR;
     ycbcrCreateInfo.forceExplicitReconstruction = VK_FALSE;
 
-    if (vkCreateSamplerYcbcrConversion(mDevice, &ycbcrCreateInfo, nullptr, &mYcbcrConversion) != VK_SUCCESS) {
+    const bool rgba = formatProps.format == VK_FORMAT_R8G8B8A8_UNORM || formatProps.format == VK_FORMAT_R8G8B8A8_SRGB;
+    if (!rgba && vkCreateSamplerYcbcrConversion(mDevice, &ycbcrCreateInfo, nullptr, &layer.mYcbcrConversion) != VK_SUCCESS) {
         LOGE("Failed to create YCbCr conversion");
         return false;
     }
@@ -935,11 +839,11 @@ bool VulkanRenderer::createVideoPipelineOnce(VkAndroidHardwareBufferFormatProper
     // 2. Create Immutable Sampler
     VkSamplerYcbcrConversionInfo ycbcrConversionInfo{};
     ycbcrConversionInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_INFO;
-    ycbcrConversionInfo.conversion = mYcbcrConversion;
+    ycbcrConversionInfo.conversion = layer.mYcbcrConversion;
 
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.pNext = &ycbcrConversionInfo;
+    samplerInfo.pNext = layer.mYcbcrConversion != VK_NULL_HANDLE ? &ycbcrConversionInfo : nullptr;
     samplerInfo.magFilter = VK_FILTER_LINEAR;
     samplerInfo.minFilter = VK_FILTER_LINEAR;
     samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
@@ -955,7 +859,7 @@ bool VulkanRenderer::createVideoPipelineOnce(VkAndroidHardwareBufferFormatProper
     samplerInfo.anisotropyEnable = VK_FALSE;
     samplerInfo.unnormalizedCoordinates = VK_FALSE;
 
-    if (vkCreateSampler(mDevice, &samplerInfo, nullptr, &mVideoSampler) != VK_SUCCESS) {
+    if (vkCreateSampler(mDevice, &samplerInfo, nullptr, &layer.mVideoSampler) != VK_SUCCESS) {
         LOGE("Failed to create video sampler");
         return false;
     }
@@ -965,7 +869,7 @@ bool VulkanRenderer::createVideoPipelineOnce(VkAndroidHardwareBufferFormatProper
     samplerLayoutBinding.binding = 0;
     samplerLayoutBinding.descriptorCount = 1;
     samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    samplerLayoutBinding.pImmutableSamplers = &mVideoSampler;
+    samplerLayoutBinding.pImmutableSamplers = &layer.mVideoSampler;
     samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -973,7 +877,7 @@ bool VulkanRenderer::createVideoPipelineOnce(VkAndroidHardwareBufferFormatProper
     layoutInfo.bindingCount = 1;
     layoutInfo.pBindings = &samplerLayoutBinding;
 
-    if (vkCreateDescriptorSetLayout(mDevice, &layoutInfo, nullptr, &mVideoDescriptorSetLayout) != VK_SUCCESS) {
+    if (vkCreateDescriptorSetLayout(mDevice, &layoutInfo, nullptr, &layer.mVideoDescriptorSetLayout) != VK_SUCCESS) {
         LOGE("Failed to create descriptor set layout");
         return false;
     }
@@ -981,7 +885,7 @@ bool VulkanRenderer::createVideoPipelineOnce(VkAndroidHardwareBufferFormatProper
     // 4. Create Descriptor Pool and Set
     VkDescriptorPoolSize poolSize{};
     poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSize.descriptorCount = 1;
+    poolSize.descriptorCount = 3; // Multi-planar YCbCr combined samplers can consume three descriptors.
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -989,18 +893,18 @@ bool VulkanRenderer::createVideoPipelineOnce(VkAndroidHardwareBufferFormatProper
     poolInfo.pPoolSizes = &poolSize;
     poolInfo.maxSets = 1;
 
-    if (vkCreateDescriptorPool(mDevice, &poolInfo, nullptr, &mVideoDescriptorPool) != VK_SUCCESS) {
+    if (vkCreateDescriptorPool(mDevice, &poolInfo, nullptr, &layer.mVideoDescriptorPool) != VK_SUCCESS) {
         LOGE("Failed to create descriptor pool");
         return false;
     }
 
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = mVideoDescriptorPool;
+    allocInfo.descriptorPool = layer.mVideoDescriptorPool;
     allocInfo.descriptorSetCount = 1;
-    allocInfo.pSetLayouts = &mVideoDescriptorSetLayout;
+    allocInfo.pSetLayouts = &layer.mVideoDescriptorSetLayout;
 
-    if (vkAllocateDescriptorSets(mDevice, &allocInfo, &mVideoDescriptorSet) != VK_SUCCESS) {
+    if (vkAllocateDescriptorSets(mDevice, &allocInfo, &layer.mVideoDescriptorSet) != VK_SUCCESS) {
         LOGE("Failed to allocate descriptor set");
         return false;
     }
@@ -1014,11 +918,11 @@ bool VulkanRenderer::createVideoPipelineOnce(VkAndroidHardwareBufferFormatProper
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &mVideoDescriptorSetLayout;
+    pipelineLayoutInfo.pSetLayouts = &layer.mVideoDescriptorSetLayout;
     pipelineLayoutInfo.pushConstantRangeCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
-    if (vkCreatePipelineLayout(mDevice, &pipelineLayoutInfo, nullptr, &mVideoPipelineLayout) != VK_SUCCESS) {
+    if (vkCreatePipelineLayout(mDevice, &pipelineLayoutInfo, nullptr, &layer.mVideoPipelineLayout) != VK_SUCCESS) {
         LOGE("Failed to create pipeline layout");
         return false;
     }
@@ -1029,6 +933,11 @@ bool VulkanRenderer::createVideoPipelineOnce(VkAndroidHardwareBufferFormatProper
 
     VkShaderModule vertShaderModule = createShaderModule(mDevice, vertShaderCode);
     VkShaderModule fragShaderModule = createShaderModule(mDevice, fragShaderCode);
+    if (!vertShaderModule || !fragShaderModule) {
+        if (vertShaderModule) vkDestroyShaderModule(mDevice, vertShaderModule, nullptr);
+        if (fragShaderModule) vkDestroyShaderModule(mDevice, fragShaderModule, nullptr);
+        return false;
+    }
 
     VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
     vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1101,6 +1010,10 @@ bool VulkanRenderer::createVideoPipelineOnce(VkAndroidHardwareBufferFormatProper
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
 
+    const VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo dynamicState{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+    dynamicState.dynamicStateCount = 2;
+    dynamicState.pDynamicStates = dynamicStates;
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.stageCount = 2;
@@ -1111,28 +1024,28 @@ bool VulkanRenderer::createVideoPipelineOnce(VkAndroidHardwareBufferFormatProper
     pipelineInfo.pRasterizationState = &rasterizer;
     pipelineInfo.pMultisampleState = &multisampling;
     pipelineInfo.pColorBlendState = &colorBlending;
-    pipelineInfo.layout = mVideoPipelineLayout;
+    pipelineInfo.pDynamicState = &dynamicState;
+    pipelineInfo.layout = layer.mVideoPipelineLayout;
     pipelineInfo.renderPass = mOffscreenRenderPass;
     pipelineInfo.subpass = 0;
 
-    if (vkCreateGraphicsPipelines(mDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &mVideoPipeline) != VK_SUCCESS) {
+    if (vkCreateGraphicsPipelines(mDevice, mPipelineCache, 1, &pipelineInfo, nullptr, &layer.mVideoPipeline) != VK_SUCCESS) {
         LOGE("Failed to create graphics pipeline");
+        vkDestroyShaderModule(mDevice, fragShaderModule, nullptr);
+        vkDestroyShaderModule(mDevice, vertShaderModule, nullptr);
         return false;
     }
 
     vkDestroyShaderModule(mDevice, fragShaderModule, nullptr);
     vkDestroyShaderModule(mDevice, vertShaderModule, nullptr);
 
-    mVideoPipelineCreated = true;
+    layer.mVideoPipelineCreated = true;
     LOGI("Video pipeline created successfully");
     return true;
 }
 
 
-void VulkanRenderer::setLayerTransform(float matrix[16], float opacity) {
-    for(int i=0; i<16; i++) mLayerTransform.matrix[i] = matrix[i];
-    mLayerTransform.opacity = opacity;
-}
+
 
 bool VulkanRenderer::createOffscreenTarget() {
     VkImageCreateInfo imageInfo{};
@@ -1206,9 +1119,27 @@ bool VulkanRenderer::createOffscreenTarget() {
     renderPassInfo.pAttachments = &colorAttachment;
     renderPassInfo.subpassCount = 1;
     renderPassInfo.pSubpasses = &subpass;
+    VkSubpassDependency dependencies[2]{};
+    dependencies[0].srcSubpass=VK_SUBPASS_EXTERNAL;
+    dependencies[0].dstSubpass=0;
+    dependencies[0].srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT;
+    dependencies[0].dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT;
+    dependencies[0].dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].srcSubpass=0;
+    dependencies[1].dstSubpass=VK_SUBPASS_EXTERNAL;
+    dependencies[1].srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[1].dstStageMask=VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[1].srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].dstAccessMask=VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    renderPassInfo.dependencyCount=2;
+    renderPassInfo.pDependencies=dependencies;
 
     if (vkCreateRenderPass(mDevice, &renderPassInfo, nullptr, &mOffscreenRenderPass) != VK_SUCCESS) return false;
 
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    if (vkCreateRenderPass(mDevice, &renderPassInfo, nullptr, &mLoadRenderPass) != VK_SUCCESS) return false;
     VkFramebufferCreateInfo framebufferInfo{};
     framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     framebufferInfo.renderPass = mOffscreenRenderPass;
@@ -1223,6 +1154,13 @@ bool VulkanRenderer::createOffscreenTarget() {
 }
 
 void VulkanRenderer::cleanupOffscreenTarget() {
+    if (mReadbackMapped) vkUnmapMemory(mDevice,mReadbackMemory);
+    mReadbackMapped = nullptr;
+    if (mReadback) vkDestroyBuffer(mDevice,mReadback,nullptr);
+    if (mReadbackMemory) vkFreeMemory(mDevice,mReadbackMemory,nullptr);
+    mReadback=VK_NULL_HANDLE; mReadbackMemory=VK_NULL_HANDLE; mReadbackSize=0;
+    if (mLoadRenderPass) vkDestroyRenderPass(mDevice,mLoadRenderPass,nullptr);
+    mLoadRenderPass=VK_NULL_HANDLE;
     if (mOffscreenFramebuffer != VK_NULL_HANDLE) {
         vkDestroyFramebuffer(mDevice, mOffscreenFramebuffer, nullptr);
         mOffscreenFramebuffer = VK_NULL_HANDLE;
@@ -1245,50 +1183,89 @@ void VulkanRenderer::cleanupOffscreenTarget() {
     }
 }
 
-bool VulkanRenderer::renderExportFrame() {
-    if (!mInitialized || mDevice == VK_NULL_HANDLE || mDevice == (VkDevice)1) return false;
 
-    AHardwareBuffer* newBuffer = mStagedBuffer.exchange(nullptr);
-    int64_t newGeneration = mStagedGeneration.load();
-    int newCropWidth = mStagedCropWidth.load();
-    int newCropHeight = mStagedCropHeight.load();
 
-    if (newBuffer) {
-        if (mCurrentRenderingBuffer) {
-            cleanupVideoImage();
-            AHardwareBuffer_release(mCurrentRenderingBuffer);
-            if (mCurrentRenderingGeneration >= 0) {
-                int64_t currentLast = mLastConsumedGeneration.load();
-                while (mCurrentRenderingGeneration > currentLast) {
-                    if (mLastConsumedGeneration.compare_exchange_weak(currentLast, mCurrentRenderingGeneration)) {
-                        break;
-                    }
-                }
-            }
+
+// Every entry point below is confined to the same preview worker as render().
+bool VulkanRenderer::beginFrame(int width, int height, int presentationWidth, int presentationHeight) {
+    mReadbackValid=false;
+    if (!mInitialized || width <= 0 || height <= 0) return false;
+    mPresentationWidth = presentationWidth > 0 ? presentationWidth : width;
+    mPresentationHeight = presentationHeight > 0 ? presentationHeight : height;
+    mFirstBatch = true;
+    mDrawOrder.clear();
+    if (width != mCompWidth || height != mCompHeight) {
+        LOGI("Offscreen target resize %dx%d -> %dx%d (presentation %dx%d)",
+             mCompWidth, mCompHeight, width, height, mPresentationWidth, mPresentationHeight);
+        // Target recreation is serialized on the owner worker; pause alone is not a GPU fence.
+        if (vkDeviceWaitIdle(mDevice) != VK_SUCCESS) return false;
+        releaseLayers();
+        cleanupOffscreenTarget();
+        mCompWidth = width; mCompHeight = height;
+        if (!createOffscreenTarget()) return false;
+    }
+    return true;
+}
+bool VulkanRenderer::setFrameLayer(int64_t id, AHardwareBuffer* buffer, const float* matrix, float opacity) {
+    if (!mInitialized || !buffer || mDrawOrder.size() >= 4) return false;
+    if (mLayers.find(id) == mLayers.end() && mLayers.size() >= 4) {
+        auto victim = mLayers.end();
+        for (auto it=mLayers.begin();it!=mLayers.end();++it) {
+            if (std::find(mDrawOrder.begin(),mDrawOrder.end(),it->first)!=mDrawOrder.end()) continue;
+            if(victim==mLayers.end() || it->second.lastUse<victim->second.lastUse) victim=it;
         }
-
-        mCurrentRenderingBuffer = newBuffer;
-        mCurrentRenderingGeneration = newGeneration;
-        mCurrentCropWidth = newCropWidth;
-        mCurrentCropHeight = newCropHeight;
-        
-        createHardwareBufferImage(mCurrentRenderingBuffer);
+        if(victim==mLayers.end()) return false;
+        cleanupVideoImage(victim->second);cleanupVideoPipeline(victim->second);
+        if(victim->second.buffer) AHardwareBuffer_release(victim->second.buffer);
+        mLayers.erase(victim);
     }
-
-    VkCommandBuffer commandBuffer = mCommandBuffers[0];
-    vkResetCommandBuffer(commandBuffer, 0);
-
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-        LOGE("Failed to begin recording command buffer for export!");
-        return false;
+    auto& layer = mLayers[id];
+    layer.lastUse=++mUseCounter;
+    if (layer.buffer != buffer) {
+        cleanupVideoImage(layer);
+        if (layer.buffer) AHardwareBuffer_release(layer.buffer);
+        layer.buffer = buffer;
+        AHardwareBuffer_acquire(buffer);
+        layer.transitioned = false;
+        if (!createHardwareBufferImage(layer, buffer)) {
+            cleanupVideoImage(layer);
+            AHardwareBuffer_release(layer.buffer);
+            layer.buffer = nullptr;
+            return false;
+        }
     }
-
+    std::copy(matrix, matrix + 16, layer.transform.matrix);
+    layer.transform.opacity = opacity;
+    mDrawOrder.push_back(id);
+    return true;
+}
+bool VulkanRenderer::finishFrame() {
+    if (!mInitialized) return false;
+    if ((!mDrawOrder.empty() || mFirstBatch) && !flushBatch()) return false;
+    if (mWindow) { return render() && vkQueueWaitIdle(mPresentQueue) == VK_SUCCESS; }
+    return true;
+}
+bool VulkanRenderer::beginWork() {
+    if (vkWaitForFences(mDevice,1,&mWorkFence,VK_TRUE,5000000000ULL) != VK_SUCCESS) return false;
+    vkResetCommandBuffer(mWorkCommand,0);
+    VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    begin.flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    return vkBeginCommandBuffer(mWorkCommand,&begin)==VK_SUCCESS;
+}
+bool VulkanRenderer::submitWork() {
+    if (vkEndCommandBuffer(mWorkCommand)!=VK_SUCCESS) return false;
+    VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    submit.commandBufferCount=1; submit.pCommandBuffers=&mWorkCommand;
+    vkResetFences(mDevice,1,&mWorkFence);
+    if (vkQueueSubmit(mGraphicsQueue,1,&submit,mWorkFence)!=VK_SUCCESS) return false;
+    return vkWaitForFences(mDevice,1,&mWorkFence,VK_TRUE,5000000000ULL)==VK_SUCCESS;
+}
+bool VulkanRenderer::flushBatch() {
+    if (!beginWork()) return false;
+    auto commandBuffer=mWorkCommand;
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = mOffscreenRenderPass;
+    renderPassInfo.renderPass = mFirstBatch ? mOffscreenRenderPass : mLoadRenderPass;
     renderPassInfo.framebuffer = mOffscreenFramebuffer;
     renderPassInfo.renderArea.offset = {0, 0};
     renderPassInfo.renderArea.extent = {(uint32_t)mCompWidth, (uint32_t)mCompHeight};
@@ -1297,14 +1274,17 @@ bool VulkanRenderer::renderExportFrame() {
     renderPassInfo.clearValueCount = 1;
     renderPassInfo.pClearValues = &clearColor;
 
-    if (mVideoImage != VK_NULL_HANDLE) {
+    for (auto id : mDrawOrder) {
+        auto& layer = mLayers.at(id);
+        if (layer.transitioned) continue;
+        layer.transitioned = true;
         VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = mVideoImage;
+        barrier.image = layer.mVideoImage;
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         barrier.subresourceRange.baseMipLevel = 0;
         barrier.subresourceRange.levelCount = 1;
@@ -1325,12 +1305,14 @@ bool VulkanRenderer::renderExportFrame() {
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    if (mVideoPipelineCreated && mVideoDescriptorSet != VK_NULL_HANDLE) {
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mVideoPipeline);
-        
+    for (auto id : mDrawOrder) {
+        auto& layer = mLayers.at(id);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layer.mVideoPipeline);
+
         VkViewport viewport{};
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
+
         viewport.x = 0.0f;
         viewport.y = 0.0f;
         viewport.width = (float)mCompWidth;
@@ -1345,151 +1327,101 @@ bool VulkanRenderer::renderExportFrame() {
         vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mVideoPipelineLayout, 0, 1, &mVideoDescriptorSet, 0, nullptr);
-        vkCmdPushConstants(commandBuffer, mVideoPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(mLayerTransform), &mLayerTransform);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layer.mVideoPipelineLayout, 0, 1, &layer.mVideoDescriptorSet, 0, nullptr);
+        vkCmdPushConstants(commandBuffer, layer.mVideoPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(LayerTransform), &layer.transform);
         vkCmdDraw(commandBuffer, 6, 1, 0, 0);
     }
 
     vkCmdEndRenderPass(commandBuffer);
-
-    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-        LOGE("Failed to record command buffer for export!");
-        return false;
+    if (!submitWork()) return false;
+    mFirstBatch=false;
+    mDrawOrder.clear();
+    return true;
+}
+void VulkanRenderer::releaseLayers() {
+    if (mDevice != VK_NULL_HANDLE) vkDeviceWaitIdle(mDevice);
+    for (auto& entry : mLayers) {
+        cleanupVideoImage(entry.second); cleanupVideoPipeline(entry.second);
+        if (entry.second.buffer) AHardwareBuffer_release(entry.second.buffer);
     }
+    mLayers.clear(); mDrawOrder.clear();
+}
 
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
-
-    vkResetFences(mDevice, 1, &mInFlightFence);
-
-    if (vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, mInFlightFence) != VK_SUCCESS) {
-        LOGE("Failed to submit draw command buffer for export!");
-        return false;
+bool VulkanRenderer::readbackRgba() {
+    if (!mOffscreenImage || mCompWidth<=0 || mCompHeight<=0) return false;
+    if(mReadbackValid && mReadbackMapped) return true;
+    const VkDeviceSize bytes=static_cast<VkDeviceSize>(mCompWidth)*mCompHeight*4;
+    if (!mReadback) {
+        VkBufferCreateInfo info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        info.size=bytes; info.usage=VK_BUFFER_USAGE_TRANSFER_DST_BIT; info.sharingMode=VK_SHARING_MODE_EXCLUSIVE;
+        if(vkCreateBuffer(mDevice,&info,nullptr,&mReadback)!=VK_SUCCESS) return false;
+        VkMemoryRequirements req; vkGetBufferMemoryRequirements(mDevice,mReadback,&req);
+        VkPhysicalDeviceMemoryProperties props; vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice,&props);
+        uint32_t type=UINT32_MAX;
+        for(uint32_t i=0;i<props.memoryTypeCount;i++) if((req.memoryTypeBits&(1u<<i)) &&
+            (props.memoryTypes[i].propertyFlags & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) ==
+            (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) { type=i; break; }
+        if(type==UINT32_MAX) return false;
+        VkMemoryAllocateInfo alloc{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO}; alloc.allocationSize=req.size; alloc.memoryTypeIndex=type;
+        if(vkAllocateMemory(mDevice,&alloc,nullptr,&mReadbackMemory)!=VK_SUCCESS) return false;
+        if(vkBindBufferMemory(mDevice,mReadback,mReadbackMemory,0)!=VK_SUCCESS) return false;
+        if(vkMapMemory(mDevice,mReadbackMemory,0,bytes,0,&mReadbackMapped)!=VK_SUCCESS) return false;
+        mReadbackSize=bytes;
     }
-
-    vkWaitForFences(mDevice, 1, &mInFlightFence, VK_TRUE, UINT64_MAX);
-
+    if(!mReadbackMapped || mReadbackSize<bytes) return false;
+    if(!beginWork()) return false;
+    // Both clear/load composition render passes finish in TRANSFER_SRC_OPTIMAL;
+    // preview blits read that layout without changing it. Keep it for the next load pass.
+    // This barrier makes the render writes visible to this independent readback submission.
+    VkImageMemoryBarrier imageBarrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    imageBarrier.oldLayout=VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    imageBarrier.newLayout=VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    imageBarrier.srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT;
+    imageBarrier.dstAccessMask=VK_ACCESS_TRANSFER_READ_BIT;
+    imageBarrier.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+    imageBarrier.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+    imageBarrier.image=mOffscreenImage;
+    imageBarrier.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};
+    vkCmdPipelineBarrier(mWorkCommand,VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,nullptr,0,nullptr,1,&imageBarrier);
+    VkBufferImageCopy region{}; region.imageSubresource.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.layerCount=1; region.imageExtent={static_cast<uint32_t>(mCompWidth),static_cast<uint32_t>(mCompHeight),1};
+    vkCmdCopyImageToBuffer(mWorkCommand,mOffscreenImage,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,mReadback,1,&region);
+    VkBufferMemoryBarrier barrier{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+    barrier.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT; barrier.dstAccessMask=VK_ACCESS_HOST_READ_BIT;
+    barrier.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED; barrier.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+    barrier.buffer=mReadback; barrier.size=bytes;
+    vkCmdPipelineBarrier(mWorkCommand,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_HOST_BIT,0,0,nullptr,1,&barrier,0,nullptr);
+    if(!submitWork()) return false;
+    mReadbackValid=true;
     return true;
 }
 
-bool VulkanRenderer::readbackOffscreenPixels(void* outputBuffer, uint32_t bufferSize) {
-    if (!mInitialized || mDevice == VK_NULL_HANDLE || mDevice == (VkDevice)1) return false;
+int64_t VulkanRenderer::readPreviewPixel(float nx, float ny) {
+    if (!(nx>=0 && nx<1 && ny>=0 && ny<1) || mPreviewW<=0 || mPreviewH<=0) return -1;
+    const double x=nx*mPreviewBufferW-mPreviewX, y=ny*mPreviewBufferH-mPreviewY;
+    if(x<0 || y<0 || x>=mPreviewW || y>=mPreviewH) return -1;
+    const int cx=std::min(mCompWidth-1,static_cast<int>(x*mCompWidth/mPreviewW));
+    const int cy=std::min(mCompHeight-1,static_cast<int>(y*mCompHeight/mPreviewH));
+    if(!readbackRgba()) return -1;
+    const auto* p=static_cast<const uint8_t*>(mReadbackMapped)+(static_cast<size_t>(cy)*mCompWidth+cx)*4;
+    return (static_cast<int64_t>(p[3])<<24) | (static_cast<int64_t>(p[0])<<16) | (p[1]<<8) | p[2];
+}
 
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = bufferSize;
-    bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    if (vkCreateBuffer(mDevice, &bufferInfo, nullptr, &stagingBuffer) != VK_SUCCESS) return false;
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(mDevice, stagingBuffer, &memRequirements);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-
-    VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &memProperties);
-
-    uint32_t memoryTypeIndex = 0;
-    bool found = false;
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-        if ((memRequirements.memoryTypeBits & (1 << i)) && 
-            (memProperties.memoryTypes[i].propertyFlags & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) == 
-            (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
-            memoryTypeIndex = i;
-            found = true;
-            break;
+bool VulkanRenderer::copyYuv(uint8_t* y, uint8_t* u, uint8_t* v, int yr, int ur, int vr, int up, int vp) {
+    if(!readbackRgba()) return false;
+    const auto* rgba=static_cast<const uint8_t*>(mReadbackMapped);
+    auto clamp=[](int a){ return static_cast<uint8_t>(std::max(0,std::min(255,a))); };
+    for(int row=0;row<mCompHeight;row+=2) for(int col=0;col<mCompWidth;col+=2) {
+        int r=0,g=0,b=0;
+        for(int dy=0;dy<2;dy++) for(int dx=0;dx<2;dx++) {
+            auto* p=rgba+((row+dy)*mCompWidth+col+dx)*4;
+            y[(row+dy)*yr+col+dx]=clamp(16+((11966*p[0]+40254*p[1]+4064*p[2]+32768)>>16));
+            r+=p[0];g+=p[1];b+=p[2];
         }
+        r=(r+2)/4;g=(g+2)/4;b=(b+2)/4;
+        u[(row/2)*ur+(col/2)*up]=clamp(128+((-6596*r-22188*g+28784*b+32768)>>16));
+        v[(row/2)*vr+(col/2)*vp]=clamp(128+((28784*r-26145*g-2639*b+32768)>>16));
     }
-
-    if (!found) {
-        vkDestroyBuffer(mDevice, stagingBuffer, nullptr);
-        return false;
-    }
-
-    allocInfo.memoryTypeIndex = memoryTypeIndex;
-    if (vkAllocateMemory(mDevice, &allocInfo, nullptr, &stagingBufferMemory) != VK_SUCCESS) {
-        vkDestroyBuffer(mDevice, stagingBuffer, nullptr);
-        return false;
-    }
-    vkBindBufferMemory(mDevice, stagingBuffer, stagingBufferMemory, 0);
-
-    VkCommandBuffer commandBuffer = mCommandBuffers[0];
-    vkResetCommandBuffer(commandBuffer, 0);
-
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = mOffscreenImage;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = 1;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-
-    vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-
-    VkBufferImageCopy region{};
-    region.bufferOffset = 0;
-    region.bufferRowLength = 0;
-    region.bufferImageHeight = 0;
-    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    region.imageSubresource.mipLevel = 0;
-    region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = 1;
-    region.imageOffset = {0, 0, 0};
-    region.imageExtent = {(uint32_t)mCompWidth, (uint32_t)mCompHeight, 1};
-
-    vkCmdCopyImageToBuffer(commandBuffer, mOffscreenImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer, 1, &region);
-
-    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-        vkDestroyBuffer(mDevice, stagingBuffer, nullptr);
-        vkFreeMemory(mDevice, stagingBufferMemory, nullptr);
-        return false;
-    }
-
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
-
-    vkResetFences(mDevice, 1, &mInFlightFence);
-    if (vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, mInFlightFence) != VK_SUCCESS) {
-        vkDestroyBuffer(mDevice, stagingBuffer, nullptr);
-        vkFreeMemory(mDevice, stagingBufferMemory, nullptr);
-        return false;
-    }
-    vkWaitForFences(mDevice, 1, &mInFlightFence, VK_TRUE, UINT64_MAX);
-
-    void* data;
-    if (vkMapMemory(mDevice, stagingBufferMemory, 0, bufferSize, 0, &data) == VK_SUCCESS) {
-        memcpy(outputBuffer, data, bufferSize);
-        vkUnmapMemory(mDevice, stagingBufferMemory);
-    } else {
-        vkDestroyBuffer(mDevice, stagingBuffer, nullptr);
-        vkFreeMemory(mDevice, stagingBufferMemory, nullptr);
-        return false;
-    }
-
-    vkDestroyBuffer(mDevice, stagingBuffer, nullptr);
-    vkFreeMemory(mDevice, stagingBufferMemory, nullptr);
-
     return true;
 }

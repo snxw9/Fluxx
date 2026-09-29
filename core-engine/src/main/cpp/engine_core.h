@@ -17,16 +17,11 @@ public:
     void release();
 
     void setPlayState(bool playing);
-    void stageHardwareBuffer(AHardwareBuffer* buffer, int64_t generationId, int cropWidth, int cropHeight);
-    int64_t getLastConsumedGeneration();
-    void setLayerTransform(float matrix[16], float opacity);
+    VulkanRenderer& renderer() { return mRenderer; }
 
     int getCompWidth();
     int getCompHeight();
 
-    // Export pipeline
-    bool renderExportFrame();
-    bool readbackOffscreenPixels(void* outputBuffer, uint32_t bufferSize);
 
     // Audio engine controls
     bool setupAudio();

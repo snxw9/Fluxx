@@ -14,7 +14,7 @@ EngineCore* EngineCore::getInstance() {
 
 bool EngineCore::init(ANativeWindow* window, int width, int height, AAssetManager* assetManager) {
     std::lock_guard<std::mutex> lock(sMutex);
-    
+
     if (mInitialized) {
         LOGW("EngineCore is already initialized");
         return true;
@@ -26,7 +26,7 @@ bool EngineCore::init(ANativeWindow* window, int width, int height, AAssetManage
         LOGE("EngineCore: Vulkan renderer initialization failed");
         return false;
     }
-    
+
     mRenderer.resize(width, height);
     mInitialized = true;
     LOGI("EngineCore: Initialized successfully");
@@ -40,13 +40,13 @@ void EngineCore::resize(int width, int height) {
 
 void EngineCore::renderFrame(int64_t frameIndex) {
     if (!mInitialized) return;
-    
+
     // In actual engine, this will:
     // 1. Sync visual frame to audio timestamp if playing
     // 2. Build local/world matrices for scene DAG
     // 3. Process time -> masks -> effects -> transforms
     // 4. Render final composition to Vulkan swapchain
-    
+
     mRenderer.render();
 }
 
@@ -66,13 +66,9 @@ void EngineCore::setPlayState(bool playing) {
     }
 }
 
-void EngineCore::stageHardwareBuffer(AHardwareBuffer* buffer, int64_t generationId, int cropWidth, int cropHeight) {
-    mRenderer.stageHardwareBuffer(buffer, generationId, cropWidth, cropHeight);
-}
 
-int64_t EngineCore::getLastConsumedGeneration() {
-    return mRenderer.getLastConsumedGeneration();
-}
+
+
 
 bool EngineCore::setupAudio() {
     return mAudioProcessor.init();
@@ -90,9 +86,7 @@ int64_t EngineCore::getAudioPositionMs() {
     return mAudioProcessor.getCurrentAudioTimestamp();
 }
 
-void EngineCore::setLayerTransform(float matrix[16], float opacity) {
-    mRenderer.setLayerTransform(matrix, opacity);
-}
+
 
 int EngineCore::getCompWidth() {
     return mRenderer.getCompWidth();
@@ -100,12 +94,4 @@ int EngineCore::getCompWidth() {
 
 int EngineCore::getCompHeight() {
     return mRenderer.getCompHeight();
-}
-
-bool EngineCore::renderExportFrame() {
-    return mRenderer.renderExportFrame();
-}
-
-bool EngineCore::readbackOffscreenPixels(void* outputBuffer, uint32_t bufferSize) {
-    return mRenderer.readbackOffscreenPixels(outputBuffer, bufferSize);
 }

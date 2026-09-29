@@ -3,6 +3,12 @@
 
 > **Scope note:** This document describes Fluxx's complete target architecture and feature set — the north star. It is **not** the v0.1 build scope. For what actually ships first, in what order, and why, see `FLUXX_ROADMAP.md`. Nothing in v0.1 should paint the engine into a corner that blocks anything described here later.
 
+### Current implementation note - 2026-09-11
+
+The target architecture below is not a description of completed engine features. Phase 2 A-C backend details and outstanding hardware validation are recorded in [PHASE_2_STATUS_AND_BACKEND.md](../checkpoints/PHASE_2_STATUS_AND_BACKEND.md). Current layered preview/export share a batched offscreen Vulkan compositor; general export transfers RGBA to a reusable host buffer for MediaCodec input, while the working full-source single-video Media3 path remains available. Audio uses a disk-backed sequential mix and AudioTrack preview. The future scene-linear color engine, frame/proxy caches, Oboe-driven composition audio and resumable export described below are not established by this implementation.
+
+**Scaling requirement:** never impose an arbitrary maximum number of project or export layers. Bound expensive resident resources, virtualize UI work and schedule additional work through those resources. Actual format, allocation and storage failures must be reported, and real-time guarantees must be based on measurements. See [PHASE_2_STATUS_AND_BACKEND.md](../checkpoints/PHASE_2_STATUS_AND_BACKEND.md) for the live UI placeholder matrix.
+
 ### Revision notes (v1 → v2)
 - Reframed Section 2 as the full feature scope, not "minimum" — see roadmap for what v0.1 actually contains
 - Renamed four effects that mirrored Adobe's own product naming too closely (Section 2)
@@ -47,13 +53,13 @@ The complete Fluxx feature set, across all versions, encompasses the following c
 ## 3. Technology Stack & Architecture Boundaries
 To guarantee real-time performance and prevent Android's Garbage Collector from causing frame drops, Fluxx strictly separates the User Interface from the Render Engine.
 
-| Environment | Technology | Responsibility |
-|---|---|---|
-| UI & State Layer | Kotlin & Jetpack Compose (Android-only) | Project state, timeline UI, touch gestures, and file I/O. |
-| Core Render Engine | C/C++ (Android NDK) | Pixel compositing, Bezier interpolation, and effect shaders. |
-| Graphics Pipeline | Vulkan only (v0.1+) | Hardware-accelerated drawing and matrix transformations. |
-| Audio Engine | Oboe (C++) | Ultra-low latency, perfectly synchronized audio playback. |
-| JNI Bridge | FlatBuffers (structured/infrequent) + Direct ByteBuffer / AHardwareBuffer (hot path) | High-speed numerical instruction passing between Kotlin and C++. |
+| Environment        | Technology                                                                           | Responsibility                                                   |
+|--------------------|--------------------------------------------------------------------------------------|------------------------------------------------------------------|
+| UI & State Layer   | Kotlin & Jetpack Compose (Android-only)                                              | Project state, timeline UI, touch gestures, and file I/O.        |
+| Core Render Engine | C/C++ (Android NDK)                                                                  | Pixel compositing, Bezier interpolation, and effect shaders.     |
+| Graphics Pipeline  | Vulkan only (v0.1+)                                                                  | Hardware-accelerated drawing and matrix transformations.         |
+| Audio Engine       | Oboe (C++)                                                                           | Ultra-low latency, perfectly synchronized audio playback.        |
+| JNI Bridge         | FlatBuffers (structured/infrequent) + Direct ByteBuffer / AHardwareBuffer (hot path) | High-speed numerical instruction passing between Kotlin and C++. |
 
 **UI framework note:** Compose Multiplatform's Android target is functionally identical to Jetpack Compose (sharing the same compiler and runtime, resulting in identical performance). Plain Jetpack Compose is used instead purely to avoid carrying unnecessary Kotlin Multiplatform tooling for code-sharing capabilities the project doesn't require. Any future iOS build is planned as a separate native rebuild (utilizing Metal, Core Audio, and AVFoundation/VideoToolbox), rather than a shared-UI port.
 
@@ -106,6 +112,8 @@ Translating blunt touch inputs into frame-accurate, professional edits.
 - **Unidirectional Data Flow (UDF):** The Compose UI never modifies state directly. Gestures emit actions to a ViewModel, which mutates an immutable state. Granular state hoisting guarantees that moving a single layer does not recompose the entire timeline.
 
 ## 7. Animation & Graph Editor Core
+
+**Phase 2 Step D decision (Option B, September 16, 2026):** Transform animation is evaluated in Kotlin on the existing preview/export worker, alongside `LayerGeometry`. One LUT evaluator fills a renderer-owned six-float buffer; FlatBuffers persists tracks but no animation JNI sync or native evaluator is used. This is the approved current implementation boundary, superseding the aspirational C++ interpolation responsibility in section 3 for this step. See [keyframe checkpoint](../checkpoints/KEYFRAME_ANIMATION.md) for contracts and pending verification.
 - **Sparse Execution:** Animatable properties contain an `isAnimated` boolean. If false, the engine reads a static float, bypassing interpolation math entirely to save CPU cycles.
 - **Bezier Mathematics:** Temporal motion computes via the standard cubic Bezier parametric form, for control points P0–P3 and t ∈ [0,1]:
 

@@ -7,6 +7,8 @@
 #include <android/asset_manager.h>
 #include <vector>
 #include <atomic>
+#include <mutex>
+#include <map>
 
 
 struct LayerTransform {
@@ -14,34 +16,76 @@ struct LayerTransform {
     float opacity;
 };
 
+struct VideoLayerState {
+    // YCbCr Video Pipeline state
+    bool mVideoPipelineCreated = false;
+    VkDescriptorSetLayout mVideoDescriptorSetLayout = VK_NULL_HANDLE;
+    VkPipelineLayout mVideoPipelineLayout = VK_NULL_HANDLE;
+    VkPipeline mVideoPipeline = VK_NULL_HANDLE;
+    VkDescriptorPool mVideoDescriptorPool = VK_NULL_HANDLE;
+    VkDescriptorSet mVideoDescriptorSet = VK_NULL_HANDLE;
+
+    VkImage mVideoImage = VK_NULL_HANDLE;
+    VkDeviceMemory mVideoMemory = VK_NULL_HANDLE;
+    VkSamplerYcbcrConversion mYcbcrConversion = VK_NULL_HANDLE;
+    VkSampler mVideoSampler = VK_NULL_HANDLE;
+    VkImageView mVideoImageView = VK_NULL_HANDLE;
+
+    AHardwareBuffer* buffer = nullptr;
+    LayerTransform transform{};
+    bool transitioned = false;
+    uint64_t externalFormat = 0;
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    uint64_t lastUse = 0;
+};
+
 class VulkanRenderer {
 public:
-    void setLayerTransform(float matrix[16], float opacity);
+    bool beginFrame(int width, int height, int presentationWidth = 0, int presentationHeight = 0);
+    bool setFrameLayer(int64_t id, AHardwareBuffer* buffer, const float* matrix, float opacity);
+    bool finishFrame();
+    bool flushBatch();
+    bool copyYuv(uint8_t* y, uint8_t* u, uint8_t* v, int yr, int ur, int vr, int up, int vp);
+    // Render-thread only, after a completed paused frame. -1 denotes failure/outside canvas.
+    int64_t readPreviewPixel(float normalizedX, float normalizedY);
 public:
     VulkanRenderer();
     ~VulkanRenderer();
 
     bool init(ANativeWindow* window, AAssetManager* assetManager);
     void resize(int width, int height);
-    void render();
+    bool render(int resizeRetries = 1);
     void cleanup();
 
-    // Export pipeline
-    bool renderExportFrame(); // Renders the scene into the offscreen FBO only (no swapchain blit, no present)
-    VkImage getOffscreenImage() const { return mOffscreenImage; }
-    VkFormat getOffscreenFormat() const { return VK_FORMAT_R8G8B8A8_UNORM; }
-    bool readbackOffscreenPixels(void* outputBuffer, uint32_t bufferSize);
+    void releaseLayers();
 
-    int getCompWidth() const { return mCompWidth; }
-    int getCompHeight() const { return mCompHeight; }
+    [[nodiscard]] int getCompWidth() const { return mCompWidth; }
+    [[nodiscard]] int getCompHeight() const { return mCompHeight; }
 
-    void stageHardwareBuffer(AHardwareBuffer* buffer, int64_t generationId, int cropWidth, int cropHeight);
-    int64_t getLastConsumedGeneration() const;
 
 private:
-    LayerTransform mLayerTransform;
+    bool readbackRgba();
+    bool mReadbackValid = false;
+    int mPreviewX = 0, mPreviewY = 0, mPreviewW = 0, mPreviewH = 0;
+    int mPreviewBufferW = 0, mPreviewBufferH = 0;
+    std::map<int64_t, VideoLayerState> mLayers;
+    std::vector<int64_t> mDrawOrder;
+    uint64_t mUseCounter = 0;
+    VkPipelineCache mPipelineCache = VK_NULL_HANDLE;
     int mCompWidth = 1080;
     int mCompHeight = 1920;
+    int mPresentationWidth = 1080;
+    int mPresentationHeight = 1920;
+    bool mFirstBatch = true;
+    VkRenderPass mLoadRenderPass = VK_NULL_HANDLE;
+    VkCommandBuffer mWorkCommand = VK_NULL_HANDLE;
+    VkFence mWorkFence = VK_NULL_HANDLE;
+    VkBuffer mReadback = VK_NULL_HANDLE;
+    VkDeviceMemory mReadbackMemory = VK_NULL_HANDLE;
+    void* mReadbackMapped = nullptr;
+    VkDeviceSize mReadbackSize = 0;
+    bool submitWork();
+    bool beginWork();
     VkImage mOffscreenImage = VK_NULL_HANDLE;
     VkDeviceMemory mOffscreenMemory = VK_NULL_HANDLE;
     VkImageView mOffscreenImageView = VK_NULL_HANDLE;
@@ -78,7 +122,7 @@ private:
     VkSwapchainKHR mSwapchain = VK_NULL_HANDLE;
     std::vector<VkImage> mSwapchainImages;
     VkFormat mSwapchainImageFormat;
-    VkExtent2D mSwapchainExtent;
+    VkExtent2D mSwapchainExtent{};
     std::vector<VkImageView> mSwapchainImageViews;
 
     VkRenderPass mRenderPass = VK_NULL_HANDLE;
@@ -95,38 +139,9 @@ private:
     [[maybe_unused]] uint32_t mPresentQueueFamilyIndex = 0;
     bool mInitialized = false;
 
-    // AHardwareBuffer tracking
-    std::atomic<AHardwareBuffer*> mStagedBuffer{nullptr};
-    std::atomic<int64_t> mStagedGeneration{-1};
-    std::atomic<int> mStagedCropWidth{0};
-    std::atomic<int> mStagedCropHeight{0};
-    std::atomic<int64_t> mLastConsumedGeneration{-1};
-    
-    AHardwareBuffer* mCurrentRenderingBuffer = nullptr;
-    int64_t mCurrentRenderingGeneration = -1;
-    int mCurrentCropWidth = 0;
-    int mCurrentCropHeight = 0;
-    
-    [[maybe_unused]] AHardwareBuffer* mPreviousFinishedBuffer = nullptr;
-    [[maybe_unused]] int64_t mPreviousFinishedGeneration = -1;
-
-    // YCbCr Video Pipeline state
-    bool mVideoPipelineCreated = false;
-    VkDescriptorSetLayout mVideoDescriptorSetLayout = VK_NULL_HANDLE;
-    VkPipelineLayout mVideoPipelineLayout = VK_NULL_HANDLE;
-    VkPipeline mVideoPipeline = VK_NULL_HANDLE;
-    VkDescriptorPool mVideoDescriptorPool = VK_NULL_HANDLE;
-    VkDescriptorSet mVideoDescriptorSet = VK_NULL_HANDLE;
-
-    VkImage mVideoImage = VK_NULL_HANDLE;
-    VkDeviceMemory mVideoMemory = VK_NULL_HANDLE;
-    VkSamplerYcbcrConversion mYcbcrConversion = VK_NULL_HANDLE;
-    VkSampler mVideoSampler = VK_NULL_HANDLE;
-    VkImageView mVideoImageView = VK_NULL_HANDLE;
-
-    bool createVideoPipelineOnce(VkAndroidHardwareBufferFormatPropertiesANDROID& formatProps);
-    bool createHardwareBufferImage(AHardwareBuffer* buffer);
-    void cleanupVideoImage();
-    void cleanupVideoPipeline();
+    bool createVideoPipelineOnce(VideoLayerState& layer, VkAndroidHardwareBufferFormatPropertiesANDROID& formatProps);
+    bool createHardwareBufferImage(VideoLayerState& layer, AHardwareBuffer* buffer);
+    void cleanupVideoImage(VideoLayerState& layer);
+    void cleanupVideoPipeline(VideoLayerState& layer);
 
 };

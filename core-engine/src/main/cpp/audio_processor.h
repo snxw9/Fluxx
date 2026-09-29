@@ -6,7 +6,7 @@
 class AudioProcessor : public oboe::AudioStreamCallback {
 public:
     AudioProcessor();
-    ~AudioProcessor();
+    ~AudioProcessor() override;
 
     bool init();
     bool start();

@@ -6,6 +6,7 @@ project("fluxxengine")
 find_library(log-lib log)
 find_library(android-lib android)
 find_library(vulkan-lib vulkan)
+find_library(jnigraphics-lib jnigraphics)
 
 # Find Oboe via Prefab
 find_package(oboe REQUIRED CONFIG)
@@ -33,5 +34,5 @@ target_link_libraries(fluxxengine PRIVATE
     ${log-lib}
     ${android-lib}
     ${vulkan-lib}
+    ${jnigraphics-lib}
 )
-

@@ -1,346 +1,433 @@
 package com.fluxx.android
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
-import android.view.SurfaceHolder
-import android.view.SurfaceView
-import android.widget.FrameLayout
+import android.view.Surface
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import com.fluxx.android.engine.FluxxEngine
-import com.fluxx.android.engine.VideoDecoder
-import kotlinx.coroutines.*
-import java.io.FileDescriptor
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import android.opengl.Matrix
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import com.fluxx.android.editor.CompositionCreationViewModel
+import com.fluxx.android.editor.EditorAction
+import com.fluxx.android.editor.EditorViewModel
+import com.fluxx.android.editor.ProjectSaveQueue
+import com.fluxx.android.export.ExportService
+import com.fluxx.android.media.MediaRepository
+import com.fluxx.android.model.PaletteRepository
+import com.fluxx.android.render.PreviewController
+import com.fluxx.android.render.ProjectThumbnails
+import com.fluxx.android.ui.editor.EditorScreen
+import com.fluxx.android.ui.home.CompositionCreationSheet
+import com.fluxx.android.ui.navigation.MainShellScreen
+import com.fluxx.android.ui.projects.ProjectOperation
+import com.fluxx.android.ui.settings.SettingsScreen
+import com.fluxx.android.ui.theme.FluxxTheme
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.File
 
-data class Layer(
-    val id: Long = 0L,
-    var positionX: Float = 0f,
-    var positionY: Float = 0f,
-    var scaleX: Float = 1f,
-    var scaleY: Float = 1f,
-    var rotationDegrees: Float = 0f,
-    var opacity: Float = 1f,
-    var assetUri: android.net.Uri? = null
-)
+sealed interface AppDestination {
+    data object Shell : AppDestination
+    data object Settings : AppDestination
+    data class Editor(val projectFile: File? = null) : AppDestination
+}
 
+@androidx.media3.common.util.UnstableApi
 class MainActivity : ComponentActivity() {
+    private val editor by lazy { ViewModelProvider(this)[EditorViewModel::class.java] }
+    private val projectManager by lazy { ProjectManager(applicationContext) }
+    private val mediaRepository by lazy { MediaRepository(applicationContext) }
+    private val paletteRepository by lazy { PaletteRepository.getInstance(applicationContext) }
+    private val projectThumbnails by lazy { ProjectThumbnails(applicationContext, projectManager) }
+    private val creation by lazy { ViewModelProvider(this)[CompositionCreationViewModel::class.java] }
+    private val compositionPresets by lazy { CompositionPresetStore(applicationContext) }
 
-    private var videoDecoder: VideoDecoder? = null
-    private var renderJob: Job? = null
-    private val scope = CoroutineScope(Dispatchers.Main + Job())
-    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
-    private val renderDispatcher = kotlinx.coroutines.newSingleThreadContext("VulkanRenderThread")
+    private var currentDestination by mutableStateOf<AppDestination>(AppDestination.Shell)
+    private var projectsList by mutableStateOf<List<ProjectMetadata>>(emptyList())
+    private var preview by mutableStateOf<PreviewController?>(null)
+    private var previewSurface: Surface? = null
+    private var previewWidth = 1
+    private var previewHeight = 1
+    private var previewMessage by mutableStateOf<String?>(null)
+    private var surfaceReady = false
+    private var leavingEditor = false
 
-    private val layerState = mutableStateOf(Layer())
-    private val isExporting = java.util.concurrent.atomic.AtomicBoolean(false)
-    private val exportProgress = mutableStateOf<com.fluxx.android.export.VideoExporter.Progress?>(null)
+    /** Called on main: settle the gesture before capturing the immutable committed document. */
+    private fun queueEditorSave(): Deferred<Result<Unit>>? {
+        val destination = currentDestination as? AppDestination.Editor ?: return null
+        val file = destination.projectFile ?: return null
+        editor.commitGesture()
+        return ProjectSaveQueue.enqueue(projectManager, file, editor.state.project)
+    }
 
-    private val pickVideo = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    private fun autosaveEditor() {
+        val save = queueEditorSave() ?: return
+        // Only this UI observer belongs to the Activity; the disk write survives its destruction.
+        lifecycleScope.launch {
+            save.await().onFailure { toast("Autosave failed: ${it.message}") }
+        }
+    }
+
+    private fun refreshProjects() {
+        lifecycleScope.launch {
+            ProjectSaveQueue.awaitPending()
+            projectsList = projectManager.listProjects()
+        }
+    }
+
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        checkPermissions()
+    }
+
+    // Document picker fallback route for files outside MediaStore library
+    private val pickDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             try {
-                // Attempt to make the URI grant durable across app restarts
                 contentResolver.takePersistableUriPermission(
-                    uri, 
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-                
-                // Only save the URI to the project state if the persistent grant succeeded
-                updateLayer(layerState.value.copy(assetUri = uri))
             } catch (e: SecurityException) {
-                // Known issue on some OEM skins or unsupported content providers
-                android.util.Log.w(
-                    "MainActivity", 
-                    "Failed to get persistable permission for URI. Video will play now, but won't be saved to the .fluxx project.", 
-                    e
-                )
+                android.util.Log.w("Fluxx", "Using session-only document access", e)
             }
-
-            // Proceed with opening and playing the file for the current session regardless
-            val fd = contentResolver.openFileDescriptor(uri, "r")?.fileDescriptor
-            if (fd != null) {
-                startVideo(fd)
+            lifecycleScope.launch {
+                try {
+                    editor.addMedia(mediaRepository, uri, "Document", editor.state.playheadUs)
+                    preview?.update(editor.state.project, editor.state.playheadUs, false)
+                    toast("Added document media")
+                } catch (e: Exception) {
+                    toast("Cannot import: ${e.message}")
+                }
             }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        lifecycleScope.launch {
+            try { paletteRepository.load() }
+            catch(e:CancellationException) { throw e }
+            catch(e:Exception) { Toast.makeText(this@MainActivity,e.message ?: "Could not load palettes",Toast.LENGTH_LONG).show() }
+        }
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.rgb(18, 18, 18))
+        )
+        currentDestination = when (savedInstanceState?.getString("appDestination")) {
+            "settings" -> AppDestination.Settings
+            else -> AppDestination.Shell
+        }
+        checkPermissions()
+        refreshProjects()
 
-        val frameLayout = FrameLayout(this)
-        val surfaceView = SurfaceView(this)
-        frameLayout.addView(surfaceView)
-        
-        val composeView = ComposeView(this).apply {
-            setContent {
-                MaterialTheme {
-                    val layer by layerState
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.Bottom
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            Button(onClick = {
-                                val currentUri = layer.assetUri
-                                if (currentUri != null && !isExporting.get()) {
-                                    scope.launch {
-                                        isExporting.set(true)
-                                        stopVideo()
-                                        
-                                        val fd = contentResolver.openFileDescriptor(currentUri, "r")?.fileDescriptor
-                                        if (fd != null) {
-                                            val exportDecoder = VideoDecoder(fd).apply {
-                                                exportMode = true
-                                            }
-                                            exportDecoder.start()
-                                            
-                                            val exporter = com.fluxx.android.export.VideoExporter(renderDispatcher, exportDecoder)
-                                            exporter.onProgress = { progress ->
-                                                exportProgress.value = progress
-                                            }
-                                            
-                                            val outputFile = java.io.File(getExternalFilesDir(null), "export_${System.currentTimeMillis()}.mp4")
-                                            val result = exporter.export(outputFile)
-                                            
-                                            if (result.isSuccess) {
-                                                android.widget.Toast.makeText(this@MainActivity, "Export Saved: ${outputFile.name}", android.widget.Toast.LENGTH_LONG).show()
-                                            } else {
-                                                android.widget.Toast.makeText(this@MainActivity, "Export Failed", android.widget.Toast.LENGTH_LONG).show()
-                                            }
-                                            
-                                            exportDecoder.stop()
-                                        }
-                                        
-                                        isExporting.set(false)
-                                        exportProgress.value = null
-                                        
-                                        // Restart normal video preview
-                                        val restartFd = contentResolver.openFileDescriptor(currentUri, "r")?.fileDescriptor
-                                        if (restartFd != null) {
-                                            startVideo(restartFd)
-                                        }
-                                    }
+        setContent {
+            FluxxTheme {
+                val shellPagerState = rememberPagerState(pageCount = { 2 })
+                var openingCreatedProject by remember { mutableStateOf(false) }
+                LaunchedEffect(creation.createdFile, creation.openAttempt) {
+                    val path = creation.createdFile ?: return@LaunchedEffect
+                    openingCreatedProject = true
+                    try {
+                        openProject(File(path)).onSuccess { creation.opened(); refreshProjects() }
+                            .onFailure { creation.openFailed("Project saved, but could not open: ${it.message}. Tap Create Project to retry opening.") }
+                    } finally { openingCreatedProject = false }
+                }
+                when (val destination = currentDestination) {
+                    is AppDestination.Shell -> {
+                        MainShellScreen(
+                            pagerState = shellPagerState,
+                            projects = projectsList,
+                            blurred = creation.visible,
+                            projectThumbnails = projectThumbnails,
+                            onProjectOperation = { operation, file, name ->
+                                val result = when (operation) {
+                                    ProjectOperation.Rename -> projectManager.renameProject(file, name).map { Unit }
+                                    ProjectOperation.Duplicate -> projectManager.duplicateProject(file).map { Unit }
+                                    ProjectOperation.Delete -> projectManager.deleteProject(file)
                                 }
-                            }) {
-                                Text("Export")
-                            }
-                            
-                            val projectManager = remember { ProjectManager(this@MainActivity) }
-                            val projectFile = remember { java.io.File(filesDir, "project.fluxx") }
-                            
-                            Button(onClick = {
-                                scope.launch {
-                                    val result = projectManager.saveProject(projectFile, listOf(layer))
-                                    if (result.isSuccess) {
-                                        android.widget.Toast.makeText(this@MainActivity, "Saved!", android.widget.Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        android.widget.Toast.makeText(this@MainActivity, "Save Failed", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
+                                if (result.isSuccess) projectsList = projectManager.listProjects()
+                                result
+                            },
+                            onOpenProject = { file ->
+                                lifecycleScope.launch {
+                                    openProject(file)
+                                        .onSuccess { creation.opened() }
+                                        .onFailure { toast("Failed to open project: ${it.message}") }
                                 }
-                            }) {
-                                Text("Save")
-                            }
-                            
-                            Button(onClick = {
-                                scope.launch {
-                                    val result = projectManager.loadProject(projectFile)
-                                    result.onSuccess { layers ->
-                                        if (layers.isNotEmpty()) {
-                                            val loadedLayer = layers.first()
-                                            updateLayer(loadedLayer)
-                                            android.widget.Toast.makeText(this@MainActivity, "Loaded!", android.widget.Toast.LENGTH_SHORT).show()
-                                            
-                                            // Re-start video if URI is valid
-                                            loadedLayer.assetUri?.let { uri ->
-                                                try {
-                                                    val fd = contentResolver.openFileDescriptor(uri, "r")?.fileDescriptor
-                                                    if (fd != null) {
-                                                        startVideo(fd)
-                                                    }
-                                                } catch (e: Exception) {
-                                                    android.util.Log.e("MainActivity", "Failed to reopen video after load", e)
-                                                }
-                                            }
-                                        }
-                                    }.onFailure {
-                                        android.widget.Toast.makeText(this@MainActivity, "Load Failed", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
+                            },
+                            onOpenCompositionSheet = {
+                                creation.open(projectsList)
+                            },
+                            onOpenSettings = { currentDestination = AppDestination.Settings }
+                        )
+                        if (creation.visible) CompositionCreationSheet(
+                            draft = creation.draft,
+                            busy = creation.busy || openingCreatedProject,
+                            creationError = creation.error,
+                            presets = compositionPresets,
+                            onUpdate = creation::update,
+                            onCreate = { creation.create(projectManager) },
+                            onDismiss = creation::dismiss
+                        )
+                    }
+                    is AppDestination.Settings -> {
+                        SettingsScreen(
+                            onBackClick = { currentDestination = AppDestination.Shell }
+                        )
+                    }
+                    is AppDestination.Editor -> {
+                        val hasPerm = checkHasMediaPermission()
+                        val isLimited = checkIsLimitedMediaAccess()
+
+                        EditorScreen(
+                            paletteRepository = paletteRepository,
+                    editor = editor,
+                    mediaRepository = mediaRepository,
+                    previewController = preview,
+                    previewMessage = previewMessage,
+                    hasMediaPermission = hasPerm,
+                    isLimitedAccess = isLimited,
+                    onSurfaceAvailable = { surface, width, height ->
+                        previewSurface = surface
+                        if (width > 0 && height > 0) {
+                            previewWidth = width
+                            previewHeight = height
+                        }
+                        surfaceReady = true
+                        refreshPreview()
+                    },
+                    onSurfaceDestroyed = {
+                        surfaceReady = false
+                        previewSurface = null
+                        stopPreview()
+                    },
+                    onSurfaceResized = { width, height ->
+                        if (width > 0 && height > 0) {
+                            val sizeChanged = previewWidth != width || previewHeight != height
+                            previewWidth = width
+                            previewHeight = height
+                            if (surfaceReady) {
+                                if (preview == null) {
+                                    refreshPreview()
+                                } else if (sizeChanged) {
+                                    preview?.resize(width, height)
                                 }
-                            }) {
-                                Text("Load")
                             }
                         }
-                        
-                        val progress = exportProgress.value
-                        if (progress != null && !progress.isComplete) {
-                            val progressValue = if (progress.totalFrames > 0) progress.currentFrame.toFloat() / progress.totalFrames else 0f
-                            LinearProgressIndicator(
-                                progress = { progressValue },
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    },
+                    onRequestMediaPermission = { requestMediaPermissions() },
+                    onOpenDocumentPicker = {
+                        pickDocument.launch(arrayOf("video/*", "image/*"))
+                    },
+                    onSaveProject = {
+                        val save = queueEditorSave()
+                        lifecycleScope.launch {
+                            (save?.await() ?: Result.failure(IllegalStateException("No active project file")))
+                                .onSuccess {
+                                    refreshProjects()
+                                    toast("Project saved successfully!")
+                                }
+                                .onFailure { toast("Save failed: ${it.message}") }
+                        }
+                    },
+                    onLoadProject = {
+                        val file = destination.projectFile
+                        lifecycleScope.launch {
+                            (file?.let { openProject(it) } ?: Result.failure(IllegalStateException("No active project file")))
+                                .onSuccess { toast("Project loaded successfully!") }
+                                .onFailure { toast("Load failed: ${it.message}") }
+                        }
+                    },
+                    onExportStart = {
+                        editor.commitGesture()
+                        lifecycleScope.launch {
+                            try {
+                                stopPreview()
+                                ExportService.start(this@MainActivity, editor.state.project)
+                            } catch (e: Exception) {
+                                toast("Export start failed: ${e.message}")
+                                refreshPreview()
+                            }
+                        }
+                    },
+                    onExportCancel = {
+                        ExportService.cancel(this@MainActivity)
+                    },
+                    onOpenExportedVideo = { uri ->
+                        try {
+                            startActivity(
+                                Intent(Intent.ACTION_VIEW)
+                                    .setDataAndType(uri, "video/mp4")
+                                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             )
-                            Text("Exporting: ${progress.currentFrame} / ${progress.totalFrames}", color = androidx.compose.ui.graphics.Color.White)
+                        } catch (_: Exception) {
+                            toast("Export saved in Movies/Fluxx")
                         }
-                        
-                        Text("Position X: ${layer.positionX}", color = androidx.compose.ui.graphics.Color.White)
-                        Slider(value = layer.positionX, onValueChange = { updateLayer(layer.copy(positionX = it)) }, valueRange = -2f..2f)
-                        
-                        Text("Position Y: ${layer.positionY}", color = androidx.compose.ui.graphics.Color.White)
-                        Slider(value = layer.positionY, onValueChange = { updateLayer(layer.copy(positionY = it)) }, valueRange = -2f..2f)
-                        
-                        Text("Scale: ${layer.scaleX}", color = androidx.compose.ui.graphics.Color.White)
-                        Slider(value = layer.scaleX, onValueChange = { updateLayer(layer.copy(scaleX = it, scaleY = it)) }, valueRange = 0.1f..3f)
-                        
-                        Text("Rotation: ${layer.rotationDegrees}", color = androidx.compose.ui.graphics.Color.White)
-                        Slider(value = layer.rotationDegrees, onValueChange = { updateLayer(layer.copy(rotationDegrees = it)) }, valueRange = 0f..360f)
-                        
-                        Text("Opacity: ${layer.opacity}", color = androidx.compose.ui.graphics.Color.White)
-                        Slider(value = layer.opacity, onValueChange = { updateLayer(layer.copy(opacity = it)) }, valueRange = 0f..1f)
-                    }
-                }
-            }
-        }
-        frameLayout.addView(composeView)
-
-        setContentView(frameLayout)
-
-        // Request POST_NOTIFICATIONS permission for Android 13+
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 0)
-        }
-
-        surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
-            override fun surfaceCreated(holder: SurfaceHolder) {
-                val surface = holder.surface
-                val w = surfaceView.width
-                val h = surfaceView.height
-                val am = assets
-                
-                scope.launch(renderDispatcher) {
-                    FluxxEngine.init(surface, w, h, am)
-                    
-                    withContext(Dispatchers.Main) {
-                        // Initialize transform
-                        updateLayer(layerState.value)
-                        
-                        // Prompt user for video on main thread
-                        pickVideo.launch("video/*")
-                    }
-                    
-                    val targetFrameTimeNanos = 16_666_666L
-                    var lastTime = System.nanoTime()
-                    
-                    // We run render loop within the same coroutine after init
-                    renderJob = scope.launch(renderDispatcher) {
-                        while(isActive) {
-                            if (!isExporting.get()) {
-                                FluxxEngine.renderFrame()
-                            }
-                            val now = System.nanoTime()
-                            val elapsed = now - lastTime
-                            val slackMs = (targetFrameTimeNanos - elapsed) / 1_000_000L
-                            if (slackMs > 0) {
-                                delay(slackMs)
-                            }
-                            lastTime = System.nanoTime()
+                    },
+                    onExitClick = {
+                        if (!leavingEditor) lifecycleScope.launch {
+                            leavingEditor = true
+                            try {
+                                // Edits may continue during IO. Save again if the committed document changed.
+                                while (currentDestination == destination) {
+                                    val save = queueEditorSave()
+                                    val snapshot = editor.state.project
+                                    val result = save?.await() ?: Result.failure(IllegalStateException("No active project file"))
+                                    if (result.isFailure) {
+                                        toast("Could not save before leaving: ${result.exceptionOrNull()?.message}")
+                                        break
+                                    }
+                                    if (currentDestination != destination) break
+                                    if (editor.transientState != null || editor.state.project != snapshot) continue
+                                    currentDestination = AppDestination.Shell
+                                    shellPagerState.scrollToPage(1)
+                                    refreshProjects()
+                                    break
+                                }
+                            } finally { leavingEditor = false }
                         }
                     }
-                }
-            }
-
-            override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-            }
-
-            override fun surfaceDestroyed(holder: SurfaceHolder) {
-                stopVideo()
-                runBlocking {
-                    renderJob?.cancelAndJoin()
-                    renderJob = null
-                    withContext(renderDispatcher) {
-                        FluxxEngine.cleanup()
+                )
                     }
                 }
             }
-        })
-    }
-
-    private fun updateLayer(newLayer: Layer) {
-        layerState.value = newLayer
-        val matrix = FloatArray(16)
-        Matrix.setIdentityM(matrix, 0)
-        
-        // 5. USER TRANSLATE
-        Matrix.translateM(matrix, 0, newLayer.positionX, newLayer.positionY, 0f)
-        
-        // 4. COMP-SPACE CORRECTION (Ortho/Aspect mapping)
-        val compWidth = FluxxEngine.getCompWidth().toFloat()
-        val compHeight = FluxxEngine.getCompHeight().toFloat()
-        
-        // Handle uninitialized engine state smoothly
-        val finalCompW = if (compWidth > 0f) compWidth else 1080f
-        val finalCompH = if (compHeight > 0f) compHeight else 1920f
-        
-        Matrix.scaleM(matrix, 0, 1f / (finalCompW / 2f), 1f / (finalCompH / 2f), 1f)
-        
-        // 3. USER ROTATE
-        Matrix.rotateM(matrix, 0, newLayer.rotationDegrees, 0f, 0f, 1f)
-        
-        // 2. USER SCALE
-        Matrix.scaleM(matrix, 0, newLayer.scaleX, newLayer.scaleY, 1f)
-        
-        // 1. BASE QUAD SHAPING (Dynamic Video Aspect)
-        val videoW = videoDecoder?.videoWidth?.toFloat()?.takeIf { it > 0 } ?: 1080f
-        val videoH = videoDecoder?.videoHeight?.toFloat()?.takeIf { it > 0 } ?: 1920f
-        val videoAspect = videoW / videoH
-        
-        val compAspect = finalCompW / finalCompH
-        val quadWidthPixels: Float
-        val quadHeightPixels: Float
-        if (videoAspect > compAspect) {
-            // video is proportionally wider than the comp -> constrain by width, letterbox top/bottom
-            quadWidthPixels = finalCompW / 2f
-            quadHeightPixels = quadWidthPixels / videoAspect
-        } else {
-            // video is proportionally narrower/taller than the comp -> constrain by height, pillarbox left/right
-            quadHeightPixels = finalCompH / 2f
-            quadWidthPixels = quadHeightPixels * videoAspect
-        }
-        Matrix.scaleM(matrix, 0, quadWidthPixels, quadHeightPixels, 1f)
-        
-        scope.launch(renderDispatcher) {
-            FluxxEngine.setLayerTransform(matrix, newLayer.opacity)
         }
     }
 
-    private fun startVideo(fd: FileDescriptor) {
-        stopVideo()
-        videoDecoder = VideoDecoder(fd).apply {
-            onFormatReady = {
-                scope.launch(Dispatchers.Main) {
-                    updateLayer(layerState.value)
-                }
-            }
+    override fun onResume() {
+        super.onResume()
+        checkPermissions()
+        refreshProjects()
+        if (surfaceReady && !ExportService.state.value.running && preview == null) {
+            refreshPreview()
         }
-        videoDecoder?.start()
     }
 
-    private fun stopVideo() {
-        videoDecoder?.stop()
-        videoDecoder = null
+    override fun onPause() {
+        preview?.pause()
+        autosaveEditor()
+        super.onPause()
     }
-    
+
+    override fun onStop() {
+        autosaveEditor()
+        super.onStop()
+    }
+
     override fun onDestroy() {
+        stopPreview()
         super.onDestroy()
-        scope.cancel()
-        renderDispatcher.close()
+    }
+
+    private fun refreshPreview() {
+        if (!surfaceReady || ExportService.state.value.running) return
+        val surface = previewSurface ?: return
+        val w = if (previewWidth > 0) previewWidth else 1
+        val h = if (previewHeight > 0) previewHeight else 1
+        if (preview == null) {
+            preview = PreviewController(
+                context = applicationContext,
+                surface = surface,
+                width = w,
+                height = h,
+                onPosition = { editor.reportPosition(it) },
+                onStatus = { previewMessage = it }
+            )
+        }
+        preview?.update(editor.displayedState.project, editor.displayedState.playheadUs, false)
+    }
+
+    private fun stopPreview() {
+        val old = preview ?: return
+        preview = null
+        lifecycleScope.launch(Dispatchers.Default) {
+            try {
+                old.close()
+            } catch (_: Exception) {}
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        autosaveEditor()
+        when (currentDestination) {
+            AppDestination.Shell -> outState.putString("appDestination", "shell")
+            AppDestination.Settings -> outState.putString("appDestination", "settings")
+            is AppDestination.Editor -> {
+                // Document process restoration belongs to the existing editor lifecycle.
+                outState.putString("appDestination", "shell")
+            }
+        }
+        super.onSaveInstanceState(outState)
+    }
+
+    private suspend fun openProject(file: File): Result<Unit> {
+        ProjectSaveQueue.awaitPending()
+        return projectManager.loadProject(file).map { doc ->
+            editor.dispatch(EditorAction.Load(doc))
+            preview?.update(editor.state.project, 0L, false)
+            currentDestination = AppDestination.Editor(file)
+        }
+    }
+
+    private fun checkHasMediaPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= 33) {
+            val video = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED
+            val images = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+            video || images || (Build.VERSION.SDK_INT >= 34 && ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED)
+        } else {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun checkIsLimitedMediaAccess(): Boolean {
+        return if (Build.VERSION.SDK_INT >= 34) {
+            val fullVideo = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED
+            val userSelected = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED
+            !fullVideo && userSelected
+        } else false
+    }
+
+    private fun requestMediaPermissions() {
+        val permissions = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= 34) {
+            permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
+            permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
+            permissions.add(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+        } else if (Build.VERSION.SDK_INT >= 33) {
+            permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
+            permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
+        } else {
+            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        if (Build.VERSION.SDK_INT >= 33) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        permissionLauncher.launch(permissions.toTypedArray())
+    }
+
+    private fun checkPermissions() {
+        // Triggers recomposition of permission dependent UI
+    }
+
+    private fun toast(text: String) {
+        Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
     }
 }
