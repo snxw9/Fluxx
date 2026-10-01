@@ -80,6 +80,18 @@ extern "C" JNIEXPORT void JNICALL Java_com_fluxx_android_engine_TextNative_close
     }
     // Last lease destroys handles/bytes after in-flight calls, outside the registry lock.
 }
+extern "C" JNIEXPORT jdoubleArray JNICALL Java_com_fluxx_android_engine_TextNative_metrics(JNIEnv* env, jobject, jlong id, jstring font, jbyteArray utf8) {
+    try {
+        if (!utf8 || env->GetArrayLength(utf8)>static_cast<jsize>(FontManager::MaxTextBytes)) throw std::invalid_argument("Invalid text bytes");
+        std::string text(static_cast<size_t>(env->GetArrayLength(utf8)), '\0');
+        env->GetByteArrayRegion(utf8,0,static_cast<jsize>(text.size()),reinterpret_cast<jbyte*>(text.data()));
+        if(env->ExceptionCheck()) return nullptr;
+        const auto values=fluxx::text::layoutMetrics(*get(id)->shape(string(env,font),text));
+        auto result=env->NewDoubleArray(static_cast<jsize>(values.size()));
+        if(result) env->SetDoubleArrayRegion(result,0,static_cast<jsize>(values.size()),values.data());
+        return result;
+    } catch(const std::exception& error) { fail(env,error); return nullptr; }
+}
 extern "C" JNIEXPORT jstring JNICALL Java_com_fluxx_android_engine_TextNative_shape(JNIEnv* env, jobject, jlong id, jstring font, jbyteArray utf8) {
     try {
         if (!utf8 || env->GetArrayLength(utf8) > static_cast<jsize>(FontManager::MaxTextBytes)) throw std::invalid_argument("Invalid text bytes");

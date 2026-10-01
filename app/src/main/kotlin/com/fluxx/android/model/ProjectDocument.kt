@@ -17,7 +17,7 @@ class FrozenList<out T> private constructor(private val values: List<T>) : List<
 object CompositionDefaults {
     const val WIDTH = 1080
     const val HEIGHT = 1920
-    const val PROJECT_VERSION = 8 // Display timecode origin; layer times remain composition-relative.
+    const val PROJECT_VERSION = 9 // Typed text properties; existing slots and type ordinals retained.
 }
 
 /** Convert from the absolute frame index, never by repeatedly adding a rounded frame period. */
@@ -141,16 +141,7 @@ object KeyframeEvaluator {
         if (timeUs <= keyframes.first().timeUs) return keyframes.first().value
         if (timeUs >= keyframes.last().timeUs) return keyframes.last().value
 
-        var low = 0
-        var high = keyframes.size - 1
-        while (low <= high) {
-            val mid = (low + high) ushr 1
-            if (keyframes[mid].timeUs <= timeUs) {
-                low = mid + 1
-            } else {
-                high = mid - 1
-            }
-        }
+        val high = PropertyTimeSearch.atOrBefore(keyframes, timeUs) { it.timeUs }
         val k0 = keyframes[high]
         val k1 = keyframes[high + 1]
         val dt = k1.timeUs - k0.timeUs
@@ -182,16 +173,7 @@ object KeyframeEvaluator {
             return
         }
 
-        var low = 0
-        var high = keyframes.size - 1
-        while (low <= high) {
-            val mid = (low + high) ushr 1
-            if (keyframes[mid].timeUs <= timeUs) {
-                low = mid + 1
-            } else {
-                high = mid - 1
-            }
-        }
+        val high = PropertyTimeSearch.atOrBefore(keyframes, timeUs) { it.timeUs }
         val k0 = keyframes[high]
         val k1 = keyframes[high + 1]
         val dt = k1.timeUs - k0.timeUs
@@ -311,7 +293,8 @@ data class CompositionLayer(
     val keyframeAnchorUs: Long? = null,
     val anchorX: Float = .5f,
     val anchorY: Float = .5f,
-    val markers: FrozenList<Marker> = FrozenList.empty()
+    val markers: FrozenList<Marker> = FrozenList.empty(),
+    val text: TextProperties = TextProperties()
 ) {
     init {
         Markers.validate(markers, anchor = resolvedKeyframeAnchorUs)
@@ -378,6 +361,16 @@ data class Composition(
         require(markers.all { it.timeUs >= 0 })
         Markers.validate(markers, frameRate)
         layers.forEach { Markers.validate(it.markers, frameRate, it.resolvedKeyframeAnchorUs) }
+        require(layers.filter { it.type == LayerType.TEXT }.sumOf { it.text.sourceBytes() } <= TextLimits.MAX_DOCUMENT_BYTES) {
+            "Text source payload exceeds the 1 MiB document budget"
+        }
+        layers.filter { it.type == LayerType.TEXT }.forEach { layer ->
+            for (times in listOf(layer.text.source.keyframes.map { it.timeUs }, layer.text.size.keyframes.map { it.timeUs },
+                layer.text.fill.keyframes.map { it.timeUs })) {
+                val frames = times.map { Markers.signedFrame(frameRate, Math.addExact(layer.resolvedKeyframeAnchorUs, it)) }
+                require(frames.distinct().size == frames.size) { "Text keys share a composition frame" }
+            }
+        }
         require(width > 0 && height > 0)
         require(durationUs == null || durationUs >= 0)
         require(startTimecodeUs >= 0)

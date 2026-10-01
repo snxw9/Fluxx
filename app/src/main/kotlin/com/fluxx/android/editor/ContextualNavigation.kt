@@ -48,6 +48,7 @@ object ContextualNavigation {
             AnimPropertyType.SCALE -> animation.scale.takeIf { it.isAnimated }?.keyframes?.map { it.timeUs }
             AnimPropertyType.ROTATION -> animation.rotation.takeIf { it.isAnimated }?.keyframes?.map { it.timeUs }
             AnimPropertyType.OPACITY -> animation.opacity.takeIf { it.isAnimated }?.keyframes?.map { it.timeUs }
+            AnimPropertyType.FONT_SIZE, AnimPropertyType.FILL_COLOUR, AnimPropertyType.SOURCE_TEXT -> layer.propertyKeyTimes(property)
         }.orEmpty()
         return local.mapNotNull {
             try { Math.addExact(layer.resolvedKeyframeAnchorUs, it).takeIf { time -> time >= 0 } }

@@ -1,6 +1,6 @@
 # Phase 2 Status, Backend Architecture & UI Control Matrix
 
-**Status:** Phase 2 A-D and text E1b–E1e are implemented in source. E1b/E1c accepted; E1d renderer and E1e harness are uncompiled/untested. E2/E3 are unimplemented pending a production overflow design decision under the user's stop rule. Earlier Android/native compilation and A16 smoke evidence apply to earlier source only. See [text checkpoint](TEXT_LAYER.md#stop-before-e2--production-overflow-design-decision). "Functional" means source implementation, not phone verification.
+**Text status (2026-10-01):** E1d/E1e and E2 are implemented in source, compiled, device-unverified. E2 adds v9 typed properties, shared native metrics, preview/export/thumbnail rendering and the approved lazy R8 texture-array atlas (four pages; two on low-RAM devices). E3 editor wiring remains pending. E1d/E1e compile checks and policy tests passed; E2 compile checks and 140 JVM tests passed. See [text checkpoint](TEXT_LAYER.md#e2-implementation-and-approved-array-overflow).
 
 ---
 

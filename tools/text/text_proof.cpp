@@ -1,5 +1,6 @@
 #include "font_manager.h"
 #include "text_diagnostics.h"
+#include "atlas_packer.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -59,6 +60,21 @@ int main(int argc, char** argv) {
                 }
             });
             for (auto& worker : workers) worker.join();
+            std::vector<std::shared_ptr<const SdfGlyph>> corpus;
+            for(const auto* font:{"fluxx.sans","fluxx.serif","fluxx.mono"})
+                for(auto glyph:manager.latinGlyphs(font)) corpus.push_back(manager.sdf(font,glyph));
+            const auto rasterizations=manager.stats().rasterizations;
+            require(packGlyphPages(corpus,1).rejected>0,"Corpus no longer exercises one-page overflow");
+            auto pages=packGlyphPages(corpus,2);
+            require(pages.rejected==0 && pages.pages.size()==2,"Three-font corpus must fit two pages");
+            require(manager.stats().rasterizations==rasterizations,"Growth rerasterized retained leases");
+            std::vector<std::shared_ptr<const SdfGlyph>> oversized;
+            for(unsigned i=0;i<5;++i) {
+                auto glyph=std::make_shared<SdfGlyph>(); glyph->fontId="synthetic"; glyph->glyphId=i;
+                glyph->width=2046; glyph->height=2046; glyph->pixels.resize(2046u*2046u);
+                oversized.push_back(glyph);
+            }
+            require(packGlyphPages(oversized,4).rejected>0,"Four-page capacity must reject before draws");
             std::cout << "PASS: fallback, newline, missing glyph, UTF8, pinned LRU/lifetime, concurrent shaping/rasterization\n";
         } else throw std::runtime_error("Unknown CPU proof command");
         return 0;

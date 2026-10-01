@@ -866,6 +866,9 @@ private fun TimelineClipRow(
                 AnimPropertyType.SCALE -> anim.scale.keyframes.map { it.timeUs }
                 AnimPropertyType.ROTATION -> anim.rotation.keyframes.map { it.timeUs }
                 AnimPropertyType.OPACITY -> anim.opacity.keyframes.map { it.timeUs }
+                AnimPropertyType.FONT_SIZE -> layer.text.size.keyframes.map { it.timeUs }
+                AnimPropertyType.FILL_COLOUR -> layer.text.fill.keyframes.map { it.timeUs }
+                AnimPropertyType.SOURCE_TEXT -> layer.text.source.keyframes.map { it.timeUs }
                 null -> emptyList()
             }
             keys.map { it + anchorOffsetUs }.toSet()

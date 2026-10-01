@@ -212,33 +212,45 @@ class Layer : Table() {
             val o = __offset(62)
             return if(o != 0) bb.getFloat(o + bb_pos) else 0.5f
         }
-    fun markers(j: Int): Marker? {
+    fun markers(j: Int) : fluxx.schema.Marker? = markers(fluxx.schema.Marker(), j)
+    fun markers(obj: fluxx.schema.Marker, j: Int) : fluxx.schema.Marker? {
         val o = __offset(64)
-        return if (o != 0) Marker().__assign(__indirect(__vector(o) + j * 4), bb) else null
-    }
-    val markersLength: Int get() { val o = __offset(64); return if (o != 0) __vector_len(o) else 0 }
-    companion object {
-        fun addMarkers(builder: FlatBufferBuilder, markers: Int) = builder.addOffset(30, markers, 0)
-        fun createMarkersVector(builder: FlatBufferBuilder, data: IntArray): Int {
-            builder.startVector(4, data.size, 4)
-            for (i in data.lastIndex downTo 0) builder.addOffset(data[i])
-            return builder.endVector()
+        return if (o != 0) {
+            obj.__assign(__indirect(__vector(o) + j * 4), bb)
+        } else {
+            null
         }
+    }
+    val markersLength : Int
+        get() {
+            val o = __offset(64); return if (o != 0) __vector_len(o) else 0
+        }
+    val textPayload : fluxx.schema.TextPayload? get() = textPayload(fluxx.schema.TextPayload())
+    fun textPayload(obj: fluxx.schema.TextPayload) : fluxx.schema.TextPayload? {
+        val o = __offset(66)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    companion object {
         fun validateVersion() = Constants.FLATBUFFERS_25_2_10()
         fun getRootAsLayer(_bb: ByteBuffer): Layer = getRootAsLayer(_bb, Layer())
         fun getRootAsLayer(_bb: ByteBuffer, obj: Layer): Layer {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createLayer(builder: FlatBufferBuilder, id: ULong, positionX: Float, positionY: Float, scaleX: Float, scaleY: Float, rotation: Float, opacity: Float, assetUriOffset: Int, type: Int, zOrder: Int, startUs: Long, sourceInUs: Long, durationUs: Long, visible: Boolean, assetIdOffset: Int, sourceDurationUs: Long, muted: Boolean, audioGain: Float, nameOffset: Int, solidColorArgb: Int, referenceWidth: Int, referenceHeight: Int, animPositionOffset: Int, animScaleOffset: Int, animRotationOffset: Int, animOpacityOffset: Int, keyframeAnchorUs: Long, hasKeyframeAnchor: Boolean, anchorX: Float, anchorY: Float, markersOffset: Int = 0) : Int {
-            builder.startTable(31)
-            addMarkers(builder, markersOffset)
+        fun createLayer(builder: FlatBufferBuilder, id: ULong, positionX: Float, positionY: Float, scaleX: Float, scaleY: Float, rotation: Float, opacity: Float, assetUriOffset: Int, type: Int, zOrder: Int, startUs: Long, sourceInUs: Long, durationUs: Long, visible: Boolean, assetIdOffset: Int, sourceDurationUs: Long, muted: Boolean, audioGain: Float, nameOffset: Int, solidColorArgb: Int, referenceWidth: Int, referenceHeight: Int, animPositionOffset: Int, animScaleOffset: Int, animRotationOffset: Int, animOpacityOffset: Int, keyframeAnchorUs: Long, hasKeyframeAnchor: Boolean, anchorX: Float, anchorY: Float, markersOffset: Int, textPayloadOffset: Int) : Int {
+            builder.startTable(32)
             addKeyframeAnchorUs(builder, keyframeAnchorUs)
             addSourceDurationUs(builder, sourceDurationUs)
             addDurationUs(builder, durationUs)
             addSourceInUs(builder, sourceInUs)
             addStartUs(builder, startUs)
             addId(builder, id)
+            addTextPayload(builder, textPayloadOffset)
+            addMarkers(builder, markersOffset)
             addAnchorY(builder, anchorY)
             addAnchorX(builder, anchorX)
             addAnimOpacity(builder, animOpacityOffset)
@@ -265,7 +277,7 @@ class Layer : Table() {
             addVisible(builder, visible)
             return endLayer(builder)
         }
-        fun startLayer(builder: FlatBufferBuilder) = builder.startTable(31)
+        fun startLayer(builder: FlatBufferBuilder) = builder.startTable(32)
         fun addId(builder: FlatBufferBuilder, id: ULong) = builder.addLong(0, id.toLong(), 0)
         fun addPositionX(builder: FlatBufferBuilder, positionX: Float) = builder.addFloat(1, positionX, 0.0)
         fun addPositionY(builder: FlatBufferBuilder, positionY: Float) = builder.addFloat(2, positionY, 0.0)
@@ -296,6 +308,16 @@ class Layer : Table() {
         fun addHasKeyframeAnchor(builder: FlatBufferBuilder, hasKeyframeAnchor: Boolean) = builder.addBoolean(27, hasKeyframeAnchor, false)
         fun addAnchorX(builder: FlatBufferBuilder, anchorX: Float) = builder.addFloat(28, anchorX, 0.5)
         fun addAnchorY(builder: FlatBufferBuilder, anchorY: Float) = builder.addFloat(29, anchorY, 0.5)
+        fun addMarkers(builder: FlatBufferBuilder, markers: Int) = builder.addOffset(30, markers, 0)
+        fun createMarkersVector(builder: FlatBufferBuilder, data: IntArray) : Int {
+            builder.startVector(4, data.size, 4)
+            for (i in data.size - 1 downTo 0) {
+                builder.addOffset(data[i])
+            }
+            return builder.endVector()
+        }
+        fun startMarkersVector(builder: FlatBufferBuilder, numElems: Int) = builder.startVector(4, numElems, 4)
+        fun addTextPayload(builder: FlatBufferBuilder, textPayload: Int) = builder.addOffset(31, textPayload, 0)
         fun endLayer(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

@@ -43,9 +43,11 @@ struct VideoLayerState {
 class VulkanRenderer {
 public:
     int64_t upsertText(const std::string& font, const std::string& utf8);
-    bool prepareText(const std::vector<int64_t>& handles);
+    bool prepareText(const std::vector<int64_t>& handles, bool proofOnly);
+    void configureText(unsigned pages) { mTextMaxPages=pages; }
     bool setTextLayer(int64_t handle, const float* matrix, float size, int alignment, uint32_t argb, float opacity);
     void releaseText(int64_t handle);
+    std::vector<double> textMetrics(int64_t handle) const { return fluxx::text::layoutMetrics(*mTextLayouts.at(handle)); }
     bool validationEnabled() const { return mValidationEnabled; }
     uint64_t validationErrors() const { return mValidationErrors.load(); }
     std::string textStatsJson() const;
@@ -91,6 +93,7 @@ private:
     std::map<int64_t,std::shared_ptr<const fluxx::text::Layout>> mTextLayouts;
     int64_t mNextTextHandle=1;
     bool mTextPrepared=false;
+    unsigned mTextMaxPages=4;
     bool mValidationEnabled=false;
     std::atomic<uint64_t> mValidationErrors{0};
     VkDebugUtilsMessengerEXT mDebugMessenger=VK_NULL_HANDLE;

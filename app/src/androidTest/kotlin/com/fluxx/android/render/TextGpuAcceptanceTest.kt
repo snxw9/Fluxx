@@ -111,6 +111,42 @@ class TextGpuAcceptanceTest {
         } finally { TextFixtureProvider.fixtures = emptyList() }
     }
 
+    @Test fun arrayGrowthUsesRetainedCorpusDuringSweepAndTeardownReturnsLedger() {
+        val baseline = resources()
+        val corpus = buildString {
+            for (range in listOf(0x20..0x24f, 0x1e00..0x1eff, 0x2000..0x206f)) for (cp in range) append(cp.toChar())
+        }
+        try {
+            CompositionRenderer(context, MediaRepository(context)).use { renderer ->
+                TextFixtureProvider.fixtures = listOf(TextFixture(1))
+                renderer.render(project(), 0)
+                assertEquals(1, stats(renderer).getInt("atlasPages"))
+                TextFixtureProvider.fixtures = listOf("fluxx.sans", "fluxx.serif", "fluxx.mono").mapIndexed { i, font ->
+                    TextFixture(i + 1L, source = corpus, font = font)
+                }
+                try { renderer.render(project(), 0); fail("E1 single-page fixture must remain constrained") }
+                catch (_: TextCapacityException) { }
+                val rasterizations = stats(renderer).getLong("rasterizations")
+                TextFixtureProvider.fixtures = emptyList()
+                val layers = project().composition.layers + listOf("fluxx.sans", "fluxx.serif", "fluxx.mono").mapIndexed { i, font ->
+                    CompositionLayer(id = 10L + i, type = LayerType.TEXT, zOrder = i * 2,
+                        timing = ClipTiming(durationUs = 1_000_000), text = TextProperties(
+                            source = AnimatableString(staticValue = corpus), fontId = font))
+                }
+                val document = ProjectDocument(project().composition.copy(layers = FrozenList.of(layers)))
+                repeat(30) { index ->
+                    val scaled = document.copy(composition = document.composition.copy(layers = FrozenList.of(layers.map {
+                        it.copy(transform = it.transform.copy(scaleX = .5f + index / 10f, scaleY = .5f + index / 10f))
+                    })))
+                    renderer.render(scaled, 0)
+                    assertEquals("Array recreation cannot rasterize retained corpus", rasterizations, stats(renderer).getLong("rasterizations"))
+                    assertEquals(2, stats(renderer).getInt("atlasPages"))
+                }
+            }
+            assertTrue("Array teardown leaked resources", TextProofPolicy.resourcePass(baseline, resources()))
+        } finally { TextFixtureProvider.fixtures = emptyList() }
+    }
+
     @Test fun thirtySurfaceAndRendererCyclesReturnResourcesAndBoundHeap() {
         val directory = directory("lifecycle"); val host = host()
         val baseline = resources()

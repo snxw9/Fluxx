@@ -90,7 +90,8 @@ class CompositionContractTest {
         val asset = loaded.composition.layers.first().asset!!
         val resolved = EditorReducer.reduce(EditorState(loaded), EditorAction.ResolveAsset(asset.uri,
             asset.copy(access = MediaAccess.AVAILABLE, durationUs = 1234567)))
-        assertEquals(1234567L, resolved.project.composition.durationUs)
+        assertNull(resolved.project.composition.durationUs)
+        assertEquals(1234567L, resolved.project.composition.resolvedDurationUs)
         assertTrue(resolved.project.composition.layers.all { it.timing.durationUs == 1234567L })
     }
 

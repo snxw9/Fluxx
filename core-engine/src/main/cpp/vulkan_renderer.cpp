@@ -1293,19 +1293,19 @@ bool VulkanRenderer::beginFrame(int width, int height, int presentationWidth, in
     return true;
 }
 int64_t VulkanRenderer::upsertText(const std::string& font, const std::string& utf8) {
-    if(!mText) mText=std::make_unique<fluxx::text::TextRenderer>(mPhysicalDevice,mDevice,mOffscreenRenderPass,mPipelineCache,mAssetManager);
+    if(!mText) mText=std::make_unique<fluxx::text::TextRenderer>(mPhysicalDevice,mDevice,mOffscreenRenderPass,mPipelineCache,mAssetManager,mTextMaxPages);
     if(mNextTextHandle==INT64_MAX) throw std::runtime_error("Text layout handles exhausted");
     auto layout=mText->layout(font,utf8);
     const int64_t handle=mNextTextHandle++; mTextLayouts.emplace(handle,std::move(layout)); return handle;
 }
 void VulkanRenderer::releaseText(int64_t handle) { mTextLayouts.erase(handle); }
-bool VulkanRenderer::prepareText(const std::vector<int64_t>& handles) {
+bool VulkanRenderer::prepareText(const std::vector<int64_t>& handles, bool proofOnly) {
     if(!mInitialized || !mDrawOrder.empty() || !mFirstBatch) throw std::logic_error("Text preparation must precede composition draws");
     if(handles.empty()) return true;
     if(!mText || !beginWork()) return false;
     mText->begin();
     for(auto handle:handles) mText->collect(mTextLayouts.at(handle));
-    mText->pack(); mTextPrepared=true;
+    mText->pack(proofOnly); mTextPrepared=true;
     // No command submission yet: pack/capacity validation finishes before any draw.
     return true;
 }
@@ -1327,6 +1327,7 @@ std::string VulkanRenderer::textStatsJson() const {
     json << ",\"descriptorPools\":" << stats.pools << ",\"descriptorSets\":" << stats.sets << ",\"descriptorLayouts\":" << stats.layouts;
     json << ",\"pipelines\":" << stats.pipelines << ",\"pipelineLayouts\":" << stats.pipelineLayouts;
     json << ",\"generation\":" << stats.generation << ",\"uploads\":" << stats.uploads << ",\"uploadBytes\":" << stats.uploadBytes << ",\"draws\":" << stats.draws;
+    json << ",\"atlasPages\":" << stats.atlasPages << ",\"arrayRecreations\":" << stats.arrayRecreations;
     if(mText) { auto font=mText->fontStats(); json << ",\"rasterizations\":" << font.rasterizations << ",\"lockWaitNs\":" << font.lockWaitNs; }
     json << "}"; return json.str();
 }

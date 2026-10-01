@@ -2,7 +2,7 @@
 
 **Status:** Implemented in source. Android debug Kotlin compilation passed during E1b/E1c; the feature-specific JVM/phone checks below remain pending. This document owns inspector navigation, layer actions and trim/extend/split.
 
-**Text pass:** E1d rendering and E1e debug harness are implemented in source, unverified. E2/E3 remain unimplemented pending the production atlas overflow decision. The Text creation pill and Edit Text editor are still disabled/unavailable; the proof renderer enables no inspector capability. Earlier compile results do not cover this pass. See [text checkpoint and planned E3 checks](TEXT_LAYER.md#stop-before-e2--production-overflow-design-decision).
+**Text pass:** E1d/E1e and E2 renderer/model integration are implemented in source, compiled, device-unverified. E3 editor controls and the Text creation pill remain pending. The proof harness remains available. See [text checkpoint](TEXT_LAYER.md#e2-implementation-and-approved-array-overflow).
 
 ### Anchor acceptance — 2026-09-24
 

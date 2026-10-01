@@ -66,31 +66,36 @@ class Composition : Table() {
             val o = __offset(14)
             return if(o != 0) bb.getInt(o + bb_pos) else 1
         }
-    fun markers(j: Int): Marker? {
+    fun markers(j: Int) : fluxx.schema.Marker? = markers(fluxx.schema.Marker(), j)
+    fun markers(obj: fluxx.schema.Marker, j: Int) : fluxx.schema.Marker? {
         val o = __offset(16)
-        return if (o != 0) Marker().__assign(__indirect(__vector(o) + j * 4), bb) else null
-    }
-    val markersLength: Int get() { val o = __offset(16); return if (o != 0) __vector_len(o) else 0 }
-    val startTimecodeUs: Long get() { val o = __offset(18); return if (o != 0) bb.getLong(o + bb_pos) else 0L }
-    companion object {
-        fun addStartTimecodeUs(builder: FlatBufferBuilder, value: Long) = builder.addLong(7, value, 0L)
-        fun addMarkers(builder: FlatBufferBuilder, markers: Int) = builder.addOffset(6, markers, 0)
-        fun createMarkersVector(builder: FlatBufferBuilder, data: IntArray): Int {
-            builder.startVector(4, data.size, 4)
-            for (i in data.lastIndex downTo 0) builder.addOffset(data[i])
-            return builder.endVector()
+        return if (o != 0) {
+            obj.__assign(__indirect(__vector(o) + j * 4), bb)
+        } else {
+            null
         }
+    }
+    val markersLength : Int
+        get() {
+            val o = __offset(16); return if (o != 0) __vector_len(o) else 0
+        }
+    val startTimecodeUs : Long
+        get() {
+            val o = __offset(18)
+            return if(o != 0) bb.getLong(o + bb_pos) else 0L
+        }
+    companion object {
         fun validateVersion() = Constants.FLATBUFFERS_25_2_10()
         fun getRootAsComposition(_bb: ByteBuffer): Composition = getRootAsComposition(_bb, Composition())
         fun getRootAsComposition(_bb: ByteBuffer, obj: Composition): Composition {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createComposition(builder: FlatBufferBuilder, layersOffset: Int, width: Int, height: Int, durationUs: Long, fpsNumerator: Int, fpsDenominator: Int, markersOffset: Int = 0, startTimecodeUs: Long = 0) : Int {
+        fun createComposition(builder: FlatBufferBuilder, layersOffset: Int, width: Int, height: Int, durationUs: Long, fpsNumerator: Int, fpsDenominator: Int, markersOffset: Int, startTimecodeUs: Long) : Int {
             builder.startTable(8)
             addStartTimecodeUs(builder, startTimecodeUs)
-            addMarkers(builder, markersOffset)
             addDurationUs(builder, durationUs)
+            addMarkers(builder, markersOffset)
             addFpsDenominator(builder, fpsDenominator)
             addFpsNumerator(builder, fpsNumerator)
             addHeight(builder, height)
@@ -113,6 +118,16 @@ class Composition : Table() {
         fun addDurationUs(builder: FlatBufferBuilder, durationUs: Long) = builder.addLong(3, durationUs, -1L)
         fun addFpsNumerator(builder: FlatBufferBuilder, fpsNumerator: Int) = builder.addInt(4, fpsNumerator, 30)
         fun addFpsDenominator(builder: FlatBufferBuilder, fpsDenominator: Int) = builder.addInt(5, fpsDenominator, 1)
+        fun addMarkers(builder: FlatBufferBuilder, markers: Int) = builder.addOffset(6, markers, 0)
+        fun createMarkersVector(builder: FlatBufferBuilder, data: IntArray) : Int {
+            builder.startVector(4, data.size, 4)
+            for (i in data.size - 1 downTo 0) {
+                builder.addOffset(data[i])
+            }
+            return builder.endVector()
+        }
+        fun startMarkersVector(builder: FlatBufferBuilder, numElems: Int) = builder.startVector(4, numElems, 4)
+        fun addStartTimecodeUs(builder: FlatBufferBuilder, startTimecodeUs: Long) = builder.addLong(7, startTimecodeUs, 0L)
         fun endComposition(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

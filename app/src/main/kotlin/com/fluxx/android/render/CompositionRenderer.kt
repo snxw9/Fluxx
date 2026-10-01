@@ -36,12 +36,19 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private val evaluatedTransform = FloatArray(6)
     private data class FixtureLayout(val source: String, val font: String, val handle: Long)
     private val fixtureLayouts = mutableMapOf<Long, FixtureLayout>()
+    private data class ProductLayout(val handle: Long, val metrics: TextLayoutMetrics)
+    private val textLayouts = LinkedHashMap<Pair<String, String>, ProductLayout>(64, .75f, true)
     private var previewQuality: PreviewResolution? = null
     private var previewCompWidth = 0
     private var previewCompHeight = 0
     private var previewTargetWidth = 0
     private var previewTargetHeight = 0
-    init { KeyframeEvaluator.easeProgress(0f, EasingPreset.EASY_EASE) } // Initialize LUT outside render().
+    private fun textLayout(font: String, source: String): ProductLayout = textLayouts.getOrPut(font to source) {
+        val handle = RenderBridge.upsertText(session, font, source)
+        try { ProductLayout(handle, TextLayoutMetrics.fromNative(RenderBridge.textMetrics(session, handle), source.isEmpty())) }
+        catch (error: Exception) { RenderBridge.releaseText(session, handle); throw error }
+    }
+    init { KeyframeEvaluator.easeProgress(0f, EasingPreset.EASY_EASE); RenderBridge.configureText(session, if(lowRam) 2 else 4) }
 
     private fun flush() {
         if (staged == 0) return
@@ -126,8 +133,31 @@ class CompositionRenderer(private val context: Context, private val repository: 
                     RenderBridge.upsertText(session, entry.font, entry.source))
             }
         }
-        if (fixtures.isNotEmpty()) check(RenderBridge.prepareText(session,
-            fixtures.map { requireNotNull(fixtureLayouts[it.id]).handle }.toLongArray())) { "Text preparation failed" }
+        val textForFrame = mutableMapOf<Long, ProductLayout>()
+        val textKeysForFrame = mutableSetOf<Pair<String, String>>()
+        requireNotNull(plan).forEachActive(timeUs) { layer, _, _, _ ->
+            if (layer.type == LayerType.TEXT && layer.evaluatedTransform(timeUs).opacity != 0f) {
+                val local = timeUs - layer.resolvedKeyframeAnchorUs
+                val source = layer.text.source.evaluate(local)
+                val key = layer.text.fontId to source
+                textKeysForFrame += key
+                textForFrame[layer.id] = textLayout(key.first, key.second)
+                if (layer.text.source.isAnimated) {
+                    val keys = layer.text.source.keyframes
+                    val next = PropertyTimeSearch.atOrBefore(keys, local) { it.timeUs } + 1
+                    keys.getOrNull(next)?.let { textLayout(layer.text.fontId, it.value) }
+                }
+            }
+        }
+        val handles = fixtures.map { requireNotNull(fixtureLayouts[it.id]).handle } + textForFrame.values.map { it.handle }
+        if (handles.isNotEmpty()) try {
+            check(RenderBridge.prepareText(session, handles.toLongArray(), fixtures.isNotEmpty() && textForFrame.isEmpty())) { "Text preparation failed" }
+        } catch (error: TextCapacityException) {
+            if (textForFrame.isEmpty()) throw error
+            if (interactive) TextLayerErrors.capacity(project, textForFrame.keys.toSet(), error.message.orEmpty())
+            throw TextFrameCapacityException(textForFrame.keys.toSet(), error.message.orEmpty(), error)
+        }
+        if (interactive) TextLayerErrors.clear()
         var rasterIndex = 0
         fun drawFixtures(index: Int) {
             fixtures.filter { it.beforeRaster == index }.forEach { entry ->
@@ -177,7 +207,15 @@ class CompositionRenderer(private val context: Context, private val repository: 
             if(staged == 4) flush()
             val referenceWidth=layer.referenceWidth.takeIf { it > 0 } ?: comp.width
             val referenceHeight=layer.referenceHeight.takeIf { it > 0 } ?: comp.height
-            if(layer.type == LayerType.VIDEO) {
+            if(layer.type == LayerType.TEXT) {
+                val local = timeUs - layer.resolvedKeyframeAnchorUs
+                val layout = requireNotNull(textForFrame[layer.id])
+                val size = layer.text.size.evaluate(local)
+                LayerGeometry.textMatrix(matrix, layer.evaluatedTransform(timeUs), layout.metrics.logical(size),
+                    comp.width, comp.height, referenceWidth, referenceHeight, layer.anchorX, layer.anchorY)
+                check(RenderBridge.textLayer(session, layout.handle, matrix, size, layer.text.alignment.ordinal,
+                    layer.text.fill.evaluate(local), opacity)) { "Could not composite text" }
+            } else if(layer.type == LayerType.VIDEO) {
                 val uri=requireNotNull(layer.asset?.uri)
                 val decoder=decoder(uri)
                 // A source reused by several clips may need a seek; finish earlier uses before advancing it.
@@ -203,12 +241,21 @@ class CompositionRenderer(private val context: Context, private val repository: 
         if(cancelled()) throw CancellationException("Superseded frame")
         check(RenderBridge.finish(session)) { "Could not finish composition frame" }
         staged=0
+        val iterator = textLayouts.entries.iterator()
+        var idle = textLayouts.keys.count { it !in textKeysForFrame }
+        while (iterator.hasNext() && idle > 64) {
+            val entry = iterator.next()
+            if (entry.key !in textKeysForFrame) { RenderBridge.releaseText(session, entry.value.handle); iterator.remove(); idle-- }
+        }
     }
     fun resize(width: Int,height: Int) = RenderBridge.resize(session,width,height)
     override fun close() {
         // Native teardown waits for GPU completion before producers return their Images.
         RenderBridge.destroy(session)
+        if (interactive) TextLayerErrors.clear()
         decoders.values.forEach { it.decoder.close() }; decoders.clear()
         images.values.forEach { it.buffer.close() }; images.clear()
     }
 }
+
+class TextFrameCapacityException(val layerIds: Set<Long>, message: String, cause: Throwable) : IllegalStateException(message, cause)

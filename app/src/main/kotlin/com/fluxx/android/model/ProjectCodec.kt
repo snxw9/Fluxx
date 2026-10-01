@@ -52,8 +52,10 @@ object ProjectCodec {
                     layer.animTransform.opacity.staticValue, kfVec)
             }
 
+            val textOffset = if (layer.type == LayerType.TEXT) encodeText(b, layer.text) else 0
             val markerVector = SLayer.createMarkersVector(b, encodeMarkers(b, layer.markers))
             SLayer.startLayer(b)
+            if (textOffset != 0) SLayer.addTextPayload(b, textOffset)
             SLayer.addMarkers(b, markerVector)
             SLayer.addId(b, layer.id.toULong())
             with(layer.evaluatedTransform(layer.timing.startUs)) {
@@ -93,6 +95,59 @@ object ProjectCodec {
         return b.sizedByteArray()
     }
 
+    private fun encodeText(b: FlatBufferBuilder, text: TextProperties): Int {
+        val strings = text.source.keyframes.map { k ->
+            val value = b.createString(k.value)
+            fluxx.schema.StringKeyframe.createStringKeyframe(b, k.timeUs, value)
+        }.toIntArray()
+        val stringKeys = fluxx.schema.AnimatableString.createKeyframesVector(b, strings)
+        val value = b.createString(text.source.staticValue)
+        val source = fluxx.schema.AnimatableString.createAnimatableString(b, text.source.isAnimated, value, stringKeys)
+        val sizes = text.size.keyframes.map { fluxx.schema.Keyframe1D.createKeyframe1D(b, it.timeUs, it.value,
+            (if (it.easing == EasingPreset.LINEAR) 0 else 1).toByte()) }.toIntArray()
+        val sizeKeys = fluxx.schema.AnimatableProperty1D.createKeyframesVector(b, sizes)
+        val size = fluxx.schema.AnimatableProperty1D.createAnimatableProperty1D(b, text.size.isAnimated, text.size.staticValue, sizeKeys)
+        val colours = text.fill.keyframes.map { fluxx.schema.ColourKeyframe.createColourKeyframe(b, it.timeUs, it.argb,
+            (if (it.easing == EasingPreset.LINEAR) 0 else 1).toByte()) }.toIntArray()
+        val colourKeys = fluxx.schema.AnimatableColour.createKeyframesVector(b, colours)
+        val fill = fluxx.schema.AnimatableColour.createAnimatableColour(b, text.fill.isAnimated, text.fill.staticValue, colourKeys)
+        val font = b.createString(text.fontId)
+        return fluxx.schema.TextPayload.createTextPayload(b, source, size, fill, font, text.alignment.ordinal, 0)
+    }
+    private fun decodeText(payload: fluxx.schema.TextPayload?, byteCount: Int, consume: (Long) -> Unit): TextProperties {
+        if (payload == null) return TextProperties()
+        require(payload.textAnimatorsLength == 0) { "Text animators are not supported by this version" }
+        fun count(value: Int) { require(value in 0..byteCount / 4) { "Invalid text key count" } }
+        fun source(buffer: ByteBuffer?): String {
+            if (buffer == null) return ""
+            require(buffer.remaining() <= 16384) { "Text source byte limit exceeded" }
+            consume(buffer.remaining().toLong())
+            val decoder = Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+            return decoder.decode(buffer.duplicate()).toString().also(TextLimits::validateSource)
+        }
+        fun easing(value: Byte): EasingPreset { require(value.toInt() in 0..1) { "Unsupported text easing" }
+            return if (value.toInt() == 0) EasingPreset.LINEAR else EasingPreset.EASY_EASE }
+        val source = payload.source?.let { p ->
+            count(p.keyframesLength)
+            AnimatableString(p.isAnimated, source(p.staticValueAsByteBuffer), FrozenList.of((0 until p.keyframesLength).map {
+                val k = requireNotNull(p.keyframes(it)); StringKeyframe(k.timeUs, source(k.valueAsByteBuffer)) }))
+        } ?: AnimatableString()
+        val size = payload.size?.let { p ->
+            count(p.keyframesLength)
+            val keys = (0 until p.keyframesLength).map { val k = requireNotNull(p.keyframes(it))
+                Keyframe1D(k.timeUs, TextLimits.decodeSize(k.value), easing(k.easing)) }
+            TextLimits.ordered(keys.map { it.timeUs })
+            AnimatableProperty1D(p.isAnimated, TextLimits.decodeSize(p.staticValue), FrozenList.of(keys))
+        } ?: AnimatableProperty1D(staticValue = 72f)
+        val fill = payload.fill?.let { p ->
+            count(p.keyframesLength)
+            AnimatableColour(p.isAnimated, p.staticValue, FrozenList.of((0 until p.keyframesLength).map {
+                val k = requireNotNull(p.keyframes(it)); ColourKeyframe(k.timeUs, k.argb, easing(k.easing)) }))
+        } ?: AnimatableColour()
+        return TextProperties(source, size, fill, payload.fontId ?: "fluxx.sans",
+            requireNotNull(TextAlignment.entries.getOrNull(payload.alignment)))
+    }
     private fun encodeMarkers(b: FlatBufferBuilder, markers: List<Marker>): IntArray = markers.map {
         val description = b.createString(it.description)
         fluxx.schema.Marker.createMarker(b, it.id.toULong(), it.timeUs, it.colorArgb, description)
@@ -118,6 +173,7 @@ object ProjectCodec {
         val records = (0 until c.layersLength).map { requireNotNull(c.layers(it)) }
         val used = records.map { it.id.toLong() }.filter { it > 0 }.toMutableSet()
         var next = 1L
+        var textBytes = 0L
         val layers = records.mapIndexed { index, l ->
             val id = if (legacy && l.id == 0UL) {
                 while (next in used) next++
@@ -200,7 +256,11 @@ object ProjectCodec {
                 animTransform = animTransform,
                 keyframeAnchorUs = l.keyframeAnchorUs.takeIf { l.hasKeyframeAnchor || it != -1L },
                 anchorX = l.anchorX, anchorY = l.anchorY,
-                markers = if (p.version >= 7) decodeMarkers(l.markersLength, bytes.size) { l.markers(it) } else FrozenList.empty())
+                markers = if (p.version >= 7) decodeMarkers(l.markersLength, bytes.size) { l.markers(it) } else FrozenList.empty(),
+                text = if (p.version >= 9) decodeText(l.textPayload, bytes.size) { count ->
+                    textBytes = Math.addExact(textBytes, count)
+                    require(textBytes <= TextLimits.MAX_DOCUMENT_BYTES) { "Text payload exceeds document budget" }
+                } else TextProperties())
         }
         return ProjectDocument(Composition(
             width = if (legacy) CompositionDefaults.WIDTH else c.width,

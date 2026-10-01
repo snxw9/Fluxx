@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 #include <cstddef>
+#include <set>
 #include "../gpu_ledger.h"
 
 namespace fluxx::text {
@@ -19,8 +20,18 @@ template<size_t N> VkShaderModule shader(VkDevice device, const uint32_t (&code)
 }
 }
 TextRenderer::TextRenderer(VkPhysicalDevice physical, VkDevice device, VkRenderPass pass,
-    VkPipelineCache cache, AAssetManager* assets):physical_(physical),device_(device),pass_(pass),cache_(cache),
-    fonts_(acquireFontCatalog(assets)) {}
+    VkPipelineCache cache, AAssetManager* assets, unsigned maxPages):physical_(physical),device_(device),pass_(pass),cache_(cache),
+    fonts_(acquireFontCatalog(assets)),maxPages_(maxPages) {
+    VkFormatProperties format; vkGetPhysicalDeviceFormatProperties(physical_,VK_FORMAT_R8_UNORM,&format);
+    const auto required=VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT|VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT|VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+    VkImageFormatProperties image{};
+    check(vkGetPhysicalDeviceImageFormatProperties(physical_,VK_FORMAT_R8_UNORM,VK_IMAGE_TYPE_2D,VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT,0,&image),"R8 array sampling support");
+    VkPhysicalDeviceProperties props; vkGetPhysicalDeviceProperties(physical_,&props);
+    if((format.optimalTilingFeatures&required)!=required || image.maxArrayLayers<maxPages ||
+        props.limits.maxImageArrayLayers<maxPages || image.maxExtent.width<2048 || image.maxExtent.height<2048)
+        throw std::runtime_error("Required R8 texture-array limits unsupported");
+}
 TextRenderer::~TextRenderer() {
     // Owner has completed its work fence / device idle before releasing this object.
     release(staging_); release(vertex_); release(index_);
@@ -85,7 +96,7 @@ void TextRenderer::createAtlas() {
     VkPhysicalDeviceProperties props; vkGetPhysicalDeviceProperties(physical_,&props);
     if(props.limits.maxImageDimension2D<2048) throw TextCapacityError("2048 text atlas unsupported");
     VkImageCreateInfo image{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO}; image.imageType=VK_IMAGE_TYPE_2D;
-    image.format=VK_FORMAT_R8_UNORM; image.extent={2048,2048,1}; image.mipLevels=1; image.arrayLayers=1;
+    image.format=VK_FORMAT_R8_UNORM; image.extent={2048,2048,1}; image.mipLevels=1; image.arrayLayers=allocatedPages_;
     image.samples=VK_SAMPLE_COUNT_1_BIT; image.tiling=VK_IMAGE_TILING_OPTIMAL;
     image.usage=VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT; image.sharingMode=VK_SHARING_MODE_EXCLUSIVE;
     check(vkCreateImage(device_,&image,nullptr,&image_),"text atlas"); ++stats_.images;
@@ -95,8 +106,8 @@ void TextRenderer::createAtlas() {
     check(vkAllocateMemory(device_,&allocation,nullptr,&memory_),"text atlas memory"); ++stats_.memories; stats_.bytes+=requirements.size;
     atlasAllocation_=requirements.size;
     check(vkBindImageMemory(device_,image_,memory_,0),"text atlas bind");
-    VkImageViewCreateInfo view{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO}; view.image=image_; view.viewType=VK_IMAGE_VIEW_TYPE_2D;
-    view.format=VK_FORMAT_R8_UNORM; view.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};
+    VkImageViewCreateInfo view{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO}; view.image=image_; view.viewType=VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    view.format=VK_FORMAT_R8_UNORM; view.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,allocatedPages_};
     check(vkCreateImageView(device_,&view,nullptr,&view_),"text atlas view"); ++stats_.views;
     VkSamplerCreateInfo sampler{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO}; sampler.magFilter=VK_FILTER_LINEAR; sampler.minFilter=VK_FILTER_LINEAR;
     sampler.mipmapMode=VK_SAMPLER_MIPMAP_MODE_NEAREST;
@@ -132,10 +143,11 @@ void TextRenderer::createPipeline() {
         stages[1].stage=VK_SHADER_STAGE_FRAGMENT_BIT; stages[1].module=frag;
         VkVertexInputBindingDescription bindingDescription{0,sizeof(TextVertex),VK_VERTEX_INPUT_RATE_VERTEX};
         VkVertexInputAttributeDescription attributes[]={{0,0,VK_FORMAT_R32G32_SFLOAT,offsetof(TextVertex,x)},
-            {1,0,VK_FORMAT_R32G32_SFLOAT,offsetof(TextVertex,u)},{2,0,VK_FORMAT_R32G32B32A32_SFLOAT,offsetof(TextVertex,colour)}};
+            {1,0,VK_FORMAT_R32G32_SFLOAT,offsetof(TextVertex,u)},{2,0,VK_FORMAT_R32G32B32A32_SFLOAT,offsetof(TextVertex,colour)},
+            {3,0,VK_FORMAT_R32_SFLOAT,offsetof(TextVertex,page)}};
         VkPipelineVertexInputStateCreateInfo input{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
         input.vertexBindingDescriptionCount=1; input.pVertexBindingDescriptions=&bindingDescription;
-        input.vertexAttributeDescriptionCount=3; input.pVertexAttributeDescriptions=attributes;
+        input.vertexAttributeDescriptionCount=4; input.pVertexAttributeDescriptions=attributes;
         VkPipelineInputAssemblyStateCreateInfo assembly{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO}; assembly.topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         VkPipelineViewportStateCreateInfo viewport{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO}; viewport.viewportCount=1; viewport.scissorCount=1;
         VkPipelineRasterizationStateCreateInfo raster{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
@@ -160,37 +172,53 @@ void TextRenderer::createPipeline() {
     }
     vkDestroyShaderModule(device_,vert,nullptr); vkDestroyShaderModule(device_,frag,nullptr);
 }
-std::shared_ptr<const Layout> TextRenderer::layout(const std::string& font, const std::string& utf8) { return fonts_->shape(font,utf8); }
-void TextRenderer::begin() { required_.clear(); vertices_.clear(); indices_.clear(); }
+std::shared_ptr<const Layout> TextRenderer::layout(const std::string& font, const std::string& utf8) {
+    auto result=fonts_->shape(font,utf8);
+    std::set<uint32_t> unique;
+    for(const auto& glyph:result->glyphs) if(unique.insert(glyph.id).second) fonts_->sdf(result->fontId,glyph.id);
+    return result;
+}
+void TextRenderer::begin() { previousRequired_=std::move(required_); required_.clear(); vertices_.clear(); indices_.clear(); }
 void TextRenderer::collect(const std::shared_ptr<const Layout>& layout) {
     for(const auto& glyph:layout->glyphs) {
         Key key{layout->fontId,glyph.id};
         if(required_.count(key)) continue;
         auto found=retained_.find(key);
-        required_[key]=found==retained_.end()?fonts_->sdf(key.first,key.second):found->second;
+        auto previous=previousRequired_.find(key);
+        required_[key]=found!=retained_.end()?found->second:previous!=previousRequired_.end()?previous->second:fonts_->sdf(key.first,key.second);
     }
 }
-void TextRenderer::pack() {
+void TextRenderer::pack(bool proofOnly) {
     bool misses=false; for(const auto& entry:required_) if(!retained_.count(entry.first)) { misses=true; break; }
-    if(!misses) return;
+    if(!misses && (!proofOnly || allocatedPages_<=1)) return;
     std::map<Key,std::shared_ptr<const SdfGlyph>> candidates=retained_;
     candidates.insert(required_.begin(),required_.end());
-    auto packEntries=[](const auto& entries) { std::vector<std::shared_ptr<const SdfGlyph>> glyphs;
-        for(const auto& entry:entries) glyphs.push_back(entry.second); return packGlyphs(std::move(glyphs),2048); };
-    auto packed=packEntries(candidates);
-    if(packed.rejected) { candidates=required_; packed=packEntries(candidates); }
-    if(packed.rejected) throw TextCapacityError("Required glyph set exceeds the 2048 atlas (E1 proof capacity)");
-    createAtlas(); retained_=std::move(candidates); packed_=std::move(packed); placements_.clear();
-    for(const auto& placement:packed_.placements) placements_.emplace(Key{placement.glyph->fontId,placement.glyph->glyphId},placement);
+    const unsigned limit=proofOnly?1:maxPages_;
+    auto packEntries=[](const auto& entries,unsigned pages) { std::vector<std::shared_ptr<const SdfGlyph>> glyphs;
+        for(const auto& entry:entries) glyphs.push_back(entry.second); return packGlyphPages(std::move(glyphs),pages); };
+    const unsigned resident=proofOnly?1:std::max(1u,allocatedPages_);
+    auto packed=packEntries(candidates,resident);
+    if(packed.rejected) { candidates=required_; packed=packEntries(candidates,resident); }
+    if(packed.rejected && !proofOnly) packed=packEntries(candidates,limit);
+    if(packed.rejected) throw TextCapacityError("Required glyph set exceeds the atlas page budget ("+std::to_string(limit)+" pages)");
+    const unsigned count=std::max(1u,static_cast<unsigned>(packed.pages.size()));
+    if(count>allocatedPages_) {
+        check(vkDeviceWaitIdle(device_),"text array growth idle");
+        destroyAtlas(); allocatedPages_=count; createAtlas(); ++stats_.arrayRecreations; stats_.atlasPages=count;
+    } else if(!image_) { allocatedPages_=std::max(allocatedPages_,count); createAtlas(); stats_.atlasPages=allocatedPages_; }
+    retained_=std::move(candidates); packed_=std::move(packed); placements_.clear();
+    for(unsigned page=0;page<packed_.pages.size();++page) for(const auto& p:packed_.pages[page].placements)
+        placements_.emplace(Key{p.glyph->fontId,p.glyph->glyphId},PagePlacement{p,page});
     dirty_=true; ++stats_.generation;
 }
 void TextRenderer::repackRetained() {
     std::vector<std::shared_ptr<const SdfGlyph>> glyphs;
     for(const auto& entry:retained_) glyphs.push_back(entry.second);
-    auto packed=packGlyphs(std::move(glyphs),2048);
+    auto packed=packGlyphPages(std::move(glyphs),std::max(1u,allocatedPages_));
     if(packed.rejected) throw TextCapacityError("Retained atlas repack failed");
     packed_=std::move(packed); placements_.clear();
-    for(const auto& p:packed_.placements) placements_.emplace(Key{p.glyph->fontId,p.glyph->glyphId},p);
+    for(unsigned page=0;page<packed_.pages.size();++page) for(const auto& p:packed_.pages[page].placements)
+        placements_.emplace(Key{p.glyph->fontId,p.glyph->glyphId},PagePlacement{p,page});
     dirty_=true; ++stats_.generation;
 }
 TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, const std::vector<GlyphModifier>* modifiers) {
@@ -205,7 +233,7 @@ TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, con
         if(glyph.line!=line) { line=glyph.line; pen=0; }
         const auto found=placements_.find({layout.fontId,glyph.id});
         if(found!=placements_.end()) {
-            const auto& p=found->second; const auto& sdf=*p.glyph;
+            const auto& p=found->second.placement; const auto& sdf=*p.glyph;
             const double align=(maximum-layout.lineAdvances[line])*factor*(alignment==0?0:alignment==1?0.5:1);
             const float x=static_cast<float>(pen+(glyph.xOffset*factor)+align+sdf.left*size/48);
             const float y=static_cast<float>(line*lineHeight-glyph.yOffset*factor-sdf.top*size/48);
@@ -214,6 +242,7 @@ TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, con
             const uint32_t base=static_cast<uint32_t>(vertices_.size());
             TextVertex quad[]={{x,y,u,v},{x+w,y,u+du,v},{x,y+h,u,v+dv},{x+w,y+h,u+du,v+dv}};
             for(auto& vertex:quad) {
+                vertex.page=static_cast<float>(found->second.page);
                 if(modifiers) { const auto& m=(*modifiers)[ordinal]; const float px=vertex.x-x,py=vertex.y-y;
                     vertex.x=x+m.a*px+m.c*py+m.tx; vertex.y=y+m.b*px+m.d*py+m.ty;
                     for(int c=0;c<4;++c) vertex.colour[c]=m.rgba[c]; vertex.colour[3]*=m.opacity; }
@@ -228,22 +257,29 @@ TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, con
 void TextRenderer::upload(VkCommandBuffer command) {
     if(!image_) return;
     if(dirty_) {
-        buffer(staging_,packed_.pixels.size(),VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-        std::memcpy(staging_.mapped,packed_.pixels.data(),packed_.pixels.size()); flush(staging_);
+        const VkDeviceSize pageBytes=2048u*2048u;
+        const VkDeviceSize bytes=pageBytes*allocatedPages_;
+        buffer(staging_,bytes,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+        std::memset(staging_.mapped,0,static_cast<size_t>(bytes));
+        for(unsigned page=0;page<packed_.pages.size();++page)
+            std::memcpy(static_cast<uint8_t*>(staging_.mapped)+page*pageBytes,packed_.pages[page].pixels.data(),static_cast<size_t>(pageBytes));
+        flush(staging_);
         VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER}; barrier.image=image_;
         barrier.oldLayout=initialized_?VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:VK_IMAGE_LAYOUT_UNDEFINED;
         barrier.newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         barrier.srcAccessMask=initialized_?VK_ACCESS_SHADER_READ_BIT:0; barrier.dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
         barrier.srcQueueFamilyIndex=barrier.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
-        barrier.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};
+        barrier.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,allocatedPages_};
         vkCmdPipelineBarrier(command,initialized_?VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT:VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
             VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,nullptr,0,nullptr,1,&barrier);
-        VkBufferImageCopy region{}; region.imageSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0,0,1}; region.imageExtent={2048,2048,1};
-        vkCmdCopyBufferToImage(command,staging_.buffer,image_,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&region);
+        std::vector<VkBufferImageCopy> regions(allocatedPages_);
+        for(unsigned page=0;page<allocatedPages_;++page) { auto& region=regions[page]; region.bufferOffset=page*pageBytes;
+            region.imageSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0,page,1}; region.imageExtent={2048,2048,1}; }
+        vkCmdCopyBufferToImage(command,staging_.buffer,image_,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,allocatedPages_,regions.data());
         barrier.oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; barrier.newLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         barrier.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT; barrier.dstAccessMask=VK_ACCESS_SHADER_READ_BIT;
         vkCmdPipelineBarrier(command,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,0,0,nullptr,0,nullptr,1,&barrier);
-        initialized_=true; dirty_=false; ++stats_.uploads; stats_.uploadBytes+=packed_.pixels.size();
+        initialized_=true; dirty_=false; ++stats_.uploads; stats_.uploadBytes+=bytes;
     }
     buffer(vertex_,vertices_.size()*sizeof(TextVertex),VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     buffer(index_,indices_.size()*sizeof(uint32_t),VK_BUFFER_USAGE_INDEX_BUFFER_BIT);

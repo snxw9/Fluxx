@@ -39,7 +39,7 @@ Fluxx is currently in **Phase 2: Timeline + Multiple Layers**.
   - [**Autosave & Persistence**](../checkpoints/AUTOSAVE.md)
   - [**Composition & Layer Markers**](../checkpoints/MARKERS.md) — implemented in source; tests and phone acceptance pending.
   - [**Timeline Layout & Automatic Duration**](../checkpoints/TIMELINE_LAYOUT.md) — compact separated ruler/tracks/inspector regions, frame-grid ticks, content-driven new projects; source implementation with validation pending.
-- **Current focus:** **Phase 2 Step E**. E1b/E1c accepted; E1d lazy 2048 R8 renderer and E1e proof/lifecycle harness are implemented in source, unverified. The user authorized E1d–E3 together, superseding earlier implementation gates, but E2/E3 are unimplemented pending a production overflow decision under the user's stop rule. 16 KB/golden/device evidence remains outstanding. See [text checkpoint](../checkpoints/TEXT_LAYER.md#stop-before-e2--production-overflow-design-decision). Step D checks remain in the [keyframe reference](../checkpoints/KEYFRAME_ANIMATION.md).
+- **Current focus:** Phase 2 Step E. E1b/E1c accepted; E1d/E1e and E2 are implemented in source, compiled, device-unverified. E2 uses the approved lazy 2048 R8 texture-array atlas and typed v9 source/size/fill properties. E3 editor wiring follows after the E2 commit. Device, golden and 16 KB acceptance remain outstanding. See [text checkpoint](../checkpoints/TEXT_LAYER.md#e2-implementation-and-approved-array-overflow).
 
 ---
 

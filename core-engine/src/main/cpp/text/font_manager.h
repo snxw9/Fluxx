@@ -11,6 +11,7 @@ struct FontInput { std::string id; std::vector<uint8_t> bytes; };
 struct Glyph {
     uint32_t id, cluster, line;
     int32_t xAdvance, yAdvance, xOffset, yOffset;
+    int32_t xBearing = 0, yBearing = 0, inkWidth = 0, inkHeight = 0;
 };
 struct Layout {
     std::string fontId;
@@ -56,4 +57,5 @@ private:
 };
 
 std::string layoutJson(const Layout& layout);
+std::vector<double> layoutMetrics(const Layout& layout);
 } // namespace fluxx::text

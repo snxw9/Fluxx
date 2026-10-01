@@ -4,7 +4,9 @@ package com.fluxx.android.engine
 object RenderBridge {
     external fun upsertText(session: Long, font: String, text: String): Long
     external fun releaseText(session: Long, handle: Long)
-    external fun prepareText(session: Long, handles: LongArray): Boolean
+    external fun textMetrics(session: Long, handle: Long): DoubleArray
+    external fun prepareText(session: Long, handles: LongArray, proofOnly: Boolean = false): Boolean
+    external fun configureText(session: Long, pages: Int)
     external fun textLayer(session: Long, handle: Long, matrix: FloatArray, size: Float,
         alignment: Int, argb: Int, opacity: Float): Boolean
     external fun textStats(session: Long): String

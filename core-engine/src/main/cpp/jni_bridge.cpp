@@ -99,12 +99,23 @@ JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_RenderBridge_upsertText(JN
 JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_releaseText(JNIEnv*,jobject,jlong session,jlong handle) {
     reinterpret_cast<VulkanRenderer*>(session)->releaseText(handle);
 }
-JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_prepareText(JNIEnv* env,jobject,jlong session,jlongArray handles) {
+JNIEXPORT jdoubleArray JNICALL Java_com_fluxx_android_engine_RenderBridge_textMetrics(JNIEnv* env,jobject,jlong session,jlong handle) {
+    try {
+        const auto values=reinterpret_cast<VulkanRenderer*>(session)->textMetrics(handle);
+        auto result=env->NewDoubleArray(static_cast<jsize>(values.size()));
+        if(result) env->SetDoubleArrayRegion(result,0,static_cast<jsize>(values.size()),values.data());
+        return result;
+    } catch(const std::exception& error) { env->ThrowNew(env->FindClass("java/lang/IllegalStateException"),error.what()); return nullptr; }
+}
+JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_prepareText(JNIEnv* env,jobject,jlong session,jlongArray handles,jboolean proofOnly) {
     try {
         const auto count=env->GetArrayLength(handles); std::vector<jlong> input(count);
         env->GetLongArrayRegion(handles,0,count,input.data()); if(env->ExceptionCheck()) return false;
-        return reinterpret_cast<VulkanRenderer*>(session)->prepareText(std::vector<int64_t>(input.begin(),input.end()));
+        return reinterpret_cast<VulkanRenderer*>(session)->prepareText(std::vector<int64_t>(input.begin(),input.end()),proofOnly);
     } catch(const std::exception& error) { textFailure(env,error); return false; }
+}
+JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_configureText(JNIEnv*,jobject,jlong session,jint pages) {
+    reinterpret_cast<VulkanRenderer*>(session)->configureText(pages==2?2:4);
 }
 JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_textLayer(JNIEnv* env,jobject,jlong session,jlong handle,jfloatArray matrix,
     jfloat size,jint alignment,jint argb,jfloat opacity) {

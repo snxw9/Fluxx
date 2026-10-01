@@ -38,6 +38,26 @@ table Marker {
   description: string;
 }
 
+table ColourKeyframe { time_us: long; argb: int = -1; easing: EasingType = EASY_EASE; }
+table StringKeyframe { time_us: long; value: string; }
+table AnimatableColour { is_animated: bool; static_value: int = -1; keyframes: [ColourKeyframe]; }
+table AnimatableString { is_animated: bool; static_value: string; keyframes: [StringKeyframe]; }
+table TextRangeSelector { version: uint = 1; }
+table TextPropertyOverride { version: uint = 1; property_id: uint; }
+table TextAnimator {
+  version: uint = 1;
+  range_selector: TextRangeSelector;
+  property_overrides: [TextPropertyOverride];
+}
+table TextPayload {
+  source: AnimatableString;
+  size: AnimatableProperty1D;
+  fill: AnimatableColour;
+  font_id: string;
+  alignment: int = 1;
+  text_animators: [TextAnimator];
+}
+
 table Layer {
   // Unique identifier for the layer
   id: ulong;
@@ -80,6 +100,7 @@ table Layer {
   anchor_x: float = 0.5;
   anchor_y: float = 0.5;
   markers: [Marker];
+  text_payload: TextPayload;
 }
 
 table Composition {

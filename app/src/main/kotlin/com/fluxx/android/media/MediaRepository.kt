@@ -217,7 +217,6 @@ object CompositionSupport {
         val layers = comp.layers.filter { it.visible && it.timing.startUs < comp.resolvedDurationUs && it.timing.durationUs != 0L }
 
         layers.forEach {
-            require(it.type != LayerType.TEXT) { "Text layers are not supported yet" }
             require(it.timing.durationUs != null) { "Relink media with an unresolved duration" }
             require(it.asset == null || it.asset.access == MediaAccess.AVAILABLE) { "Relink missing media or hide its layer" }
         }

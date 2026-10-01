@@ -12,7 +12,7 @@ data class EditorState(
     val selectedLayer: CompositionLayer? get() = project.composition.layers.firstOrNull { it.id == selectedLayerId }
 }
 
-enum class AnimPropertyType { POSITION, SCALE, ROTATION, OPACITY }
+enum class AnimPropertyType { POSITION, SCALE, ROTATION, OPACITY, FONT_SIZE, FILL_COLOUR, SOURCE_TEXT }
 
 sealed interface EditorAction {
     data class SelectMarker(val markerId: Long?) : EditorAction
@@ -33,6 +33,7 @@ sealed interface EditorAction {
     data class StretchToComposition(val id: Long, val playheadUs: Long,
         val sourceWidth: Int, val sourceHeight: Int, val sourceRotation: Int = 0,
         val pixelAspect: Float = 1f) : EditorAction
+    data class FitText(val id: Long, val playheadUs: Long, val bounds: TextBounds, val mode: Int) : EditorAction
 
     /** One undoable edit, including gestures that change several animated properties. */
     data class Batch(val actions: List<EditorAction>) : EditorAction
@@ -42,6 +43,10 @@ sealed interface EditorAction {
     data class Add(val layer: CompositionLayer) : EditorAction
     data class Remove(val id: Long) : EditorAction
     data class SetTransform(val id: Long, val transform: Transform) : EditorAction
+    data class SetTextPayload(val id: Long, val text: TextProperties, val newPosition: Transform? = null) : EditorAction
+    data class SetStringKeyframe(val id: Long, val localTimeUs: Long, val value: String) : EditorAction
+    data class SetColourKeyframe(val id: Long, val localTimeUs: Long, val argb: Int,
+        val easing: EasingPreset = EasingPreset.EASY_EASE) : EditorAction
     data class SetAnchorPoint(val id: Long, val anchorX: Float, val anchorY: Float,
         val newPosition: Transform? = null) : EditorAction
     data class SetTiming(val id: Long, val timing: ClipTiming) : EditorAction
@@ -73,6 +78,7 @@ sealed interface EditorAction {
 
 object EditorReducer {
     fun reduce(state: EditorState, action: EditorAction): EditorState {
+        TextPropertyActions.apply(state, action)?.let { return reduce(state, it) }
         val comp = state.project.composition
         fun replaceLayers(layers: List<CompositionLayer>): EditorState {
             val maxEnd = layers.mapNotNull { it.timing.endUs }.maxOrNull() ?: 0L
@@ -111,6 +117,12 @@ object EditorReducer {
         fun compositionMarkers(markers: FrozenList<Marker>) = state.copy(
             project = state.project.copy(composition = comp.copy(markers = markers)))
         return when (action) {
+            is EditorAction.FitText -> setScale(action.id, action.playheadUs) { layer ->
+                require(layer.type == LayerType.TEXT && !action.bounds.empty)
+                val x = comp.width / action.bounds.width; val y = comp.height / action.bounds.height
+                when (action.mode) { 0 -> LayerGeometry.FitScales(x, x); 1 -> LayerGeometry.FitScales(y, y)
+                    else -> LayerGeometry.FitScales(x, y) }
+            }
             is EditorAction.SelectMarker -> {
                 require(action.markerId == null || (state.selectedLayer?.markers ?: comp.markers).any { it.id == action.markerId })
                 state.copy(selectedMarkerId = action.markerId)
@@ -192,6 +204,13 @@ object EditorReducer {
                 if (state.selectedLayerId == action.id) it.copy(selectedLayerId = null, selectedMarkerId = null) else it
             }
             is EditorAction.SetTransform -> update(action.id) { it.copy(transform = action.transform) }
+            is EditorAction.SetTextPayload -> update(action.id) {
+                require(it.type == LayerType.TEXT)
+                val position = action.newPosition.takeUnless { _ -> it.text.layoutAnimated || action.text.layoutAnimated || it.animTransform.position.isAnimated }
+                it.copy(text = action.text, transform = if (position == null) it.transform else
+                    it.transform.copy(positionX = position.positionX, positionY = position.positionY))
+            }
+            is EditorAction.SetStringKeyframe, is EditorAction.SetColourKeyframe -> error("Text action was not normalized")
             is EditorAction.SetAnchorPoint -> update(action.id) {
                 require(action.anchorX.isFinite() && action.anchorY.isFinite())
                 // Compensation changes only static Position, never another channel or keyframe curve.
@@ -228,7 +247,8 @@ object EditorReducer {
                     keyframeAnchorUs = p,
                     markers = FrozenList.of(original.markers.filter { Math.addExact(original.resolvedKeyframeAnchorUs, it.timeUs) >= p }
                         .map { it.copy(timeUs = Math.subtractExact(it.timeUs, Math.subtractExact(p, original.resolvedKeyframeAnchorUs))) }),
-                    animTransform = original.animTransform.rebaseKeyframes(Math.subtractExact(p, original.resolvedKeyframeAnchorUs)))
+                    animTransform = original.animTransform.rebaseKeyframes(Math.subtractExact(p, original.resolvedKeyframeAnchorUs)),
+                    text = original.text.rebase(Math.subtractExact(p, original.resolvedKeyframeAnchorUs)))
                 // Keep both segments beside the original in render order, even when zOrder values tie.
                 val ordered = comp.layers.sortedWith(compareBy<CompositionLayer> { it.zOrder }.thenBy { it.id }).toMutableList()
                 val index = ordered.indexOfFirst { it.id == original.id }
@@ -298,6 +318,7 @@ object EditorReducer {
                     AnimPropertyType.SCALE -> layer.animTransform.scale.isAnimated
                     AnimPropertyType.ROTATION -> layer.animTransform.rotation.isAnimated
                     AnimPropertyType.OPACITY -> layer.animTransform.opacity.isAnimated
+                    else -> error("Text property was not normalized")
                 }
                 if (alreadyEnabled == action.enable) return@update layer
                 val evaluated = layer.evaluatedTransform(action.playheadUs)
@@ -413,6 +434,7 @@ object EditorReducer {
                         val remaining = at.opacity.keyframes.filterNot { it.timeUs == action.localTimeUs }
                         at.copy(opacity = at.opacity.copy(isAnimated = remaining.isNotEmpty(), keyframes = FrozenList.of(remaining)))
                     }
+                    else -> error("Text property was not normalized")
                 }
                 val static = when (action.property) {
                     AnimPropertyType.POSITION -> if (!newAnimTransform.position.isAnimated)
@@ -460,7 +482,8 @@ object EditorReducer {
                             val updated = (filtered + kf.copy(timeUs = newTime)).sortedBy { it.timeUs }
                             at = at.copy(opacity = at.opacity.copy(keyframes = FrozenList.of(updated)))
                         }
-                    }
+                        else -> error("Text property was not normalized")
+                }
                 }
                 layer.copy(animTransform = at)
             }
@@ -483,6 +506,7 @@ object EditorReducer {
                         at.copy(opacity = AnimatableProperty1D(isAnimated = false, staticValue = 1f, keyframes = FrozenList.empty())),
                         layer.transform.copy(opacity = 1f)
                     )
+                    else -> error("Text property was not normalized")
                 }
                 layer.copy(animTransform = newAnimTransform, transform = newTransform)
             }

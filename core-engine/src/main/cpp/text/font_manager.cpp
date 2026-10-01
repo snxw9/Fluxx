@@ -170,8 +170,11 @@ std::shared_ptr<const Layout> FontManager::shape(const std::string& id, const st
         const auto* pos = hb_buffer_get_glyph_positions(buffer.get(), nullptr);
         int64_t advance = 0;
         for (unsigned i = 0; i < count; ++i) {
+            hb_glyph_extents_t ink{};
+            hb_font_get_glyph_extents(face.font, info[i].codepoint, &ink);
             result->glyphs.push_back({info[i].codepoint, info[i].cluster + static_cast<uint32_t>(start),
-                static_cast<uint32_t>(result->lineAdvances.size()), pos[i].x_advance, pos[i].y_advance, pos[i].x_offset, pos[i].y_offset});
+                static_cast<uint32_t>(result->lineAdvances.size()), pos[i].x_advance, pos[i].y_advance, pos[i].x_offset, pos[i].y_offset,
+                ink.x_bearing, ink.y_bearing, ink.width, ink.height});
             advance += pos[i].x_advance;
         }
         result->lineAdvances.push_back(advance);
@@ -249,6 +252,21 @@ FontStats FontManager::stats() {
 }
 void FontManager::trim() { auto guard = impl_->lock(); impl_->evict(); }
 
+std::vector<double> layoutMetrics(const Layout& layout) {
+    std::vector<double> result{static_cast<double>(layout.upem), static_cast<double>(layout.ascent),
+        static_cast<double>(layout.descent), static_cast<double>(layout.lineGap),
+        static_cast<double>(layout.lineAdvances.size()), static_cast<double>(layout.glyphs.size())};
+    for(auto advance:layout.lineAdvances) result.push_back(static_cast<double>(advance));
+    int64_t pen=0; uint32_t line=0;
+    for(const auto& glyph:layout.glyphs) {
+        if(glyph.line!=line) { line=glyph.line; pen=0; }
+        for(double value:{static_cast<double>(line),static_cast<double>(pen+glyph.xOffset),
+            static_cast<double>(-glyph.yOffset),static_cast<double>(glyph.xBearing),
+            static_cast<double>(glyph.yBearing),static_cast<double>(glyph.inkWidth),static_cast<double>(glyph.inkHeight)}) result.push_back(value);
+        pen+=glyph.xAdvance;
+    }
+    return result;
+}
 std::string layoutJson(const Layout& layout) {
     std::ostringstream out;
     out << "{\"font\":\"" << layout.fontId << "\",\"upem\":" << layout.upem

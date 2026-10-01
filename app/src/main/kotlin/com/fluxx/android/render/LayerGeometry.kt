@@ -1,10 +1,35 @@
 package com.fluxx.android.render
 
 import com.fluxx.android.model.Transform
+import com.fluxx.android.model.TextBounds
 import kotlin.math.*
 
 /** Normalized positions, clockwise rotation, aspect-fit in composition pixels, column-major matrices. */
 object LayerGeometry {
+    /** Text mesh uses baseline-relative pixels; text is never implicitly aspect-fit. */
+    fun textMatrix(out: FloatArray, t: Transform, bounds: TextBounds, cw: Int, ch: Int,
+        referenceWidth: Int = cw, referenceHeight: Int = ch, anchorX: Float = .5f, anchorY: Float = .5f) {
+        val angle = Math.toRadians(t.rotationDegrees.toDouble())
+        val c = cos(angle).toFloat(); val s = sin(angle).toFloat()
+        out.fill(0f); out[10] = 1f; out[15] = 1f
+        out[0] = 2f * c * t.scaleX / cw; out[1] = 2f * s * t.scaleX / ch
+        out[4] = -2f * s * t.scaleY / cw; out[5] = 2f * c * t.scaleY / ch
+        val x = bounds.left + anchorX * bounds.width; val y = bounds.top + anchorY * bounds.height
+        out[12] = t.positionX * referenceWidth / cw - out[0] * x - out[4] * y
+        out[13] = t.positionY * referenceHeight / ch - out[1] * x - out[5] * y
+    }
+    fun compensateTextPosition(current: Transform, old: TextBounds, next: TextBounds,
+        anchorX: Float, anchorY: Float, referenceWidth: Int, referenceHeight: Int,
+        oldAlignment: com.fluxx.android.model.TextAlignment = com.fluxx.android.model.TextAlignment.LEFT,
+        nextAlignment: com.fluxx.android.model.TextAlignment = oldAlignment): Transform {
+        val matrix = FloatArray(16)
+        textMatrix(matrix, current, old, referenceWidth, referenceHeight)
+        val dx = next.left + next.width * anchorX - old.left - old.width * anchorX -
+            (next.width * nextAlignment.ordinal / 2f - old.width * oldAlignment.ordinal / 2f)
+        val dy = next.top + next.height * anchorY - old.top - old.height * anchorY
+        return current.copy(positionX = current.positionX + matrix[0] * dx + matrix[4] * dy,
+            positionY = current.positionY + matrix[1] * dx + matrix[5] * dy)
+    }
     data class FitScales(val scaleX: Float, val scaleY: Float)
 
     fun calculateFit(referenceWidth: Int, referenceHeight: Int, sourceWidth: Int, sourceHeight: Int,
