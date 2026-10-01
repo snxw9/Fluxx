@@ -5,6 +5,8 @@
 #include <string>
 #include <algorithm>
 #include <sstream>
+#include <cstring>
+#include "gpu_ledger.h"
 
 VulkanRenderer::VulkanRenderer() {
     LOGI("VulkanRenderer created");
@@ -369,11 +371,50 @@ bool VulkanRenderer::createInstance() {
     LOGI("Vulkan validation enabled=%d",mValidationEnabled);
     return true;
 }
+bool VulkanRenderer::proofSurface(ANativeWindow* window, int width, int height) {
+#ifdef FLUXX_TEXT_DIAGNOSTICS
+    if(!mInitialized || vkDeviceWaitIdle(mDevice)!=VK_SUCCESS) { if(window) ANativeWindow_release(window); return false; }
+    cleanupSwapchain();
+    if(!mCommandBuffers.empty()) vkFreeCommandBuffers(mDevice,mCommandPool,static_cast<uint32_t>(mCommandBuffers.size()),mCommandBuffers.data());
+    mCommandBuffers.clear();
+    if(mSurface) vkDestroySurfaceKHR(mInstance,mSurface,nullptr);
+    mSurface=VK_NULL_HANDLE;
+    if(mWindow) ANativeWindow_release(mWindow);
+    mWindow=window; mWidth=width; mHeight=height;
+    if(!window) return true;
+    VkAndroidSurfaceCreateInfoKHR info{VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR}; info.window=window;
+    if(vkCreateAndroidSurfaceKHR(mInstance,&info,nullptr,&mSurface)!=VK_SUCCESS) return false;
+    VkBool32 supported=false;
+    if(vkGetPhysicalDeviceSurfaceSupportKHR(mPhysicalDevice,mPresentQueueFamilyIndex,mSurface,&supported)!=VK_SUCCESS || !supported) return false;
+    return createSwapchain() && createCommandBuffers();
+#else
+    if(window) ANativeWindow_release(window);
+    return false;
+#endif
+}
+void VulkanRenderer::proofRepack() {
+#ifdef FLUXX_TEXT_DIAGNOSTICS
+    if(!mText || !mDrawOrder.empty() || vkDeviceWaitIdle(mDevice)!=VK_SUCCESS) throw std::logic_error("Repack requires an idle text renderer");
+    mText->repackRetained();
+#endif
+}
+bool VulkanRenderer::proofPixels(uint8_t* output, size_t capacity) {
+#ifdef FLUXX_TEXT_DIAGNOSTICS
+    const size_t size=static_cast<size_t>(mCompWidth)*mCompHeight*4;
+    if(!output || capacity<size || !readbackRgba()) return false;
+    std::memcpy(output,mReadbackMapped,size); return true;
+#else
+    return false;
+#endif
+}
 
 VKAPI_ATTR VkBool32 VKAPI_CALL VulkanRenderer::debugMessage(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT* data, void* user) {
     auto* renderer=static_cast<VulkanRenderer*>(user);
     if(severity&VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) ++renderer->mValidationErrors;
+#ifdef FLUXX_TEXT_DIAGNOSTICS
+    if(severity&VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) ++fluxx::debug::validationErrors;
+#endif
     LOGW("Vulkan validation: %s",data->pMessage); return VK_FALSE;
 }
 

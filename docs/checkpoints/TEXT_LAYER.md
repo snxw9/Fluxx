@@ -20,11 +20,57 @@ Debug `TextFixtureProvider` is consumed inside `CompositionRenderer` under `Buil
 
 The historical E1a–E1c record below retains its original evidence and superseded gate wording; the authorization above governs this pass.
 
-**2026-10-01 update:** E1a render/playback/export smoke verified by the user on A16. E1b and E1c were explicitly authorized together and are implemented: vendored native shaping, static font bundle, cached CPU SDF, independent shaping references and PNG diagnostics. See the E1b/E1c results, diagnostics ledger and reproduction section below. Host CPU, Android debug Kotlin and both-ABI debug/release native compilation passed. Typography instrumented tests remain device-unverified. **Stop before E1d until the user completes the E1a 16 KB environment run and fixed golden-project comparison.** No Vulkan text pipeline has been implemented.
+## E1e instrumentation — implemented in source, unverified
+
+`TextGpuAcceptanceTest` uses a debug-only visible SurfaceView host and drives the same composition renderer on the instrumentation owner thread. It captures PNGs/native counters for nine 50/100/300% × Full/Half/Quarter combinations, 8/12/14/16px typography, opacity/rotation/flips, missing glyphs and seven mixed entries. A 120-frame warm scale sweep and forced retained-pixel repack assert no additional SDF rasterization. The combined three-font Latin corpus exercises typed capacity failure before any text draw, followed by recovery.
+
+After five warm-ups, lifecycle acceptance performs 30 actual surface detach/recreate/attach cycles with the same renderer/device, then five warm-ups and 30 full renderer create/render/destroy cycles. A debug allocation ledger records successful creates and actual destroys separately from renderer fields, by resource category and allocated bytes. Descriptor-pool destruction retires its sets. Surface cycles must return to their live baseline; full teardown must return to the pre-session baseline. Global validation errors include teardown. Native heap first/last ten-sample medians must remain within 1 MiB; three strictly increasing consecutive ten-cycle medians fail as sustained growth even below that ceiling. Global/driver allocations are outside this owned Vulkan ledger.
+
+**User-run E1e checklist:**
+
+1. Compile debug and JVM test sources in Android Studio. Run `TextProofPolicyTest` and retain the results. No tests have been run by the agent.
+2. Enable Vulkan validation for the debug application; choose a fresh instrumentation argument `textRunLabel`, such as `a16-e1e-01`. Run all three methods in `TextGpuAcceptanceTest` with the app otherwise idle.
+3. Archive `Android/data/com.fluxx.android.debug/files/text/<textRunLabel>/matrix/` and `lifecycle/`, including PNGs, per-fixture statistics, heap samples and allocation ledgers. Existing result directories are deliberately not overwritten.
+4. Visually inspect all nine scale/quality PNGs, the small-size fixtures and on-screen composition. Reduced previews are compared against achievable resolution; watch for bleed, overlap holes, baseline/alignment errors and softened corners.
+5. Verify mixed ordering across the four-entry boundary, opacity, rotated/flipped glyphs and visible `.notdef`; require zero validation errors. Warm sweep and retained repack must have zero new rasterizations.
+6. Confirm capacity failure is explicit with zero prior text draws and the next small frame succeeds. This is an E1 proof constraint; production overflow is addressed separately in E2.
+7. Check all 30 surface and 30 full-renderer cycle counters by category, native heap criteria and post-teardown baseline. Record available driver memory separately. Repeat manual background/foreground, cancellation and orientation interruptions; they are not established merely by SurfaceView replacement.
+8. Record device/OS/GPU, APK hash, page size and validation-layer provenance. Repeat packaged alignment/16 KB and existing Video/Image/Solid/audio regressions. No device verification is claimed.
+
+**Historical E1a–E1c update:** E1a render/playback/export smoke was verified by the user on A16. E1b/E1c were accepted before the later authorized pass. Recorded host/Android compilation results below apply to that earlier source only. E1d/E1e now have source implementations but have not been compiled or tested. E2/E3 are unimplemented pending the overflow-design decision below. Outstanding 16 KB/golden/device checks remain unverified.
 
 **Verifier correction:** the initial audit incorrectly required raw GNU_RELRO endpoints to be 16 KB aligned. Android rounds them before applying protection; a nonaligned endpoint alone is not incompatibility. Oboe/graphics-path source rebuilds remain, but earlier RELRO-only failure claims are withdrawn. The corrected verifier checks LOAD alignment/congruence and TEXTREL while inventorying RELRO; prior reports need regeneration. See [Bionic protection logic](https://raw.githubusercontent.com/aosp-mirror/platform_bionic/master/linker/linker_phdr.cpp), `_phdr_table_set_gnu_relro_prot`.
 
-## Toolchain and packaging changes
+## Stop before E2 — production overflow design decision
+
+The user authorized all four stages in dependency order, but also required an immediate stop if a stage forces a change to the approved design. E1d is committed as `74cc219`; E1e is the following `test(text): E1e GPU fixtures and lifecycle acceptance harness` commit. E2 and E3 have **not** been implemented or committed.
+
+The E1c corpus has 2,233 glyph records across three bundled faces; measured 2048 packing holds 1,547 nonempty rectangles. E1 preparation correctly rejects an oversized required set before draws. Retaining this proof limit for production does not resolve E2 overflow. Silently omitting glyphs, reducing font quality, or limiting project layers is unacceptable.
+
+The approved E1 path collects the entire frame's required glyphs, prepares one atlas before composition draws and renders each text entry with one indexed draw. Bounded page streaming keeps one logical pending entry and one reusable indexed mesh, but requires multiple index-range subdraws and compatible load-pass boundaries around page uploads. That changes the approved batch execution/preparation contract. A multi-page texture-array atlas preserves one draw per layer but changes atlas allocation and requires an explicit residency/memory policy. Neither revision has been adopted.
+
+**Proposed revision:** retain four ordered logical pending entries and one indexed mesh per text entry. Pre-shape/pin CPU glyph leases and plan bounded pages before drawing. For oversized entries, process page-aligned index ranges serially: end the composition pass, upload a prepared R8 page with the existing barriers/fence ownership, and reopen the compatible load pass. Preserve glyph order, including overlapping geometry; do not reorder glyphs by page. No shaping inside a render pass, no new `PreviewController` API, no new gesture protocol and no layer-count limit. Retain the E1 harness's explicit capacity-failure mode. This is a proposal, not implemented source.
+
+**Remaining user-run E2 checklist — planned; E2 is unavailable:**
+
+1. Compile debug/release and both ABIs; run v9 codec/decode-validation and v1–8 compatibility JVM tests. Cover malformed strings, finite size limits, signed/frame-unique keys, aggregate payload limits, unknown font preservation and explicit unsupported nonempty animator rejection.
+2. Run fake-metrics geometry tests: natural pixels, multiline logical/ink bounds, empty bounds, static baseline compensation, animated anchors and evaluated Fit/Stretch with Scale auto-keying.
+3. Run typed size/fill/hold-source evaluator/reducer tests: exact boundaries, transparent colours, endpoint holds, move/trim/split rebasing, copy/paste, undo and autosave round trips.
+4. Compare device preview, headless export and thumbnails with animated text plus transforms, transparent fill and empty-source keys. Preserve single-video fast-path exclusion.
+5. Exercise the approved overflow strategy with the combined corpus and >4 entries: complete output, overlap/z-order, bounded residency and explicit real allocation failures. Re-run every E1 harness test.
+6. Verify warm size/fill sweeps and held-string playback produce no shaping/SDF misses merely because time/size/fill advances. Uncached seeks wait for the correct revision; exports/thumbnails never use stale layouts.
+
+**Remaining user-run E3 checklist — planned; E3 is unavailable:**
+
+1. Run JVM typing/property/capability tests. One session inserts/edits one captured-frame hold key and creates one undo entry; unchanged sessions create none; cancel restores the exact original.
+2. Verify Text creation: five seconds at snapped playhead, topmost order, Inter/72px/white/centre defaults, automatic duration and persistence.
+3. Inspect fixed Edit Text controls at both preview sizes, enlarged fonts and landscape. Only the source field scrolls; fill reuses the Global Colour Picker.
+4. Repeatedly open/dismiss IME: workspace layout keeps the letterboxed preview and compact Done panel visible, hides timeline/actions temporarily and restores their previous layout.
+5. Type with IME composition; Done/focus-loss/dismiss commits once, cancel restores source/keys, seek/playback/layer/property changes finish at the captured time, and stale worker results cannot revive drafts.
+6. Confirm native metrics never block the UI on the font mutex, including concurrent export preparation. Matching source/layout/allowed Position compensation publish atomically.
+7. Verify Source Text/Size/Fill diamonds, Hold-only source controls, timeline held-string labels, common navigation, shared-metrics bounds/handles, anchor/fit behavior and inert unsupported capabilities. Re-run E1/E2 regressions.
+
+## Historical E1a toolchain and packaging changes
 
 - Both modules default to NDK r28c, `28.2.13676358`. CMake 3.22.1, C++17, `c++_shared`, arm64-v8a/x86_64, SDK levels and AGP 9.4.0 are retained.
 - Build-tools is explicit at 37.0.0 (installed locally). `jniLibs.useLegacyPackaging = false` is explicit in the app. The source manifest has no conflicting `extractNativeLibs` declaration; AGP supplies it. The verifier requires **false in the compiled manifest**, rather than trusting the DSL.
@@ -135,7 +181,7 @@ All 11 host artifact/golden-tool regression tests passed during E1b/E1c. These u
 
 ## Text E1b / E1c — CPU implementation and verification
 
-2026-10-01. E1a render, playback and export smoke checks were **confirmed by the user on Galaxy A16**. The user authorized E1b and E1c together. CPU typography is implemented; no text Vulkan resources, renderer injection, persistence or editor UI are added. **E1d remains blocked on the user's E1a 16 KB environment run and fixed golden-project comparison.** A16 smoke testing does not establish those gates.
+Historical 2026-10-01 CPU pass: E1a render/playback/export smoke was **confirmed by the user on Galaxy A16**. E1b/E1c added CPU typography only; their pass did not add Vulkan text or editor integration. The earlier E1d implementation gate is superseded by the later authorization recorded above. A16 smoke still does not establish 16 KB compatibility or golden-project parity.
 
 ### Reproducible inputs
 

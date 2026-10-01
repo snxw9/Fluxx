@@ -40,6 +40,7 @@ public:
     void upload(VkCommandBuffer command);
     void draw(VkCommandBuffer command, const TextMesh& mesh, const TextPush& push);
     void begin();
+    void repackRetained();
     TextGpuStats stats() const { return stats_; }
     FontStats fontStats() { return fonts_->stats(); }
 private:
@@ -51,6 +52,7 @@ private:
     void release(Buffer& target);
     void flush(const Buffer& target);
     void createAtlas();
+    void destroyAtlas();
     void createPipeline();
     VkPhysicalDevice physical_; VkDevice device_; VkRenderPass pass_; VkPipelineCache cache_;
     std::shared_ptr<FontManager> fonts_;
@@ -60,6 +62,7 @@ private:
     std::vector<TextVertex> vertices_; std::vector<uint32_t> indices_;
     Buffer staging_, vertex_, index_;
     VkImage image_=VK_NULL_HANDLE; VkDeviceMemory memory_=VK_NULL_HANDLE;
+    VkDeviceSize atlasAllocation_=0;
     VkImageView view_=VK_NULL_HANDLE; VkSampler sampler_=VK_NULL_HANDLE;
     VkDescriptorSetLayout descriptorLayout_=VK_NULL_HANDLE;
     VkDescriptorPool pool_=VK_NULL_HANDLE; VkDescriptorSet descriptor_=VK_NULL_HANDLE;

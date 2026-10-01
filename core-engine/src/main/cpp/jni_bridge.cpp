@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include "engine_core.h"
+#include "gpu_ledger.h"
 
 extern "C" {
 JNIEXPORT jint JNICALL Java_com_fluxx_android_engine_FluxxEngine_nativePing(JNIEnv*, jobject, jint value) { return value + 1; }
@@ -116,6 +117,23 @@ JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_textLayer(
 JNIEXPORT jstring JNICALL Java_com_fluxx_android_engine_RenderBridge_textStats(JNIEnv* env,jobject,jlong session) {
     const auto stats=reinterpret_cast<VulkanRenderer*>(session)->textStatsJson(); return env->NewStringUTF(stats.c_str());
 }
+#ifdef FLUXX_TEXT_DIAGNOSTICS
+JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_TextDebugBridge_surface(JNIEnv* env,jobject,jlong session,jobject surface,jint w,jint h) {
+    return reinterpret_cast<VulkanRenderer*>(session)->proofSurface(surface?ANativeWindow_fromSurface(env,surface):nullptr,w,h);
+}
+JNIEXPORT void JNICALL Java_com_fluxx_android_engine_TextDebugBridge_repack(JNIEnv* env,jobject,jlong session) {
+    try { reinterpret_cast<VulkanRenderer*>(session)->proofRepack(); }
+    catch(const std::exception& error) { textFailure(env,error); }
+}
+JNIEXPORT jstring JNICALL Java_com_fluxx_android_engine_TextDebugBridge_gpuLedger(JNIEnv* env,jobject) {
+    const auto json=fluxx::debug::ledger.json(); return env->NewStringUTF(json.c_str());
+}
+JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_TextDebugBridge_pixels(JNIEnv* env,jobject,jlong session,jobject output) {
+    auto* bytes=static_cast<uint8_t*>(env->GetDirectBufferAddress(output));
+    const auto capacity=env->GetDirectBufferCapacity(output);
+    return capacity>=0 && reinterpret_cast<VulkanRenderer*>(session)->proofPixels(bytes,static_cast<size_t>(capacity));
+}
+#endif
 JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_destroy(JNIEnv*,jobject,jlong session) { delete reinterpret_cast<VulkanRenderer*>(session); }
 JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_resize(JNIEnv*,jobject,jlong session,jint w,jint h) { reinterpret_cast<VulkanRenderer*>(session)->resize(w,h); }
 JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_begin(JNIEnv*,jobject,jlong session,jint w,jint h,jint pw,jint ph) { return reinterpret_cast<VulkanRenderer*>(session)->beginFrame(w,h,pw,ph); }

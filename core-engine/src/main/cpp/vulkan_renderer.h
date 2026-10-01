@@ -49,6 +49,9 @@ public:
     bool validationEnabled() const { return mValidationEnabled; }
     uint64_t validationErrors() const { return mValidationErrors.load(); }
     std::string textStatsJson() const;
+    bool proofSurface(ANativeWindow* window, int width, int height);
+    void proofRepack();
+    bool proofPixels(uint8_t* output, size_t capacity);
     bool beginFrame(int width, int height, int presentationWidth = 0, int presentationHeight = 0);
     bool setFrameLayer(int64_t id, AHardwareBuffer* buffer, const float* matrix, float opacity);
     bool finishFrame();

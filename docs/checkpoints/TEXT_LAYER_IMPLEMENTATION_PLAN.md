@@ -1,5 +1,7 @@
 # Phase 2 Step E — Revised Native Proof Plan
 
+**Later authorization/status:** the user accepted E1b/E1c and authorized E1d–E3 in one ordered pass with a lazy 2048 R8 atlas. E1d/E1e are implemented in source, unverified; no builds/tests were run. E2/E3 have not begun because production overflow requires a change to the approved atlas/batch execution design, triggering the user's explicit stop rule. The [checkpoint](TEXT_LAYER.md#stop-before-e2--production-overflow-design-decision) owns the concrete proposal and per-stage user-run checklists. Earlier gate wording below is historical and does not override this authorization.
+
 **Text animation scope:** size/fill and hold-keyed Source Text use the existing property framework; see [section 3.1](#31-universal-text-property-animation). No E2/E3 or E1d implementation is authorized by this plan update.
 
 **Execution update, 2026-10-01:** the user confirmed E1a A16 render/playback/export smoke and explicitly authorized E1b/E1c in one pass. Both CPU passes are implemented; see [actual results](TEXT_LAYER.md). This overrides the individual stop between E1b and E1c in the original gate table. E1d remains unstarted and requires the user's E1a 16 KB environment run and fixed golden-project comparison. E2/E3 remain outlines; device typography verification is pending.

@@ -39,7 +39,7 @@ Fluxx is currently in **Phase 2: Timeline + Multiple Layers**.
   - [**Autosave & Persistence**](../checkpoints/AUTOSAVE.md)
   - [**Composition & Layer Markers**](../checkpoints/MARKERS.md) — implemented in source; tests and phone acceptance pending.
   - [**Timeline Layout & Automatic Duration**](../checkpoints/TIMELINE_LAYOUT.md) — compact separated ruler/tracks/inspector regions, frame-grid ticks, content-driven new projects; source implementation with validation pending.
-- **Current focus:** **Phase 2 Step E**, with E1b/E1c CPU work implemented and E1d blocked on the user's 16 KB environment and golden-project checks. E2/E3 animation is planned. Step D is implemented; its outstanding feature tests remain in the [keyframe reference](../checkpoints/KEYFRAME_ANIMATION.md).
+- **Current focus:** **Phase 2 Step E**. E1b/E1c accepted; E1d lazy 2048 R8 renderer and E1e proof/lifecycle harness are implemented in source, unverified. The user authorized E1d–E3 together, superseding earlier implementation gates, but E2/E3 are unimplemented pending a production overflow decision under the user's stop rule. 16 KB/golden/device evidence remains outstanding. See [text checkpoint](../checkpoints/TEXT_LAYER.md#stop-before-e2--production-overflow-design-decision). Step D checks remain in the [keyframe reference](../checkpoints/KEYFRAME_ANIMATION.md).
 
 ---
 
@@ -97,7 +97,7 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
   - Export fast-path guard ensuring animated single videos use layered Vulkan pipeline.
   - *Status: Implemented in source; awaiting user Android Studio build & phone review.*
 - [ ] **Step E: Text Layer Support**
-  - E1a render/playback/export smoke passed on A16 (user, 2026-10-01). E1b/E1c native shaping and CPU SDF are implemented together by explicit user authorization; host parity and CPU capacity results are recorded in [TEXT_LAYER.md](../checkpoints/TEXT_LAYER.md). Android typography device checks remain pending. Stop before E1d: the user's 16 KB environment run and fixed r26/r28 golden comparison remain mandatory. See [TEXT_LAYER.md](../checkpoints/TEXT_LAYER.md).
+  - E1a A16 smoke and E1b/E1c acceptance are recorded in [TEXT_LAYER.md](../checkpoints/TEXT_LAYER.md). E1d lazy 2048 R8 atlas/SDF draws and E1e debug visual/lifecycle/resource harness are implemented in source, unverified. E2/E3 are unimplemented pending the overflow-design decision; 16 KB/golden/device checks remain outstanding.
   - Text data model, typography editor, font layout, and Vulkan glyph/quad rendering. [E2/E3 animation revision](../checkpoints/TEXT_LAYER_IMPLEMENTATION_PLAN.md#31-universal-text-property-animation): size/fill and hold-keyed Source Text in this pass; Universal Properties for all eventual text animation. Planning only; E1d gates unchanged.
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.

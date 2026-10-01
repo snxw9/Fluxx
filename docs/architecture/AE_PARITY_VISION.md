@@ -1,6 +1,6 @@
 # Fluxx — Phase 2 Changes & After Effects-Level Architecture Notes
 
-> Scope: long-term product vision, not the current implementation inventory. The [documentation index](../README.md) points to feature-owned contracts and acceptance evidence; those supersede historical proposals below. Text E1b/E1c CPU work is implemented; E1d gates and E2/E3 animation remain in the existing text checkpoint/plan.
+> Scope: long-term product vision, not the current implementation inventory. The [documentation index](../README.md) points to feature-owned contracts and evidence. Text E1b/E1c is accepted; E1d per-renderer lazy 2048 R8 SDF rendering and E1e debug visual/lifecycle/resource harness are implemented in source, unverified. E2/E3 are unimplemented pending the [production overflow design decision](../checkpoints/TEXT_LAYER.md#stop-before-e2--production-overflow-design-decision). Product Text creation/editor, v9 persistence and typed text animation remain planned. No device verification is implied by the proof pipeline.
 
 ## Overall Direction
 
