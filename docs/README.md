@@ -2,7 +2,7 @@
 
 Start with the [roadmap](architecture/FLUXX_ROADMAP.md) for active scope. The [Phase 2 status matrix](checkpoints/PHASE_2_STATUS_AND_BACKEND.md) distinguishes implemented controls from placeholders. Feature references below own their detailed behavior and verification evidence.
 
-Current work is Text E1: E1b/E1c CPU shaping and SDF are implemented with host verification and Android compile checks. The user confirmed E1a A16 render/playback/export smoke. E1d still requires the user's 16 KB environment run and fixed golden-project comparison. E2/E3 animation is planned, not implemented.
+Current text work: E1b/E1c accepted; E1d lazy 2048 R8 rendering and E1e debug visual/lifecycle/resource harness implemented in source, unverified. No builds/tests were run for this pass. E2/E3 are unimplemented pending the [production overflow design decision](checkpoints/TEXT_LAYER.md#stop-before-e2--production-overflow-design-decision). Earlier A16 smoke and CPU compilation evidence does not verify new GPU text. Outstanding 16 KB/golden checks remain.
 
 ## Architecture and scope
 

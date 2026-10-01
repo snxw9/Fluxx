@@ -1,6 +1,6 @@
 # Phase 2 Status, Backend Architecture & UI Control Matrix
 
-**Status:** Phase 2 A-D are implemented in source; E1b/E1c CPU text is implemented. Android debug Kotlin and both-ABI native debug/release compilation passed during E1b/E1c. The user confirmed A16 E1a render/playback/export smoke. Specific feature acceptance and JVM/device tests remain pending unless individually recorded. "Functional" below means implemented, not exhaustive phone verification.
+**Status:** Phase 2 A-D and text E1b–E1e are implemented in source. E1b/E1c accepted; E1d renderer and E1e harness are uncompiled/untested. E2/E3 are unimplemented pending a production overflow design decision under the user's stop rule. Earlier Android/native compilation and A16 smoke evidence apply to earlier source only. See [text checkpoint](TEXT_LAYER.md#stop-before-e2--production-overflow-design-decision). "Functional" means source implementation, not phone verification.
 
 ---
 
@@ -13,7 +13,7 @@ Phase 2 transitions Fluxx from a single-layer proof-of-concept to a multi-layer 
 - **Step C:** Mobile editing UI (shell, timeline, inspector, media browser, autosave). *(Implemented in source, pending on-device acceptance)*
 - **Step D:** Keyframe animation on transform properties (Bezier interpolation + 1 easing preset). *(Implemented in source, pending on-device acceptance)*
   - [Approved Option B architecture, regression coverage and acceptance checklist](KEYFRAME_ANIMATION.md).
-- **Step E:** E1a A16 render/playback/export smoke confirmed by user. E1b/E1c CPU shaping, static font bundle and cached SDF generation implemented; six host shaping fixtures pass. Android native/debug Kotlin compilation passes; device typography tests pending. No Vulkan text or editor integration. See [TEXT_LAYER.md](TEXT_LAYER.md). E1d requires the user's outstanding 16 KB runtime and golden-export comparison.
+- **Step E:** E1b/E1c accepted. E1d adds the lazy 2048 R8 SDF atlas and ordered text entries; E1e adds debug visual/lifecycle/resource acceptance. Both are implemented in source, unverified. E2 v9/model/integration and E3 editor are unimplemented pending the overflow-design decision. Later authorization supersedes earlier implementation gates; 16 KB/golden/device evidence remains outstanding. See [TEXT_LAYER.md](TEXT_LAYER.md).
 
 ---
 
@@ -83,7 +83,8 @@ This matrix maps every editor control to its underlying engine state, distinguis
 | **Motion Blur Cell** | Visible, disabled & inert (non-tappable) | Composition-level shutter angle/phase and layer-level blur engine. |
 | **Shape Layer Icon** | Visible, disabled & inert | Vector shape model, path tessellation, and shape renderer. |
 | **Native text shaping** | E1b CPU source implemented; six host hb-shape parity fixtures pass | Android instrumented execution pending; no renderer submission yet |
-| **CPU SDF / atlas packing** | E1c dumps, overlap probe and retained bitmap cache verified on host | GPU atlas/pipeline remain E1d; measured 338 / 1,547 glyphs for combined corpus |
+| **CPU SDF / atlas packing** | E1c dumps, overlap probe and retained bitmap cache verified on host | Lazy 2048 R8 GPU atlas/pipeline implemented in E1d source, unverified; production overflow decision pending |
+| **Debug text GPU proof** | E1d provider/validation and E1e visual/resource/lifecycle harness implemented in source | No compile/test/device execution; E1 proof has typed capacity failure |
 | **Bundled text faces** | Static Inter / Noto Serif / JetBrains Mono, pinned hashes and OFL notices | Native fallback implemented; editor picker remains E3 |
 | **Text Layer Icon** | Visible, disabled (`LayerType.TEXT` is placeholder) | **Phase 2 Step E:** Text data model, renderer integration and editor remain planned. |
 | **Adjustment Layer Icon** | Visible, disabled & inert | Adjustment layer model and render-pass effect accumulation. |

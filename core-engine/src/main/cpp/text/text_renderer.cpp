@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 #include <cstddef>
+#include "../gpu_ledger.h"
 
 namespace fluxx::text {
 namespace {
@@ -23,6 +24,9 @@ TextRenderer::TextRenderer(VkPhysicalDevice physical, VkDevice device, VkRenderP
 TextRenderer::~TextRenderer() {
     // Owner has completed its work fence / device idle before releasing this object.
     release(staging_); release(vertex_); release(index_);
+    destroyAtlas();
+}
+void TextRenderer::destroyAtlas() {
     if(pipeline_) vkDestroyPipeline(device_,pipeline_,nullptr);
     if(pipelineLayout_) vkDestroyPipelineLayout(device_,pipelineLayout_,nullptr);
     if(pool_) vkDestroyDescriptorPool(device_,pool_,nullptr);
@@ -31,6 +35,12 @@ TextRenderer::~TextRenderer() {
     if(view_) vkDestroyImageView(device_,view_,nullptr);
     if(image_) vkDestroyImage(device_,image_,nullptr);
     if(memory_) vkFreeMemory(device_,memory_,nullptr);
+    pipeline_=VK_NULL_HANDLE; pipelineLayout_=VK_NULL_HANDLE;
+    pool_=VK_NULL_HANDLE; descriptor_=VK_NULL_HANDLE; descriptorLayout_=VK_NULL_HANDLE;
+    sampler_=VK_NULL_HANDLE; view_=VK_NULL_HANDLE; image_=VK_NULL_HANDLE; memory_=VK_NULL_HANDLE;
+    stats_.images=stats_.views=stats_.samplers=stats_.pools=stats_.sets=stats_.layouts=stats_.pipelines=stats_.pipelineLayouts=0;
+    if(atlasAllocation_) { --stats_.memories; stats_.bytes-=atlasAllocation_; }
+    atlasAllocation_=0; initialized_=false;
 }
 uint32_t TextRenderer::memoryType(uint32_t bits, VkMemoryPropertyFlags required, VkMemoryPropertyFlags preferred) {
     VkPhysicalDeviceMemoryProperties props; vkGetPhysicalDeviceMemoryProperties(physical_,&props);
@@ -68,6 +78,7 @@ void TextRenderer::flush(const Buffer& target) {
 }
 void TextRenderer::createAtlas() {
     if(image_) return;
+    try {
     VkFormatProperties format; vkGetPhysicalDeviceFormatProperties(physical_,VK_FORMAT_R8_UNORM,&format);
     const auto required=VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT|VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT|VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
     if((format.optimalTilingFeatures&required)!=required) throw std::runtime_error("R8 linear-filtered atlas unsupported");
@@ -82,6 +93,7 @@ void TextRenderer::createAtlas() {
     VkMemoryAllocateInfo allocation{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO}; allocation.allocationSize=requirements.size;
     allocation.memoryTypeIndex=memoryType(requirements.memoryTypeBits,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     check(vkAllocateMemory(device_,&allocation,nullptr,&memory_),"text atlas memory"); ++stats_.memories; stats_.bytes+=requirements.size;
+    atlasAllocation_=requirements.size;
     check(vkBindImageMemory(device_,image_,memory_,0),"text atlas bind");
     VkImageViewCreateInfo view{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO}; view.image=image_; view.viewType=VK_IMAGE_VIEW_TYPE_2D;
     view.format=VK_FORMAT_R8_UNORM; view.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};
@@ -91,6 +103,7 @@ void TextRenderer::createAtlas() {
     sampler.addressModeU=sampler.addressModeV=sampler.addressModeW=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     check(vkCreateSampler(device_,&sampler,nullptr,&sampler_),"text sampler"); ++stats_.samplers;
     createPipeline();
+    } catch(...) { destroyAtlas(); throw; }
 }
 void TextRenderer::createPipeline() {
     VkDescriptorSetLayoutBinding binding{}; binding.binding=0; binding.descriptorCount=1;
@@ -169,6 +182,15 @@ void TextRenderer::pack() {
     if(packed.rejected) throw TextCapacityError("Required glyph set exceeds the 2048 atlas (E1 proof capacity)");
     createAtlas(); retained_=std::move(candidates); packed_=std::move(packed); placements_.clear();
     for(const auto& placement:packed_.placements) placements_.emplace(Key{placement.glyph->fontId,placement.glyph->glyphId},placement);
+    dirty_=true; ++stats_.generation;
+}
+void TextRenderer::repackRetained() {
+    std::vector<std::shared_ptr<const SdfGlyph>> glyphs;
+    for(const auto& entry:retained_) glyphs.push_back(entry.second);
+    auto packed=packGlyphs(std::move(glyphs),2048);
+    if(packed.rejected) throw TextCapacityError("Retained atlas repack failed");
+    packed_=std::move(packed); placements_.clear();
+    for(const auto& p:packed_.placements) placements_.emplace(Key{p.glyph->fontId,p.glyph->glyphId},p);
     dirty_=true; ++stats_.generation;
 }
 TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, const std::vector<GlyphModifier>* modifiers) {

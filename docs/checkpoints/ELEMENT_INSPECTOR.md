@@ -2,6 +2,8 @@
 
 **Status:** Implemented in source. Android debug Kotlin compilation passed during E1b/E1c; the feature-specific JVM/phone checks below remain pending. This document owns inspector navigation, layer actions and trim/extend/split.
 
+**Text pass:** E1d rendering and E1e debug harness are implemented in source, unverified. E2/E3 remain unimplemented pending the production atlas overflow decision. The Text creation pill and Edit Text editor are still disabled/unavailable; the proof renderer enables no inspector capability. Earlier compile results do not cover this pass. See [text checkpoint and planned E3 checks](TEXT_LAYER.md#stop-before-e2--production-overflow-design-decision).
+
 ### Anchor acceptance — 2026-09-24
 
 Source implementation and generated FlatBuffers bindings are complete. `AnchorPointTest.kt` covers centre parity, pivot invariance, compensated corners across source rotation/SAR/odd reference dimensions and resizing, legacy v1–v5 decoding, v6 round-trip, protected curves, gesture undo/cancel, copy/paste and opacity-preserving reset. Tests have not been run.
