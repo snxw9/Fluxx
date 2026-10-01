@@ -28,7 +28,7 @@ import com.fluxx.android.ui.theme.*
         Triple(InspectorSection.LAYER_STYLES,"Layer Styles",false),
         Triple(InspectorSection.BLENDING_OPACITY,"Blending &\nOpacity",true),
         Triple(InspectorSection.TRANSFORM,"Transform",true),
-        Triple(InspectorSection.CONTEXTUAL_EDIT,if(type==LayerType.SOLID) "Edit Solid" else "Edit Footage",type==LayerType.SOLID),
+        Triple(InspectorSection.CONTEXTUAL_EDIT,when(type) { LayerType.SOLID -> "Edit Solid"; LayerType.TEXT -> "Edit Text"; else -> "Edit Footage" },type==LayerType.SOLID || type==LayerType.TEXT),
         Triple(InspectorSection.MOTION_BLUR,"Motion Blur",false),
         Triple(InspectorSection.EFFECTS,"Effects",false))
     val columns=4

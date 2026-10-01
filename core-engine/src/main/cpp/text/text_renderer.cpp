@@ -179,6 +179,7 @@ std::shared_ptr<const Layout> TextRenderer::layout(const std::string& font, cons
     return result;
 }
 void TextRenderer::begin() { previousRequired_=std::move(required_); required_.clear(); vertices_.clear(); indices_.clear(); }
+void TextRenderer::retireBatch() { vertices_.clear(); indices_.clear(); }
 void TextRenderer::collect(const std::shared_ptr<const Layout>& layout) {
     for(const auto& glyph:layout->glyphs) {
         Key key{layout->fontId,glyph.id};

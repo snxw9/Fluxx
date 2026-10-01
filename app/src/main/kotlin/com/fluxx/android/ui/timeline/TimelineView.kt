@@ -828,7 +828,8 @@ private fun TimelineClipRow(
                     },
                 contentAlignment = Alignment.CenterStart
             ) {
-                val label = layer.name.ifBlank {
+                val label = if (layer.type == LayerType.TEXT) layer.text.source.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs)
+                    .replace('\n', ' ').ifBlank { "Text" } else layer.name.ifBlank {
                     when (layer.type) {
                         LayerType.VIDEO -> "Video ${layer.id}"
                         LayerType.IMAGE -> "Image ${layer.id}"
@@ -851,16 +852,21 @@ private fun TimelineClipRow(
         // Keyframe Markers Container (unclipped, layered above clip body)
         val anim = layer.animTransform
         val anchorOffsetUs = layer.resolvedKeyframeAnchorUs - startUs
-        val observedTimes = remember(anim, anchorOffsetUs) {
+        val observedTimes = remember(anim, layer.text, anchorOffsetUs) {
             val times = sortedSetOf<Long>()
             if (anim.position.isAnimated) anim.position.keyframes.forEach { times.add(it.timeUs) }
             if (anim.scale.isAnimated) anim.scale.keyframes.forEach { times.add(it.timeUs) }
             if (anim.rotation.isAnimated) anim.rotation.keyframes.forEach { times.add(it.timeUs) }
             if (anim.opacity.isAnimated) anim.opacity.keyframes.forEach { times.add(it.timeUs) }
+            if (layer.type == LayerType.TEXT) {
+                if (layer.text.source.isAnimated) layer.text.source.keyframes.forEach { times.add(it.timeUs) }
+                if (layer.text.size.isAnimated) layer.text.size.keyframes.forEach { times.add(it.timeUs) }
+                if (layer.text.fill.isAnimated) layer.text.fill.keyframes.forEach { times.add(it.timeUs) }
+            }
             // Drawing/snapping is clip-relative; stored keys are anchor-relative and may be negative.
             times.map { Math.addExact(it, anchorOffsetUs) }
         }
-        val focusedTimes = remember(anim, activeProperty, anchorOffsetUs) {
+        val focusedTimes = remember(anim, layer.text, activeProperty, anchorOffsetUs) {
             val keys = when (activeProperty) {
                 AnimPropertyType.POSITION -> anim.position.keyframes.map { it.timeUs }
                 AnimPropertyType.SCALE -> anim.scale.keyframes.map { it.timeUs }

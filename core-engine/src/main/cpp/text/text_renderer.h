@@ -41,6 +41,7 @@ public:
     void upload(VkCommandBuffer command);
     void draw(VkCommandBuffer command, const TextMesh& mesh, const TextPush& push);
     void begin();
+    void retireBatch();
     void repackRetained();
     TextGpuStats stats() const { return stats_; }
     FontStats fontStats() { return fonts_->stats(); }

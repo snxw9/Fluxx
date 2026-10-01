@@ -2,7 +2,7 @@
 
 **Status:** Implemented in source. Android debug Kotlin compilation passed during E1b/E1c; the feature-specific JVM/phone checks below remain pending. This document owns inspector navigation, layer actions and trim/extend/split.
 
-**Text pass:** E1d/E1e and E2 renderer/model integration are implemented in source, compiled, device-unverified. E3 editor controls and the Text creation pill remain pending. The proof harness remains available. See [text checkpoint](TEXT_LAYER.md#e2-implementation-and-approved-array-overflow).
+**Text pass:** E1d, E1e, E2 and E3 are implemented in source and compiled; all new text device behavior remains unverified. Native debug/release compilation passed for arm64-v8a and x86_64, Kotlin debug/release and instrumentation sources compiled, and the final JVM run passed 150/150 tests. No APK was installed or launched. See [stage evidence and exact user-run checklists](TEXT_LAYER.md). The approved overflow policy uses lazy texture-array growth; range selectors and text animators remain future work.
 
 ### Anchor acceptance — 2026-09-24
 
@@ -243,7 +243,7 @@ Video Extend In clamps to `max(0, start - sourceIn)`. Images and solids extend t
 
 ### Persistence
 
-Signed key times and persistent animation origins were introduced in **version 5**; the current writer uses v8. Versions 1-4 still load, with absent anchors resolving to clip start.
+Signed key times and persistent animation origins were introduced in **version 5**; the current writer uses v9. Versions 1-4 still load, with absent anchors resolving to clip start.
 
 The additive Layer fields are `keyframe_anchor_us:long=-1` and `has_keyframe_anchor:bool=false`. The presence bit is necessary: moving a trimmed clip earlier can create a legitimate negative anchor, including exactly -1. Null remains null on round-trip; explicit -1 survives as an explicit value. Decoding also accepts a non-sentinel anchor without the presence flag.
 
@@ -270,3 +270,12 @@ Phone acceptance:
 4. Duplicate and paste a trimmed or split layer later; save/reopen and verify animation timing, source mapping and negative keys.
 5. Collapse from each exact endpoint, confirm timeline/preview disappearance, then Undo and Redo.
 6. Check all inspector pages fit without scrolling in both preview sizes; the 36dp action row appears only on the landing page.
+
+
+## E3 Text inspector — implemented in source, device-unverified
+
+Text enables Contextual Edit as Edit Text. Its controls stay fixed; only the source field scrolls. A compact header and workspace-level IME padding keep the source field, Done/Cancel and letterboxed preview visible while typing; timeline/actions restore their prior layout after dismissal. Font and alignment are static controls. Size, Fill and Hold-only Source Text use the existing keyframe focus/navigation/easing framework. Fill opens the existing Global Colour Picker and eyedropper.
+
+A typing session captures the frame-snapped playhead and original editor state. Native metrics run on a dedicated worker, revisions reject stale results, and source/layout/allowed static Position compensation publish in one gesture preview. Done, focus loss and navigation await the latest draft and commit one existing gesture; Cancel restores the snapshot. Style changes await typing before applying their own gesture. No PreviewController API or gesture protocol changed.
+
+Text gets shared-metric natural-pixel bounds, handles, hit testing and anchor compensation. Fit Width/Height and Stretch preserve font size and use Scale; empty text disables fit and retains its anchor target. Media Info remains media-only. Timeline labels evaluate the held string. Add Content creates an assetless five-second text layer at the snapped playhead. See the exact [E3 device checklist](TEXT_LAYER.md#e3-editor-integration--implemented-in-source-device-unverified).

@@ -58,6 +58,7 @@ fun EditorActionBar(
     hasTimelineContent: Boolean = true,
     hasClipboard: Boolean = false,
     selectedLayer: CompositionLayer? = null,
+    textCanFit: Boolean = false,
     onFlipHorizontal: () -> Unit = {},
     onFlipVertical: () -> Unit = {},
     onFitToWidth: () -> Unit = {},
@@ -143,6 +144,7 @@ fun EditorActionBar(
                 onFlipHorizontal = onFlipHorizontal, onFlipVertical = onFlipVertical,
                 onFitToWidth = onFitToWidth, onFitToHeight = onFitToHeight,
                 onStretchToArea = onStretchToArea, onMediaInfo = onMediaInfo,
+                textCanFit = textCanFit,
                 onPasteLayer = onPasteLayer
             )
 
@@ -168,7 +170,8 @@ private fun LayerMenuButton(
     onFitToHeight: () -> Unit = {},
     onStretchToArea: () -> Unit = {},
     onMediaInfo: () -> Unit = {},
-    onPasteLayer: () -> Unit
+    onPasteLayer: () -> Unit,
+    textCanFit: Boolean = false
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -187,11 +190,12 @@ private fun LayerMenuButton(
             if (selectedLayer != null) {
                 DropdownMenuItem(text = { Text("Flip Horizontal") }, onClick = { menuExpanded = false; onFlipHorizontal() })
                 DropdownMenuItem(text = { Text("Flip Vertical") }, onClick = { menuExpanded = false; onFlipVertical() })
-                if (selectedLayer.type == LayerType.VIDEO || selectedLayer.type == LayerType.IMAGE) {
-                    DropdownMenuItem(text = { Text("Fit to Composition Width") }, onClick = { menuExpanded = false; onFitToWidth() })
-                    DropdownMenuItem(text = { Text("Fit to Composition Height") }, onClick = { menuExpanded = false; onFitToHeight() })
-                    DropdownMenuItem(text = { Text("Stretch to Composition Area") }, onClick = { menuExpanded = false; onStretchToArea() })
-                    DropdownMenuItem(text = { Text("Media Info") }, onClick = { menuExpanded = false; onMediaInfo() })
+                if (selectedLayer.type == LayerType.VIDEO || selectedLayer.type == LayerType.IMAGE || selectedLayer.type == LayerType.TEXT) {
+                    val fitEnabled = selectedLayer.type != LayerType.TEXT || textCanFit
+                    DropdownMenuItem(text = { Text("Fit to Composition Width") }, enabled = fitEnabled, onClick = { menuExpanded = false; onFitToWidth() })
+                    DropdownMenuItem(text = { Text("Fit to Composition Height") }, enabled = fitEnabled, onClick = { menuExpanded = false; onFitToHeight() })
+                    DropdownMenuItem(text = { Text("Stretch to Composition Area") }, enabled = fitEnabled, onClick = { menuExpanded = false; onStretchToArea() })
+                    if (selectedLayer.type != LayerType.TEXT) DropdownMenuItem(text = { Text("Media Info") }, onClick = { menuExpanded = false; onMediaInfo() })
                 }
                 DropdownMenuItem(text = { Text("Auto Orient") }, enabled = false, onClick = {})
                 DropdownMenuItem(text = { Text("Convert to Outline / Autotrace") }, enabled = false, onClick = {})

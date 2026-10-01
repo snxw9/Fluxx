@@ -29,7 +29,7 @@ After five warm-ups, lifecycle acceptance performs 30 actual surface detach/recr
 **User-run E1e checklist:**
 
 1. Compile debug and JVM test sources in Android Studio. `TextProofPolicyTest` already passed on the host; retain fresh results with the device build.
-2. Enable Vulkan validation for the debug application; choose a fresh instrumentation argument `textRunLabel`, such as `a16-e1e-01`. Run all three methods in `TextGpuAcceptanceTest` with the app otherwise idle.
+2. Enable Vulkan validation for the debug application; choose a fresh instrumentation argument `textRunLabel`, such as `a16-e1e-01`. Run `scaleQualityMatrixSweepMixedOrderAndRepack`, `requiredCorpusCapacityFailureIsExplicitAndRecoverable`, and `thirtySurfaceAndRendererCyclesReturnResourcesAndBoundHeap` in `TextGpuAcceptanceTest` with the app otherwise idle. At E2 and later, also run `arrayGrowthUsesRetainedCorpusDuringSweepAndTeardownReturnsLedger`.
 3. Archive `Android/data/com.fluxx.android.debug/files/text/<textRunLabel>/matrix/` and `lifecycle/`, including PNGs, per-fixture statistics, heap samples and allocation ledgers. Existing result directories are deliberately not overwritten.
 4. Visually inspect all nine scale/quality PNGs, the small-size fixtures and on-screen composition. Reduced previews are compared against achievable resolution; watch for bleed, overlap holes, baseline/alignment errors and softened corners.
 5. Verify mixed ordering across the four-entry boundary, opacity, rotated/flipped glyphs and visible `.notdef`; require zero validation errors. Warm sweep and retained repack must have zero new rasterizations.
@@ -37,13 +37,13 @@ After five warm-ups, lifecycle acceptance performs 30 actual surface detach/recr
 7. Check all 30 surface and 30 full-renderer cycle counters by category, native heap criteria and post-teardown baseline. Record available driver memory separately. Repeat manual background/foreground, cancellation and orientation interruptions; they are not established merely by SurfaceView replacement.
 8. Record device/OS/GPU, APK hash, page size and validation-layer provenance. Repeat packaged alignment/16 KB and existing Video/Image/Solid/audio regressions. No device verification is claimed.
 
-**Historical E1a–E1c update:** E1a render/playback/export smoke was verified by the user on A16. E1b/E1c were accepted before the later authorized pass. Recorded host/Android compilation results below apply to that earlier source only. E1d/E1e compile and host/JVM evidence is recorded above. E2 is implemented in source and compiled; E3 remains pending. Outstanding 16 KB/golden/device checks remain unverified.
+**Historical E1a–E1c update:** E1a render/playback/export smoke was verified by the user on A16. E1b/E1c were accepted before the later authorized pass. Recorded host/Android compilation results below apply to that earlier source only. E1d/E1e compile and host/JVM evidence is recorded above. E2 and E3 are implemented in source and compiled, device-unverified. Outstanding 16 KB/golden/device checks remain unverified.
 
 **Verifier correction:** the initial audit incorrectly required raw GNU_RELRO endpoints to be 16 KB aligned. Android rounds them before applying protection; a nonaligned endpoint alone is not incompatibility. Oboe/graphics-path source rebuilds remain, but earlier RELRO-only failure claims are withdrawn. The corrected verifier checks LOAD alignment/congruence and TEXTREL while inventorying RELRO; prior reports need regeneration. See [Bionic protection logic](https://raw.githubusercontent.com/aosp-mirror/platform_bionic/master/linker/linker_phdr.cpp), `_phdr_table_set_gnu_relro_prot`.
 
 ## E2 implementation and approved array overflow
 
-E1d is committed as `16f2d10`; E1e as `90af786`. E2 implements FlatBuffers v9 typed source/size/fill properties, native-backed and fake metrics, natural-pixel text geometry, text Fit/Stretch actions, temporal rebasing and common property navigation. Preview, headless export and thumbnails use the shared text renderer. The single-video fast path continues to exclude Text. Product editor controls remain E3 work.
+E1d is committed as `16f2d10`; E1e as `90af786`. E2 implements FlatBuffers v9 typed source/size/fill properties, native-backed and fake metrics, natural-pixel text geometry, text Fit/Stretch actions, temporal rebasing and common property navigation. Preview, headless export and thumbnails use the shared text renderer. The single-video fast path continues to exclude Text. Product editor controls are implemented in E3, described below.
 
 The approved overflow design replaces the previous streaming proposal. Each renderer starts with one lazy 2048x2048 R8 array layer. If the frame's pinned union does not fit, unused resident glyphs are removed first; necessary growth recreates the 2D_ARRAY atlas at the frame boundary after GPU idle and reuploads retained CPU SDF leases. Growth never requires rerasterization. One staging upload command covers every array layer, followed by transfer/sample barriers, before any composition draw. A per-vertex page index preserves glyph/overlap order and one indexed draw per text entry; the four-entry batch contract, gesture protocol and PreviewController API remain unchanged.
 
@@ -61,18 +61,29 @@ Compile evidence is recorded per stage; native debug/release for both ABIs, Kotl
 2. Run fake-metrics geometry tests: natural pixels, multiline logical/ink bounds, empty bounds, static baseline compensation, animated anchors and evaluated Fit/Stretch with Scale auto-keying.
 3. Run typed size/fill/hold-source evaluator/reducer tests: exact boundaries, transparent colours, endpoint holds, move/trim/split rebasing, copy/paste, undo and autosave round trips.
 4. Compare device preview, headless export and thumbnails with animated text plus transforms, transparent fill and empty-source keys. Preserve single-video fast-path exclusion.
-5. Exercise the approved overflow strategy with the combined corpus and >4 entries: complete output, overlap/z-order, bounded residency and explicit real allocation failures. Re-run every E1 harness test.
+5. Run `TextGpuAcceptanceTest.arrayGrowthUsesRetainedCorpusDuringSweepAndTeardownReturnsLedger`: the combined three-font corpus must fit two pages, growth/sweep must add zero rasterizations, and teardown must restore the live-resource ledger. Exercise >4 entries, complete output, overlap/z-order, bounded residency and explicit allocation failures. Re-run every E1 harness test, including single-page capacity failure.
 6. Verify warm size/fill sweeps and held-string playback produce no shaping/SDF misses merely because time/size/fill advances. Uncached seeks wait for the correct revision; exports/thumbnails never use stale layouts.
 
-**Remaining user-run E3 checklist — planned; E3 is unavailable:**
+## E3 editor integration — implemented in source, device-unverified
 
-1. Run JVM typing/property/capability tests. One session inserts/edits one captured-frame hold key and creates one undo entry; unchanged sessions create none; cancel restores the exact original.
-2. Verify Text creation: five seconds at snapped playhead, topmost order, Inter/72px/white/centre defaults, automatic duration and persistence.
-3. Inspect fixed Edit Text controls at both preview sizes, enlarged fonts and landscape. Only the source field scrolls; fill reuses the Global Colour Picker.
-4. Repeatedly open/dismiss IME: workspace layout keeps the letterboxed preview and compact Done panel visible, hides timeline/actions temporarily and restores their previous layout.
-5. Type with IME composition; Done/focus-loss/dismiss commits once, cancel restores source/keys, seek/playback/layer/property changes finish at the captured time, and stale worker results cannot revive drafts.
-6. Confirm native metrics never block the UI on the font mutex, including concurrent export preparation. Matching source/layout/allowed Position compensation publish atomically.
-7. Verify Source Text/Size/Fill diamonds, Hold-only source controls, timeline held-string labels, common navigation, shared-metrics bounds/handles, anchor/fit behavior and inert unsupported capabilities. Re-run E1/E2 regressions.
+E3 enables the Add Content Text pill and Edit Text tab, fixed font/alignment/size/fill controls with a scrolling source field, shared Global Colour Picker/eyedropper, held-string timeline labels, shared-metric preview bounds/handles/hit testing and natural-pixel anchor/Fit/Stretch actions. Workspace IME handling temporarily hides timeline/actions and presents a compact Done/Cancel panel with the letterboxed preview.
+
+Typing captures the snapped edit time and original snapshot; revisions conflate worker metrics, and source/layout/allowed Position compensation publish atomically. Navigation waits for the latest draft; one typing session commits one existing gesture undo entry, cancellation restores the snapshot, and stale worker results cannot revive canceled drafts. Metrics calls execute only on the dedicated worker and never wait for the font mutex on the UI thread. Style edits preserve the latest committed source. Size/Fill/Source Text reuse shared keyframe controls, common navigation, freeze behavior, signed keys and easing; source stays Hold-only.
+
+Native mesh storage is reused after the existing completed batch fence, bounding uploads to pending entries without adding a pass break or changing ordered draw entries. The debug E1 harness remains compiled. E3 final verification passed native debug/release for both ABIs, app/core Kotlin and instrumentation source compilation, and 150/150 JVM tests. The ten additional editor tests cover session undo/cancel, captured key times, stale results, invalid drafts, style/source races, creation defaults, geometry, copy/paste/persistence and common navigation. Device behavior remains unverified.
+
+**User-run E3 checklist:**
+
+1. Build/install the debug app yourself. Run E1d/E1e first, then the E2 checks above; retain device, OS/GPU, page size, validation provenance, APK hash and test artifacts.
+2. Add Content → Text: confirm an assetless five-second layer at the frame-snapped playhead, selected inspector, default Inter/72px/white/centre, one creation undo, and explicit composition duration preserved. Verify duplicate/copy/paste, undo/redo and save/reopen retain typed properties and requested font IDs.
+3. Open Edit Text at both preview sizes, landscape and enlarged system fonts. Verify fixed font/alignment/size/fill controls and source-field-only scrolling; empty source keeps an anchor target and disables Fit/Stretch. Unsupported effects, outlines, range selectors and animators remain inert.
+4. Repeatedly show/dismiss the IME, enter multiline text with composing regions, and use Done, Back, focus loss and Cancel. Preview and compact Done/Cancel remain visible; timeline/actions restore their earlier layout. Confirm one undo per typing session, exact redo and Cancel restoring source/keys/Position.
+5. Type and immediately seek, play, switch layers/properties, change font/alignment, open the picker, leave the workspace, or save/export. The latest valid draft commits at the captured snapped time before navigation. Rapidly cancel/restart while metrics are busy; stale results must not overwrite the new session. An invalid final draft must roll back the session with an explicit error.
+6. Exercise Size/Fill/Source diamonds, add/remove keys, freeze at playhead, common previous/next-key navigation and signed split/trim timing. Size/Fill offer Linear/Easy Ease; Source stays Hold. Inspect held timeline labels and compare evaluated preview, reopened project and export.
+7. Reuse the Global Colour Picker and eyedropper for static and animated fill; verify one gesture undo and cancellation. Test font fallback display, alignment, multiline/overhanging glyphs, rotation and negative scale. Compare shared bounds/handles/hit testing, anchor edits and Fit Width/Height/Stretch; fitting changes Scale, preserving Size.
+8. Stress rapid typing during export and thumbnail preparation; inspect UI responsiveness and thread traces to confirm no UI-thread font-mutex waits. Trigger array growth and typed capacity failure; require explicit layer error and no partial composition frame, then edit to recover. Re-run E1 lifecycle/resource and existing Video/Image/Solid/audio regressions.
+
+**Design deviations:** the user-approved array growth replaces the earlier streaming proposal; arrays shrink only on renderer teardown. No batch-structure, gesture-protocol or PreviewController API change was needed. The provisional 8px minimum remains subject to device quality acceptance. No device result is inferred from compilation/JVM tests.
 
 ## Historical E1a toolchain and packaging changes
 
@@ -293,5 +304,5 @@ The host script requires installed Visual Studio C++ Build Tools and SDK CMake 3
 
 - E1b/c: user review of CPU PNGs and Android instrumented parity/dump results.
 - Before **E1d**: user's E1a 16 KB environment result and fixed r26/r28 golden-project video/audio comparison. If only an emulator runs, physical 16 KB AHardwareBuffer/MediaCodec behavior remains unverified.
-- E1d/E1e: no implementation yet; GPU synchronization, per-renderer atlas ownership, debug renderer injection, scale/preview matrix and heap/GPU-resource teardown stress remain planned.
-- E2/E3: outlines only. No text layer creation, FlatBuffers v9 change, geometry integration, typography UI or Text icon activation.
+- E1d/E1e: implemented in source and compiled; GPU quality, validation and heap/resource lifecycle acceptance remain user-run.
+- E2/E3: v9, geometry, renderer integration, text creation and typography UI are implemented in source and compiled; device acceptance remains user-run.

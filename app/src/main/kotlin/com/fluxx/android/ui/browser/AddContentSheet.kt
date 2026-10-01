@@ -41,7 +41,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 private enum class AddContentTab(val label: String, val available: Boolean = false) {
-    MEDIA("Media", true), SOLID("Solid", true), SHAPE("Shape"), TEXT("Text"),
+    MEDIA("Media", true), SOLID("Solid", true), SHAPE("Shape"), TEXT("Text", true),
     ADJUSTMENT("Adjustment"), CAMERA("Camera"), NULL("Null")
 }
 
@@ -58,7 +58,8 @@ fun AddContentSheet(
     onDismiss: () -> Unit,
     allowMultiSelect: Boolean = true,
     paletteRepository: PaletteRepository? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onAddText: () -> Unit = {}
 ) {
     var tab by remember { mutableStateOf(AddContentTab.MEDIA) }
     var mediaType by remember { mutableStateOf(LayerType.VIDEO) }
@@ -142,6 +143,12 @@ fun AddContentSheet(
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (tab == AddContentTab.SOLID) {
                     SolidTabContent(onAddSolid,paletteRepository)
+                } else if (tab == AddContentTab.TEXT) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Text", style = MaterialTheme.typography.titleMedium)
+                        Text("Inter · 72px · white · 5 seconds", style = MaterialTheme.typography.bodySmall)
+                        Button(onClick = onAddText) { Text("Add Text") }
+                    }
                 } else {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
                         listOf("Video", "Image", "Audio").forEach { name ->

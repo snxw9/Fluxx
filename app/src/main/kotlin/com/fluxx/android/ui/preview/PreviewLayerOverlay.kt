@@ -10,9 +10,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import com.fluxx.android.media.MediaRepository
 import com.fluxx.android.model.*
 import com.fluxx.android.render.LayerGeometry
+import com.fluxx.android.render.TextMetricsRepository
 import com.fluxx.android.ui.theme.Border
 import com.fluxx.android.ui.theme.Highlight
 import com.fluxx.android.ui.theme.TextSecondary
@@ -26,6 +28,16 @@ private data class OverlaySource(val width: Int, val height: Int, val rotation: 
 internal fun PreviewLayerOverlay(project: ProjectDocument, selected: CompositionLayer?, playheadUs: Long,
     repository: MediaRepository?, settings: ViewSettings, anchorMode: Boolean) {
     val comp = project.composition
+    val context = LocalContext.current
+    val textSource = selected?.text?.source?.evaluate(playheadUs - selected.resolvedKeyframeAnchorUs).orEmpty()
+    val textMetrics by produceState<TextLayoutMetrics?>(null, selected?.type, selected?.text?.fontId, textSource) {
+        value = null
+        if (selected?.type == LayerType.TEXT) {
+            try { value = TextMetricsRepository.get(context).measure(selected.text.fontId, textSource) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { }
+        }
+    }
     val source by produceState<OverlaySource?>(null, selected?.type, selected?.asset, repository) {
         value = null
         val uri = selected?.asset?.uri
@@ -60,16 +72,23 @@ internal fun PreviewLayerOverlay(project: ProjectDocument, selected: Composition
         val rw = layer.referenceWidth.takeIf { it > 0 } ?: comp.width
         val rh = layer.referenceHeight.takeIf { it > 0 } ?: comp.height
         val geometry = if (layer.type == LayerType.SOLID) OverlaySource(rw, rh) else source
-        if (geometry != null && geometry.width > 0 && geometry.height > 0 &&
-            geometry.pixelAspect.isFinite() && geometry.pixelAspect > 0f &&
+        val textSize = layer.text.size.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs)
+        val textBounds = textMetrics?.bounds(textSize, layer.text.alignment)
+        val hasGeometry = if (layer.type == LayerType.TEXT) textBounds?.empty == false else
+            geometry != null && geometry.width > 0 && geometry.height > 0 && geometry.pixelAspect.isFinite() && geometry.pixelAspect > 0f
+        if (hasGeometry &&
             (settings.showBoundingBoxes || settings.showSelectionHandles)) {
-            LayerGeometry.matrix(matrix, transform, comp.width, comp.height, geometry.width, geometry.height,
+            if (layer.type == LayerType.TEXT) LayerGeometry.textMatrix(matrix, transform, requireNotNull(textMetrics).logical(textSize),
+                comp.width, comp.height, rw, rh, layer.anchorX, layer.anchorY)
+            else LayerGeometry.matrix(matrix, transform, comp.width, comp.height, requireNotNull(geometry).width, geometry.height,
                 geometry.rotation, geometry.pixelAspect, referenceWidth = rw, referenceHeight = rh,
                 anchorX = layer.anchorX, anchorY = layer.anchorY)
             fun corner(x: Float, y: Float) = Offset(
                 (matrix[0] * x + matrix[4] * y + matrix[12] + 1f) * size.width / 2f,
                 (matrix[1] * x + matrix[5] * y + matrix[13] + 1f) * size.height / 2f)
-            val corners = listOf(corner(-1f, -1f), corner(1f, -1f), corner(1f, 1f), corner(-1f, 1f))
+            val corners = if (layer.type == LayerType.TEXT) requireNotNull(textBounds).let { b ->
+                listOf(corner(b.left, b.top), corner(b.left + b.width, b.top), corner(b.left + b.width, b.top + b.height), corner(b.left, b.top + b.height))
+            } else listOf(corner(-1f, -1f), corner(1f, -1f), corner(1f, 1f), corner(-1f, 1f))
             if (settings.showBoundingBoxes) {
                 val outline = Path().apply {
                     moveTo(corners[0].x, corners[0].y)

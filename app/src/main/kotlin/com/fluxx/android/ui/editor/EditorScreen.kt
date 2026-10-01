@@ -50,6 +50,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import com.fluxx.android.ui.preview.ViewSettings
 import com.fluxx.android.render.PreviewResolution
+import com.fluxx.android.render.TextMetricsRepository
+import com.fluxx.android.render.TextLayerErrors
 
 private data class PreviewColorRequest(val x: Float,val y: Float,val released: Boolean,val serial: Long)
 
@@ -86,11 +88,30 @@ fun EditorScreen(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var textTyping by remember { mutableStateOf(false) }
+    val metricsService = remember(context) { TextMetricsRepository.get(context) }
+    val latestPreview by rememberUpdatedState(previewController)
+    val textEditor = remember(editor, scope, metricsService) {
+        TextEditController(editor, scope, metricsService::measure,
+            changed = { latestPreview?.update(editor.displayedState.project, editor.displayedState.playheadUs, false) },
+            typingChanged = { textTyping = it })
+    }
+    DisposableEffect(textEditor) { onDispose { textEditor.cancel() } }
+    val textErrors by TextLayerErrors.state.collectAsState()
     val displayedState = editor.displayedState
     val project = displayedState.project
     val composition = project.composition
     val playheadUs = displayedState.playheadUs
     val selectedLayer = displayedState.selectedLayer
+    val selectedTextSource = selectedLayer?.text?.source?.evaluate(playheadUs - selectedLayer.resolvedKeyframeAnchorUs).orEmpty()
+    val selectedTextMetrics by produceState<TextLayoutMetrics?>(null, selectedLayer?.type, selectedLayer?.text?.fontId, selectedTextSource) {
+        value = null
+        if (selectedLayer?.type == LayerType.TEXT) try { value = metricsService.measure(selectedLayer.text.fontId, selectedTextSource) }
+        catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (_: Exception) { }
+    }
+    val textCanFit = selectedLayer?.let { layer -> selectedTextMetrics?.bounds(
+        layer.text.size.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs), layer.text.alignment)?.empty == false } ?: false
 
     val previewStateFlow = remember(previewController) {
         previewController?.state ?: MutableStateFlow(PreviewState())
@@ -103,14 +124,16 @@ fun EditorScreen(
     var timelineGestureId by remember { mutableStateOf<Long?>(null) }
     fun applyLayerAction(action: EditorAction) {
         previewController?.pause()
-        editor.dispatch(action)
-        previewController?.update(editor.state.project, editor.state.playheadUs, false)
+        textEditor.finish {
+            editor.dispatch(action)
+            previewController?.update(editor.state.project, editor.state.playheadUs, false)
+        }
     }
     fun fitLayer(mode: Int) {
         if (fitting) return
         val layer = editor.displayedState.selectedLayer ?: return
         val uri = layer.asset?.uri
-        if (uri == null) {
+        if (uri == null && layer.type != LayerType.TEXT) {
             android.widget.Toast.makeText(context, "Source media unavailable", android.widget.Toast.LENGTH_SHORT).show()
             return
         }
@@ -120,17 +143,21 @@ fun EditorScreen(
         fitting = true
         scope.launch {
             try {
-                val action = withContext(Dispatchers.IO) {
+                val action = if (layer.type == LayerType.TEXT) {
+                    val local = atTime - layer.resolvedKeyframeAnchorUs
+                    val metrics = metricsService.measure(layer.text.fontId, layer.text.source.evaluate(local))
+                    EditorAction.FitText(layer.id, atTime, metrics.bounds(layer.text.size.evaluate(local), layer.text.alignment), mode)
+                } else withContext(Dispatchers.IO) {
                     val width: Int
                     val height: Int
                     var rotation = 0
                     var pixelAspect = 1f
                     if (layer.type == LayerType.VIDEO) {
-                        val source = mediaRepository.video(uri)
+                        val source = mediaRepository.video(requireNotNull(uri))
                         width = source.width; height = source.height
                         rotation = source.rotation; pixelAspect = source.pixelAspect
                     } else {
-                        val bitmap = mediaRepository.image(uri)
+                        val bitmap = mediaRepository.image(requireNotNull(uri))
                         try { width = bitmap.width; height = bitmap.height } finally { bitmap.recycle() }
                     }
                     require(width > 0 && height > 0)
@@ -178,8 +205,10 @@ fun EditorScreen(
     fun dismissInspector() {
         eyedropperLayerId=null
         focusManager.clearFocus()
-        editor.cancelGesture()
-        inspectorSheetVisible = false
+        textEditor.finish {
+            editor.cancelGesture()
+            inspectorSheetVisible = false
+        }
     }
     fun leaveSelectionOrEditor() {
         focusManager.clearFocus()
@@ -189,7 +218,7 @@ fun EditorScreen(
             editor.dispatch(EditorAction.Select(null))
         } else onExitClick()
     }
-    BackHandler { leaveSelectionOrEditor() }
+    BackHandler { focusManager.clearFocus(); textEditor.finish { leaveSelectionOrEditor() } }
     LaunchedEffect(selectedLayer?.id, inspectorSheetVisible, previewState.playing) {
         if (!inspectorSheetVisible || selectedLayer?.id != eyedropperLayerId || previewState.playing) eyedropperLayerId=null
     }
@@ -208,7 +237,9 @@ fun EditorScreen(
                 if(request.released) {
                     if(argb!=null) {
                         // Keep the source frame unchanged throughout the drag. One release = one edit.
-                        editor.dispatch(EditorAction.SetColor(id,argb))
+                        val sampledLayer = editor.state.project.composition.layers.first { it.id == id }
+                        editor.dispatch(if (sampledLayer.type == LayerType.TEXT) TextEdits.fill(sampledLayer,
+                            editor.state.project.composition.frameRate.snap(editor.state.playheadUs), argb) else EditorAction.SetColor(id,argb))
                         pc.update(editor.state.project,editor.state.playheadUs,false)
                         eyedropperLayerId=null
                         break
@@ -245,16 +276,16 @@ fun EditorScreen(
                 projectName = projectName,
                 onProjectNameChange = { projectName = it },
                 onExitClick = {
-                    leaveSelectionOrEditor()
+                    focusManager.clearFocus(); textEditor.finish { leaveSelectionOrEditor() }
                 },
-                onCompSettingsClick = { compSettingsVisible = true },
-                onExportClick = { exportDialogVisible = true },
-                onSaveClick = onSaveProject,
-                onLoadClick = onLoadProject,
+                onCompSettingsClick = { focusManager.clearFocus(); textEditor.finish { compSettingsVisible = true } },
+                onExportClick = { focusManager.clearFocus(); textEditor.finish { exportDialogVisible = true } },
+                onSaveClick = { focusManager.clearFocus(); textEditor.finish(onSaveProject) },
+                onLoadClick = { focusManager.clearFocus(); textEditor.finish(onLoadProject) },
                 selectedLayerId = displayedState.selectedLayerId,
                 selectedLayerName = selectedLayer?.name.orEmpty(),
                 onLayerNameChange = { name ->
-                    selectedLayer?.let { editor.dispatch(EditorAction.Rename(it.id, name)) }
+                    selectedLayer?.let { layer -> textEditor.finish { editor.dispatch(EditorAction.Rename(layer.id, name)) } }
                 }
             )
         },
@@ -264,13 +295,14 @@ fun EditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .imePadding()
         ) {
             val isInspectorOpen = inspectorSheetVisible && selectedLayer != null
             // Reserve ruler + track gap + one row + inspector separation in BOTH preview modes.
             // Expansion trades inspector height for canvas height; opening the inspector never moves the preview.
-            val available = (maxHeight - EditorActionBarHeight - TimelineInspectorAnchorHeight).coerceAtLeast(0.dp)
+            val available = (maxHeight - if (textTyping) 0.dp else EditorActionBarHeight + TimelineInspectorAnchorHeight).coerceAtLeast(0.dp)
             val desiredInspectorHeight = (if (isExpandedPreview) 268.dp else 328.dp) * density.fontScale.coerceAtLeast(1f)
-            val previewHeight = (available - desiredInspectorHeight).coerceAtLeast(0.dp)
+            val previewHeight = (available - if (textTyping) 144.dp * density.fontScale.coerceAtLeast(1f) else desiredInspectorHeight).coerceAtLeast(0.dp)
             val inspectorHeight = available - previewHeight
             // Match the real space below the preview, including the bottom system inset.
             SideEffect { addContentHeight = maxHeight - previewHeight + innerPadding.calculateBottomPadding() }
@@ -302,8 +334,8 @@ fun EditorScreen(
                     selectedLayerId = displayedState.selectedLayerId,
                     onSelectLayer = { id ->
                         // Preview selection must never open the inspector. Keep this callback separate.
-                        dismissInspector()
-                        editor.dispatch(EditorAction.Select(id))
+                        focusManager.clearFocus()
+                        textEditor.finish { dismissInspector(); editor.dispatch(EditorAction.Select(id)) }
                     },
                     onSurfaceAvailable = onSurfaceAvailable,
                     onSurfaceDestroyed = onSurfaceDestroyed,
@@ -315,13 +347,14 @@ fun EditorScreen(
                 )
 
                 // 2. Editor Action Bar (7 actions: Undo, Redo, Prev, Play/Pause, Next, Layer, View)
-                EditorActionBar(
+                if (!textTyping) EditorActionBar(
                     hasTimelineContent = project.composition.resolvedDurationUs > 0,
                     isPlaying = previewState.playing,
                     canUndo = editor.canUndo,
                     canRedo = editor.canRedo,
                     hasClipboard = editor.hasCopiedLayer,
                     selectedLayer = selectedLayer,
+                    textCanFit = textCanFit,
                     onFlipHorizontal = { selectedLayer?.let { applyLayerAction(EditorAction.FlipHorizontal(it.id, editor.state.playheadUs)) } },
                     onFlipVertical = { selectedLayer?.let { applyLayerAction(EditorAction.FlipVertical(it.id, editor.state.playheadUs)) } },
                     onFitToWidth = { fitLayer(0) },
@@ -336,35 +369,47 @@ fun EditorScreen(
                         }
                     },
                     onUndo = {
-                        editor.undo()
-                        previewController?.update(editor.state.project, playheadUs, false)
+                        textEditor.finish {
+                            editor.undo()
+                            previewController?.update(editor.state.project, playheadUs, false)
+                        }
                     },
                     onRedo = {
-                        editor.redo()
-                        previewController?.update(editor.state.project, playheadUs, false)
+                        textEditor.finish {
+                            editor.redo()
+                            previewController?.update(editor.state.project, playheadUs, false)
+                        }
                     },
                     onPrevBoundary = {
-                        val prevUs = editor.navigateBoundary(false,
-                            inspectorSheetVisible && editor.state.selectedLayerId != null, focusedProperty)
-                        previewController?.update(editor.state.project, prevUs, false)
+                        textEditor.finish {
+                            val prevUs = editor.navigateBoundary(false,
+                                inspectorSheetVisible && editor.state.selectedLayerId != null, focusedProperty)
+                            previewController?.update(editor.state.project, prevUs, false)
+                        }
                     },
                     onPlayPauseToggle = {
-                        if (previewState.playing) previewController?.pause()
-                        else {
-                            editor.dispatch(EditorAction.SelectMarker(null))
-                            previewController?.play()
+                        textEditor.finish {
+                            if (previewState.playing) previewController?.pause()
+                            else {
+                                editor.dispatch(EditorAction.SelectMarker(null))
+                                previewController?.play()
+                            }
                         }
                     },
                     onNextBoundary = {
-                        val nextUs = editor.navigateBoundary(true,
-                            inspectorSheetVisible && editor.state.selectedLayerId != null, focusedProperty)
-                        previewController?.update(editor.state.project, nextUs, false)
+                        textEditor.finish {
+                            val nextUs = editor.navigateBoundary(true,
+                                inspectorSheetVisible && editor.state.selectedLayerId != null, focusedProperty)
+                            previewController?.update(editor.state.project, nextUs, false)
+                        }
                     },
                     onPasteLayer = {
                         focusManager.clearFocus()
-                        previewController?.pause()
-                        editor.pasteLayer()
-                        previewController?.update(editor.state.project, editor.state.playheadUs, false)
+                        textEditor.finish {
+                            previewController?.pause()
+                            editor.pasteLayer()
+                            previewController?.update(editor.state.project, editor.state.playheadUs, false)
+                        }
                     },
                     viewSettings = viewSettings,
                     onViewSettingsChange = { viewSettings = it },
@@ -378,7 +423,7 @@ fun EditorScreen(
                 )
 
                 // 3. Lower Timeline Workspace (unconditionally weight(1f) to prevent kick on sheet toggle)
-                TimelineView(
+                if (!textTyping) TimelineView(
                     project = project,
                     mediaRepository = mediaRepository,
                     playheadUs = playheadUs,
@@ -413,8 +458,10 @@ fun EditorScreen(
                         }
                     },
                     onSeek = { timeUs, snap ->
-                        editor.dispatch(EditorAction.Seek(timeUs, snap))
-                        previewController?.seek(timeUs)
+                        textEditor.finish {
+                            editor.dispatch(EditorAction.Seek(timeUs, snap))
+                            previewController?.seek(timeUs)
+                        }
                     },
                     onToggleVisibility = { id, vis ->
                         editor.dispatch(EditorAction.SetVisibility(id, vis))
@@ -465,6 +512,18 @@ fun EditorScreen(
             ) {
                 selectedLayer?.let { layer ->
                     ElementInspectorSheet(
+                        textTyping = textTyping,
+                        textError = textEditor.error ?: textErrors?.takeIf { it.project === project && layer.id in it.layerIds }?.message,
+                        onTextBegin = { previewController?.pause(); textEditor.begin(layer.id) },
+                        onTextDraft = textEditor::source,
+                        onTextFinish = { textEditor.finish() },
+                        onTextCancel = textEditor::cancel,
+                        onTextStyle = { textEditor.edit(layer.id, it) },
+                        onTextSizeBegin = { previewController?.pause()
+                            if (textEditor.typing) textEditor.finish { textEditor.begin(layer.id, false) } else textEditor.begin(layer.id, false) },
+                        onTextSizePreview = { value ->
+                            if (textEditor.typing) textEditor.finish { textEditor.begin(layer.id, false); textEditor.size(value) } else textEditor.size(value) },
+                        onTextSizeCommit = { if (textEditor.typing) textEditor.finish { textEditor.finish() } else textEditor.finish() },
                         mediaRepository = mediaRepository,
                         onAnchorModeChange = { anchorMode = it },
                         onAnchorPreview = { action ->
@@ -482,78 +541,94 @@ fun EditorScreen(
                             // should clear selection/cancel gestures, never every recomposition.
                             if (inspectorSheetVisible && focusedProperty != it) {
                                 focusedProperty = it
-                                if (it != null) editor.dispatch(EditorAction.SelectMarker(null))
+                                if (it != null && !textEditor.active) editor.dispatch(EditorAction.SelectMarker(null))
                             }
                         },
                         onAction = { action ->
                             previewController?.pause()
-                            editor.dispatch(action)
-                            previewController?.update(editor.state.project, playheadUs, false)
+                            textEditor.finish {
+                                editor.dispatch(action)
+                                previewController?.update(editor.state.project, editor.state.playheadUs, false)
+                            }
                         },
                         onRename = { newName ->
-                            editor.dispatch(EditorAction.Rename(layer.id, newName))
+                            textEditor.finish { editor.dispatch(EditorAction.Rename(layer.id, newName)) }
                         },
                         onDuplicate = {
                             focusManager.clearFocus()
                             previewController?.pause()
-                            editor.duplicateLayer(layer.id)
-                            previewController?.update(editor.state.project, editor.state.playheadUs, false)
+                            textEditor.finish { editor.duplicateLayer(layer.id)
+                                previewController?.update(editor.state.project, editor.state.playheadUs, false) }
                         },
                         onCopyLayer = {
                             focusManager.clearFocus()
-                            if (editor.copyLayer(layer.id)) {
+                            textEditor.finish { if (editor.copyLayer(layer.id)) {
                                 android.widget.Toast.makeText(context, "Layer copied", android.widget.Toast.LENGTH_SHORT).show()
-                            }
+                            } }
                         },
                         onDelete = {
-                            editor.dispatch(EditorAction.Remove(layer.id))
+                            focusManager.clearFocus()
+                            textEditor.finish { editor.dispatch(EditorAction.Remove(layer.id))
                             previewController?.update(editor.state.project, playheadUs, false)
-                            inspectorSheetVisible = false
+                            inspectorSheetVisible = false }
                         },
                         onDismiss = { dismissInspector() },
                         onTransformBegin = {
                             previewController?.pause()
-                            editor.beginGesture()
+                            textEditor.finish { editor.beginGesture() }
                         },
                         onTransformPreview = { t ->
-                            editor.editTransform(layer.id, t, preview = true)
+                            textEditor.finish { editor.editTransform(layer.id, t, preview = true)
                             previewController?.update(editor.displayedState.project, playheadUs, false)
+                            }
                         },
                         onTransformCommit = {
-                            editor.commitGesture()
+                            textEditor.finish { editor.commitGesture()
                             previewController?.update(editor.state.project, playheadUs, false)
+                            }
                         },
                         onTransformCancel = {
+                            textEditor.cancel()
                             editor.cancelGesture()
                             previewController?.update(editor.state.project, playheadUs, false)
                         },
                         onTransformEdit = { transform ->
                             previewController?.pause()
-                            editor.editTransform(layer.id, transform)
+                            textEditor.finish { editor.editTransform(layer.id, transform)
                             previewController?.update(editor.state.project, playheadUs, false)
+                            }
                         },
                         onTimingChange = { timing ->
-                            editor.dispatch(EditorAction.SetTiming(layer.id, timing))
-                            previewController?.update(editor.state.project, playheadUs, false)
+                            applyLayerAction(EditorAction.SetTiming(layer.id, timing))
                         },
                         onAudioChange = { muted, gain ->
                             editor.dispatch(EditorAction.SetAudio(layer.id, muted, gain))
                             previewController?.update(editor.state.project, playheadUs, false)
                         },
                         onColorChange = { argb ->
-                            editor.dispatch(EditorAction.SetColor(layer.id, argb))
+                            textEditor.finish { editor.dispatch(if (layer.type == LayerType.TEXT) TextEdits.fill(
+                                editor.state.project.composition.layers.first { it.id == layer.id }, composition.frameRate.snap(playheadUs), argb)
+                                else EditorAction.SetColor(layer.id, argb))
                             previewController?.update(editor.state.project, playheadUs, false)
+                            }
                         },
                         onColorPreview = { argb ->
-                            editor.previewGesture(EditorAction.SetColor(layer.id,argb))
+                            textEditor.finish {
+                            val originalLayer = editor.state.project.composition.layers.first { it.id == layer.id }
+                            val action = if (layer.type == LayerType.TEXT) TextEdits.fill(originalLayer, composition.frameRate.snap(editor.state.playheadUs), argb)
+                                else EditorAction.SetColor(layer.id,argb)
+                            editor.previewGesture(EditorAction.Batch(listOf(action)))
                             previewController?.update(editor.displayedState.project,playheadUs,false)
+                            }
                         },
                         onEyedropperRequest = {
                             focusManager.clearFocus()
+                            textEditor.finish {
                             editor.commitGesture()
                             previewController?.update(editor.state.project,editor.state.playheadUs,false)
                             eyedropperLayerId=layer.id
                             android.widget.Toast.makeText(context,"Drag the crosshair and release to sample; Back cancels",android.widget.Toast.LENGTH_SHORT).show()
+                            }
                         },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -635,6 +710,12 @@ fun EditorScreen(
                     } catch (e: Exception) {
                         addContentError = e.message ?: "Failed to add solid"
                     }
+                },
+                onAddText = {
+                    editor.addText(playheadUs)
+                    previewController?.update(editor.state.project, editor.state.playheadUs, false)
+                    addContentSheetVisible = false
+                    inspectorSheetVisible = true
                 },
                 onDismiss = {
                     addContentSheetVisible = false

@@ -109,6 +109,7 @@ fun TimelineSection(
                 // Left column: Static layer header list (outline glyphs, sentence case)
                 LayerHeadersColumn(
                     layers = sortedLayers,
+                    playheadUs = playheadUs,
                     selectedLayerId = selectedLayerId,
                     onSelectLayer = onSelectLayer,
                     onToggleVisibility = onToggleVisibility,
@@ -151,6 +152,7 @@ fun TimelineSection(
                             items(sortedLayers, key = { it.id }) { layer ->
                                 ClipRow(
                                     project = project,
+                                    playheadUs = playheadUs,
                                     mediaRepository = mediaRepository,
                                     layer = layer,
                                     isSelected = layer.id == selectedLayerId,
@@ -289,6 +291,7 @@ private fun TimelineToolbar(
 @Composable
 private fun LayerHeadersColumn(
     layers: List<CompositionLayer>,
+    playheadUs: Long,
     selectedLayerId: Long?,
     onSelectLayer: (Long?) -> Unit,
     onToggleVisibility: (Long, Boolean) -> Unit,
@@ -354,7 +357,8 @@ private fun LayerHeadersColumn(
                     Spacer(Modifier.width(6.dp))
 
                     // Layer Name in sentence case
-                    val displayName = layer.name.ifBlank {
+                    val displayName = if (layer.type == LayerType.TEXT) layer.text.source.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs)
+                        .replace('\n', ' ').ifBlank { "Text" } else layer.name.ifBlank {
                         when (layer.type) {
                             LayerType.VIDEO -> "Video ${layer.id}"
                             LayerType.IMAGE -> "Image ${layer.id}"
@@ -468,6 +472,7 @@ private fun TimeRuler(
 @Composable
 private fun ClipRow(
     project: ProjectDocument,
+    playheadUs: Long,
     mediaRepository: MediaRepository,
     layer: CompositionLayer,
     isSelected: Boolean,
@@ -594,7 +599,8 @@ private fun ClipRow(
                     Text(glyph, color = if (isSelected) Highlight else TextSecondary, fontSize = 11.sp)
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        text = layer.name.ifBlank {
+                        text = if (layer.type == LayerType.TEXT) layer.text.source.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs)
+                            .replace('\n', ' ').ifBlank { "Text" } else layer.name.ifBlank {
                             when (layer.type) {
                                 LayerType.VIDEO -> "Video"
                                 LayerType.IMAGE -> "Image"

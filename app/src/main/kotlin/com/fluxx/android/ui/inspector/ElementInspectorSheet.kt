@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.semantics.disabled
@@ -114,10 +115,17 @@ fun ElementInspectorSheet(
     paletteRepository: PaletteRepository? = null,
     mediaRepository: com.fluxx.android.media.MediaRepository? = null,
     onAnchorModeChange: (Boolean) -> Unit = {},
-    onAnchorPreview: (EditorAction.SetAnchorPoint) -> Unit = {}
+    onAnchorPreview: (EditorAction.SetAnchorPoint) -> Unit = {},
+    textTyping: Boolean = false,
+    textError: String? = null,
+    onTextBegin: () -> Unit = {}, onTextDraft: (String) -> Unit = {},
+    onTextFinish: () -> Unit = {}, onTextCancel: () -> Unit = {},
+    onTextStyle: (TextProperties) -> Unit = {},
+    onTextSizeBegin: () -> Unit = {}, onTextSizePreview: (Float) -> Unit = {}, onTextSizeCommit: () -> Unit = {}
 ) {
     key(layer.id) {
         var section by remember { mutableStateOf<InspectorSection?>(null) }
+        var textFill by remember { mutableStateOf(false) }
         val focusManager = LocalFocusManager.current
         val focusCallback by rememberUpdatedState(onPropertyFocus)
         LaunchedEffect(section) {
@@ -127,13 +135,15 @@ fun ElementInspectorSheet(
         val dismiss by rememberUpdatedState(onDismiss)
         var swipeOffset by remember { mutableFloatStateOf(0f) }
         val sections = listOf(InspectorSection.TRANSFORM, InspectorSection.TIMING, InspectorSection.BLENDING_OPACITY) +
-            if (layer.type == LayerType.SOLID) listOf(InspectorSection.CONTEXTUAL_EDIT) else emptyList()
+            if (layer.type == LayerType.SOLID || layer.type == LayerType.TEXT) listOf(InspectorSection.CONTEXTUAL_EDIT) else emptyList()
         Surface(color = Surface, shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
             modifier = modifier.fillMaxWidth().offset { IntOffset(0, swipeOffset.toInt()) }) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val compactHeight = maxHeight < 320.dp
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides if (compactHeight) 40.dp else 48.dp) {
                     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        val textSection = layer.type == LayerType.TEXT && section == InspectorSection.CONTEXTUAL_EDIT
+                        if (!textTyping && !textSection) {
                         Box(Modifier.fillMaxWidth().height(20.dp).pointerInput(Unit) {
                             detectVerticalDragGestures(
                                 onDragStart = { focusManager.clearFocus(); swipeOffset = 0f },
@@ -145,7 +155,7 @@ fun ElementInspectorSheet(
                             Box(Modifier.size(36.dp, 4.dp).background(Border, CircleShape))
                         }
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            if (section != null) IconButton(onClick = { focusManager.clearFocus(); section = null },
+                            if (section != null) IconButton(onClick = { focusManager.clearFocus(); if (textFill) textFill = false else section = null },
                                 modifier = Modifier.semantics { contentDescription = "Back to layer tools" }) {
                                 Canvas(Modifier.size(22.dp)) {
                                     val path = Path().apply {
@@ -202,7 +212,7 @@ fun ElementInspectorSheet(
                                     InspectorSection.TRANSFORM -> "Transform"
                                     InspectorSection.TIMING -> "Timing"
                                     InspectorSection.BLENDING_OPACITY -> "Blending & Opacity"
-                                    InspectorSection.CONTEXTUAL_EDIT -> "Edit Solid"
+                                    InspectorSection.CONTEXTUAL_EDIT -> if (layer.type == LayerType.TEXT) "Edit Text" else "Edit Solid"
                                     InspectorSection.AUDIO -> "Audio"
                                     else -> ""
                                 }
@@ -216,6 +226,12 @@ fun ElementInspectorSheet(
                                     Box(Modifier.fillMaxWidth().height(2.dp).background(if (active) Highlight else Color.Transparent))
                                 }
                             }
+                        }
+                        }
+                        if (!textTyping && textSection) Row(Modifier.fillMaxWidth().height(36.dp), verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = { focusManager.clearFocus(); if (textFill) textFill = false else section = null }) { Text("Back") }
+                            Text(if (textFill) "Fill Colour" else "Edit Text", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                            TextButton(onClick = onDismiss) { Text("Done") }
                         }
                         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp)) {
                             when (section) {
@@ -232,7 +248,12 @@ fun ElementInspectorSheet(
                                     { onTransformEdit(layer.evaluatedTransform(playheadUs).copy(opacity = it)) })
                                 InspectorSection.TIMING -> CompactTimingSectionContent(layer.timing, layer.type == LayerType.VIDEO, onTimingChange)
                                 InspectorSection.AUDIO -> CompactAudioSectionContent(layer.muted, layer.audioGain, onAudioChange)
-                                InspectorSection.CONTEXTUAL_EDIT -> FluxxColorPicker(FluxxColor.fromArgb(layer.solidColorArgb),
+                                InspectorSection.CONTEXTUAL_EDIT -> if (layer.type == LayerType.TEXT && !textFill) TextEditorControls(
+                                    layer, playheadUs, textTyping, onAction, onPropertyFocus,
+                                    onTextBegin, onTextDraft, onTextFinish, onTextCancel, onTextStyle,
+                                    onTextSizeBegin, onTextSizePreview, onTextSizeCommit, { textFill = true }, textError)
+                                else FluxxColorPicker(FluxxColor.fromArgb(if (layer.type == LayerType.TEXT)
+                                    layer.text.fill.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs) else layer.solidColorArgb),
                                     { onColorChange(it.toArgb()) }, ColorPickerConfig(),
                                     onEyedropperRequest, Modifier.fillMaxSize(), onTransformBegin, onTransformCommit,
                                     onTransformCancel, { onColorPreview(it.toArgb()) }, paletteRepository=paletteRepository)
@@ -503,7 +524,8 @@ private fun FittedSquare(modifier: Modifier, maxSize: Dp, content: @Composable (
         Box(Modifier.size(side), contentAlignment = Alignment.Center) { content() }
     }
 }
-private data class AnchorSource(val width: Int, val height: Int, val rotation: Int = 0, val pixelAspect: Float = 1f)
+private data class AnchorSource(val width: Int, val height: Int, val rotation: Int = 0, val pixelAspect: Float = 1f,
+    val text: TextLayoutMetrics? = null)
 
 @Composable
 private fun AnchorSubModeIcon(color: Color) {
@@ -623,9 +645,15 @@ private fun OverhauledTransformSectionContent(
     val refH = layer.referenceHeight.takeIf { it > 0 } ?: compositionHeight
     val halfReferenceW = refW / 2f
     val halfReferenceH = refH / 2f
-    val source by produceState<AnchorSource?>(null, layer.type, layer.asset, mediaRepository, refW, refH) {
+    val context = LocalContext.current
+    val heldSource = layer.text.source.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs)
+    val source by produceState<AnchorSource?>(null, layer.type, layer.asset, mediaRepository, refW, refH, layer.text.fontId, heldSource) {
         value = null
-        value = if (layer.type == LayerType.SOLID) AnchorSource(refW, refH) else {
+        value = if (layer.type == LayerType.TEXT) {
+            try { AnchorSource(1, 1, text = com.fluxx.android.render.TextMetricsRepository.get(context).measure(layer.text.fontId, heldSource)) }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { null }
+        } else if (layer.type == LayerType.SOLID) AnchorSource(refW, refH) else {
             val uri = layer.asset?.uri
             if (uri == null || mediaRepository == null) null else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 try {
@@ -648,7 +676,10 @@ private fun OverhauledTransformSectionContent(
         val ax = x.coerceIn(0f, 1f); val ay = y.coerceIn(0f, 1f)
         val position = if (base.animTransform.position.isAnimated) null else {
             val geometry = source ?: return null
-            com.fluxx.android.render.LayerGeometry.compensatePosition(compensationMatrix, t,
+            if (base.type == LayerType.TEXT) com.fluxx.android.render.LayerGeometry.compensateTextAnchor(t,
+                requireNotNull(geometry.text).logical(base.text.size.evaluate(playheadUs - base.resolvedKeyframeAnchorUs)),
+                base.anchorX, base.anchorY, ax, ay, refW, refH)
+            else com.fluxx.android.render.LayerGeometry.compensatePosition(compensationMatrix, t,
                 base.anchorX, base.anchorY, ax, ay, geometry.width, geometry.height,
                 geometry.rotation, geometry.pixelAspect, refW, refH)
         }

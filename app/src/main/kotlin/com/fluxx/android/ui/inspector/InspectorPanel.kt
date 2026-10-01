@@ -98,7 +98,7 @@ fun InspectorPanel(
 
                 // Name with rename click (sentence case)
                 Text(
-                    text = layer.name.ifBlank {
+                    text = if (layer.type == LayerType.TEXT) layer.text.source.evaluate(0).replace('\n', ' ').ifBlank { "Text" } else layer.name.ifBlank {
                         when (layer.type) {
                             LayerType.VIDEO -> "Video layer"
                             LayerType.IMAGE -> "Image layer"

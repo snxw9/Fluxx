@@ -1466,6 +1466,9 @@ bool VulkanRenderer::flushBatch() {
     if (!submitWork()) return false;
     mFirstBatch=false;
     mDrawOrder.clear();
+    // submitWork waits for this batch's fence: reuse mesh storage without
+    // retaining and re-uploading every preceding text layer in the frame.
+    if (mText) mText->retireBatch();
     return true;
 }
 void VulkanRenderer::releaseLayers() {

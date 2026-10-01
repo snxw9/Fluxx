@@ -1,6 +1,6 @@
 # Fluxx — Phase 2 Changes & After Effects-Level Architecture Notes
 
-> Text status: E1d/E1e and E2 are implemented in source, compiled, device-unverified. Typed v9 size/fill/hold-source properties and lazy texture-array overflow are implemented; E3 creation/editor wiring remains pending. Range selectors/animators remain future work. See [text checkpoint](../checkpoints/TEXT_LAYER.md#e2-implementation-and-approved-array-overflow).
+> Text status: E1d, E1e, E2 and E3 are implemented in source and compiled; all new text device behavior remains unverified. Native debug/release compilation passed for arm64-v8a and x86_64, Kotlin debug/release and instrumentation sources compiled, and the final JVM run passed 150/150 tests. No APK was installed or launched. See [stage evidence and exact user-run checklists](../checkpoints/TEXT_LAYER.md). The approved overflow policy uses lazy texture-array growth; range selectors and text animators remain future work.
 
 ## Overall Direction
 

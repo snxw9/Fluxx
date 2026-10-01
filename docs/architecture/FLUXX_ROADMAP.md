@@ -39,7 +39,7 @@ Fluxx is currently in **Phase 2: Timeline + Multiple Layers**.
   - [**Autosave & Persistence**](../checkpoints/AUTOSAVE.md)
   - [**Composition & Layer Markers**](../checkpoints/MARKERS.md) — implemented in source; tests and phone acceptance pending.
   - [**Timeline Layout & Automatic Duration**](../checkpoints/TIMELINE_LAYOUT.md) — compact separated ruler/tracks/inspector regions, frame-grid ticks, content-driven new projects; source implementation with validation pending.
-- **Current focus:** Phase 2 Step E. E1b/E1c accepted; E1d/E1e and E2 are implemented in source, compiled, device-unverified. E2 uses the approved lazy 2048 R8 texture-array atlas and typed v9 source/size/fill properties. E3 editor wiring follows after the E2 commit. Device, golden and 16 KB acceptance remain outstanding. See [text checkpoint](../checkpoints/TEXT_LAYER.md#e2-implementation-and-approved-array-overflow).
+- **Current focus:** Phase 2 Step E. E1b/E1c accepted; E1d/E1e/E2/E3 are implemented in source, compiled, device-unverified; the final JVM run passed 150/150 tests. E2 uses the approved lazy 2048 R8 texture-array atlas and typed v9 source/size/fill properties. E3 includes text creation, fixed Edit Text controls, workspace IME handling, shared geometry and one undo entry per typing session. Device, golden and 16 KB acceptance remain outstanding. See [text checkpoint](../checkpoints/TEXT_LAYER.md#e2-implementation-and-approved-array-overflow).
 
 ---
 
@@ -97,8 +97,8 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
   - Export fast-path guard ensuring animated single videos use layered Vulkan pipeline.
   - *Status: Implemented in source; awaiting user Android Studio build & phone review.*
 - [ ] **Step E: Text Layer Support**
-  - E1a A16 smoke and E1b/E1c acceptance are recorded in [TEXT_LAYER.md](../checkpoints/TEXT_LAYER.md). E1d lazy 2048 R8 atlas/SDF draws and E1e debug visual/lifecycle/resource harness are implemented in source, unverified. E2/E3 are unimplemented pending the overflow-design decision; 16 KB/golden/device checks remain outstanding.
-  - Text data model, typography editor, font layout, and Vulkan glyph/quad rendering. [E2/E3 animation revision](../checkpoints/TEXT_LAYER_IMPLEMENTATION_PLAN.md#31-universal-text-property-animation): size/fill and hold-keyed Source Text in this pass; Universal Properties for all eventual text animation. Planning only; E1d gates unchanged.
+  - E1a A16 smoke and E1b/E1c acceptance are recorded in [TEXT_LAYER.md](../checkpoints/TEXT_LAYER.md). E1d/E1e/E2/E3 are implemented in source and compiled, with 150 passing JVM tests. Texture-array overflow, v9 and editor wiring are complete in source; 16 KB/golden/device acceptance remains outstanding.
+  - Text data model, typography editor, font layout, and Vulkan glyph/quad rendering are implemented in source. [E2/E3 animation contract](../checkpoints/TEXT_LAYER_IMPLEMENTATION_PLAN.md#31-universal-text-property-animation): size/fill and hold-keyed Source Text reuse the property framework; remaining text animation is future work. Step E stays unchecked until device acceptance.
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.
 

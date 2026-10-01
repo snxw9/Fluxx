@@ -1,6 +1,6 @@
 # Phase 2 Status, Backend Architecture & UI Control Matrix
 
-**Text status (2026-10-01):** E1d/E1e and E2 are implemented in source, compiled, device-unverified. E2 adds v9 typed properties, shared native metrics, preview/export/thumbnail rendering and the approved lazy R8 texture-array atlas (four pages; two on low-RAM devices). E3 editor wiring remains pending. E1d/E1e compile checks and policy tests passed; E2 compile checks and 140 JVM tests passed. See [text checkpoint](TEXT_LAYER.md#e2-implementation-and-approved-array-overflow).
+**Text status (2026-10-01):** E1d, E1e, E2 and E3 are implemented in source and compiled; all new text device behavior remains unverified. Native debug/release compilation passed for arm64-v8a and x86_64, Kotlin debug/release and instrumentation sources compiled, and the final JVM run passed 150/150 tests. No APK was installed or launched. See [stage evidence and exact user-run checklists](TEXT_LAYER.md). The approved overflow policy uses lazy texture-array growth; range selectors and text animators remain future work.
 
 ---
 
@@ -13,7 +13,7 @@ Phase 2 transitions Fluxx from a single-layer proof-of-concept to a multi-layer 
 - **Step C:** Mobile editing UI (shell, timeline, inspector, media browser, autosave). *(Implemented in source, pending on-device acceptance)*
 - **Step D:** Keyframe animation on transform properties (Bezier interpolation + 1 easing preset). *(Implemented in source, pending on-device acceptance)*
   - [Approved Option B architecture, regression coverage and acceptance checklist](KEYFRAME_ANIMATION.md).
-- **Step E:** E1b/E1c accepted. E1d adds the lazy 2048 R8 SDF atlas and ordered text entries; E1e adds debug visual/lifecycle/resource acceptance. Both are implemented in source, unverified. E2 v9/model/integration and E3 editor are unimplemented pending the overflow-design decision. Later authorization supersedes earlier implementation gates; 16 KB/golden/device evidence remains outstanding. See [TEXT_LAYER.md](TEXT_LAYER.md).
+- **Step E:** E1b/E1c accepted. E1d adds the lazy 2048 R8 SDF atlas and ordered text entries; E1e adds debug visual/lifecycle/resource acceptance. Both are implemented in source, unverified. E2 v9/model/integration and E3 editor are implemented in source and compiled; device acceptance is pending. Later authorization supersedes earlier implementation gates; 16 KB/golden/device evidence remains outstanding. See [TEXT_LAYER.md](TEXT_LAYER.md).
 
 ---
 
@@ -58,8 +58,8 @@ This matrix maps every editor control to its underlying engine state, distinguis
 | **Timeline Interactions** | Implemented in source: 28dp rows/no extra row gap (2dp between clip bodies), 26dp clips, transparent unblurred eyes, always-visible 14×8dp grips with 48dp-wide row touch targets, 100ms sibling reflow, absolute-pointer drop targeting with release refresh, inspector viewport restore | Phone acceptance pending; see [timeline checkpoint](TIMELINE_LAYOUT.md#timeline-gestures-and-inspector-viewport). |
 | **Timeline Layout & Duration** | 32dp frame ruler → 8dp gap → tracks → 8dp inspector separator; shared geometry in both preview modes; solid-colour clips; new empty projects derive duration from layers | [Layout checkpoint](TIMELINE_LAYOUT.md); tests and device checks pending. |
 | **Flip Horizontal / Vertical** | Functional in source for selected visual layers; negate evaluated Scale, auto-key animated Scale, preserve spatial pivot | Renderer source uses `VK_CULL_MODE_NONE`; actual flipped preview/export and tests await user verification. |
-| **Fit to Composition Width / Height** | Functional in source for Video/Image; uniform absolute positive scale via shared `LayerGeometry` aspect fit | Source dimensions/rotation/SAR required; zero reference dimensions fall back to composition. Tests and phone verification pending. |
-| **Stretch to Composition Area** | Functional in source for Video/Image; independent positive X/Y scales, preserving position/rotation/pivot | Uses the same fit geometry; full aligned bounds assume no user rotation and a centred layer. Phone verification pending. |
+| **Fit to Composition Width / Height** | Functional in source for Video/Image/Text; uniform positive scale via shared geometry | Text uses asynchronous native metrics and preserves Size; empty text disables fit. JVM tests passed; phone acceptance pending. |
+| **Stretch to Composition Area** | Functional in source for Video/Image/Text; independent positive X/Y scales, preserving position/rotation/pivot | Text uses natural-pixel bounds and preserves Size. Full aligned bounds assume no user rotation and a centred layer. Phone acceptance pending. |
 | **Media Info** | Functional in source for Video/Image; shared browser/dialog metadata content | `MediaRepository.details`; handles loading and unavailable metadata. Phone verification pending. |
 | **Auto Orient** | Visible, disabled & inert in the selected-layer menu | Per-frame Position curve tangent evaluation over composition time. |
 | **Extract Audio** | Visible, disabled & inert in Audio inspector only | Audio-only layer model (`LayerType.AUDIO`), timeline audio tracks and audio mixer layer pipeline. |
@@ -76,17 +76,18 @@ This matrix maps every editor control to its underlying engine state, distinguis
 | **Palette Import (External)** | Not implemented | External .ase/.gpl swatch import is deferred. |
 | **Contextual Edit (Edit Solid)** | **Functional** (Opens Global Colour Picker) | Integrated via shared `FluxxColorPicker`. |
 | **Contextual Edit (Edit Footage)** | Visible, disabled & inert (non-tappable) | Footage editing capabilities (speed ramping, retiming, source replace). |
+| **Contextual Edit (Edit Text)** | Functional in source: fixed typography controls and asynchronous source sessions | Existing gesture undo, shared picker/metrics and workspace IME handling; JVM tests passed, phone acceptance pending. |
 | **Blending & Opacity Tab** | **Functional** (Opacity slider, reset; blend mode row is inert) | Additional blend modes require per-mode shader / linear blend math. |
 | **Effects Tab** | Visible, disabled & inert (non-tappable) | Phase 3: Curves + Gaussian Blur ping-pong FBO pipeline (SDD §4, §9). |
 | **Layer Styles Tab** | Visible, disabled & inert (non-tappable) | Layer style model, drop shadow, and glow rendering. |
 | **Track Mattes / Masks Tab** | Visible, disabled & inert (non-tappable) | Phase 3: Hard-edge stencil masks. Relationship-based track mattes (SDD §8). |
 | **Motion Blur Cell** | Visible, disabled & inert (non-tappable) | Composition-level shutter angle/phase and layer-level blur engine. |
 | **Shape Layer Icon** | Visible, disabled & inert | Vector shape model, path tessellation, and shape renderer. |
-| **Native text shaping** | E1b CPU source implemented; six host hb-shape parity fixtures pass | Android instrumented execution pending; no renderer submission yet |
-| **CPU SDF / atlas packing** | E1c dumps, overlap probe and retained bitmap cache verified on host | Lazy 2048 R8 GPU atlas/pipeline implemented in E1d source, unverified; production overflow decision pending |
-| **Debug text GPU proof** | E1d provider/validation and E1e visual/resource/lifecycle harness implemented in source | No compile/test/device execution; E1 proof has typed capacity failure |
-| **Bundled text faces** | Static Inter / Noto Serif / JetBrains Mono, pinned hashes and OFL notices | Native fallback implemented; editor picker remains E3 |
-| **Text Layer Icon** | Visible, disabled (`LayerType.TEXT` is placeholder) | **Phase 2 Step E:** Text data model, renderer integration and editor remain planned. |
+| **Native text shaping** | E1b CPU source implemented; six host hb-shape parity fixtures pass | Shared renderer submission implemented; Android instrumented execution pending |
+| **CPU SDF / atlas packing** | E1c dumps, overlap probe and retained bitmap cache verified on host | Lazy 2048 R8 GPU atlas/pipeline implemented in E1d source, unverified; approved texture-array growth implemented, device-unverified |
+| **Debug text GPU proof** | E1d provider/validation and E1e visual/resource/lifecycle harness implemented in source | Compile/JVM checks passed; device execution pending; E1 proof retains typed capacity failure |
+| **Bundled text faces** | Static Inter / Noto Serif / JetBrains Mono, pinned hashes and OFL notices | Native fallback and E3 font picker implemented, device-unverified |
+| **Text Layer Icon** | Enabled Add Content Text pill and assetless layer creation | **Phase 2 Step E:** v9, shared render paths and Edit Text implemented in source; phone acceptance pending. |
 | **Adjustment Layer Icon** | Visible, disabled & inert | Adjustment layer model and render-pass effect accumulation. |
 | **Camera Layer Icon** | Visible, disabled & inert | Camera model, 3D viewport projection, and scene hierarchy. |
 | **Null Layer Icon** | Visible, disabled & inert | Non-rendering transform parenting and spatial hierarchy. |

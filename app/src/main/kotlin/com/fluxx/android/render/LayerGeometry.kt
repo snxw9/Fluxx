@@ -31,6 +31,24 @@ object LayerGeometry {
             positionY = current.positionY + matrix[1] * dx + matrix[5] * dy)
     }
     data class FitScales(val scaleX: Float, val scaleY: Float)
+    fun textContains(matrix: FloatArray, bounds: TextBounds, x: Float, y: Float): Boolean {
+        if (bounds.empty) return false
+        val determinant = matrix[0] * matrix[5] - matrix[1] * matrix[4]
+        if (!determinant.isFinite() || determinant == 0f) return false
+        val dx = x - matrix[12]; val dy = y - matrix[13]
+        val localX = (matrix[5] * dx - matrix[4] * dy) / determinant
+        val localY = (-matrix[1] * dx + matrix[0] * dy) / determinant
+        return localX >= bounds.left && localX <= bounds.left + bounds.width &&
+            localY >= bounds.top && localY <= bounds.top + bounds.height
+    }
+    fun compensateTextAnchor(current: Transform, bounds: TextBounds, oldX: Float, oldY: Float,
+        nextX: Float, nextY: Float, referenceWidth: Int, referenceHeight: Int): Transform {
+        val matrix = FloatArray(16)
+        textMatrix(matrix, current, bounds, referenceWidth, referenceHeight)
+        val x = (nextX - oldX) * bounds.width; val y = (nextY - oldY) * bounds.height
+        return current.copy(positionX = current.positionX + matrix[0] * x + matrix[4] * y,
+            positionY = current.positionY + matrix[1] * x + matrix[5] * y)
+    }
 
     fun calculateFit(referenceWidth: Int, referenceHeight: Int, sourceWidth: Int, sourceHeight: Int,
         sourceRotation: Int = 0, pixelAspect: Float = 1f): Float {

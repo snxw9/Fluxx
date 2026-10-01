@@ -206,6 +206,16 @@ class EditorViewModel : ViewModel() {
             zOrder=(comp.layers.maxOfOrNull { it.zOrder } ?: -1)+1,
             timing=ClipTiming(comp.frameRate.snap(startUs),0,durationUs),name="Solid",solidColorArgb=argb)))
     }
+    fun addText(startUs: Long = state.playheadUs) {
+        val comp = state.project.composition
+        val add = EditorAction.Add(CompositionLayer(EditorReducer.nextLayerId(state.project), LayerType.TEXT,
+            zOrder = (comp.layers.maxOfOrNull { it.zOrder } ?: -1) + 1,
+            timing = ClipTiming(comp.frameRate.snap(startUs), 0, 5_000_000L), name = "Text",
+            text = TextProperties(source = AnimatableString(staticValue = "Text"))))
+        val edits = mutableListOf<EditorAction>(add)
+        if (comp.durationUs != null) edits += EditorAction.SetComposition(comp.width, comp.height, comp.durationUs, comp.frameRate)
+        dispatch(EditorAction.Batch(edits))
+    }
     suspend fun relink(repository: MediaRepository,assetId: String,uri: Uri) {
         val generation = projectGeneration
         val (replacement,type)=repository.reference(uri,assetId)

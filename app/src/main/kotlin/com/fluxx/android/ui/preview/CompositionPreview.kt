@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import com.fluxx.android.media.MediaRepository
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -27,6 +28,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.viewinterop.AndroidView
 import com.fluxx.android.model.CompositionLayer
 import com.fluxx.android.model.ProjectDocument
+import com.fluxx.android.model.LayerType
+import com.fluxx.android.model.TextLayoutMetrics
+import com.fluxx.android.render.TextMetricsRepository
+import com.fluxx.android.render.LayerGeometry
 import com.fluxx.android.render.PreviewController
 import com.fluxx.android.ui.theme.*
 
@@ -55,6 +60,16 @@ fun CompositionPreview(
 ) {
     val density = LocalDensity.current
     val comp = project.composition
+    val context = LocalContext.current
+    val textRequests = comp.layers.filter { it.type == LayerType.TEXT && it.visible && it.timing.isActive(playheadUs) }
+        .associate { it.id to (it.text.fontId to it.text.source.evaluate(playheadUs - it.resolvedKeyframeAnchorUs)) }
+    val textHitMetrics by produceState<Map<Long, TextLayoutMetrics>>(emptyMap(), textRequests) {
+        val result = mutableMapOf<Long, TextLayoutMetrics>()
+        for ((id, request) in textRequests) try { result[id] = TextMetricsRepository.get(context).measure(request.first, request.second) }
+        catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (_: Exception) { }
+        value = result
+    }
     val compAspect = comp.width.toFloat() / comp.height.toFloat()
 
     val currentOnSurfaceAvailable by rememberUpdatedState(onSurfaceAvailable)
@@ -164,14 +179,29 @@ fun CompositionPreview(
                     modifier = Modifier
                         .size(boxWidth, boxHeight)
                         .clip(RoundedCornerShape(2.dp))
-                        .pointerInput(comp.layers, playheadUs, selectedLayerId) {
-                            detectTapGestures {
+                        .pointerInput(comp.layers, playheadUs, selectedLayerId, textHitMetrics) {
+                            detectTapGestures { tap ->
                                 if (onSelectLayer != null) {
                                     // Find active visible layers at current playhead position
                                     val activeLayers = comp.layers.filter { layer ->
                                         val start = layer.timing.startUs
                                         val dur = layer.timing.durationUs
-                                        layer.visible && playheadUs >= start && (dur == null || playheadUs < start + dur)
+                                        val active = layer.visible && playheadUs >= start && (dur == null || playheadUs < start + dur)
+                                        if (!active || layer.type != LayerType.TEXT) active else {
+                                            val metrics = textHitMetrics[layer.id]
+                                            if (metrics == null) false else {
+                                                val textSize = layer.text.size.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs)
+                                                val bounds = metrics.bounds(textSize, layer.text.alignment)
+                                                val matrix = FloatArray(16)
+                                                LayerGeometry.textMatrix(matrix, layer.evaluatedTransform(playheadUs), metrics.logical(textSize), comp.width, comp.height,
+                                                    layer.referenceWidth.takeIf { it > 0 } ?: comp.width, layer.referenceHeight.takeIf { it > 0 } ?: comp.height,
+                                                    layer.anchorX, layer.anchorY)
+                                                val x = tap.x * 2f / size.width - 1f; val y = tap.y * 2f / size.height - 1f
+                                                if (bounds.empty) kotlin.math.abs(x - matrix[12]) <= 14.dp.toPx() / size.width &&
+                                                    kotlin.math.abs(y - matrix[13]) <= 14.dp.toPx() / size.height
+                                                else LayerGeometry.textContains(matrix, bounds, x, y)
+                                            }
+                                        }
                                     }.sortedWith(compareByDescending<CompositionLayer> { it.zOrder }.thenByDescending { it.id })
 
                                     if (activeLayers.isNotEmpty()) {
