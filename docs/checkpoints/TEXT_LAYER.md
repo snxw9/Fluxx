@@ -82,15 +82,15 @@ The packaging checks follow [Android's 16 KB guidance](https://developer.android
 
 ## Native dependency audit
 
-| Input | Current handling / evidence |
-| --- | --- |
-| Oboe 1.11.0 | Rebuilt as PIC static source under r28; explicit r26 comparison mode retains its Maven AAR. Original arm64 RELRO-only rejection was a verifier false positive, not proven incompatibility. No TEXTREL was found. AAR SHA-256 `316f31ce92f07725a41556cb1ec0790b348e36b55791df9e5e44976e1f652c30`. |
-| Oboe provenance | `core-engine/third_party/oboe/FLUXX_SOURCE.json`: archive/source hashes for 143 unmodified retained files; Apache-2.0 source and app notice. |
+| Input                        | Current handling / evidence                                                                                                                                                                                                                                                                      |
+|------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Oboe 1.11.0                  | Rebuilt as PIC static source under r28; explicit r26 comparison mode retains its Maven AAR. Original arm64 RELRO-only rejection was a verifier false positive, not proven incompatibility. No TEXTREL was found. AAR SHA-256 `316f31ce92f07725a41556cb1ec0790b348e36b55791df9e5e44976e1f652c30`. |
+| Oboe provenance              | `core-engine/third_party/oboe/FLUXX_SOURCE.json`: archive/source hashes for 143 unmodified retained files; Apache-2.0 source and app notice.                                                                                                                                                     |
 | AndroidX graphics-path 1.0.1 | Matching Kotlin/JNI rebuilt from commit `8a05a22af450d589ef911d772a001a49dcb05b71`; normal builds exclude the external module, while r26 retains it. Same class/library names and keep rules. Initial 1.0.1/1.1.0 RELRO-only rejections are withdrawn; no arbitrary version upgrade was adopted. |
-| graphics-path provenance | `core-engine/third_party/graphics-path/FLUXX_SOURCE.json`: archive and 18 unmodified source hashes; original build file retained as reference; Apache-2.0 notices. Fluxx CMake wrapper preserves code-generation options/shared C++ runtime. |
-| `/libs` | `.gitkeep` only; no prebuilt .so/.a. |
-| Media3 | Ten inspected 1.11.1 AARs contain no .so/.a; inventory in `tools/e1a/results/media3-input-audit.json`. Packaged scan remains authoritative for resolved dependencies. |
-| Native outputs | Current r28 debug/release ELF audits pass for engine, graphics-path and libc++ across both ABIs. New packaged APK/ZIP and runtime checks remain separate. |
+| graphics-path provenance     | `core-engine/third_party/graphics-path/FLUXX_SOURCE.json`: archive and 18 unmodified source hashes; original build file retained as reference; Apache-2.0 notices. Fluxx CMake wrapper preserves code-generation options/shared C++ runtime.                                                     |
+| `/libs`                      | `.gitkeep` only; no prebuilt .so/.a.                                                                                                                                                                                                                                                             |
+| Media3                       | Ten inspected 1.11.1 AARs contain no .so/.a; inventory in `tools/e1a/results/media3-input-audit.json`. Packaged scan remains authoritative for resolved dependencies.                                                                                                                            |
+| Native outputs               | Current r28 debug/release ELF audits pass for engine, graphics-path and libc++ across both ABIs. New packaged APK/ZIP and runtime checks remain separate.                                                                                                                                        |
 
 The initial old debug APK SHA-256 was `0049fc88ecebe6cdaf42e57fd3c56e33d663d0742d3daa7e26a29ebca07f325c`: ZIP alignment and compiled `extractNativeLibs=false` passed, while engine/C++ runtime had genuine 4096-byte LOAD alignment. Its RELRO-only findings are superseded by the corrected verifier. This old-artifact report (`tools/e1a/results/existing-debug-native.json`) is not acceptance evidence for new builds.
 
@@ -156,11 +156,11 @@ The report validates source/model/export hashes, matching device fingerprint/pag
 
 Record device model, OS/build fingerprint, GPU/driver, APK hash, `adb shell getconf PAGE_SIZE`, environment type, logs and result for each run:
 
-| Environment | Loader / alignment | Video AHardwareBuffer / MediaCodec on 16 KB |
-| --- | --- | --- |
-| A16 physical phone | Render/playback/export smoke confirmed by user; explicit page-size result and full regression matrix still required | Not evidence of a 16 KB run |
-| 16 KB emulator | Pending | **Unverified by emulator testing**, even if it displays video |
-| Physical device booted with 16 KB pages (e.g. supported Pixel) | Pending | Pending real-hardware playback, seeking, lifecycle and export |
+| Environment                                                    | Loader / alignment                                                                                                  | Video AHardwareBuffer / MediaCodec on 16 KB                   |
+|----------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------|
+| A16 physical phone                                             | Render/playback/export smoke confirmed by user; explicit page-size result and full regression matrix still required | Not evidence of a 16 KB run                                   |
+| 16 KB emulator                                                 | Pending                                                                                                             | **Unverified by emulator testing**, even if it displays video |
+| Physical device booted with 16 KB pages (e.g. supported Pixel) | Pending                                                                                                             | Pending real-hardware playback, seeking, lifecycle and export |
 
 An emulator demonstrates loader/alignment behavior only; its Vulkan/media stack does not establish the physical zero-copy path. If only an emulator is available, record that limitation explicitly and do not mark physical 16 KB hardware-buffer compatibility complete. Mixed export also includes CPU readback; do not describe that entire export path as zero-copy.
 
@@ -187,13 +187,13 @@ Historical 2026-10-01 CPU pass: E1a render/playback/export smoke was **confirmed
 
 `core-engine/third_party/TEXT_INPUTS.json` records resolved release commits, archive SHA-256, individual retained source hashes, static font hashes and license hashes. Builds use vendored files offline; the maintainer download script is never called by CMake/Gradle.
 
-| Input | Pin | License |
-| --- | --- | --- |
-| FreeType | 2.14.1 | FTL; full attribution/license shipped |
-| HarfBuzz | 14.3.1; tag actually resolved | MIT-style license in upstream COPYING |
-| Inter Regular | 4.1 | OFL 1.1 |
-| Noto Serif Regular | 2.014 | OFL 1.1 |
-| JetBrains Mono Regular | 2.304 | OFL 1.1 |
+| Input                  | Pin                           | License                               |
+|------------------------|-------------------------------|---------------------------------------|
+| FreeType               | 2.14.1                        | FTL; full attribution/license shipped |
+| HarfBuzz               | 14.3.1; tag actually resolved | MIT-style license in upstream COPYING |
+| Inter Regular          | 4.1                           | OFL 1.1                               |
+| Noto Serif Regular     | 2.014                         | OFL 1.1                               |
+| JetBrains Mono Regular | 2.304                         | OFL 1.1                               |
 
 All fonts are **static Regular TrueType outlines**, verified to contain `glyf` and no `fvar`. Assets and full notices live in `core-engine/src/main/assets/fonts/` and `licenses/`. FreeType is used under the FreeType License (FTL), not its alternative GPL. Portions of this software are copyright © 2025 The FreeType Project (www.freetype.org). All rights reserved.
 
@@ -232,12 +232,12 @@ The CPU cache retains immutable SDF bitmaps, with an 8 MiB unpinned LRU budget a
 
 The deterministic packer sorts by glyph height/width/font/ID and uses best-fit shelves plus one guard texel. The measured combined corpus is unique glyph IDs reached by U+0020–024F, U+1E00–1EFF and U+2000–206F in all three faces, including glyph 0. It contains 2,233 records, 47 with empty outlines. Counts below are nonempty glyph rectangles, not universal theoretical capacities:
 
-| Corpus | 1024 × 1024 | 2048 × 2048 |
-| --- | ---: | ---: |
-| All three faces combined | **338** | **1,547** |
-| Inter alone | 372 | 841 (all nonempty) |
-| Noto Serif alone | 346 | 868 (all nonempty) |
-| JetBrains Mono alone | 429 | 477 (all nonempty) |
+| Corpus                   | 1024 × 1024 |        2048 × 2048 |
+|--------------------------|------------:|-------------------:|
+| All three faces combined |     **338** |          **1,547** |
+| Inter alone              |         372 | 841 (all nonempty) |
+| Noto Serif alone         |         346 | 868 (all nonempty) |
+| JetBrains Mono alone     |         429 | 477 (all nonempty) |
 
 The combined 1024 atlas rejected 1,848 nonempty rectangles; 2048 rejected 639. A lazy 2048 R8 atlas costs 4 MiB of texels versus 1 MiB for 1024 and is a sensible **E1d option**, but still cannot hold this entire combined corpus. E1d must pack the active working set, preserve leases/UV generations and define overflow handling. No GPU allocation has been made in this pass.
 
@@ -260,14 +260,14 @@ Host MSVC CPU proof compiled successfully. Android r28c **debug and release nati
 
 The corrected ELF audit passed all six shared objects in each build variant (engine, graphics-path and NDK C++ runtime across both ABIs): `android-debug-elf.json` and `android-release-elf.json`. This checks compiled ELF LOAD alignment/congruence and text relocations, **not APK ZIP packaging or runtime behavior**. Native symbol inspection confirms the arm64 debug dump JNI symbol exists in debug and is absent from release. All 11 host verifier/golden-tool regression tests pass; these synthetic tool tests are not the user's actual golden-project comparison.
 
-| Observed issue | Focused resolution |
-| --- | --- |
-| HarfBuzz variation-disabled build referenced `gvar` from vertical-origin code | Disable vertical layout, which is outside this Latin horizontal proof; no upstream patch |
-| Explicit `HB_NO_PAINT` duplicated the implication from `HB_NO_DRAW` | Remove redundant definition |
-| MSVC exception-unwind diagnostic | Enable `/EHsc` for Fluxx text sources |
-| Initial vendor flag filtering damaged NDK `-Werror=format-security` | Match only standalone `-Werror`; preserve the NDK security flag |
-| Failed header probes from that configure cached `unistd.h`/`fcntl.h` as absent | Rerun only those CMake probes after fixing flags; both found; no source workaround |
-| SDF property readback wrote through an undersized boolean | Use the actual `FT_Int` getter contract; host probe now validates readback |
+| Observed issue                                                                 | Focused resolution                                                                       |
+|--------------------------------------------------------------------------------|------------------------------------------------------------------------------------------|
+| HarfBuzz variation-disabled build referenced `gvar` from vertical-origin code  | Disable vertical layout, which is outside this Latin horizontal proof; no upstream patch |
+| Explicit `HB_NO_PAINT` duplicated the implication from `HB_NO_DRAW`            | Remove redundant definition                                                              |
+| MSVC exception-unwind diagnostic                                               | Enable `/EHsc` for Fluxx text sources                                                    |
+| Initial vendor flag filtering damaged NDK `-Werror=format-security`            | Match only standalone `-Werror`; preserve the NDK security flag                          |
+| Failed header probes from that configure cached `unistd.h`/`fcntl.h` as absent | Rerun only those CMake probes after fixing flags; both found; no source workaround       |
+| SDF property readback wrote through an undersized boolean                      | Use the actual `FT_Int` getter contract; host probe now validates readback               |
 
 Fluxx-owned native text keeps `-Wall -Wextra -Werror` (MSVC `/W4 /WX`). Third-party font targets retain upstream warning policy rather than inheriting Fluxx's standalone global `-Werror`; warnings are not globally disabled and NDK security diagnostics are retained. No genuine new Clang warning was suppressed. Logs are in `tools/text/results/`.
 
