@@ -2,6 +2,12 @@ package com.fluxx.android.engine
 
 /** Separate native devices/sessions for preview and export; each session has one owning worker. */
 object RenderBridge {
+    external fun upsertText(session: Long, font: String, text: String): Long
+    external fun releaseText(session: Long, handle: Long)
+    external fun prepareText(session: Long, handles: LongArray): Boolean
+    external fun textLayer(session: Long, handle: Long, matrix: FloatArray, size: Float,
+        alignment: Int, argb: Int, opacity: Float): Boolean
+    external fun textStats(session: Long): String
     /** Unsigned ARGB in a Long; -1 is failure. Call only on the owning paused render worker. */
     external fun readPreviewPixel(session: Long, normalizedX: Float, normalizedY: Float): Long
     init { System.loadLibrary("fluxxengine") }
@@ -15,3 +21,6 @@ object RenderBridge {
     external fun copyYuv(session: Long, y: java.nio.ByteBuffer, u: java.nio.ByteBuffer, v: java.nio.ByteBuffer,
         yRow: Int, uRow: Int, vRow: Int, uPixel: Int, vPixel: Int): Boolean
 }
+
+/** A whole frame fails before draws when the E1 proof's required glyph set cannot fit. */
+class TextCapacityException(message: String) : IllegalStateException(message)

@@ -9,6 +9,7 @@
 #include <atomic>
 #include <mutex>
 #include <map>
+#include "text/text_renderer.h"
 
 
 struct LayerTransform {
@@ -41,6 +42,13 @@ struct VideoLayerState {
 
 class VulkanRenderer {
 public:
+    int64_t upsertText(const std::string& font, const std::string& utf8);
+    bool prepareText(const std::vector<int64_t>& handles);
+    bool setTextLayer(int64_t handle, const float* matrix, float size, int alignment, uint32_t argb, float opacity);
+    void releaseText(int64_t handle);
+    bool validationEnabled() const { return mValidationEnabled; }
+    uint64_t validationErrors() const { return mValidationErrors.load(); }
+    std::string textStatsJson() const;
     bool beginFrame(int width, int height, int presentationWidth = 0, int presentationHeight = 0);
     bool setFrameLayer(int64_t id, AHardwareBuffer* buffer, const float* matrix, float opacity);
     bool finishFrame();
@@ -69,7 +77,22 @@ private:
     int mPreviewX = 0, mPreviewY = 0, mPreviewW = 0, mPreviewH = 0;
     int mPreviewBufferW = 0, mPreviewBufferH = 0;
     std::map<int64_t, VideoLayerState> mLayers;
-    std::vector<int64_t> mDrawOrder;
+    struct DrawEntry {
+        int64_t rasterId=0;
+        bool text=false;
+        fluxx::text::TextMesh mesh{};
+        fluxx::text::TextPush push{};
+    };
+    std::vector<DrawEntry> mDrawOrder;
+    std::unique_ptr<fluxx::text::TextRenderer> mText;
+    std::map<int64_t,std::shared_ptr<const fluxx::text::Layout>> mTextLayouts;
+    int64_t mNextTextHandle=1;
+    bool mTextPrepared=false;
+    bool mValidationEnabled=false;
+    std::atomic<uint64_t> mValidationErrors{0};
+    VkDebugUtilsMessengerEXT mDebugMessenger=VK_NULL_HANDLE;
+    static VKAPI_ATTR VkBool32 VKAPI_CALL debugMessage(VkDebugUtilsMessageSeverityFlagBitsEXT,
+        VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT*, void*);
     uint64_t mUseCounter = 0;
     VkPipelineCache mPipelineCache = VK_NULL_HANDLE;
     int mCompWidth = 1080;

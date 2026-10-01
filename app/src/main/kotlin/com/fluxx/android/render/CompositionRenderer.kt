@@ -34,6 +34,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private var staged = 0
     private val matrix = FloatArray(16)
     private val evaluatedTransform = FloatArray(6)
+    private data class FixtureLayout(val source: String, val font: String, val handle: Long)
+    private val fixtureLayouts = mutableMapOf<Long, FixtureLayout>()
     private var previewQuality: PreviewResolution? = null
     private var previewCompWidth = 0
     private var previewCompHeight = 0
@@ -111,6 +113,39 @@ class CompositionRenderer(private val context: Context, private val repository: 
         val comp=project.composition
         check(RenderBridge.begin(session,targetWidth,targetHeight,comp.width,comp.height)) { "Could not start composition frame" }
         staged=0
+        val fixtures = if (com.fluxx.android.BuildConfig.DEBUG) TextFixtureProvider.entries() else emptyList()
+        val fixtureIds = fixtures.mapTo(mutableSetOf()) { it.id }
+        fixtureLayouts.keys.filter { it !in fixtureIds }.forEach { id ->
+            RenderBridge.releaseText(session, requireNotNull(fixtureLayouts.remove(id)).handle)
+        }
+        fixtures.forEach { entry ->
+            val existing = fixtureLayouts[entry.id]
+            if (existing?.source != entry.source || existing.font != entry.font) {
+                existing?.let { RenderBridge.releaseText(session, it.handle) }
+                fixtureLayouts[entry.id] = FixtureLayout(entry.source, entry.font,
+                    RenderBridge.upsertText(session, entry.font, entry.source))
+            }
+        }
+        if (fixtures.isNotEmpty()) check(RenderBridge.prepareText(session,
+            fixtures.map { requireNotNull(fixtureLayouts[it.id]).handle }.toLongArray())) { "Text preparation failed" }
+        var rasterIndex = 0
+        fun drawFixtures(index: Int) {
+            fixtures.filter { it.beforeRaster == index }.forEach { entry ->
+                if (staged == 4) flush()
+                // Baseline-relative pixel mesh, with a centred composition-space origin.
+                java.util.Arrays.fill(matrix, 0f)
+                val radians = Math.toRadians(entry.rotation.toDouble())
+                val c = kotlin.math.cos(radians).toFloat(); val s = kotlin.math.sin(radians).toFloat()
+                val sx = entry.scale * if (entry.flip) -1f else 1f
+                matrix[0] = 2f * c * sx / comp.width; matrix[1] = 2f * s * sx / comp.height
+                matrix[4] = -2f * s * entry.scale / comp.width; matrix[5] = 2f * c * entry.scale / comp.height
+                matrix[10] = 1f; matrix[15] = 1f
+                matrix[12] = entry.x * 2f / comp.width; matrix[13] = entry.y * 2f / comp.height
+                check(RenderBridge.textLayer(session, requireNotNull(fixtureLayouts[entry.id]).handle,
+                    matrix, entry.size, 0, entry.colour, entry.opacity)) { "Text draw submission failed" }
+                staged++
+            }
+        }
         requireNotNull(plan).forEachActive(timeUs) { layer,localTimeUs,sourceTimeUs,_ ->
             if (cancelled()) throw CancellationException("Superseded frame")
             val isAnim = layer.animTransform.isAnyAnimated()
@@ -138,6 +173,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 opacity = t.opacity
             }
             if(opacity == 0f) return@forEachActive
+            drawFixtures(rasterIndex++)
             if(staged == 4) flush()
             val referenceWidth=layer.referenceWidth.takeIf { it > 0 } ?: comp.width
             val referenceHeight=layer.referenceHeight.takeIf { it > 0 } ?: comp.height
@@ -163,6 +199,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
             }
             staged++
         }
+        drawFixtures(rasterIndex)
         if(cancelled()) throw CancellationException("Superseded frame")
         check(RenderBridge.finish(session)) { "Could not finish composition frame" }
         staged=0

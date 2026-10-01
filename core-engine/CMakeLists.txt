@@ -46,7 +46,35 @@ add_library(fluxxengine SHARED
     src/main/cpp/audio_processor.cpp
     src/main/cpp/vulkan_renderer.cpp
     src/main/cpp/text/text_jni.cpp
+    src/main/cpp/text/text_renderer.cpp
 )
+
+# Generate SPIR-V into the build tree; user builds compile the checked-in GLSL.
+if(CMAKE_HOST_WIN32)
+    set(FLUXX_GLSLC "${ANDROID_NDK}/shader-tools/windows-x86_64/glslc.exe")
+elseif(CMAKE_HOST_APPLE)
+    set(FLUXX_GLSLC "${ANDROID_NDK}/shader-tools/darwin-x86_64/glslc")
+else()
+    set(FLUXX_GLSLC "${ANDROID_NDK}/shader-tools/linux-x86_64/glslc")
+endif()
+set(TEXT_SHADER_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/text-shaders")
+foreach(stage vert frag)
+    add_custom_command(OUTPUT "${TEXT_SHADER_DIRECTORY}/text.${stage}.spv"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${TEXT_SHADER_DIRECTORY}"
+        COMMAND "${FLUXX_GLSLC}" --target-env=vulkan1.1
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/main/assets/shaders/text.${stage}"
+            -o "${TEXT_SHADER_DIRECTORY}/text.${stage}.spv"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/main/assets/shaders/text.${stage}" VERBATIM)
+endforeach()
+add_custom_command(OUTPUT "${TEXT_SHADER_DIRECTORY}/text_shaders.h"
+    COMMAND ${CMAKE_COMMAND} "-DINPUT=${TEXT_SHADER_DIRECTORY}"
+        "-DOUTPUT=${TEXT_SHADER_DIRECTORY}/text_shaders.h"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/text/embed_shaders.cmake"
+    DEPENDS "${TEXT_SHADER_DIRECTORY}/text.vert.spv" "${TEXT_SHADER_DIRECTORY}/text.frag.spv"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/text/embed_shaders.cmake" VERBATIM)
+add_custom_target(fluxx_text_shaders DEPENDS "${TEXT_SHADER_DIRECTORY}/text_shaders.h")
+add_dependencies(fluxxengine fluxx_text_shaders)
+target_include_directories(fluxxengine PRIVATE "${TEXT_SHADER_DIRECTORY}")
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_sources(fluxx_text PRIVATE src/main/cpp/text/text_diagnostics.cpp)

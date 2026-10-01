@@ -1,4 +1,24 @@
-# Text layer checkpoint — E1a through E1c
+# Text layer checkpoint
+
+## E1d implementation pass — 2026-10-01
+
+The user accepted E1b/E1c and explicitly authorized E1d, E1e, E2 and E3 in one ordered pass, superseding the earlier stop gates for implementation. The selected GPU default is one **lazy 2048×2048 R8 atlas per renderer**. Previous 16 KB/golden checks remain outstanding verification evidence; they no longer block this authorized source work.
+
+E1d source adds ordered raster/text entries within the existing four-entry batch, one indexed glyph mesh per text entry, a fence-protected preparation phase, retained CPU SDF leases, whole-atlas staging upload with explicit transfer/sample barriers, derivative coverage, straight alpha and disabled face culling. Optional glyph-local affine/colour/opacity modifiers default to identity. CPU shaping stays on the renderer worker; `PreviewController` and the gesture protocol are unchanged. Shaders are generated/embedded by CMake during the user's build; no generated SPIR-V is checked in.
+
+Debug `TextFixtureProvider` is consumed inside `CompositionRenderer` under `BuildConfig.DEBUG`; release supplies a no-op. The native debug instance enables validation when installed and reports its actual availability/error count. `TextGpuProofTest` fails when validation is absent. Normal debug editor sessions inject nothing.
+
+**Verification:** implemented in source, unverified. No compile, build, test or device execution was performed, per user instruction. E1 proof overflow raises `TextCapacityException` before composition draws; production overflow belongs to E2.
+
+**User-run E1d checklist:**
+
+1. In Android Studio compile debug/release and both native ABIs. Confirm CMake generates both text shaders; inspect diagnostics individually.
+2. Install/enable `VK_LAYER_KHRONOS_validation` for the debug app on the device. Run `TextGpuProofTest.rendersThroughCompositionRendererWithValidation`; missing validation must fail explicitly.
+3. Inspect Inter `AV`, Noto Serif `office`, descenders/newlines and missing-codepoint output through the composition renderer. Compare shaping with the existing independent CPU references.
+4. Verify the lazy atlas, one text draw entry/indexed mesh, no glyph hardware buffers, ordered mixed batches, zero new rasterizations on a warm redraw, and zero validation errors.
+5. Retain APK hashes, device/OS/GPU/page-size and logs. Re-run packaged native alignment checks and the outstanding r26/r28 golden/16 KB checks; source implementation does not establish these results.
+
+The historical E1a–E1c record below retains its original evidence and superseded gate wording; the authorization above governs this pass.
 
 **2026-10-01 update:** E1a render/playback/export smoke verified by the user on A16. E1b and E1c were explicitly authorized together and are implemented: vendored native shaping, static font bundle, cached CPU SDF, independent shaping references and PNG diagnostics. See the E1b/E1c results, diagnostics ledger and reproduction section below. Host CPU, Android debug Kotlin and both-ABI debug/release native compilation passed. Typography instrumented tests remain device-unverified. **Stop before E1d until the user completes the E1a 16 KB environment run and fixed golden-project comparison.** No Vulkan text pipeline has been implemented.
 

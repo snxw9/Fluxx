@@ -1,4 +1,5 @@
 #include "font_manager.h"
+#include "font_catalog.h"
 #ifdef FLUXX_TEXT_DIAGNOSTICS
 #include "text_diagnostics.h"
 #endif
@@ -47,19 +48,25 @@ std::vector<uint8_t> asset(AAssetManager* manager, const char* name) {
 }
 }
 
+std::shared_ptr<FontManager> fluxx::text::acquireFontCatalog(AAssetManager* source) {
+    std::lock_guard<std::mutex> lock(registryMutex);
+    if (!source) throw std::invalid_argument("AssetManager is null");
+    auto manager = catalog.lock();
+    if (!manager) {
+        std::vector<FontInput> fonts;
+        fonts.push_back({"fluxx.sans", asset(source, "fonts/Inter-Regular.ttf")});
+        fonts.push_back({"fluxx.serif", asset(source, "fonts/NotoSerif-Regular.ttf")});
+        fonts.push_back({"fluxx.mono", asset(source, "fonts/JetBrainsMono-Regular.ttf")});
+        manager = std::make_shared<FontManager>(std::move(fonts));
+        catalog = manager;
+    }
+    return manager;
+}
+
 extern "C" JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_TextNative_create(JNIEnv* env, jobject, jobject assets) {
     try {
+        auto manager = fluxx::text::acquireFontCatalog(AAssetManager_fromJava(env, assets));
         std::lock_guard<std::mutex> lock(registryMutex);
-        auto manager = catalog.lock();
-        if (!manager) {
-            auto* source = AAssetManager_fromJava(env, assets);
-            if (!source) throw std::invalid_argument("AssetManager is null");
-            std::vector<fluxx::text::FontInput> fonts;
-            fonts.push_back({"fluxx.sans", asset(source, "fonts/Inter-Regular.ttf")});
-            fonts.push_back({"fluxx.serif", asset(source, "fonts/NotoSerif-Regular.ttf")});
-            fonts.push_back({"fluxx.mono", asset(source, "fonts/JetBrainsMono-Regular.ttf")});
-            manager = std::make_shared<FontManager>(std::move(fonts)); catalog = manager;
-        }
         if (nextSession == INT64_MAX) throw std::runtime_error("Font session IDs exhausted");
         const jlong id = nextSession++; sessions.emplace(id, manager); return id;
     } catch (const std::exception& error) { fail(env, error); return 0; }
