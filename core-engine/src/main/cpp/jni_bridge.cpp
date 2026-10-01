@@ -5,6 +5,7 @@
 #include <android/bitmap.h>
 #include <cstring>
 #include <algorithm>
+#include <stdexcept>
 #include "engine_core.h"
 
 extern "C" {
@@ -60,6 +61,61 @@ JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_RenderBridge_create(JNIEnv
     if(window) renderer->resize(width,height);
     return reinterpret_cast<jlong>(renderer);
 }
+// Standard UTF-8, including supplementary characters; JNI modified UTF-8 is not text input.
+static std::string textUtf8(JNIEnv* env,jstring value) {
+    if(!value) throw std::invalid_argument("Null text");
+    const jsize length=env->GetStringLength(value);
+    if(length>16384) throw std::invalid_argument("Text input too large");
+    const jchar* chars=env->GetStringChars(value,nullptr);
+    if(!chars) throw std::bad_alloc();
+    std::string output;
+    try {
+        for(jsize i=0;i<length;++i) {
+            uint32_t cp=chars[i];
+            if(cp>=0xD800 && cp<=0xDBFF) {
+                if(i+1>=length || chars[i+1]<0xDC00 || chars[i+1]>0xDFFF) throw std::invalid_argument("Unpaired UTF-16 surrogate");
+                cp=0x10000+((cp-0xD800)<<10)+(chars[++i]-0xDC00);
+            } else if(cp>=0xDC00 && cp<=0xDFFF) throw std::invalid_argument("Unpaired UTF-16 surrogate");
+            if(cp<0x80) output.push_back(static_cast<char>(cp));
+            else if(cp<0x800) { output.push_back(static_cast<char>(0xC0|(cp>>6))); output.push_back(static_cast<char>(0x80|(cp&63))); }
+            else if(cp<0x10000) { output.push_back(static_cast<char>(0xE0|(cp>>12))); output.push_back(static_cast<char>(0x80|((cp>>6)&63))); output.push_back(static_cast<char>(0x80|(cp&63))); }
+            else { output.push_back(static_cast<char>(0xF0|(cp>>18))); output.push_back(static_cast<char>(0x80|((cp>>12)&63))); output.push_back(static_cast<char>(0x80|((cp>>6)&63))); output.push_back(static_cast<char>(0x80|(cp&63))); }
+        }
+        if(output.size()>16384) throw std::invalid_argument("Text exceeds UTF-8 byte limit");
+    } catch(...) { env->ReleaseStringChars(value,chars); throw; }
+    env->ReleaseStringChars(value,chars); return output;
+}
+static void textFailure(JNIEnv* env,const std::exception& error) {
+    if(env->ExceptionCheck()) return;
+    const char* type=dynamic_cast<const fluxx::text::TextCapacityError*>(&error)?
+        "com/fluxx/android/engine/TextCapacityException":"java/lang/IllegalStateException";
+    env->ThrowNew(env->FindClass(type),error.what());
+}
+JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_RenderBridge_upsertText(JNIEnv* env,jobject,jlong session,jstring font,jstring text) {
+    try { return reinterpret_cast<VulkanRenderer*>(session)->upsertText(textUtf8(env,font),textUtf8(env,text)); }
+    catch(const std::exception& error) { textFailure(env,error); return 0; }
+}
+JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_releaseText(JNIEnv*,jobject,jlong session,jlong handle) {
+    reinterpret_cast<VulkanRenderer*>(session)->releaseText(handle);
+}
+JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_prepareText(JNIEnv* env,jobject,jlong session,jlongArray handles) {
+    try {
+        const auto count=env->GetArrayLength(handles); std::vector<jlong> input(count);
+        env->GetLongArrayRegion(handles,0,count,input.data()); if(env->ExceptionCheck()) return false;
+        return reinterpret_cast<VulkanRenderer*>(session)->prepareText(std::vector<int64_t>(input.begin(),input.end()));
+    } catch(const std::exception& error) { textFailure(env,error); return false; }
+}
+JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_textLayer(JNIEnv* env,jobject,jlong session,jlong handle,jfloatArray matrix,
+    jfloat size,jint alignment,jint argb,jfloat opacity) {
+    try {
+        if(!matrix || env->GetArrayLength(matrix)!=16) return false;
+        float m[16]; env->GetFloatArrayRegion(matrix,0,16,m); if(env->ExceptionCheck()) return false;
+        return reinterpret_cast<VulkanRenderer*>(session)->setTextLayer(handle,m,size,alignment,static_cast<uint32_t>(argb),opacity);
+    } catch(const std::exception& error) { textFailure(env,error); return false; }
+}
+JNIEXPORT jstring JNICALL Java_com_fluxx_android_engine_RenderBridge_textStats(JNIEnv* env,jobject,jlong session) {
+    const auto stats=reinterpret_cast<VulkanRenderer*>(session)->textStatsJson(); return env->NewStringUTF(stats.c_str());
+}
 JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_destroy(JNIEnv*,jobject,jlong session) { delete reinterpret_cast<VulkanRenderer*>(session); }
 JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_resize(JNIEnv*,jobject,jlong session,jint w,jint h) { reinterpret_cast<VulkanRenderer*>(session)->resize(w,h); }
 JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_begin(JNIEnv*,jobject,jlong session,jint w,jint h,jint pw,jint ph) { return reinterpret_cast<VulkanRenderer*>(session)->beginFrame(w,h,pw,ph); }
@@ -68,8 +124,14 @@ JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_layer(JNIE
     float m[16]; env->GetFloatArrayRegion(matrix,0,16,m);
     return reinterpret_cast<VulkanRenderer*>(session)->setFrameLayer(slot,AHardwareBuffer_fromHardwareBuffer(env,buffer),m,opacity);
 }
-JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_flush(JNIEnv*,jobject,jlong session) { return reinterpret_cast<VulkanRenderer*>(session)->flushBatch(); }
-JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_finish(JNIEnv*,jobject,jlong session) { return reinterpret_cast<VulkanRenderer*>(session)->finishFrame(); }
+JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_flush(JNIEnv* env,jobject,jlong session) {
+    try { return reinterpret_cast<VulkanRenderer*>(session)->flushBatch(); }
+    catch(const std::exception& error) { textFailure(env,error); return false; }
+}
+JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_finish(JNIEnv* env,jobject,jlong session) {
+    try { return reinterpret_cast<VulkanRenderer*>(session)->finishFrame(); }
+    catch(const std::exception& error) { textFailure(env,error); return false; }
+}
 JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_RenderBridge_readPreviewPixel(JNIEnv*,jobject,jlong session,jfloat x,jfloat y) {
     return session ? reinterpret_cast<VulkanRenderer*>(session)->readPreviewPixel(x,y) : -1;
 }

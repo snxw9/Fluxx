@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <string>
 #include <algorithm>
+#include <sstream>
 
 VulkanRenderer::VulkanRenderer() {
     LOGI("VulkanRenderer created");
@@ -229,6 +230,7 @@ void VulkanRenderer::cleanup() {
 
     releaseLayers();
     cleanupSwapchain();
+    mText.reset(); mTextLayouts.clear();
     cleanupOffscreenTarget();
 
     if (mRenderFinishedSemaphore != VK_NULL_HANDLE) {
@@ -261,6 +263,11 @@ void VulkanRenderer::cleanup() {
             // Normally load via vkGetInstanceProcAddr or standard link
             vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
             mSurface = VK_NULL_HANDLE;
+        }
+        if(mDebugMessenger) {
+            auto destroy=reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(mInstance,"vkDestroyDebugUtilsMessengerEXT"));
+            if(destroy) destroy(mInstance,mDebugMessenger,nullptr);
+            mDebugMessenger=VK_NULL_HANDLE;
         }
         vkDestroyInstance(mInstance, nullptr);
         mInstance = VK_NULL_HANDLE;
@@ -315,6 +322,31 @@ bool VulkanRenderer::createInstance() {
     VkInstanceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo = &appInfo;
+    const char* validation="VK_LAYER_KHRONOS_validation";
+#ifdef FLUXX_TEXT_DIAGNOSTICS
+    uint32_t layerCount=0; vkEnumerateInstanceLayerProperties(&layerCount,nullptr);
+    std::vector<VkLayerProperties> layers(layerCount); vkEnumerateInstanceLayerProperties(&layerCount,layers.data());
+    for(const auto& layer:layers) if(std::string(layer.layerName)==validation) mValidationEnabled=true;
+    if(mValidationEnabled) {
+        uint32_t extensionCount=0; vkEnumerateInstanceExtensionProperties(nullptr,&extensionCount,nullptr);
+        std::vector<VkExtensionProperties> available(extensionCount);
+        vkEnumerateInstanceExtensionProperties(nullptr,&extensionCount,available.data());
+        bool debugUtils=false;
+        for(const auto& extension:available) if(std::string(extension.extensionName)==VK_EXT_DEBUG_UTILS_EXTENSION_NAME) debugUtils=true;
+        mValidationEnabled=debugUtils;
+    }
+    if(mValidationEnabled) {
+        extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        createInfo.enabledLayerCount=1; createInfo.ppEnabledLayerNames=&validation;
+    }
+#else
+    (void)validation;
+#endif
+    VkDebugUtilsMessengerCreateInfoEXT debug{VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
+    debug.messageSeverity=VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT|VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    debug.messageType=VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT|VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT|VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    debug.pfnUserCallback=debugMessage; debug.pUserData=this;
+    if(mValidationEnabled) createInfo.pNext=&debug;
     createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
 
@@ -330,7 +362,19 @@ bool VulkanRenderer::createInstance() {
     } else {
         LOGI("VkInstance created successfully at %p", mInstance);
     }
+    if(mValidationEnabled) {
+        auto create=reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(mInstance,"vkCreateDebugUtilsMessengerEXT"));
+        if(!create || create(mInstance,&debug,nullptr,&mDebugMessenger)!=VK_SUCCESS) return false;
+    }
+    LOGI("Vulkan validation enabled=%d",mValidationEnabled);
     return true;
+}
+
+VKAPI_ATTR VkBool32 VKAPI_CALL VulkanRenderer::debugMessage(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+    VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT* data, void* user) {
+    auto* renderer=static_cast<VulkanRenderer*>(user);
+    if(severity&VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) ++renderer->mValidationErrors;
+    LOGW("Vulkan validation: %s",data->pMessage); return VK_FALSE;
 }
 
 bool VulkanRenderer::selectPhysicalDevice() {
@@ -1194,6 +1238,7 @@ bool VulkanRenderer::beginFrame(int width, int height, int presentationWidth, in
     mPresentationHeight = presentationHeight > 0 ? presentationHeight : height;
     mFirstBatch = true;
     mDrawOrder.clear();
+    mTextPrepared=false;
     if (width != mCompWidth || height != mCompHeight) {
         LOGI("Offscreen target resize %dx%d -> %dx%d (presentation %dx%d)",
              mCompWidth, mCompHeight, width, height, mPresentationWidth, mPresentationHeight);
@@ -1206,12 +1251,52 @@ bool VulkanRenderer::beginFrame(int width, int height, int presentationWidth, in
     }
     return true;
 }
+int64_t VulkanRenderer::upsertText(const std::string& font, const std::string& utf8) {
+    if(!mText) mText=std::make_unique<fluxx::text::TextRenderer>(mPhysicalDevice,mDevice,mOffscreenRenderPass,mPipelineCache,mAssetManager);
+    if(mNextTextHandle==INT64_MAX) throw std::runtime_error("Text layout handles exhausted");
+    auto layout=mText->layout(font,utf8);
+    const int64_t handle=mNextTextHandle++; mTextLayouts.emplace(handle,std::move(layout)); return handle;
+}
+void VulkanRenderer::releaseText(int64_t handle) { mTextLayouts.erase(handle); }
+bool VulkanRenderer::prepareText(const std::vector<int64_t>& handles) {
+    if(!mInitialized || !mDrawOrder.empty() || !mFirstBatch) throw std::logic_error("Text preparation must precede composition draws");
+    if(handles.empty()) return true;
+    if(!mText || !beginWork()) return false;
+    mText->begin();
+    for(auto handle:handles) mText->collect(mTextLayouts.at(handle));
+    mText->pack(); mTextPrepared=true;
+    // No command submission yet: pack/capacity validation finishes before any draw.
+    return true;
+}
+bool VulkanRenderer::setTextLayer(int64_t handle, const float* matrix, float size, int alignment, uint32_t argb, float opacity) {
+    if(!mInitialized || !mTextPrepared || mDrawOrder.size()>=4) return false;
+    DrawEntry entry{}; entry.text=true;
+    entry.mesh=mText->mesh(*mTextLayouts.at(handle),size,alignment);
+    std::copy(matrix,matrix+16,entry.push.matrix);
+    entry.push.fill[0]=((argb>>16)&255)/255.0f; entry.push.fill[1]=((argb>>8)&255)/255.0f;
+    entry.push.fill[2]=(argb&255)/255.0f; entry.push.fill[3]=((argb>>24)&255)/255.0f*opacity;
+    mDrawOrder.push_back(entry); return true;
+}
+std::string VulkanRenderer::textStatsJson() const {
+    const auto stats=mText?mText->stats():fluxx::text::TextGpuStats{};
+    std::ostringstream json;
+    json << "{\"validationEnabled\":" << (mValidationEnabled?"true":"false") << ",\"validationErrors\":" << mValidationErrors.load();
+    json << ",\"images\":" << stats.images << ",\"views\":" << stats.views << ",\"samplers\":" << stats.samplers;
+    json << ",\"buffers\":" << stats.buffers << ",\"memories\":" << stats.memories << ",\"bytes\":" << stats.bytes;
+    json << ",\"descriptorPools\":" << stats.pools << ",\"descriptorSets\":" << stats.sets << ",\"descriptorLayouts\":" << stats.layouts;
+    json << ",\"pipelines\":" << stats.pipelines << ",\"pipelineLayouts\":" << stats.pipelineLayouts;
+    json << ",\"generation\":" << stats.generation << ",\"uploads\":" << stats.uploads << ",\"uploadBytes\":" << stats.uploadBytes << ",\"draws\":" << stats.draws;
+    if(mText) { auto font=mText->fontStats(); json << ",\"rasterizations\":" << font.rasterizations << ",\"lockWaitNs\":" << font.lockWaitNs; }
+    json << "}"; return json.str();
+}
 bool VulkanRenderer::setFrameLayer(int64_t id, AHardwareBuffer* buffer, const float* matrix, float opacity) {
     if (!mInitialized || !buffer || mDrawOrder.size() >= 4) return false;
     if (mLayers.find(id) == mLayers.end() && mLayers.size() >= 4) {
         auto victim = mLayers.end();
         for (auto it=mLayers.begin();it!=mLayers.end();++it) {
-            if (std::find(mDrawOrder.begin(),mDrawOrder.end(),it->first)!=mDrawOrder.end()) continue;
+            if (std::any_of(mDrawOrder.begin(),mDrawOrder.end(),[&](const DrawEntry& entry) {
+                return !entry.text && entry.rasterId==it->first;
+            })) continue;
             if(victim==mLayers.end() || it->second.lastUse<victim->second.lastUse) victim=it;
         }
         if(victim==mLayers.end()) return false;
@@ -1236,7 +1321,7 @@ bool VulkanRenderer::setFrameLayer(int64_t id, AHardwareBuffer* buffer, const fl
     }
     std::copy(matrix, matrix + 16, layer.transform.matrix);
     layer.transform.opacity = opacity;
-    mDrawOrder.push_back(id);
+    DrawEntry entry{}; entry.rasterId=id; mDrawOrder.push_back(entry);
     return true;
 }
 bool VulkanRenderer::finishFrame() {
@@ -1263,6 +1348,7 @@ bool VulkanRenderer::submitWork() {
 bool VulkanRenderer::flushBatch() {
     if (!beginWork()) return false;
     auto commandBuffer=mWorkCommand;
+    if(mTextPrepared && mText) mText->upload(commandBuffer);
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassInfo.renderPass = mFirstBatch ? mOffscreenRenderPass : mLoadRenderPass;
@@ -1274,8 +1360,9 @@ bool VulkanRenderer::flushBatch() {
     renderPassInfo.clearValueCount = 1;
     renderPassInfo.pClearValues = &clearColor;
 
-    for (auto id : mDrawOrder) {
-        auto& layer = mLayers.at(id);
+    for (const auto& entry : mDrawOrder) {
+        if(entry.text) continue;
+        auto& layer = mLayers.at(entry.rasterId);
         if (layer.transitioned) continue;
         layer.transitioned = true;
         VkImageMemoryBarrier barrier{};
@@ -1305,10 +1392,7 @@ bool VulkanRenderer::flushBatch() {
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    for (auto id : mDrawOrder) {
-        auto& layer = mLayers.at(id);
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layer.mVideoPipeline);
-
+    for (const auto& entry : mDrawOrder) {
         VkViewport viewport{};
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
@@ -1326,6 +1410,10 @@ bool VulkanRenderer::flushBatch() {
 
         vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+        if(entry.text) { mText->draw(commandBuffer,entry.mesh,entry.push); continue; }
+        auto& layer = mLayers.at(entry.rasterId);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layer.mVideoPipeline);
 
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layer.mVideoPipelineLayout, 0, 1, &layer.mVideoDescriptorSet, 0, nullptr);
         vkCmdPushConstants(commandBuffer, layer.mVideoPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(LayerTransform), &layer.transform);
