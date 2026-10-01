@@ -3,9 +3,9 @@
 
 > **Scope note:** This document describes Fluxx's complete target architecture and feature set — the north star. It is **not** the v0.1 build scope. For what actually ships first, in what order, and why, see `FLUXX_ROADMAP.md`. Nothing in v0.1 should paint the engine into a corner that blocks anything described here later.
 
-### Current implementation note - 2026-09-11
+### Current implementation boundary
 
-The target architecture below is not a description of completed engine features. Phase 2 A-C backend details and outstanding hardware validation are recorded in [PHASE_2_STATUS_AND_BACKEND.md](../checkpoints/PHASE_2_STATUS_AND_BACKEND.md). Current layered preview/export share a batched offscreen Vulkan compositor; general export transfers RGBA to a reusable host buffer for MediaCodec input, while the working full-source single-video Media3 path remains available. Audio uses a disk-backed sequential mix and AudioTrack preview. The future scene-linear color engine, frame/proxy caches, Oboe-driven composition audio and resumable export described below are not established by this implementation.
+The target architecture below is not a description of completed engine features. Current schema is v8; text v9 and E2/E3 Universal Properties remain planned. Native CPU shaping/SDF (E1b/E1c) are implemented, but Vulkan text is not. Phase 2 A-C backend details and outstanding hardware validation are recorded in [PHASE_2_STATUS_AND_BACKEND.md](../checkpoints/PHASE_2_STATUS_AND_BACKEND.md). Current layered preview/export share a batched offscreen Vulkan compositor; general export transfers RGBA to a reusable host buffer for MediaCodec input, while the working full-source single-video Media3 path remains available. Audio uses a disk-backed sequential mix and AudioTrack preview. The future scene-linear color engine, frame/proxy caches, Oboe-driven composition audio and resumable export described below are not established by this implementation.
 
 **Scaling requirement:** never impose an arbitrary maximum number of project or export layers. Bound expensive resident resources, virtualize UI work and schedule additional work through those resources. Actual format, allocation and storage failures must be reported, and real-time guarantees must be based on measurements. See [PHASE_2_STATUS_AND_BACKEND.md](../checkpoints/PHASE_2_STATUS_AND_BACKEND.md) for the live UI placeholder matrix.
 
@@ -44,7 +44,7 @@ The complete Fluxx feature set, across all versions, encompasses the following c
   > **Precomp sizing rule (confirmed against After Effects behavior):** When precomposing, the new precomp's stored width/height is determined at precompose-time, not inherited dynamically from wherever it's nested later.
   > - Precomposing a single layer → new precomp's resolution matches that layer's native pixel dimensions (e.g. the video's decoded resolution, or the image's pixel size).
   > - Precomposing multiple layers → new precomp's resolution matches the original parent composition's resolution.
-  > 
+  >
   > Once created, a precomp is just another composition — it gets its own offscreen render target at its own fixed resolution (per the offscreen-target architecture used for the top-level comp), and functions as an ordinary layer (with its own aspect) when nested inside a parent comp. Nesting a precomp into a differently-shaped parent comp never resizes or reshapes the precomp itself.
 - **Built-in Effects:** Gaussian Blur, Glow, Curves, Levels, Tint, Fill, Hue/Saturation, Exposure, Sharpen, Chaos Displace, Ripple Distort, Mosaic, Posterize, Tile Repeater, Procedural Noise.
   *(Renamed from the original Turbulent Displace, Wave Warp, CC RepeTile, and Fractal Noise — those mirror Adobe's own effect naming closely enough to be worth avoiding in a from-scratch build, especially "CC RepeTile," which keeps Adobe/Cycore's own branding prefix. Functionally identical; rename further to taste.)*
@@ -53,13 +53,13 @@ The complete Fluxx feature set, across all versions, encompasses the following c
 ## 3. Technology Stack & Architecture Boundaries
 To guarantee real-time performance and prevent Android's Garbage Collector from causing frame drops, Fluxx strictly separates the User Interface from the Render Engine.
 
-| Environment        | Technology                                                                           | Responsibility                                                   |
-|--------------------|--------------------------------------------------------------------------------------|------------------------------------------------------------------|
-| UI & State Layer   | Kotlin & Jetpack Compose (Android-only)                                              | Project state, timeline UI, touch gestures, and file I/O.        |
-| Core Render Engine | C/C++ (Android NDK)                                                                  | Pixel compositing, Bezier interpolation, and effect shaders.     |
-| Graphics Pipeline  | Vulkan only (v0.1+)                                                                  | Hardware-accelerated drawing and matrix transformations.         |
-| Audio Engine       | Oboe (C++)                                                                           | Ultra-low latency, perfectly synchronized audio playback.        |
-| JNI Bridge         | FlatBuffers (structured/infrequent) + Direct ByteBuffer / AHardwareBuffer (hot path) | High-speed numerical instruction passing between Kotlin and C++. |
+| Environment | Technology | Responsibility |
+| --- | --- | --- |
+| UI & State Layer | Kotlin & Jetpack Compose (Android-only) | Project state, timeline UI, touch gestures, and file I/O. |
+| Core Render Engine | C/C++ (Android NDK) | Pixel compositing, Bezier interpolation, and effect shaders. |
+| Graphics Pipeline | Vulkan only (v0.1+) | Hardware-accelerated drawing and matrix transformations. |
+| Audio Engine | Oboe (C++) | Ultra-low latency, perfectly synchronized audio playback. |
+| JNI Bridge | FlatBuffers (structured/infrequent) + Direct ByteBuffer / AHardwareBuffer (hot path) | High-speed numerical instruction passing between Kotlin and C++. |
 
 **UI framework note:** Compose Multiplatform's Android target is functionally identical to Jetpack Compose (sharing the same compiler and runtime, resulting in identical performance). Plain Jetpack Compose is used instead purely to avoid carrying unnecessary Kotlin Multiplatform tooling for code-sharing capabilities the project doesn't require. Any future iOS build is planned as a separate native rebuild (utilizing Metal, Core Audio, and AVFoundation/VideoToolbox), rather than a shared-UI port.
 
@@ -163,5 +163,5 @@ The project utilizes a dual-build system managed through Android Studio, with a 
 └── build.gradle.kts
 ```
 - **.gitignore Strictness:** All C++ compilation outputs (`.cxx`, `.so`, `.o`), CMake caches, and Gradle build folders are aggressively blocked from version control.
-- **Heavy Asset Isolation:** A designated `/local_testing_media` folder is established for 4K video, WAV files, and fonts. This folder is ignored by Git, ensuring the repository remains lightweight and push/pull times remain instantaneous.
+- **Heavy Asset Isolation:** A designated `/local_testing_media` folder is established for local 4K video, WAV files and ad-hoc font fixtures. The small licensed production font bundle is intentionally checked in under core-engine assets. This folder is ignored by Git, ensuring the repository remains lightweight and push/pull times remain instantaneous.
 - **Git LFS:** Consider Git LFS for `/libs` if the precompiled static binaries grow large — same rationale as isolating heavy media assets, keeps clone times fast.

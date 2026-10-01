@@ -1,0 +1,647 @@
+{
+  "schema": 1,
+  "reference_version": "hb-shape.exe (HarfBuzz) 14.3.1",
+  "reference_tool_sha256": "cdd5f71f303539e30758452fc85ed5402df45ff8b78b8ff01547a4f512da3808",
+  "reference_archive": "harfbuzz-win64-14.3.1.zip",
+  "reference_archive_sha256": "d7c278226f2bfea6fabb871a702545e661b9a29d119b3e8c66b07dc73a4350b7",
+  "font_sha256": {
+    "fluxx.sans": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+    "fluxx.serif": "b32e46719d84d5525379fa1a52f52a5d6a7d42fbb789e39db4e88747a7815f76",
+    "fluxx.mono": "a0bf60ef0f83c5ed4d7a75d45838548b1f6873372dfac88f71804491898d138f"
+  },
+  "fixtures": [
+    {
+      "name": "ligature",
+      "font": "fluxx.serif",
+      "text": "office",
+      "upem": 1000,
+      "options": [
+        "--font-funcs=ot",
+        "--font-size=1000",
+        "--direction=ltr",
+        "--script=Latn",
+        "--language=en",
+        "--cluster-level=0",
+        "--utf8-clusters",
+        "--no-glyph-names",
+        "--output-format=json"
+      ],
+      "raw_lines": [
+        [
+          {
+            "g": 82,
+            "cl": 0,
+            "dx": 0,
+            "dy": 0,
+            "ax": 577,
+            "ay": 0
+          },
+          {
+            "g": 2146,
+            "cl": 1,
+            "dx": 0,
+            "dy": 0,
+            "ax": 1002,
+            "ay": 0
+          },
+          {
+            "g": 70,
+            "cl": 4,
+            "dx": 0,
+            "dy": 0,
+            "ax": 492,
+            "ay": 0
+          },
+          {
+            "g": 72,
+            "cl": 5,
+            "dx": 0,
+            "dy": 0,
+            "ax": 535,
+            "ay": 0
+          }
+        ]
+      ],
+      "glyphs": [
+        {
+          "g": 82,
+          "cl": 0,
+          "dx": 0,
+          "dy": 0,
+          "ax": 577,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 2146,
+          "cl": 1,
+          "dx": 0,
+          "dy": 0,
+          "ax": 1002,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 70,
+          "cl": 4,
+          "dx": 0,
+          "dy": 0,
+          "ax": 492,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 72,
+          "cl": 5,
+          "dx": 0,
+          "dy": 0,
+          "ax": 535,
+          "ay": 0,
+          "line": 0
+        }
+      ]
+    },
+    {
+      "name": "kerning",
+      "font": "fluxx.sans",
+      "text": "AV",
+      "upem": 2048,
+      "options": [
+        "--font-funcs=ot",
+        "--font-size=2048",
+        "--direction=ltr",
+        "--script=Latn",
+        "--language=en",
+        "--cluster-level=0",
+        "--utf8-clusters",
+        "--no-glyph-names",
+        "--output-format=json"
+      ],
+      "raw_lines": [
+        [
+          {
+            "g": 2,
+            "cl": 0,
+            "dx": 0,
+            "dy": 0,
+            "ax": 1273,
+            "ay": 0
+          },
+          {
+            "g": 456,
+            "cl": 1,
+            "dx": 0,
+            "dy": 0,
+            "ax": 1413,
+            "ay": 0
+          }
+        ]
+      ],
+      "glyphs": [
+        {
+          "g": 2,
+          "cl": 0,
+          "dx": 0,
+          "dy": 0,
+          "ax": 1273,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 456,
+          "cl": 1,
+          "dx": 0,
+          "dy": 0,
+          "ax": 1413,
+          "ay": 0,
+          "line": 0
+        }
+      ]
+    },
+    {
+      "name": "newline",
+      "font": "fluxx.serif",
+      "text": "office\nAV gy",
+      "upem": 1000,
+      "options": [
+        "--font-funcs=ot",
+        "--font-size=1000",
+        "--direction=ltr",
+        "--script=Latn",
+        "--language=en",
+        "--cluster-level=0",
+        "--utf8-clusters",
+        "--no-glyph-names",
+        "--output-format=json"
+      ],
+      "raw_lines": [
+        [
+          {
+            "g": 82,
+            "cl": 0,
+            "dx": 0,
+            "dy": 0,
+            "ax": 577,
+            "ay": 0
+          },
+          {
+            "g": 2146,
+            "cl": 1,
+            "dx": 0,
+            "dy": 0,
+            "ax": 1002,
+            "ay": 0
+          },
+          {
+            "g": 70,
+            "cl": 4,
+            "dx": 0,
+            "dy": 0,
+            "ax": 492,
+            "ay": 0
+          },
+          {
+            "g": 72,
+            "cl": 5,
+            "dx": 0,
+            "dy": 0,
+            "ax": 535,
+            "ay": 0
+          }
+        ],
+        [
+          {
+            "g": 36,
+            "cl": 0,
+            "dx": 0,
+            "dy": 0,
+            "ax": 625,
+            "ay": 0
+          },
+          {
+            "g": 57,
+            "cl": 1,
+            "dx": 0,
+            "dy": 0,
+            "ax": 675,
+            "ay": 0
+          },
+          {
+            "g": 3,
+            "cl": 2,
+            "dx": 0,
+            "dy": 0,
+            "ax": 260,
+            "ay": 0
+          },
+          {
+            "g": 74,
+            "cl": 3,
+            "dx": 0,
+            "dy": 0,
+            "ax": 538,
+            "ay": 0
+          },
+          {
+            "g": 92,
+            "cl": 4,
+            "dx": 0,
+            "dy": 0,
+            "ax": 565,
+            "ay": 0
+          }
+        ]
+      ],
+      "glyphs": [
+        {
+          "g": 82,
+          "cl": 0,
+          "dx": 0,
+          "dy": 0,
+          "ax": 577,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 2146,
+          "cl": 1,
+          "dx": 0,
+          "dy": 0,
+          "ax": 1002,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 70,
+          "cl": 4,
+          "dx": 0,
+          "dy": 0,
+          "ax": 492,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 72,
+          "cl": 5,
+          "dx": 0,
+          "dy": 0,
+          "ax": 535,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 36,
+          "cl": 7,
+          "dx": 0,
+          "dy": 0,
+          "ax": 625,
+          "ay": 0,
+          "line": 1
+        },
+        {
+          "g": 57,
+          "cl": 8,
+          "dx": 0,
+          "dy": 0,
+          "ax": 675,
+          "ay": 0,
+          "line": 1
+        },
+        {
+          "g": 3,
+          "cl": 9,
+          "dx": 0,
+          "dy": 0,
+          "ax": 260,
+          "ay": 0,
+          "line": 1
+        },
+        {
+          "g": 74,
+          "cl": 10,
+          "dx": 0,
+          "dy": 0,
+          "ax": 538,
+          "ay": 0,
+          "line": 1
+        },
+        {
+          "g": 92,
+          "cl": 11,
+          "dx": 0,
+          "dy": 0,
+          "ax": 565,
+          "ay": 0,
+          "line": 1
+        }
+      ]
+    },
+    {
+      "name": "missing",
+      "font": "fluxx.sans",
+      "text": "A\udbff\udfffV",
+      "upem": 2048,
+      "options": [
+        "--font-funcs=ot",
+        "--font-size=2048",
+        "--direction=ltr",
+        "--script=Latn",
+        "--language=en",
+        "--cluster-level=0",
+        "--utf8-clusters",
+        "--no-glyph-names",
+        "--output-format=json"
+      ],
+      "raw_lines": [
+        [
+          {
+            "g": 2,
+            "cl": 0,
+            "dx": 0,
+            "dy": 0,
+            "ax": 1413,
+            "ay": 0
+          },
+          {
+            "g": 0,
+            "cl": 1,
+            "dx": 0,
+            "dy": 0,
+            "ax": 1344,
+            "ay": 0
+          },
+          {
+            "g": 456,
+            "cl": 5,
+            "dx": 0,
+            "dy": 0,
+            "ax": 1413,
+            "ay": 0
+          }
+        ]
+      ],
+      "glyphs": [
+        {
+          "g": 2,
+          "cl": 0,
+          "dx": 0,
+          "dy": 0,
+          "ax": 1413,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 0,
+          "cl": 1,
+          "dx": 0,
+          "dy": 0,
+          "ax": 1344,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 456,
+          "cl": 5,
+          "dx": 0,
+          "dy": 0,
+          "ax": 1413,
+          "ay": 0,
+          "line": 0
+        }
+      ]
+    },
+    {
+      "name": "combining",
+      "font": "fluxx.sans",
+      "text": "A\u0301\u0323",
+      "upem": 2048,
+      "options": [
+        "--font-funcs=ot",
+        "--font-size=2048",
+        "--direction=ltr",
+        "--script=Latn",
+        "--language=en",
+        "--cluster-level=0",
+        "--utf8-clusters",
+        "--no-glyph-names",
+        "--output-format=json"
+      ],
+      "raw_lines": [
+        [
+          {
+            "g": 21,
+            "cl": 0,
+            "dx": 0,
+            "dy": 0,
+            "ax": 1413,
+            "ay": 0
+          },
+          {
+            "g": 1770,
+            "cl": 0,
+            "dx": -954,
+            "dy": 372,
+            "ax": 0,
+            "ay": 0
+          }
+        ]
+      ],
+      "glyphs": [
+        {
+          "g": 21,
+          "cl": 0,
+          "dx": 0,
+          "dy": 0,
+          "ax": 1413,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 1770,
+          "cl": 0,
+          "dx": -954,
+          "dy": 372,
+          "ax": 0,
+          "ay": 0,
+          "line": 0
+        }
+      ]
+    },
+    {
+      "name": "mono",
+      "font": "fluxx.mono",
+      "text": "AV office",
+      "upem": 1000,
+      "options": [
+        "--font-funcs=ot",
+        "--font-size=1000",
+        "--direction=ltr",
+        "--script=Latn",
+        "--language=en",
+        "--cluster-level=0",
+        "--utf8-clusters",
+        "--no-glyph-names",
+        "--output-format=json"
+      ],
+      "raw_lines": [
+        [
+          {
+            "g": 1,
+            "cl": 0,
+            "dx": 0,
+            "dy": 0,
+            "ax": 600,
+            "ay": 0
+          },
+          {
+            "g": 161,
+            "cl": 1,
+            "dx": 0,
+            "dy": 0,
+            "ax": 600,
+            "ay": 0
+          },
+          {
+            "g": 958,
+            "cl": 2,
+            "dx": 0,
+            "dy": 0,
+            "ax": 600,
+            "ay": 0
+          },
+          {
+            "g": 290,
+            "cl": 3,
+            "dx": 0,
+            "dy": 0,
+            "ax": 600,
+            "ay": 0
+          },
+          {
+            "g": 244,
+            "cl": 4,
+            "dx": 0,
+            "dy": 0,
+            "ax": 600,
+            "ay": 0
+          },
+          {
+            "g": 244,
+            "cl": 5,
+            "dx": 0,
+            "dy": 0,
+            "ax": 600,
+            "ay": 0
+          },
+          {
+            "g": 255,
+            "cl": 6,
+            "dx": 0,
+            "dy": 0,
+            "ax": 600,
+            "ay": 0
+          },
+          {
+            "g": 215,
+            "cl": 7,
+            "dx": 0,
+            "dy": 0,
+            "ax": 600,
+            "ay": 0
+          },
+          {
+            "g": 225,
+            "cl": 8,
+            "dx": 0,
+            "dy": 0,
+            "ax": 600,
+            "ay": 0
+          }
+        ]
+      ],
+      "glyphs": [
+        {
+          "g": 1,
+          "cl": 0,
+          "dx": 0,
+          "dy": 0,
+          "ax": 600,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 161,
+          "cl": 1,
+          "dx": 0,
+          "dy": 0,
+          "ax": 600,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 958,
+          "cl": 2,
+          "dx": 0,
+          "dy": 0,
+          "ax": 600,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 290,
+          "cl": 3,
+          "dx": 0,
+          "dy": 0,
+          "ax": 600,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 244,
+          "cl": 4,
+          "dx": 0,
+          "dy": 0,
+          "ax": 600,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 244,
+          "cl": 5,
+          "dx": 0,
+          "dy": 0,
+          "ax": 600,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 255,
+          "cl": 6,
+          "dx": 0,
+          "dy": 0,
+          "ax": 600,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 215,
+          "cl": 7,
+          "dx": 0,
+          "dy": 0,
+          "ax": 600,
+          "ay": 0,
+          "line": 0
+        },
+        {
+          "g": 225,
+          "cl": 8,
+          "dx": 0,
+          "dy": 0,
+          "ax": 600,
+          "ay": 0,
+          "line": 0
+        }
+      ]
+    }
+  ]
+}

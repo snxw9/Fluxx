@@ -29,9 +29,15 @@ local.properties
 /local_testing_media/*
 !/local_testing_media/.gitkeep
 
+# User-generated E1a fixture media and machine-specific verification reports.
+/app/src/androidTest/assets/e1a/
+/tools/e1a/results/
+/tools/e1a/__pycache__/
+/tools/text/results/
+/tools/text/__pycache__/
+
 # Kotlin & Compiler artifacts
 .kotlin/
 flatc_dir/
 *.zip
 *.log
-

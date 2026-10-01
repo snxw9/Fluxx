@@ -11,7 +11,7 @@ The full SDD scope — dual Graph Editor, 15 effects, masks/mattes/blend modes, 
 **In:**
 - Single composition, no nesting
 - 4 layer types: Video, Image, Solid, Text
-- Transform animation only (position, scale, rotation, opacity) via Bezier keyframes + one easing preset
+- Transform animation (position, scale, rotation, opacity), plus Step E font size/fill colour and hold-keyed Source Text through the same property framework; other text properties become animatable in later passes
 - 2 effects: Curves (cheap, LUT-based) + Blur (GPU-heavy, proves the ping-pong FBO stack)
 - Hard-edge stencil masks only (no feathering)
 - Normal blend mode only
@@ -23,21 +23,23 @@ The full SDD scope — dual Graph Editor, 15 effects, masks/mattes/blend modes, 
 ## Defaults (change any of these — none are locked in)
 
 - **Jetpack Compose (Android-only).** Chosen because Compose Multiplatform's Android target uses the identical Compose compiler and runtime, resulting in no performance differences on Android. Since any future iOS release is planned as a separate native rebuild (utilizing Metal, Core Audio, and AVFoundation/VideoToolbox) rather than a shared-UI port, there is no code-sharing justification for carrying Kotlin Multiplatform project structure overhead.
-- **Min SDK 29 (Android 10), target latest (35/36).** API 29 is the floor for the guaranteed Vulkan 1.1 baseline on 64-bit devices. Devices on 29–34 lose the `mediaProcessing` foreground service type (added in API 35) and fall back to best-effort background export.
+- **Min SDK 29 (Android 10), target SDK 35, compile SDK 37 (current build settings).** API 29 is the floor for the guaranteed Vulkan 1.1 baseline on 64-bit devices. Devices on 29–34 lose the `mediaProcessing` foreground service type (added in API 35) and fall back to best-effort background export.
 - **First two effects: Curves + Blur** — one proves the cheap LUT path, one proves the expensive FBO ping-pong path. Which effect comes third onward in v0.2 is genuinely an open call.
 
 ## Current Status & Active Phase
 
 Fluxx is currently in **Phase 2: Timeline + Multiple Layers**.
 - **Steps A, B, and C** (backend composition model, Vulkan multi-layer rendering, audio mixing, and mobile editing UI across shell, inspector, timeline, browser, and autosave) are **implemented in source**.
-- Verification is pending Android Studio compilation and phone review by the user.
+- Android debug Kotlin and native debug/release compilation passed during E1b/E1c; the user confirmed A16 E1a render/playback/export smoke. Feature-specific phone/JVM acceptance remains where explicitly listed; see the status matrix and text checkpoint.
 - Comprehensive feature specifications and verification checklists are consolidated under [`docs/checkpoints/`](../checkpoints/):
   - [**Phase 2 Architecture & UI Matrix**](../checkpoints/PHASE_2_STATUS_AND_BACKEND.md)
   - [**Home, Projects & Creation Sheet**](../checkpoints/HOME_AND_PROJECTS.md)
   - [**Element Inspector & Layer Actions**](../checkpoints/ELEMENT_INSPECTOR.md)
   - [**Media Browser & Content Import**](../checkpoints/MEDIA_BROWSER.md)
   - [**Autosave & Persistence**](../checkpoints/AUTOSAVE.md)
-- **Current acceptance focus:** **Phase 2 Step D** (Keyframes & Bezier Curves), implemented with the approved unified Kotlin evaluator. See [keyframe checkpoint](../checkpoints/KEYFRAME_ANIMATION.md). Build, JVM tests and phone acceptance remain pending; Step E is the next planned implementation step.
+  - [**Composition & Layer Markers**](../checkpoints/MARKERS.md) — implemented in source; tests and phone acceptance pending.
+  - [**Timeline Layout & Automatic Duration**](../checkpoints/TIMELINE_LAYOUT.md) — compact separated ruler/tracks/inspector regions, frame-grid ticks, content-driven new projects; source implementation with validation pending.
+- **Current focus:** **Phase 2 Step E**, with E1b/E1c CPU work implemented and E1d blocked on the user's 16 KB environment and golden-project checks. E2/E3 animation is planned. Step D is implemented; its outstanding feature tests remain in the [keyframe reference](../checkpoints/KEYFRAME_ANIMATION.md).
 
 ---
 
@@ -79,7 +81,7 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
   - *Details:* [PHASE_2_STATUS_AND_BACKEND.md](../checkpoints/PHASE_2_STATUS_AND_BACKEND.md)
 - [x] **Step B: Multi-Layer Visual & Audio Parity**
   - Vulkan layered offscreen compositor (`CompositionRenderer`) with reference-canvas geometry.
-  - *Details:* [PHASE_2_STATUS_AND_BACKEND.md](../checkpoints/PHASE_2_STATUS_AND_BACKEND.md), [COMPOSITION_RESIZE_AUDIT.md](../audits/COMPOSITION_RESIZE_AUDIT.md)
+  - *Details:* [PHASE_2_STATUS_AND_BACKEND.md](../checkpoints/PHASE_2_STATUS_AND_BACKEND.md), [Composition resize evidence](../checkpoints/TIMELINE_LAYOUT.md#composition-resize-and-surface-ownership)
 - [x] **Step C: Mobile Editing UI & Integration**
   - Shell & Projects: Floating navigation pill, liquid bubble create button, project cards with rendered first-frame thumbnails, A/B/C sorting, and composition creation sheet with presets. (*Details:* [HOME_AND_PROJECTS.md](../checkpoints/HOME_AND_PROJECTS.md))
   - Editor Workspace: Letterboxed Vulkan preview with expand/collapse, toolbar actions, synchronized timeline tracks, clip moving, frame-snapped trimming.
@@ -88,14 +90,15 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
   - Persistence & Autosave: Lifecycle-driven (`onPause`/`onStop`) `ProjectSaveQueue` with atomic file writes. (*Details:* [AUTOSAVE.md](../checkpoints/AUTOSAVE.md))
   - *Status: Implemented in source; awaiting user Android Studio build & phone review.*
 - [x] **Step D: Keyframe Animation on Transform Properties**
-  - Follow-up: [seven inspector trim/extend/split actions](../checkpoints/TRIM_EXTEND_SPLIT.md), v5 persistent animation anchors, signed key rebasing and atomic split history. Implemented in source; validation pending.
+  - Follow-up: [seven inspector trim/extend/split actions](../checkpoints/ELEMENT_INSPECTOR.md#7-trim-extend-and-split), v5 persistent animation anchors, signed key rebasing and atomic split history. Implemented in source; validation pending.
   - Keyframe data model, actions, FlatBuffers persistence, and Bezier interpolation (Easy Ease preset).
   - Inspector utility rail keyframe diamond buttons (toggle/add/remove/auto-keyframe).
   - Timeline inline diamond markers with 48dp Fitts's Law touch targets, magnetic snapping, and seek-on-tap.
   - Export fast-path guard ensuring animated single videos use layered Vulkan pipeline.
   - *Status: Implemented in source; awaiting user Android Studio build & phone review.*
 - [ ] **Step E: Text Layer Support**
-  - Text data model, typography editor, font layout, and Vulkan glyph/quad rendering.
+  - E1a render/playback/export smoke passed on A16 (user, 2026-10-01). E1b/E1c native shaping and CPU SDF are implemented together by explicit user authorization; host parity and CPU capacity results are recorded in [TEXT_LAYER.md](../checkpoints/TEXT_LAYER.md). Android typography device checks remain pending. Stop before E1d: the user's 16 KB environment run and fixed r26/r28 golden comparison remain mandatory. See [TEXT_LAYER.md](../checkpoints/TEXT_LAYER.md).
+  - Text data model, typography editor, font layout, and Vulkan glyph/quad rendering. [E2/E3 animation revision](../checkpoints/TEXT_LAYER_IMPLEMENTATION_PLAN.md#31-universal-text-property-animation): size/fill and hold-keyed Source Text in this pass; Universal Properties for all eventual text animation. Planning only; E1d gates unchanged.
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.
 

@@ -1,0 +1,102 @@
+namespace fluxx.schema;
+
+enum EasingType : byte {
+  LINEAR = 0,
+  EASY_EASE = 1
+}
+
+table Keyframe1D {
+  time_us: long;
+  value: float;
+  easing: EasingType = EASY_EASE;
+}
+
+table Keyframe2D {
+  time_us: long;
+  x: float;
+  y: float;
+  easing: EasingType = EASY_EASE;
+}
+
+table AnimatableProperty1D {
+  is_animated: bool;
+  static_value: float;
+  keyframes: [Keyframe1D];
+}
+
+table AnimatableProperty2D {
+  is_animated: bool;
+  static_x: float;
+  static_y: float;
+  keyframes: [Keyframe2D];
+}
+
+table Marker {
+  id: ulong;
+  time_us: long;
+  color_argb: int = -26624;
+  description: string;
+}
+
+table Layer {
+  // Unique identifier for the layer
+  id: ulong;
+
+  // Transform parameters
+  position_x: float;
+  position_y: float;
+  scale_x: float = 1.0;
+  scale_y: float = 1.0;
+  rotation: float;
+  opacity: float = 1.0;
+
+  // Content reference (content:// URI string)
+  asset_uri: string;
+  // Additive v2 fields. Type: 0 video, 1 image, 2 solid, 3 text.
+  type: int;
+  z_order: int;
+  start_us: long;
+  source_in_us: long;
+  duration_us: long = -1; // -1 means unresolved, not an empty clip
+  visible: bool = true;
+  asset_id: string;
+  source_duration_us: long = -1;
+  muted: bool;
+  audio_gain: float = 1.0;
+  name: string;
+  solid_color_argb: int = -12290100;
+  // v4: stable layer fit/position space; zero pairs use the pre-resize canvas for legacy layers.
+  reference_width: int;
+  reference_height: int;
+  // v4 additive animation fields
+  anim_position: AnimatableProperty2D;
+  anim_scale: AnimatableProperty2D;
+  anim_rotation: AnimatableProperty1D;
+  anim_opacity: AnimatableProperty1D;
+  // v5: signed composition-time origin. Presence distinguishes a real -1 origin from legacy unset.
+  keyframe_anchor_us: long = -1;
+  has_keyframe_anchor: bool = false;
+  // v6: spatial pivot in source-local bounds, independent of temporal keyframe origin.
+  anchor_x: float = 0.5;
+  anchor_y: float = 0.5;
+  markers: [Marker];
+}
+
+table Composition {
+  layers: [Layer];
+  width: int = 1080;
+  height: int = 1920;
+  duration_us: long = -1;
+  fps_numerator: int = 30;
+  fps_denominator: int = 1;
+  markers: [Marker];
+  start_timecode_us: long;
+}
+
+table Project {
+  // Schema version for future backward compatibility checks
+  version: int;
+  main_comp: Composition;
+}
+
+root_type Project;

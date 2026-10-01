@@ -5,10 +5,25 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val nativeNdkVersion = providers.gradleProperty("fluxxNdkVersion").orElse("28.2.13676358").get()
+
+if (nativeNdkVersion != "26.1.10909125") {
+    configurations.configureEach {
+        // The unchanged 1.0.1 Kotlin/JNI sources are rebuilt in core-engine for 16 KB RELRO.
+        exclude(group = "androidx.graphics", module = "graphics-path")
+    }
+}
+
 android {
     namespace = "com.fluxx.android"
     compileSdk = 37
-    ndkVersion = "26.1.10909125"
+    // Override only for the E1a r26/r28 golden comparison; normal builds use r28c.
+    ndkVersion = nativeNdkVersion
+    buildToolsVersion = "37.0.0"
+
+    packaging {
+        jniLibs.useLegacyPackaging = false
+    }
 
     defaultConfig {
         applicationId = "com.fluxx.android"
@@ -18,6 +33,7 @@ android {
         versionName = "0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "NATIVE_NDK_VERSION", "\"$nativeNdkVersion\"")
 
         ndk {
             abiFilters.addAll(setOf("arm64-v8a", "x86_64"))
@@ -45,6 +61,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
         prefab = true
     }
