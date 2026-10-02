@@ -111,7 +111,7 @@ fun EditorScreen(
         catch (_: Exception) { }
     }
     val textCanFit = selectedLayer?.let { layer -> selectedTextMetrics?.bounds(
-        layer.text.size.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs), layer.text.alignment)?.empty == false } ?: false
+        layer.text, playheadUs - layer.resolvedKeyframeAnchorUs)?.empty == false } ?: false
 
     val previewStateFlow = remember(previewController) {
         previewController?.state ?: MutableStateFlow(PreviewState())
@@ -146,7 +146,7 @@ fun EditorScreen(
                 val action = if (layer.type == LayerType.TEXT) {
                     val local = atTime - layer.resolvedKeyframeAnchorUs
                     val metrics = metricsService.measure(layer.text.fontId, layer.text.source.evaluate(local))
-                    EditorAction.FitText(layer.id, atTime, metrics.bounds(layer.text.size.evaluate(local), layer.text.alignment), mode)
+                    EditorAction.FitText(layer.id, atTime, metrics.bounds(layer.text, local), mode)
                 } else withContext(Dispatchers.IO) {
                     val width: Int
                     val height: Int
@@ -238,8 +238,9 @@ fun EditorScreen(
                     if(argb!=null) {
                         // Keep the source frame unchanged throughout the drag. One release = one edit.
                         val sampledLayer = editor.state.project.composition.layers.first { it.id == id }
-                        editor.dispatch(if (sampledLayer.type == LayerType.TEXT) TextEdits.fill(sampledLayer,
-                            editor.state.project.composition.frameRate.snap(editor.state.playheadUs), argb) else EditorAction.SetColor(id,argb))
+                        editor.dispatch(if (sampledLayer.type == LayerType.TEXT) TextEdits.colour(sampledLayer,
+                            editor.state.project.composition.frameRate.snap(editor.state.playheadUs),
+                            if (focusedProperty == AnimPropertyType.STROKE_COLOUR) AnimPropertyType.STROKE_COLOUR else AnimPropertyType.FILL_COLOUR, argb) else EditorAction.SetColor(id,argb))
                         pc.update(editor.state.project,editor.state.playheadUs,false)
                         eyedropperLayerId=null
                         break
@@ -524,6 +525,20 @@ fun EditorScreen(
                         onTextSizePreview = { value ->
                             if (textEditor.typing) textEditor.finish { textEditor.begin(layer.id, false); textEditor.size(value) } else textEditor.size(value) },
                         onTextSizeCommit = { if (textEditor.typing) textEditor.finish { textEditor.finish() } else textEditor.finish() },
+                        onTextScalarPreview = { property, value ->
+                            val base = editor.state.project.composition.layers.first { it.id == layer.id }
+                            textEditor.preview(TextEdits.scalar(base, composition.frameRate.snap(playheadUs), property, value))
+                        },
+                        onTextColourChange = { property, argb -> textEditor.finish {
+                            val base = editor.state.project.composition.layers.first { it.id == layer.id }
+                            editor.dispatch(TextEdits.colour(base, composition.frameRate.snap(playheadUs), property, argb))
+                            previewController?.update(editor.state.project, playheadUs, false)
+                        } },
+                        onTextColourPreview = { property, argb -> textEditor.finish {
+                            val base = editor.state.project.composition.layers.first { it.id == layer.id }
+                            editor.previewGesture(EditorAction.Batch(listOf(TextEdits.colour(base, composition.frameRate.snap(playheadUs), property, argb))))
+                            previewController?.update(editor.displayedState.project, playheadUs, false)
+                        } },
                         mediaRepository = mediaRepository,
                         onAnchorModeChange = { anchorMode = it },
                         onAnchorPreview = { action ->

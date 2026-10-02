@@ -24,7 +24,8 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
     onAction: (EditorAction) -> Unit, onFocus: (AnimPropertyType?) -> Unit,
     onBeginSource: () -> Unit, onDraft: (String) -> Unit, onFinish: () -> Unit, onCancel: () -> Unit,
     onStyle: (TextProperties) -> Unit, onSizeBegin: () -> Unit, onSizePreview: (Float) -> Unit,
-    onSizeCommit: () -> Unit, onOpenFill: () -> Unit, error: String?) {
+    onSizeCommit: () -> Unit, onOpenFill: (AnimPropertyType) -> Unit, error: String?,
+    onScalarPreview: (AnimPropertyType, Float) -> Unit) {
     val local = time - layer.resolvedKeyframeAnchorUs
     val evaluated = layer.text.source.evaluate(local)
     var draft by remember(layer.id) { mutableStateOf(evaluated) }
@@ -32,7 +33,15 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
     val focusManager = LocalFocusManager.current
     LaunchedEffect(evaluated, focused) { if (!focused) draft = evaluated }
     fun done() { focusManager.clearFocus(); onFinish() }
+    var page by remember(layer.id) { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (!compact) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            listOf("Text", "Spacing", "Stroke").forEachIndexed { index, label ->
+                TextButton(onClick = { done(); page = index; onFocus(null) }) { Text(label,
+                    color = if (page == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }
+            }
+        }
+        if (compact || page == 0) {
         if (!compact) Row(Modifier.fillMaxWidth()) {
             Text("Source Text · Hold", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall)
             TextPropertyDiamond(layer, AnimPropertyType.SOURCE_TEXT, time, onAction, onFocus)
@@ -83,12 +92,42 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
                 TextPropertyDiamond(layer, AnimPropertyType.FONT_SIZE, time, onAction, onFocus)
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                TextButton(onClick = { focusManager.clearFocus(); onFocus(AnimPropertyType.FILL_COLOUR); onOpenFill() }, modifier = Modifier.weight(1f)) {
+                TextButton(onClick = { focusManager.clearFocus(); onFocus(AnimPropertyType.FILL_COLOUR); onOpenFill(AnimPropertyType.FILL_COLOUR) }, modifier = Modifier.weight(1f)) {
                     Box(Modifier.size(18.dp).background(Color(layer.text.fill.evaluate(local))))
                     Spacer(Modifier.width(6.dp)); Text("Fill Colour")
                 }
                 TextPropertyDiamond(layer, AnimPropertyType.FILL_COLOUR, time, onAction, onFocus)
             }
+        }
+        }
+        if (!compact && page == 1) {
+            TextScalarControl(layer, time, AnimPropertyType.TRACKING, "Tracking · 1/1000 em", -500f..1000f, onAction, onFocus, onSizeBegin, onScalarPreview, onSizeCommit)
+            TextScalarControl(layer, time, AnimPropertyType.LEADING, "Additional leading · px", -500f..500f, onAction, onFocus, onSizeBegin, onScalarPreview, onSizeCommit)
+            TextScalarControl(layer, time, AnimPropertyType.BASELINE_SHIFT, "Baseline shift · px", -500f..500f, onAction, onFocus, onSizeBegin, onScalarPreview, onSizeCommit)
+            Text("Tracking preserves ligatures and combining marks.", style = MaterialTheme.typography.labelSmall)
+        }
+        if (!compact && page == 2) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                TextButton(onClick = { done(); onFocus(AnimPropertyType.STROKE_COLOUR); onOpenFill(AnimPropertyType.STROKE_COLOUR) }, modifier = Modifier.weight(1f)) {
+                    Box(Modifier.size(18.dp).background(Color(layer.text.strokeColour.evaluate(local))))
+                    Spacer(Modifier.width(6.dp)); Text("Stroke Colour")
+                }
+                TextPropertyDiamond(layer, AnimPropertyType.STROKE_COLOUR, time, onAction, onFocus)
+            }
+            TextScalarControl(layer, time, AnimPropertyType.STROKE_WIDTH, "Stroke width · px", 0f..500f, onAction, onFocus, onSizeBegin, onScalarPreview, onSizeCommit)
+            val requested = layer.text.strokeWidth.evaluate(local)
+            val effective = layer.text.effectiveStrokeWidth(local)
+            if (requested > effective) Text("Limited to ${"%.2f".format(effective)} px at this font size (requested ${"%.2f".format(requested)} px)",
+                color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelSmall, maxLines = 2)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                TextButton(onClick = {
+                    done(); onFocus(AnimPropertyType.STROKE_OVER_FILL)
+                    onAction(EditorAction.SetTextPayload(layer.id, TextEdits.scalar(layer, time, AnimPropertyType.STROKE_OVER_FILL,
+                        if (layer.text.paintOrder(local) == 0) 1f else 0f)))
+                }, modifier = Modifier.weight(1f)) { Text(if (layer.text.paintOrder(local) == 0) "Fill over stroke" else "Stroke over fill") }
+                TextPropertyDiamond(layer, AnimPropertyType.STROKE_OVER_FILL, time, onAction, onFocus)
+            }
+            Text("Centred stroke · round joins", style = MaterialTheme.typography.labelSmall)
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall, maxLines = 2) }
     }
@@ -98,8 +137,7 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
 private fun TextPropertyDiamond(layer: CompositionLayer, property: AnimPropertyType, time: Long,
     onAction: (EditorAction) -> Unit, onFocus: (AnimPropertyType?) -> Unit) {
     val local = time - layer.resolvedKeyframeAnchorUs
-    val enabled = when (property) { AnimPropertyType.SOURCE_TEXT -> layer.text.source.isAnimated
-        AnimPropertyType.FONT_SIZE -> layer.text.size.isAnimated; else -> layer.text.fill.isAnimated }
+    val enabled = layer.text.animated(property)
     val key = layer.propertyKeyTimes(property).contains(local)
     var menu by remember { mutableStateOf(false) }
     Box(Modifier.width(60.dp).height(36.dp)) {
@@ -108,8 +146,8 @@ private fun TextPropertyDiamond(layer: CompositionLayer, property: AnimPropertyT
                 else if (key) EditorAction.RemoveKeyframe(layer.id, property, local)
                 else when (property) {
                     AnimPropertyType.SOURCE_TEXT -> EditorAction.SetStringKeyframe(layer.id, local, layer.text.source.evaluate(local))
-                    AnimPropertyType.FONT_SIZE -> EditorAction.SetKeyframe(layer.id, property, local, layer.text.size.evaluate(local))
-                    else -> EditorAction.SetColourKeyframe(layer.id, local, layer.text.fill.evaluate(local))
+                    AnimPropertyType.FILL_COLOUR, AnimPropertyType.STROKE_COLOUR -> EditorAction.SetColourKeyframe(layer.id, local, layer.text.colour(property).evaluate(local), property = property)
+                    else -> EditorAction.SetKeyframe(layer.id, property, local, layer.text.scalarValue(property, local))
                 }
             onAction(action)
         }, modifier = Modifier.size(36.dp).semantics { contentDescription = "$property keyframe diamond" }, contentPadding = PaddingValues(0.dp)) {
@@ -119,12 +157,27 @@ private fun TextPropertyDiamond(layer: CompositionLayer, property: AnimPropertyT
         if (enabled) TextButton(onClick = { onFocus(property); menu = true }, modifier = Modifier.width(24.dp).offset(x = 36.dp), contentPadding = PaddingValues(0.dp)) { Text("⋮") }
         DropdownMenu(menu, { menu = false }) {
             DropdownMenuItem(text = { Text("Freeze at playhead") }, onClick = { menu = false; onAction(EditorAction.ToggleAnimated(layer.id, property, false, time)) })
-            if (property != AnimPropertyType.SOURCE_TEXT && key) EasingPreset.entries.forEach { easing ->
+            if (property != AnimPropertyType.SOURCE_TEXT && property != AnimPropertyType.STROKE_OVER_FILL && key) EasingPreset.entries.forEach { easing ->
                 DropdownMenuItem(text = { Text(if (easing == EasingPreset.LINEAR) "Linear" else "Easy Ease") }, onClick = {
-                    menu = false; onAction(if (property == AnimPropertyType.FONT_SIZE) EditorAction.SetKeyframe(layer.id, property, local, layer.text.size.evaluate(local), easing)
-                        else EditorAction.SetColourKeyframe(layer.id, local, layer.text.fill.evaluate(local), easing))
+                    menu = false; onAction(if (property == AnimPropertyType.FILL_COLOUR || property == AnimPropertyType.STROKE_COLOUR) EditorAction.SetColourKeyframe(layer.id, local, layer.text.colour(property).evaluate(local), easing, property)
+                        else EditorAction.SetKeyframe(layer.id, property, local, layer.text.scalarValue(property, local), easing))
                 })
             }
+        }
+    }
+}
+
+@Composable
+private fun TextScalarControl(layer: CompositionLayer, time: Long, property: AnimPropertyType, label: String, range: ClosedFloatingPointRange<Float>,
+    onAction: (EditorAction) -> Unit, onFocus: (AnimPropertyType?) -> Unit, begin: () -> Unit,
+    preview: (AnimPropertyType, Float) -> Unit, commit: () -> Unit) {
+    val value = layer.text.scalarValue(property, time-layer.resolvedKeyframeAnchorUs)
+    Column {
+        Text("$label: ${"%.1f".format(value)}", style = MaterialTheme.typography.labelSmall)
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Slider(value = value.coerceIn(range), onValueChange = { onFocus(property); begin(); preview(property,it) },
+                onValueChangeFinished = commit, valueRange = range, modifier = Modifier.weight(1f).height(36.dp).semantics { contentDescription = label })
+            TextPropertyDiamond(layer, property, time, onAction, onFocus)
         }
     }
 }

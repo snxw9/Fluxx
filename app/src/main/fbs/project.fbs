@@ -56,6 +56,13 @@ table TextPayload {
   font_id: string;
   alignment: int = 1;
   text_animators: [TextAnimator];
+  // v10: additive F1 tracks. Paint order is a validated 0/1 scalar with hold evaluation.
+  tracking: AnimatableProperty1D;
+  leading: AnimatableProperty1D;
+  baseline_shift: AnimatableProperty1D;
+  stroke_colour: AnimatableColour;
+  stroke_width: AnimatableProperty1D;
+  stroke_over_fill: AnimatableProperty1D;
 }
 
 table Layer {

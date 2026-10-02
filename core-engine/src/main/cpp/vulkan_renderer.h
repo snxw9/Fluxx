@@ -43,14 +43,23 @@ struct VideoLayerState {
 class VulkanRenderer {
 public:
     int64_t upsertText(const std::string& font, const std::string& utf8);
-    bool prepareText(const std::vector<int64_t>& handles, bool proofOnly);
+    bool prepareText(const int64_t* handles, size_t count, bool proofOnly);
+    bool reusePreparedText() {
+        return !mPreparedTextHandles.empty() && prepareText(mPreparedTextHandles.data(),mPreparedTextHandles.size(),mPreparedProofOnly);
+    }
     void configureText(unsigned pages) { mTextMaxPages=pages; }
-    bool setTextLayer(int64_t handle, const float* matrix, float size, int alignment, uint32_t argb, float opacity);
+    bool setTextLayer(int64_t handle, const float* matrix, float size, int alignment, uint32_t argb, float opacity, float tracking=0, float leading=0, float baselineShift=0,
+                      uint32_t stroke=0xff000000, float strokeWidth=0, int paintOrder=0, float softness=0);
     void releaseText(int64_t handle);
     std::vector<double> textMetrics(int64_t handle) const { return fluxx::text::layoutMetrics(*mTextLayouts.at(handle)); }
     bool validationEnabled() const { return mValidationEnabled; }
     uint64_t validationErrors() const { return mValidationErrors.load(); }
     std::string textStatsJson() const;
+    void textFrameCounters(int64_t handle, int64_t* out) {
+        const auto gpu=mText->stats(); const auto font=mText->fontStats();
+        out[0]=gpu.meshBuildNs; out[1]=font.rasterizations; out[2]=gpu.uploads;
+        out[3]=font.shapes; out[4]=mTextLayouts.at(handle)->glyphs.size(); out[5]=gpu.generation;
+    }
     bool proofSurface(ANativeWindow* window, int width, int height);
     void proofRepack();
     bool proofPixels(uint8_t* output, size_t capacity);
@@ -93,6 +102,8 @@ private:
     std::map<int64_t,std::shared_ptr<const fluxx::text::Layout>> mTextLayouts;
     int64_t mNextTextHandle=1;
     bool mTextPrepared=false;
+    std::vector<int64_t> mPreparedTextHandles;
+    bool mPreparedProofOnly=false;
     unsigned mTextMaxPages=4;
     bool mValidationEnabled=false;
     std::atomic<uint64_t> mValidationErrors{0};

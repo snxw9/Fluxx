@@ -84,6 +84,60 @@ class TextPayload : Table() {
         get() {
             val o = __offset(14); return if (o != 0) __vector_len(o) else 0
         }
+    val tracking : fluxx.schema.AnimatableProperty1D? get() = tracking(fluxx.schema.AnimatableProperty1D())
+    fun tracking(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(16)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val leading : fluxx.schema.AnimatableProperty1D? get() = leading(fluxx.schema.AnimatableProperty1D())
+    fun leading(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(18)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val baselineShift : fluxx.schema.AnimatableProperty1D? get() = baselineShift(fluxx.schema.AnimatableProperty1D())
+    fun baselineShift(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(20)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val strokeColour : fluxx.schema.AnimatableColour? get() = strokeColour(fluxx.schema.AnimatableColour())
+    fun strokeColour(obj: fluxx.schema.AnimatableColour) : fluxx.schema.AnimatableColour? {
+        val o = __offset(22)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val strokeWidth : fluxx.schema.AnimatableProperty1D? get() = strokeWidth(fluxx.schema.AnimatableProperty1D())
+    fun strokeWidth(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(24)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val strokeOverFill : fluxx.schema.AnimatableProperty1D? get() = strokeOverFill(fluxx.schema.AnimatableProperty1D())
+    fun strokeOverFill(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(26)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_25_2_10()
         fun getRootAsTextPayload(_bb: ByteBuffer): TextPayload = getRootAsTextPayload(_bb, TextPayload())
@@ -91,8 +145,14 @@ class TextPayload : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createTextPayload(builder: FlatBufferBuilder, sourceOffset: Int, sizeOffset: Int, fillOffset: Int, fontIdOffset: Int, alignment: Int, textAnimatorsOffset: Int) : Int {
-            builder.startTable(6)
+        fun createTextPayload(builder: FlatBufferBuilder, sourceOffset: Int, sizeOffset: Int, fillOffset: Int, fontIdOffset: Int, alignment: Int, textAnimatorsOffset: Int, trackingOffset: Int, leadingOffset: Int, baselineShiftOffset: Int, strokeColourOffset: Int, strokeWidthOffset: Int, strokeOverFillOffset: Int) : Int {
+            builder.startTable(12)
+            addStrokeOverFill(builder, strokeOverFillOffset)
+            addStrokeWidth(builder, strokeWidthOffset)
+            addStrokeColour(builder, strokeColourOffset)
+            addBaselineShift(builder, baselineShiftOffset)
+            addLeading(builder, leadingOffset)
+            addTracking(builder, trackingOffset)
             addTextAnimators(builder, textAnimatorsOffset)
             addAlignment(builder, alignment)
             addFontId(builder, fontIdOffset)
@@ -101,7 +161,7 @@ class TextPayload : Table() {
             addSource(builder, sourceOffset)
             return endTextPayload(builder)
         }
-        fun startTextPayload(builder: FlatBufferBuilder) = builder.startTable(6)
+        fun startTextPayload(builder: FlatBufferBuilder) = builder.startTable(12)
         fun addSource(builder: FlatBufferBuilder, source: Int) = builder.addOffset(0, source, 0)
         fun addSize(builder: FlatBufferBuilder, size: Int) = builder.addOffset(1, size, 0)
         fun addFill(builder: FlatBufferBuilder, fill: Int) = builder.addOffset(2, fill, 0)
@@ -116,6 +176,12 @@ class TextPayload : Table() {
             return builder.endVector()
         }
         fun startTextAnimatorsVector(builder: FlatBufferBuilder, numElems: Int) = builder.startVector(4, numElems, 4)
+        fun addTracking(builder: FlatBufferBuilder, tracking: Int) = builder.addOffset(6, tracking, 0)
+        fun addLeading(builder: FlatBufferBuilder, leading: Int) = builder.addOffset(7, leading, 0)
+        fun addBaselineShift(builder: FlatBufferBuilder, baselineShift: Int) = builder.addOffset(8, baselineShift, 0)
+        fun addStrokeColour(builder: FlatBufferBuilder, strokeColour: Int) = builder.addOffset(9, strokeColour, 0)
+        fun addStrokeWidth(builder: FlatBufferBuilder, strokeWidth: Int) = builder.addOffset(10, strokeWidth, 0)
+        fun addStrokeOverFill(builder: FlatBufferBuilder, strokeOverFill: Int) = builder.addOffset(11, strokeOverFill, 0)
         fun endTextPayload(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

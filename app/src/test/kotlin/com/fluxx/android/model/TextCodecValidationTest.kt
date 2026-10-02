@@ -26,7 +26,7 @@ class TextCodecValidationTest {
         val bytes = document { b ->
             val animator = fluxx.schema.TextAnimator.createTextAnimator(b, 1U, 0, 0)
             val vector = fluxx.schema.TextPayload.createTextAnimatorsVector(b, intArrayOf(animator))
-            fluxx.schema.TextPayload.createTextPayload(b, 0, 0, 0, 0, 1, vector)
+            fluxx.schema.TextPayload.createTextPayload(b, 0, 0, 0, 0, 1, vector, 0, 0, 0, 0, 0, 0)
         }
         val error = assertThrows(IllegalArgumentException::class.java) { ProjectCodec.decode(bytes) }
         assertTrue(error.message!!.contains("animators"))
@@ -34,7 +34,7 @@ class TextCodecValidationTest {
     @Test fun absentStaticStringInPresentPayloadDefaultsToEmpty() {
         val bytes = document { b ->
             val source = fluxx.schema.AnimatableString.createAnimatableString(b, false, 0, 0)
-            fluxx.schema.TextPayload.createTextPayload(b, source, 0, 0, 0, 1, 0)
+            fluxx.schema.TextPayload.createTextPayload(b, source, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0)
         }
         assertEquals("", ProjectCodec.decode(bytes).composition.layers.first().text.source.staticValue)
     }
@@ -43,7 +43,7 @@ class TextCodecValidationTest {
             val bytes = document { b ->
                 val value = b.createString(ByteBuffer.wrap(raw))
                 val source = fluxx.schema.AnimatableString.createAnimatableString(b, false, value, 0)
-                fluxx.schema.TextPayload.createTextPayload(b, source, 0, 0, 0, 1, 0)
+                fluxx.schema.TextPayload.createTextPayload(b, source, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0)
             }
             assertThrows(Exception::class.java) { ProjectCodec.decode(bytes) }
         }

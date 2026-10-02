@@ -112,7 +112,22 @@ object ProjectCodec {
         val colourKeys = fluxx.schema.AnimatableColour.createKeyframesVector(b, colours)
         val fill = fluxx.schema.AnimatableColour.createAnimatableColour(b, text.fill.isAnimated, text.fill.staticValue, colourKeys)
         val font = b.createString(text.fontId)
-        return fluxx.schema.TextPayload.createTextPayload(b, source, size, fill, font, text.alignment.ordinal, 0)
+        fun scalar(p: AnimatableProperty1D): Int {
+            val keys = p.keyframes.map { fluxx.schema.Keyframe1D.createKeyframe1D(b, it.timeUs, it.value,
+                (if (it.easing == EasingPreset.LINEAR) 0 else 1).toByte()) }.toIntArray()
+            val vector = fluxx.schema.AnimatableProperty1D.createKeyframesVector(b, keys)
+            return fluxx.schema.AnimatableProperty1D.createAnimatableProperty1D(b, p.isAnimated, p.staticValue, vector)
+        }
+        fun colour(p: AnimatableColour): Int {
+            val keys = p.keyframes.map { fluxx.schema.ColourKeyframe.createColourKeyframe(b, it.timeUs, it.argb,
+                (if (it.easing == EasingPreset.LINEAR) 0 else 1).toByte()) }.toIntArray()
+            val vector = fluxx.schema.AnimatableColour.createKeyframesVector(b, keys)
+            return fluxx.schema.AnimatableColour.createAnimatableColour(b, p.isAnimated, p.staticValue, vector)
+        }
+        val tracking = scalar(text.tracking); val leading = scalar(text.leading); val baseline = scalar(text.baselineShift)
+        val stroke = colour(text.strokeColour); val width = scalar(text.strokeWidth); val order = scalar(text.strokeOverFill)
+        return fluxx.schema.TextPayload.createTextPayload(b, source, size, fill, font, text.alignment.ordinal, 0,
+            tracking, leading, baseline, stroke, width, order)
     }
     private fun decodeText(payload: fluxx.schema.TextPayload?, byteCount: Int, consume: (Long) -> Unit): TextProperties {
         if (payload == null) return TextProperties()
@@ -145,8 +160,22 @@ object ProjectCodec {
             AnimatableColour(p.isAnimated, p.staticValue, FrozenList.of((0 until p.keyframesLength).map {
                 val k = requireNotNull(p.keyframes(it)); ColourKeyframe(k.timeUs, k.argb, easing(k.easing)) }))
         } ?: AnimatableColour()
+        fun scalar(p: fluxx.schema.AnimatableProperty1D?): AnimatableProperty1D {
+            if (p == null) return AnimatableProperty1D()
+            count(p.keyframesLength)
+            return AnimatableProperty1D(p.isAnimated, p.staticValue, FrozenList.of((0 until p.keyframesLength).map {
+                val k = requireNotNull(p.keyframes(it)); Keyframe1D(k.timeUs, k.value, easing(k.easing)) }))
+        }
+        val stroke = payload.strokeColour?.let { p ->
+            count(p.keyframesLength)
+            AnimatableColour(p.isAnimated, p.staticValue, FrozenList.of((0 until p.keyframesLength).map {
+                val k = requireNotNull(p.keyframes(it)); ColourKeyframe(k.timeUs, k.argb, easing(k.easing)) }))
+        } ?: AnimatableColour(staticValue = 0xff000000.toInt())
+        // This additive loader permanently accepts v9 defaults and v10 tracks, including after F2/v11.
         return TextProperties(source, size, fill, payload.fontId ?: "fluxx.sans",
-            requireNotNull(TextAlignment.entries.getOrNull(payload.alignment)))
+            requireNotNull(TextAlignment.entries.getOrNull(payload.alignment)),
+            scalar(payload.tracking), scalar(payload.leading), scalar(payload.baselineShift), stroke,
+            scalar(payload.strokeWidth), scalar(payload.strokeOverFill))
     }
     private fun encodeMarkers(b: FlatBufferBuilder, markers: List<Marker>): IntArray = markers.map {
         val description = b.createString(it.description)

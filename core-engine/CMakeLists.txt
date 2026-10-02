@@ -77,6 +77,8 @@ add_dependencies(fluxxengine fluxx_text_shaders)
 target_include_directories(fluxxengine PRIVATE "${TEXT_SHADER_DIRECTORY}")
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_sources(fluxxengine PRIVATE src/main/cpp/text/allocation_probe.cpp)
+    target_link_options(fluxxengine PRIVATE "-Wl,-Bsymbolic-functions")
     target_sources(fluxx_text PRIVATE src/main/cpp/text/text_diagnostics.cpp)
     target_compile_definitions(fluxxengine PRIVATE FLUXX_TEXT_DIAGNOSTICS=1)
 endif()

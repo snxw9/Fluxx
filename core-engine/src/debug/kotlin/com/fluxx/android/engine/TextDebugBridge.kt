@@ -9,6 +9,10 @@ object TextDebugBridge {
     external fun repack(session: Long)
     external fun gpuLedger(): String
     external fun pixels(session: Long, output: java.nio.ByteBuffer): Boolean
+    external fun allocationCount(): Long
+    external fun allocationCanary(): Long
+    /** Reusable output: mesh ns, rasterizations, atlas uploads, shape count, glyph count, generation. */
+    external fun frameCounters(session: Long, handle: Long, output: LongArray)
     fun dump(session: FontSession, directory: File) {
         check(directory.mkdirs() || directory.isDirectory)
         session.withHandle { dump(it, directory.absolutePath) }

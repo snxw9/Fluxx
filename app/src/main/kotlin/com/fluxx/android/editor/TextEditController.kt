@@ -57,8 +57,8 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
                 ensureActive()
                 if (session !== s || revision != s.revision || editor.activeGestureId != s.token || editor.state.project !== s.state.project) return@launch
                 val position = if (!old.layoutAnimated && !text.layoutAnimated && !s.layer.animTransform.position.isAnimated)
-                    LayerGeometry.compensateTextPosition(s.layer.evaluatedTransform(s.time), oldMetrics.logical(old.size.evaluate(local)),
-                        newMetrics.logical(text.size.evaluate(local)), s.layer.anchorX, s.layer.anchorY,
+                    LayerGeometry.compensateTextPosition(s.layer.evaluatedTransform(s.time), oldMetrics.logical(old, local),
+                        newMetrics.logical(text, local), s.layer.anchorX, s.layer.anchorY,
                         s.layer.referenceWidth.takeIf { it > 0 } ?: s.state.project.composition.width,
                         s.layer.referenceHeight.takeIf { it > 0 } ?: s.state.project.composition.height,
                         old.alignment, text.alignment) else null
@@ -108,6 +108,17 @@ object TextEdits {
         val p = layer.text.size; val t = local(layer, time)
         return layer.text.copy(size = if (!p.isAnimated) p.copy(staticValue = value) else p.copy(keyframes = FrozenList.of(
             (p.keyframes.filterNot { it.timeUs == t } + Keyframe1D(t, value, p.keyframes.firstOrNull { it.timeUs == t }?.easing ?: EasingPreset.EASY_EASE)).sortedBy { it.timeUs })))
+    }
+    fun scalar(layer: CompositionLayer, time: Long, property: AnimPropertyType, value: Float): TextProperties {
+        val p = layer.text.scalar(property); val t = local(layer, time)
+        return layer.text.withScalar(property, if (!p.isAnimated) p.copy(staticValue = value) else p.copy(keyframes = FrozenList.of(
+            (p.keyframes.filterNot { it.timeUs == t } + Keyframe1D(t, value, p.keyframes.firstOrNull { it.timeUs == t }?.easing ?: EasingPreset.EASY_EASE)).sortedBy { it.timeUs })))
+    }
+    fun colour(layer: CompositionLayer, time: Long, property: AnimPropertyType, argb: Int): EditorAction {
+        val p = layer.text.colour(property); val t = local(layer, time)
+        return if (p.isAnimated) EditorAction.SetColourKeyframe(layer.id, t, argb,
+            p.keyframes.firstOrNull { it.timeUs == t }?.easing ?: EasingPreset.EASY_EASE, property)
+        else EditorAction.SetTextPayload(layer.id, layer.text.withColour(property, p.copy(staticValue = argb)))
     }
     fun fill(layer: CompositionLayer, time: Long, argb: Int): EditorAction = if (layer.text.fill.isAnimated)
         EditorAction.SetColourKeyframe(layer.id, local(layer, time), argb,

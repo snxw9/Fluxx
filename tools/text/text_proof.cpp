@@ -31,6 +31,23 @@ int main(int argc, char** argv) {
         } else if (command == "dump" && argc == 4) {
             dumpDiagnostics(manager, argv[3]); std::cout << "CPU dump complete: " << argv[3] << '\n';
         } else if (command == "selftest") {
+            const auto clustered=manager.shape("fluxx.serif","office A\xcc\x81 B\n\nC");
+            require(clustered->glyphClusters.size()==clustered->glyphs.size(),"Missing glyph membership");
+            require(clustered->lineClusterCounts.size()==3 && clustered->lineClusterCounts[1]==0,"Empty line membership lost");
+            const auto shapesBefore=manager.stats().shapes;
+            require(manager.shape("fluxx.serif","office A\xcc\x81 B\n\nC")==clustered,"Layout membership must be cached with shaping");
+            require(manager.stats().shapes==shapesBefore,"Cached membership reshaped");
+            require(clustered->characters.size()==11,"Latin combining mark must share its source character");
+            bool ligatureSpan=false;
+            for(size_t i=0;i<clustered->glyphs.size();++i) {
+                const auto& cluster=clustered->clusters[clustered->glyphClusters[i]];
+                require(cluster.byteStart==clustered->glyphs[i].cluster && cluster.byteEnd>cluster.byteStart,"Cluster byte boundary mismatch");
+                require(cluster.line==clustered->glyphs[i].line,"Line membership mismatch");
+                require(cluster.space==(cluster.nonSpaceCharacter==UINT32_MAX),"Space exclusion mismatch");
+                require(cluster.characterEnd>cluster.character,"Empty source-character span");
+                if(cluster.characterEnd-cluster.character>1) ligatureSpan=true;
+            }
+            require(ligatureSpan,"Ligature source-character span was lost");
             auto layout = manager.shape("fluxx.sans", "AV");
             require(manager.shape("unknown.font", "AV") == layout, "Unknown font fallback/cache mismatch");
             require(manager.shape("fluxx.sans", "")->glyphs.empty(), "Empty text draws glyphs");

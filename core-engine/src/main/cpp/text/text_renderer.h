@@ -17,12 +17,13 @@ struct GlyphModifier {
     float opacity=1;
 };
 struct TextMesh { uint32_t firstIndex=0, indexCount=0; };
-struct TextPush { float matrix[16]; float fill[4]; };
+struct TextPush { float matrix[16]; float fill[4]; float stroke[4]; float sdf[4]; };
 struct TextGpuStats {
     uint64_t generation=0, uploads=0, uploadBytes=0, draws=0;
     uint64_t arrayRecreations=0, atlasPages=0;
     uint64_t images=0, views=0, samplers=0, buffers=0, memories=0, bytes=0;
     uint64_t pools=0, sets=0, layouts=0, pipelines=0, pipelineLayouts=0;
+    uint64_t meshBuildNs=0;
 };
 
 // Device-owned state. Preparation finishes before any composition render pass.
@@ -36,11 +37,14 @@ public:
     void collect(const std::shared_ptr<const Layout>& layout);
     // Called before recording draws. Throws a typed capacity error without a partial frame.
     void pack(bool proofOnly);
+    void prepareMesh(const std::shared_ptr<const Layout>& layout);
     TextMesh mesh(const Layout& layout, float size, int alignment,
-                  const std::vector<GlyphModifier>* modifiers=nullptr);
+                  const std::vector<GlyphModifier>* modifiers=nullptr,
+                  float tracking=0, float leading=0, float baselineShift=0);
     void upload(VkCommandBuffer command);
     void draw(VkCommandBuffer command, const TextMesh& mesh, const TextPush& push);
     void begin();
+    void forget(const Layout* layout) { preparedLayouts_.erase(layout); }
     void retireBatch();
     void repackRetained();
     TextGpuStats stats() const { return stats_; }
@@ -64,6 +68,9 @@ private:
     PagedAtlas packed_{};
     unsigned maxPages_, allocatedPages_=0;
     std::vector<TextVertex> vertices_; std::vector<uint32_t> indices_;
+    struct PreparedGlyph { const SdfGlyph* sdf=nullptr; float u=0,v=0; unsigned page=0; };
+    struct PreparedLayout { std::shared_ptr<const Layout> owner; uint64_t generation=UINT64_MAX; std::vector<PreparedGlyph> glyphs; };
+    std::map<const Layout*,PreparedLayout> preparedLayouts_;
     Buffer staging_, vertex_, index_;
     VkImage image_=VK_NULL_HANDLE; VkDeviceMemory memory_=VK_NULL_HANDLE;
     VkDeviceSize atlasAllocation_=0;

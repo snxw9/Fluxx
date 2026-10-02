@@ -38,6 +38,64 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private val fixtureLayouts = mutableMapOf<Long, FixtureLayout>()
     private data class ProductLayout(val handle: Long, val metrics: TextLayoutMetrics)
     private val textLayouts = LinkedHashMap<Pair<String, String>, ProductLayout>(64, .75f, true)
+    private class PreparedText(val layer: CompositionLayer, val sources: Array<String>, val layouts: Array<ProductLayout>)
+    private var preparedText = emptyArray<PreparedText>()
+    private var preparedHandles = LongArray(0)
+    private var nativePreparedTextProject: ProjectDocument? = null
+    private var onlyText = false
+    private val logicalBounds = FloatArray(4)
+    private fun prepareTextProject(project: ProjectDocument) {
+        nativePreparedTextProject = null
+        val layers = project.composition.layers
+        onlyText = layers.isNotEmpty() && layers.all { it.type == LayerType.TEXT } && TextFixtureProvider.entries().isEmpty()
+        if (!onlyText) { preparedText = emptyArray(); return }
+        preparedText = layers.sortedWith(compareBy<CompositionLayer> { it.zOrder }.thenBy { it.id }).map { layer ->
+            val sources = (listOf(layer.text.source.staticValue) + layer.text.source.keyframes.map { it.value }).distinct().toTypedArray()
+            PreparedText(layer, sources, sources.map { textLayout(layer.text.fontId,it) }.toTypedArray())
+        }.toTypedArray()
+        preparedHandles = preparedText.flatMap { it.layouts.map { layout -> layout.handle } }.toLongArray()
+        // Release obsolete layouts; active source-key layouts remain pinned until the next project preparation.
+        val iterator = textLayouts.entries.iterator()
+        while (iterator.hasNext()) { val entry = iterator.next()
+            if (entry.value.handle !in preparedHandles) { RenderBridge.releaseText(session,entry.value.handle); iterator.remove() }
+        }
+    }
+    private fun renderPreparedText(project: ProjectDocument, time: Long, cancelled: () -> Boolean) {
+        require(time >= 0)
+        val comp = project.composition
+        try {
+            if (nativePreparedTextProject === project) check(RenderBridge.reusePreparedText(session))
+            else { check(RenderBridge.prepareText(session,preparedHandles)); nativePreparedTextProject = project }
+        }
+        catch (error: TextCapacityException) {
+            val ids = preparedText.map { it.layer.id }.toSet()
+            if (interactive) TextLayerErrors.capacity(project,ids,error.message.orEmpty())
+            throw TextFrameCapacityException(ids,error.message.orEmpty(),error)
+        }
+        if (interactive) TextLayerErrors.clear()
+        for (entry in preparedText) {
+            if (cancelled()) throw CancellationException("Superseded frame")
+            val layer = entry.layer
+            if (!layer.visible || !layer.timing.isActive(time) || (comp.durationUs != null && time >= comp.durationUs)) continue
+            layer.evaluatedTransformInto(time,evaluatedTransform)
+            val opacity = evaluatedTransform[5]; if (opacity == 0f) continue
+            val local = time-layer.resolvedKeyframeAnchorUs
+            val source = layer.text.source.evaluate(local)
+            var index = 0; while (entry.sources[index] != source) index++
+            val layout = entry.layouts[index]; val text = layer.text
+            val size = text.size.evaluate(local); val tracking = text.tracking.evaluate(local)
+            val leading = text.leading.evaluate(local); val baseline = text.baselineShift.evaluate(local)
+            layout.metrics.logicalInto(size,tracking,leading,baseline,logicalBounds)
+            LayerGeometry.textMatrixInto(matrix,evaluatedTransform,logicalBounds,comp.width,comp.height,
+                layer.referenceWidth.takeIf { it > 0 } ?: comp.width,layer.referenceHeight.takeIf { it > 0 } ?: comp.height,layer.anchorX,layer.anchorY)
+            if (staged == 4) flush()
+            check(RenderBridge.textLayer(session,layout.handle,matrix,size,text.alignment.ordinal,text.fill.evaluate(local),opacity,
+                tracking,leading,baseline,text.strokeColour.evaluate(local),text.strokeWidth.evaluate(local),text.paintOrder(local)))
+            staged++
+        }
+        if (cancelled()) throw CancellationException("Superseded frame")
+        check(RenderBridge.finish(session)); staged = 0
+    }
     private var previewQuality: PreviewResolution? = null
     private var previewCompWidth = 0
     private var previewCompHeight = 0
@@ -116,10 +174,12 @@ class CompositionRenderer(private val context: Context, private val repository: 
             }
             prepared=project
             plan=FramePlan(project)
+            prepareTextProject(project)
         }
         val comp=project.composition
         check(RenderBridge.begin(session,targetWidth,targetHeight,comp.width,comp.height)) { "Could not start composition frame" }
         staged=0
+        if (onlyText && TextFixtureProvider.entries().isEmpty()) { renderPreparedText(project,timeUs,cancelled); return }
         val fixtures = if (com.fluxx.android.BuildConfig.DEBUG) TextFixtureProvider.entries() else emptyList()
         val fixtureIds = fixtures.mapTo(mutableSetOf()) { it.id }
         fixtureLayouts.keys.filter { it !in fixtureIds }.forEach { id ->
@@ -211,10 +271,11 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 val local = timeUs - layer.resolvedKeyframeAnchorUs
                 val layout = requireNotNull(textForFrame[layer.id])
                 val size = layer.text.size.evaluate(local)
-                LayerGeometry.textMatrix(matrix, layer.evaluatedTransform(timeUs), layout.metrics.logical(size),
+                LayerGeometry.textMatrix(matrix, layer.evaluatedTransform(timeUs), layout.metrics.logical(layer.text, local),
                     comp.width, comp.height, referenceWidth, referenceHeight, layer.anchorX, layer.anchorY)
                 check(RenderBridge.textLayer(session, layout.handle, matrix, size, layer.text.alignment.ordinal,
-                    layer.text.fill.evaluate(local), opacity)) { "Could not composite text" }
+                    layer.text.fill.evaluate(local), opacity, layer.text.tracking.evaluate(local), layer.text.leading.evaluate(local),
+                    layer.text.baselineShift.evaluate(local), layer.text.strokeColour.evaluate(local), layer.text.strokeWidth.evaluate(local), layer.text.paintOrder(local))) { "Could not composite text" }
             } else if(layer.type == LayerType.VIDEO) {
                 val uri=requireNotNull(layer.asset?.uri)
                 val decoder=decoder(uri)
@@ -247,6 +308,11 @@ class CompositionRenderer(private val context: Context, private val repository: 
             val entry = iterator.next()
             if (entry.key !in textKeysForFrame) { RenderBridge.releaseText(session, entry.value.handle); iterator.remove(); idle-- }
         }
+    }
+    /** Harness reads the production layout handle after preparation; no alternate renderer. */
+    internal fun preparedTextHandle(layerId: Long): Long {
+        for (entry in preparedText) if (entry.layer.id == layerId) return entry.layouts[0].handle
+        error("Text layer has not been prepared")
     }
     fun resize(width: Int,height: Int) = RenderBridge.resize(session,width,height)
     override fun close() {

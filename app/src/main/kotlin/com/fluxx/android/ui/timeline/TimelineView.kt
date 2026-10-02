@@ -1,4 +1,5 @@
 package com.fluxx.android.ui.timeline
+import com.fluxx.android.editor.propertyKeyTimes
 
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -876,6 +877,7 @@ private fun TimelineClipRow(
                 AnimPropertyType.FILL_COLOUR -> layer.text.fill.keyframes.map { it.timeUs }
                 AnimPropertyType.SOURCE_TEXT -> layer.text.source.keyframes.map { it.timeUs }
                 null -> emptyList()
+                else -> layer.propertyKeyTimes(activeProperty)
             }
             keys.map { it + anchorOffsetUs }.toSet()
         }

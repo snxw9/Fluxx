@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <sstream>
 #include <cstring>
+#include <cmath>
 #include "gpu_ledger.h"
 
 VulkanRenderer::VulkanRenderer() {
@@ -1298,24 +1299,43 @@ int64_t VulkanRenderer::upsertText(const std::string& font, const std::string& u
     auto layout=mText->layout(font,utf8);
     const int64_t handle=mNextTextHandle++; mTextLayouts.emplace(handle,std::move(layout)); return handle;
 }
-void VulkanRenderer::releaseText(int64_t handle) { mTextLayouts.erase(handle); }
-bool VulkanRenderer::prepareText(const std::vector<int64_t>& handles, bool proofOnly) {
+void VulkanRenderer::releaseText(int64_t handle) {
+    auto found=mTextLayouts.find(handle);
+    if(found!=mTextLayouts.end() && mText) mText->forget(found->second.get());
+    mTextLayouts.erase(handle); mPreparedTextHandles.clear();
+}
+bool VulkanRenderer::prepareText(const int64_t* handles, size_t count, bool proofOnly) {
     if(!mInitialized || !mDrawOrder.empty() || !mFirstBatch) throw std::logic_error("Text preparation must precede composition draws");
-    if(handles.empty()) return true;
+    if(!count) return true;
     if(!mText || !beginWork()) return false;
-    mText->begin();
-    for(auto handle:handles) mText->collect(mTextLayouts.at(handle));
-    mText->pack(proofOnly); mTextPrepared=true;
+    if(mPreparedProofOnly==proofOnly && count==mPreparedTextHandles.size() &&
+        std::equal(handles,handles+count,mPreparedTextHandles.begin())) mText->retireBatch();
+    else {
+        mText->begin();
+        for(size_t i=0;i<count;++i) mText->collect(mTextLayouts.at(handles[i]));
+        mText->pack(proofOnly);
+        mPreparedTextHandles.assign(handles,handles+count); mPreparedProofOnly=proofOnly;
+    }
+    for(size_t i=0;i<count;++i) mText->prepareMesh(mTextLayouts.at(handles[i]));
+    mDrawOrder.reserve(4); mTextPrepared=true;
     // No command submission yet: pack/capacity validation finishes before any draw.
     return true;
 }
-bool VulkanRenderer::setTextLayer(int64_t handle, const float* matrix, float size, int alignment, uint32_t argb, float opacity) {
+bool VulkanRenderer::setTextLayer(int64_t handle, const float* matrix, float size, int alignment, uint32_t argb, float opacity, float tracking, float leading, float baselineShift, uint32_t stroke, float strokeWidth, int paintOrder, float softness) {
+    if(!std::isfinite(strokeWidth) || strokeWidth<0 || !std::isfinite(softness) || softness<0 || paintOrder<0 || paintOrder>1) return false;
     if(!mInitialized || !mTextPrepared || mDrawOrder.size()>=4) return false;
     DrawEntry entry{}; entry.text=true;
-    entry.mesh=mText->mesh(*mTextLayouts.at(handle),size,alignment);
+    entry.mesh=mText->mesh(*mTextLayouts.at(handle),size,alignment,nullptr,tracking,leading,baselineShift);
     std::copy(matrix,matrix+16,entry.push.matrix);
     entry.push.fill[0]=((argb>>16)&255)/255.0f; entry.push.fill[1]=((argb>>8)&255)/255.0f;
-    entry.push.fill[2]=(argb&255)/255.0f; entry.push.fill[3]=((argb>>24)&255)/255.0f*opacity;
+    entry.push.fill[2]=(argb&255)/255.0f; entry.push.fill[3]=((argb>>24)&255)/255.0f;
+    entry.push.stroke[0]=((stroke>>16)&255)/255.0f; entry.push.stroke[1]=((stroke>>8)&255)/255.0f;
+    entry.push.stroke[2]=(stroke&255)/255.0f; entry.push.stroke[3]=((stroke>>24)&255)/255.0f;
+    const float half=std::min(strokeWidth*.5f,size*.10f);
+    const float soft=std::min(softness,std::max(0.0f,size*.10f-half));
+    const float distanceScale=fluxx::text::FontManager::Ppem/(2.0f*fluxx::text::FontManager::Spread*size);
+    entry.push.sdf[0]=half*distanceScale; entry.push.sdf[1]=soft*distanceScale;
+    entry.push.sdf[2]=static_cast<float>(paintOrder); entry.push.sdf[3]=opacity;
     mDrawOrder.push_back(entry); return true;
 }
 std::string VulkanRenderer::textStatsJson() const {
@@ -1329,6 +1349,7 @@ std::string VulkanRenderer::textStatsJson() const {
     json << ",\"generation\":" << stats.generation << ",\"uploads\":" << stats.uploads << ",\"uploadBytes\":" << stats.uploadBytes << ",\"draws\":" << stats.draws;
     json << ",\"atlasPages\":" << stats.atlasPages << ",\"arrayRecreations\":" << stats.arrayRecreations;
     if(mText) { auto font=mText->fontStats(); json << ",\"rasterizations\":" << font.rasterizations << ",\"lockWaitNs\":" << font.lockWaitNs; }
+    json << ",\"meshBuildNs\":" << stats.meshBuildNs;
     json << "}"; return json.str();
 }
 bool VulkanRenderer::setFrameLayer(int64_t id, AHardwareBuffer* buffer, const float* matrix, float opacity) {

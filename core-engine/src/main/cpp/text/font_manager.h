@@ -19,6 +19,13 @@ struct Layout {
     int32_t ascent, descent, lineGap;
     std::vector<int64_t> lineAdvances;
     std::vector<Glyph> glyphs;
+    // Shared F1/F2 membership, prepared once with shaping (LTR Latin only).
+    struct Character { uint32_t byteStart, byteEnd, line, word, nonSpaceCharacter; bool space; };
+    struct Cluster { uint32_t byteStart, byteEnd, line, word, character, nonSpaceCharacter; bool space;
+        uint32_t characterEnd=0, nonSpaceCharacterEnd=0; };
+    std::vector<Character> characters;
+    std::vector<Cluster> clusters;
+    std::vector<uint32_t> glyphClusters, lineClusterCounts;
 };
 struct SdfGlyph {
     std::string fontId;
@@ -31,6 +38,7 @@ struct SdfGlyph {
 struct FontStats {
     uint64_t rasterizations, cacheHits, lockWaitNs;
     size_t cacheBytes, pinnedBytes, layouts;
+    uint64_t shapes=0;
 };
 
 /** CPU only. All face mutation is serialized; immutable results outlive the manager safely.
@@ -41,7 +49,8 @@ class FontManager {
 public:
     static constexpr unsigned Ppem = 48, Spread = 8;
     static constexpr size_t MaxTextBytes = 16384;
-    explicit FontManager(std::vector<FontInput> fonts, size_t unpinnedBudget = 8 * 1024 * 1024);
+    explicit FontManager(std::vector<FontInput> fonts, size_t unpinnedBudget = 8 * 1024 * 1024,
+                         unsigned ppem = Ppem, unsigned spread = Spread);
     ~FontManager();
     FontManager(const FontManager&) = delete;
     FontManager& operator=(const FontManager&) = delete;

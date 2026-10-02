@@ -12,7 +12,7 @@ data class EditorState(
     val selectedLayer: CompositionLayer? get() = project.composition.layers.firstOrNull { it.id == selectedLayerId }
 }
 
-enum class AnimPropertyType { POSITION, SCALE, ROTATION, OPACITY, FONT_SIZE, FILL_COLOUR, SOURCE_TEXT }
+enum class AnimPropertyType { POSITION, SCALE, ROTATION, OPACITY, FONT_SIZE, FILL_COLOUR, SOURCE_TEXT, TRACKING, LEADING, BASELINE_SHIFT, STROKE_COLOUR, STROKE_WIDTH, STROKE_OVER_FILL }
 
 sealed interface EditorAction {
     data class SelectMarker(val markerId: Long?) : EditorAction
@@ -46,7 +46,7 @@ sealed interface EditorAction {
     data class SetTextPayload(val id: Long, val text: TextProperties, val newPosition: Transform? = null) : EditorAction
     data class SetStringKeyframe(val id: Long, val localTimeUs: Long, val value: String) : EditorAction
     data class SetColourKeyframe(val id: Long, val localTimeUs: Long, val argb: Int,
-        val easing: EasingPreset = EasingPreset.EASY_EASE) : EditorAction
+        val easing: EasingPreset = EasingPreset.EASY_EASE, val property: AnimPropertyType = AnimPropertyType.FILL_COLOUR) : EditorAction
     data class SetAnchorPoint(val id: Long, val anchorX: Float, val anchorY: Float,
         val newPosition: Transform? = null) : EditorAction
     data class SetTiming(val id: Long, val timing: ClipTiming) : EditorAction

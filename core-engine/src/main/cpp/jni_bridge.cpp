@@ -1,3 +1,6 @@
+#ifdef FLUXX_TEXT_DIAGNOSTICS
+#include "text/allocation_probe.h"
+#endif
 #include <jni.h>
 #include <android/hardware_buffer_jni.h>
 #include <android/asset_manager_jni.h>
@@ -109,26 +112,46 @@ JNIEXPORT jdoubleArray JNICALL Java_com_fluxx_android_engine_RenderBridge_textMe
 }
 JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_prepareText(JNIEnv* env,jobject,jlong session,jlongArray handles,jboolean proofOnly) {
     try {
-        const auto count=env->GetArrayLength(handles); std::vector<jlong> input(count);
-        env->GetLongArrayRegion(handles,0,count,input.data()); if(env->ExceptionCheck()) return false;
-        return reinterpret_cast<VulkanRenderer*>(session)->prepareText(std::vector<int64_t>(input.begin(),input.end()),proofOnly);
+        const auto count=env->GetArrayLength(handles);
+        auto* input=env->GetLongArrayElements(handles,nullptr); if(!input) return false;
+        bool result=false;
+        try { result=reinterpret_cast<VulkanRenderer*>(session)->prepareText(input,static_cast<size_t>(count),proofOnly); }
+        catch(...) { env->ReleaseLongArrayElements(handles,input,JNI_ABORT); throw; }
+        env->ReleaseLongArrayElements(handles,input,JNI_ABORT); return result;
     } catch(const std::exception& error) { textFailure(env,error); return false; }
 }
 JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_configureText(JNIEnv*,jobject,jlong session,jint pages) {
     reinterpret_cast<VulkanRenderer*>(session)->configureText(pages==2?2:4);
 }
+JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_reusePreparedText(JNIEnv* env,jobject,jlong session) {
+    try { return reinterpret_cast<VulkanRenderer*>(session)->reusePreparedText(); }
+    catch(const std::exception& error) { textFailure(env,error); return false; }
+}
 JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_textLayer(JNIEnv* env,jobject,jlong session,jlong handle,jfloatArray matrix,
-    jfloat size,jint alignment,jint argb,jfloat opacity) {
+    jfloat size,jint alignment,jint argb,jfloat opacity,jfloat tracking,jfloat leading,jfloat baselineShift,jint stroke,jfloat strokeWidth,jint paintOrder,jfloat softness) {
     try {
         if(!matrix || env->GetArrayLength(matrix)!=16) return false;
         float m[16]; env->GetFloatArrayRegion(matrix,0,16,m); if(env->ExceptionCheck()) return false;
-        return reinterpret_cast<VulkanRenderer*>(session)->setTextLayer(handle,m,size,alignment,static_cast<uint32_t>(argb),opacity);
+        return reinterpret_cast<VulkanRenderer*>(session)->setTextLayer(handle,m,size,alignment,static_cast<uint32_t>(argb),opacity,tracking,leading,baselineShift,static_cast<uint32_t>(stroke),strokeWidth,paintOrder,softness);
     } catch(const std::exception& error) { textFailure(env,error); return false; }
 }
 JNIEXPORT jstring JNICALL Java_com_fluxx_android_engine_RenderBridge_textStats(JNIEnv* env,jobject,jlong session) {
     const auto stats=reinterpret_cast<VulkanRenderer*>(session)->textStatsJson(); return env->NewStringUTF(stats.c_str());
 }
 #ifdef FLUXX_TEXT_DIAGNOSTICS
+JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_TextDebugBridge_allocationCount(JNIEnv*,jobject) {
+    return fluxx::text::debug::allocationCount();
+}
+JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_TextDebugBridge_allocationCanary(JNIEnv*,jobject) {
+    return fluxx::text::debug::allocationCanary();
+}
+JNIEXPORT void JNICALL Java_com_fluxx_android_engine_TextDebugBridge_frameCounters(JNIEnv* env,jobject,jlong session,jlong handle,jlongArray output) {
+    try {
+        if(env->GetArrayLength(output)!=6) throw std::invalid_argument("Expected six frame counters");
+        int64_t values[6]; reinterpret_cast<VulkanRenderer*>(session)->textFrameCounters(handle,values);
+        env->SetLongArrayRegion(output,0,6,values);
+    } catch(const std::exception& error) { textFailure(env,error); }
+}
 JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_TextDebugBridge_surface(JNIEnv* env,jobject,jlong session,jobject surface,jint w,jint h) {
     return reinterpret_cast<VulkanRenderer*>(session)->proofSurface(surface?ANativeWindow_fromSurface(env,surface):nullptr,w,h);
 }

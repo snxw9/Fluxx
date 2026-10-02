@@ -18,6 +18,17 @@ object LayerGeometry {
         out[12] = t.positionX * referenceWidth / cw - out[0] * x - out[4] * y
         out[13] = t.positionY * referenceHeight / ch - out[1] * x - out[5] * y
     }
+    /** Worker variant: reusable transform and logical bounds arrays, no frame-time objects. */
+    fun textMatrixInto(out: FloatArray, t: FloatArray, bounds: FloatArray, cw: Int, ch: Int,
+        rw: Int, rh: Int, anchorX: Float, anchorY: Float) {
+        val angle = Math.toRadians(t[4].toDouble()); val c = cos(angle).toFloat(); val s = sin(angle).toFloat()
+        out.fill(0f); out[10] = 1f; out[15] = 1f
+        out[0] = 2f*c*t[2]/cw; out[1] = 2f*s*t[2]/ch
+        out[4] = -2f*s*t[3]/cw; out[5] = 2f*c*t[3]/ch
+        val x = bounds[0]+anchorX*bounds[2]; val y = bounds[1]+anchorY*bounds[3]
+        out[12] = t[0]*rw/cw-out[0]*x-out[4]*y
+        out[13] = t[1]*rh/ch-out[1]*x-out[5]*y
+    }
     fun compensateTextPosition(current: Transform, old: TextBounds, next: TextBounds,
         anchorX: Float, anchorY: Float, referenceWidth: Int, referenceHeight: Int,
         oldAlignment: com.fluxx.android.model.TextAlignment = com.fluxx.android.model.TextAlignment.LEFT,

@@ -53,6 +53,8 @@ struct Face {
 } // namespace
 
 struct FontManager::Impl {
+    unsigned ppem = Ppem, spread = Spread;
+    uint64_t shapes=0;
     FT_Library library = nullptr;
     std::mutex mutex;
     std::vector<std::unique_ptr<Face>> faces;
@@ -94,13 +96,15 @@ struct FontManager::Impl {
     }
 };
 
-FontManager::FontManager(std::vector<FontInput> fonts, size_t budget) : impl_(std::make_unique<Impl>(budget)) {
+FontManager::FontManager(std::vector<FontInput> fonts, size_t budget, unsigned ppem, unsigned spread) : impl_(std::make_unique<Impl>(budget)) {
+    if (!ppem || spread < 2 || spread > 32) throw std::invalid_argument("Invalid SDF settings");
+    impl_->ppem = ppem; impl_->spread = spread;
     ftCheck(FT_Init_FreeType(&impl_->library), "FT_Init_FreeType");
     FT_Int major = 0, minor = 0, patch = 0;
     FT_Library_Version(impl_->library, &major, &minor, &patch);
     if (major != 2 || minor != 14 || patch != 1 || std::string(hb_version_string()) != "14.3.1")
         throw std::runtime_error("Unexpected native font library version");
-    unsigned spread = Spread;
+    // Spike-only settings are fixed for the manager lifetime; production keeps defaults.
     ftCheck(FT_Property_Set(impl_->library, "sdf", "spread", &spread), "Set SDF spread");
     // Check both overlap modes explicitly; unsupported properties must not silently pass E1c.
     for (FT_Bool enabled : {FT_Bool(0), FT_Bool(1)}) {
@@ -145,6 +149,7 @@ std::shared_ptr<const Layout> FontManager::shape(const std::string& id, const st
             return value;
         }
     }
+    ++impl_->shapes;
     auto result = std::make_shared<Layout>();
     result->fontId = face.input.id;
     result->upem = hb_face_get_upem(face.face);
@@ -181,6 +186,52 @@ std::shared_ptr<const Layout> FontManager::shape(const std::string& id, const st
         if (end == std::string::npos) break;
         start = end + 1;
     }
+    // Source characters are Latin graphemes, distinct from ligature clusters. F2 can
+    // project a selected character span onto an indivisible glyph cluster without reshaping.
+    uint32_t sourceLine=0,word=0,nonSpace=0; bool inWord=false;
+    for(size_t offset=0;offset<text.size();) {
+        const auto begin=static_cast<uint32_t>(offset);
+        uint32_t cp=static_cast<uint8_t>(text[offset++]);
+        unsigned extra=0;
+        if(cp>=0xf0) { cp&=7; extra=3; } else if(cp>=0xe0) { cp&=15; extra=2; } else if(cp>=0xc0) { cp&=31; extra=1; }
+        while(extra--) cp=(cp<<6)|(static_cast<uint8_t>(text[offset++])&63);
+        if(cp=='\n') { ++sourceLine; inWord=false; continue; }
+        const auto category=hb_unicode_general_category(hb_unicode_funcs_get_default(),cp);
+        const bool mark=category==HB_UNICODE_GENERAL_CATEGORY_NON_SPACING_MARK ||
+            category==HB_UNICODE_GENERAL_CATEGORY_SPACING_MARK || category==HB_UNICODE_GENERAL_CATEGORY_ENCLOSING_MARK;
+        if(mark && !result->characters.empty() && result->characters.back().line==sourceLine) {
+            result->characters.back().byteEnd=static_cast<uint32_t>(offset); continue;
+        }
+        const bool space=cp==' ' || cp=='\t' || cp=='\v' || cp=='\f' || cp==0xa0 || cp==0x1680 ||
+            (cp>=0x2000 && cp<=0x200a) || cp==0x202f || cp==0x205f || cp==0x3000;
+        if(!space && !inWord) ++word;
+        inWord=!space;
+        result->characters.push_back({begin,static_cast<uint32_t>(offset),sourceLine,
+            space?UINT32_MAX:word-1,space?UINT32_MAX:nonSpace++,space});
+    }
+    result->lineClusterCounts.resize(result->lineAdvances.size());
+    size_t character=0;
+    for(size_t i=0;i<result->glyphs.size();++i) {
+        const auto& g=result->glyphs[i];
+        if(i==0 || g.cluster!=result->glyphs[i-1].cluster || g.line!=result->glyphs[i-1].line) {
+            size_t next=i+1;
+            while(next<result->glyphs.size() && result->glyphs[next].cluster==g.cluster && result->glyphs[next].line==g.line) ++next;
+            const auto newline=text.find('\n',g.cluster);
+            const uint32_t end=next<result->glyphs.size() && result->glyphs[next].line==g.line ? result->glyphs[next].cluster :
+                static_cast<uint32_t>(newline==std::string::npos ? text.size() : newline);
+            while(character<result->characters.size() && result->characters[character].byteEnd<=g.cluster) ++character;
+            if(character==result->characters.size()) throw std::logic_error("Missing source character membership");
+            size_t characterEnd=character+1;
+            while(characterEnd<result->characters.size() && result->characters[characterEnd].byteStart<end &&
+                  result->characters[characterEnd].line==g.line) ++characterEnd;
+            const auto& first=result->characters[character];
+            const auto& last=result->characters[characterEnd-1];
+            result->clusters.push_back({g.cluster,end,g.line,first.word,static_cast<uint32_t>(character),first.nonSpaceCharacter,first.space,
+                static_cast<uint32_t>(characterEnd),last.space?UINT32_MAX:last.nonSpaceCharacter+1});
+            ++result->lineClusterCounts[g.line];
+        }
+        result->glyphClusters.push_back(static_cast<uint32_t>(result->clusters.size()-1));
+    }
     impl_->layouts.push_back({key, result});
     // 64 bounded layouts, each at most MaxTextBytes input. Leases survive eviction.
     if (impl_->layouts.size() > 64) impl_->layouts.pop_front();
@@ -192,7 +243,7 @@ std::shared_ptr<const SdfGlyph> FontManager::sdf(const std::string& id, uint32_t
     auto& face = impl_->resolve(id);
     if (glyphId >= static_cast<uint32_t>(face.ft->num_glyphs)) throw std::out_of_range("Invalid glyph ID");
     // Font catalog is immutable for this manager; resolved ID identifies the exact owned bytes.
-    const std::string key = face.input.id + ':' + std::to_string(glyphId) + (overlaps ? ":48:8:1" : ":48:8:0");
+    const std::string key = face.input.id + ':' + std::to_string(glyphId) + (overlaps ? ":1" : ":0");
     impl_->evict();
     auto found = impl_->index.find(key);
     if (found != impl_->index.end()) {
@@ -202,7 +253,7 @@ std::shared_ptr<const SdfGlyph> FontManager::sdf(const std::string& id, uint32_t
     }
     FT_Bool enabled = overlaps ? 1 : 0;
     ftCheck(FT_Property_Set(impl_->library, "sdf", "overlaps", &enabled), "Set SDF overlaps");
-    ftCheck(FT_Set_Pixel_Sizes(face.ft, 0, Ppem), "FT_Set_Pixel_Sizes");
+    ftCheck(FT_Set_Pixel_Sizes(face.ft, 0, impl_->ppem), "FT_Set_Pixel_Sizes");
     ftCheck(FT_Load_Glyph(face.ft, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP), "FT_Load_Glyph");
     auto result = std::make_shared<SdfGlyph>();
     result->fontId = face.input.id; result->glyphId = glyphId; result->overlaps = overlaps;
@@ -243,7 +294,7 @@ std::vector<uint32_t> FontManager::latinGlyphs(const std::string& id) {
 }
 FontStats FontManager::stats() {
     auto guard = impl_->lock();
-    FontStats result{impl_->rasterizations, impl_->hits, impl_->waitNs, 0, 0, impl_->layouts.size()};
+    FontStats result{impl_->rasterizations, impl_->hits, impl_->waitNs, 0, 0, impl_->layouts.size(), impl_->shapes};
     for (const auto& entry : impl_->rasters) {
         result.cacheBytes += entry.value->pixels.size();
         if (entry.value.use_count() > 1) result.pinnedBytes += entry.value->pixels.size();
@@ -264,6 +315,14 @@ std::vector<double> layoutMetrics(const Layout& layout) {
             static_cast<double>(-glyph.yOffset),static_cast<double>(glyph.xBearing),
             static_cast<double>(glyph.yBearing),static_cast<double>(glyph.inkWidth),static_cast<double>(glyph.inkHeight)}) result.push_back(value);
         pen+=glyph.xAdvance;
+    }
+    for (auto value : layout.lineClusterCounts) result.push_back(value);
+    uint32_t membershipLine = UINT32_MAX, ordinal = 0;
+    uint32_t previous = UINT32_MAX;
+    for (size_t i=0; i<layout.glyphs.size(); ++i) {
+        if (layout.glyphs[i].line != membershipLine) { membershipLine=layout.glyphs[i].line; ordinal=0; previous=UINT32_MAX; }
+        if (previous != UINT32_MAX && previous != layout.glyphClusters[i]) ++ordinal;
+        result.push_back(ordinal); previous=layout.glyphClusters[i];
     }
     return result;
 }

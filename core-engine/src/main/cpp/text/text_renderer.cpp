@@ -1,4 +1,5 @@
 #include "text_renderer.h"
+#include <chrono>
 #include "font_catalog.h"
 #include "text_shaders.h"
 #include <algorithm>
@@ -222,38 +223,76 @@ void TextRenderer::repackRetained() {
         placements_.emplace(Key{p.glyph->fontId,p.glyph->glyphId},PagePlacement{p,page});
     dirty_=true; ++stats_.generation;
 }
-TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, const std::vector<GlyphModifier>* modifiers) {
-    if(!std::isfinite(size) || size<=0 || alignment<0 || alignment>2) throw std::invalid_argument("Invalid text mesh inputs");
+void TextRenderer::prepareMesh(const std::shared_ptr<const Layout>& layout) {
+    auto& prepared=preparedLayouts_[layout.get()];
+    prepared.owner=layout;
+    if (prepared.generation==stats_.generation) return;
+    prepared.glyphs.resize(layout->glyphs.size());
+    for(size_t i=0;i<layout->glyphs.size();++i) {
+        const Key key{layout->fontId,layout->glyphs[i].id};
+        const auto found=placements_.find(key);
+        auto& out=prepared.glyphs[i]; out={};
+        if(found!=placements_.end()) {
+            const auto& p=found->second;
+            out={p.placement.glyph.get(),p.placement.x/2048.0f,p.placement.y/2048.0f,p.page};
+        } else if(required_.at(key)->width) throw std::runtime_error("Missing prepared glyph");
+    }
+    prepared.generation=stats_.generation;
+    vertices_.reserve(std::max(vertices_.capacity(),layout->glyphs.size()*16));
+    indices_.reserve(std::max(indices_.capacity(),layout->glyphs.size()*24));
+    // GPU buffers are also provisioned during preparation, never by animated mesh evaluation.
+    buffer(vertex_,vertices_.capacity()*sizeof(TextVertex),VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    buffer(index_,indices_.capacity()*sizeof(uint32_t),VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+}
+TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, const std::vector<GlyphModifier>* modifiers,
+                            float tracking, float leading, float baselineShift) {
+    const auto started=std::chrono::steady_clock::now();
+    if(!std::isfinite(size) || size<=0 || alignment<0 || alignment>2 || !std::isfinite(tracking) ||
+        !std::isfinite(leading) || !std::isfinite(baselineShift)) throw std::invalid_argument("Invalid text mesh inputs");
     if(modifiers && modifiers->size()!=layout.glyphs.size()) throw std::invalid_argument("Glyph modifier count mismatch");
+    const auto& prepared=preparedLayouts_.at(&layout);
+    if(prepared.generation!=stats_.generation) throw std::logic_error("Stale text preparation");
+    if(vertices_.size()+layout.glyphs.size()*4>vertices_.capacity() || indices_.size()+layout.glyphs.size()*6>indices_.capacity())
+        throw TextCapacityError("Text batch exceeds prepared mesh capacity");
     TextMesh result{static_cast<uint32_t>(indices_.size()),0};
     const double factor=static_cast<double>(size)/layout.upem;
-    const int64_t maximum=layout.lineAdvances.empty()?0:*std::max_element(layout.lineAdvances.begin(),layout.lineAdvances.end());
-    const double lineHeight=(layout.ascent-layout.descent+std::max(0,layout.lineGap))*factor;
-    double pen=0; uint32_t line=0; size_t ordinal=0;
-    for(const auto& glyph:layout.glyphs) {
-        if(glyph.line!=line) { line=glyph.line; pen=0; }
-        const auto found=placements_.find({layout.fontId,glyph.id});
-        if(found!=placements_.end()) {
-            const auto& p=found->second.placement; const auto& sdf=*p.glyph;
-            const double align=(maximum-layout.lineAdvances[line])*factor*(alignment==0?0:alignment==1?0.5:1);
-            const float x=static_cast<float>(pen+(glyph.xOffset*factor)+align+sdf.left*size/48);
-            const float y=static_cast<float>(line*lineHeight-glyph.yOffset*factor-sdf.top*size/48);
-            const float w=sdf.width*size/48, h=sdf.height*size/48;
-            const float u=p.x/2048.0f,v=p.y/2048.0f,du=sdf.width/2048.0f,dv=sdf.height/2048.0f;
+    const double spacing=static_cast<double>(tracking)*size/1000.0;
+    double maximum=0;
+    for(size_t i=0;i<layout.lineAdvances.size();++i) maximum=std::max(maximum,
+        layout.lineAdvances[i]*factor+std::max(0,static_cast<int>(layout.lineClusterCounts[i])-1)*spacing);
+    const double lineHeight=(layout.ascent-layout.descent+std::max(0,layout.lineGap))*factor+leading;
+    double pen=0; uint32_t line=0,previousCluster=UINT32_MAX,clusterOrdinal=0;
+    for(size_t ordinal=0;ordinal<layout.glyphs.size();++ordinal) {
+        const auto& glyph=layout.glyphs[ordinal];
+        if(glyph.line!=line) { line=glyph.line; pen=0; previousCluster=UINT32_MAX; clusterOrdinal=0; }
+        if(previousCluster!=UINT32_MAX && previousCluster!=layout.glyphClusters[ordinal]) ++clusterOrdinal;
+        previousCluster=layout.glyphClusters[ordinal];
+        const auto& p=prepared.glyphs[ordinal];
+        if(p.sdf) {
+            const auto& sdf=*p.sdf;
+            const double advance=layout.lineAdvances[line]*factor+std::max(0,static_cast<int>(layout.lineClusterCounts[line])-1)*spacing;
+            const double align=(maximum-advance)*(alignment==0?0:alignment==1?0.5:1);
+            // SDF bitmap already includes the full spread padding: half-stroke + AA stays inside it.
+            const float x=static_cast<float>(pen+clusterOrdinal*spacing+glyph.xOffset*factor+align+sdf.left*size/FontManager::Ppem);
+            const float y=static_cast<float>(line*lineHeight-glyph.yOffset*factor-sdf.top*size/FontManager::Ppem-baselineShift);
+            const float w=sdf.width*size/FontManager::Ppem,h=sdf.height*size/FontManager::Ppem;
+            const float du=sdf.width/2048.0f,dv=sdf.height/2048.0f;
             const uint32_t base=static_cast<uint32_t>(vertices_.size());
-            TextVertex quad[]={{x,y,u,v},{x+w,y,u+du,v},{x,y+h,u,v+dv},{x+w,y+h,u+du,v+dv}};
+            TextVertex quad[]={{x,y,p.u,p.v},{x+w,y,p.u+du,p.v},{x,y+h,p.u,p.v+dv},{x+w,y+h,p.u+du,p.v+dv}};
             for(auto& vertex:quad) {
-                vertex.page=static_cast<float>(found->second.page);
+                vertex.page=static_cast<float>(p.page);
                 if(modifiers) { const auto& m=(*modifiers)[ordinal]; const float px=vertex.x-x,py=vertex.y-y;
                     vertex.x=x+m.a*px+m.c*py+m.tx; vertex.y=y+m.b*px+m.d*py+m.ty;
                     for(int c=0;c<4;++c) vertex.colour[c]=m.rgba[c]; vertex.colour[3]*=m.opacity; }
                 vertices_.push_back(vertex);
             }
             for(uint32_t index:{0u,1u,2u,1u,3u,2u}) indices_.push_back(base+index);
-        } else if(required_.at({layout.fontId,glyph.id})->width) throw std::runtime_error("Missing prepared glyph");
-        pen+=glyph.xAdvance*factor; ++ordinal;
+        }
+        pen+=glyph.xAdvance*factor;
     }
-    result.indexCount=static_cast<uint32_t>(indices_.size())-result.firstIndex; return result;
+    result.indexCount=static_cast<uint32_t>(indices_.size())-result.firstIndex;
+    stats_.meshBuildNs=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-started).count();
+    return result;
 }
 void TextRenderer::upload(VkCommandBuffer command) {
     if(!image_) return;

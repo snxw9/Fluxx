@@ -121,11 +121,15 @@ fun ElementInspectorSheet(
     onTextBegin: () -> Unit = {}, onTextDraft: (String) -> Unit = {},
     onTextFinish: () -> Unit = {}, onTextCancel: () -> Unit = {},
     onTextStyle: (TextProperties) -> Unit = {},
-    onTextSizeBegin: () -> Unit = {}, onTextSizePreview: (Float) -> Unit = {}, onTextSizeCommit: () -> Unit = {}
+    onTextSizeBegin: () -> Unit = {}, onTextSizePreview: (Float) -> Unit = {}, onTextSizeCommit: () -> Unit = {},
+    onTextScalarPreview: (AnimPropertyType, Float) -> Unit = { _, _ -> },
+    onTextColourChange: (AnimPropertyType, Int) -> Unit = { _, _ -> },
+    onTextColourPreview: (AnimPropertyType, Int) -> Unit = { _, _ -> }
 ) {
     key(layer.id) {
         var section by remember { mutableStateOf<InspectorSection?>(null) }
         var textFill by remember { mutableStateOf(false) }
+        var textColourProperty by remember { mutableStateOf(AnimPropertyType.FILL_COLOUR) }
         val focusManager = LocalFocusManager.current
         val focusCallback by rememberUpdatedState(onPropertyFocus)
         LaunchedEffect(section) {
@@ -251,12 +255,12 @@ fun ElementInspectorSheet(
                                 InspectorSection.CONTEXTUAL_EDIT -> if (layer.type == LayerType.TEXT && !textFill) TextEditorControls(
                                     layer, playheadUs, textTyping, onAction, onPropertyFocus,
                                     onTextBegin, onTextDraft, onTextFinish, onTextCancel, onTextStyle,
-                                    onTextSizeBegin, onTextSizePreview, onTextSizeCommit, { textFill = true }, textError)
+                                    onTextSizeBegin, onTextSizePreview, onTextSizeCommit, { textColourProperty = it; textFill = true }, textError, onTextScalarPreview)
                                 else FluxxColorPicker(FluxxColor.fromArgb(if (layer.type == LayerType.TEXT)
-                                    layer.text.fill.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs) else layer.solidColorArgb),
-                                    { onColorChange(it.toArgb()) }, ColorPickerConfig(),
+                                    layer.text.colour(textColourProperty).evaluate(playheadUs - layer.resolvedKeyframeAnchorUs) else layer.solidColorArgb),
+                                    { if (layer.type == LayerType.TEXT) onTextColourChange(textColourProperty, it.toArgb()) else onColorChange(it.toArgb()) }, ColorPickerConfig(),
                                     onEyedropperRequest, Modifier.fillMaxSize(), onTransformBegin, onTransformCommit,
-                                    onTransformCancel, { onColorPreview(it.toArgb()) }, paletteRepository=paletteRepository)
+                                    onTransformCancel, { if (layer.type == LayerType.TEXT) onTextColourPreview(textColourProperty, it.toArgb()) else onColorPreview(it.toArgb()) }, paletteRepository=paletteRepository)
                                 else -> Unit // Disabled categories cannot be opened.
                             }
                         }
@@ -677,7 +681,7 @@ private fun OverhauledTransformSectionContent(
         val position = if (base.animTransform.position.isAnimated) null else {
             val geometry = source ?: return null
             if (base.type == LayerType.TEXT) com.fluxx.android.render.LayerGeometry.compensateTextAnchor(t,
-                requireNotNull(geometry.text).logical(base.text.size.evaluate(playheadUs - base.resolvedKeyframeAnchorUs)),
+                requireNotNull(geometry.text).logical(base.text, playheadUs - base.resolvedKeyframeAnchorUs),
                 base.anchorX, base.anchorY, ax, ay, refW, refH)
             else com.fluxx.android.render.LayerGeometry.compensatePosition(compensationMatrix, t,
                 base.anchorX, base.anchorY, ax, ay, geometry.width, geometry.height,

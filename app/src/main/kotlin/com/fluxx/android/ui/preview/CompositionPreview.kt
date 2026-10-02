@@ -191,9 +191,9 @@ fun CompositionPreview(
                                             val metrics = textHitMetrics[layer.id]
                                             if (metrics == null) false else {
                                                 val textSize = layer.text.size.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs)
-                                                val bounds = metrics.bounds(textSize, layer.text.alignment)
+                                                val bounds = metrics.bounds(layer.text, playheadUs - layer.resolvedKeyframeAnchorUs)
                                                 val matrix = FloatArray(16)
-                                                LayerGeometry.textMatrix(matrix, layer.evaluatedTransform(playheadUs), metrics.logical(textSize), comp.width, comp.height,
+                                                LayerGeometry.textMatrix(matrix, layer.evaluatedTransform(playheadUs), metrics.logical(layer.text, playheadUs - layer.resolvedKeyframeAnchorUs), comp.width, comp.height,
                                                     layer.referenceWidth.takeIf { it > 0 } ?: comp.width, layer.referenceHeight.takeIf { it > 0 } ?: comp.height,
                                                     layer.anchorX, layer.anchorY)
                                                 val x = tap.x * 2f / size.width - 1f; val y = tap.y * 2f / size.height - 1f

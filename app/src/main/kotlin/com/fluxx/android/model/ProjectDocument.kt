@@ -17,7 +17,7 @@ class FrozenList<out T> private constructor(private val values: List<T>) : List<
 object CompositionDefaults {
     const val WIDTH = 1080
     const val HEIGHT = 1920
-    const val PROJECT_VERSION = 9 // Typed text properties; existing slots and type ordinals retained.
+    const val PROJECT_VERSION = 10 // Typed text properties; existing slots and type ordinals retained.
 }
 
 /** Convert from the absolute frame index, never by repeatedly adding a rounded frame period. */
@@ -265,7 +265,7 @@ data class ClipTiming(val startUs: Long = 0, val sourceInUs: Long = 0, val durat
             durationUs <= Long.MAX_VALUE - startUs && durationUs <= Long.MAX_VALUE - sourceInUs))
     }
     val endUs: Long? get() = durationUs?.let { startUs + it }
-    fun isActive(timeUs: Long): Boolean = timeUs >= startUs && endUs?.let { timeUs < it } == true
+    fun isActive(timeUs: Long): Boolean = timeUs >= startUs && durationUs != null && timeUs - startUs < durationUs
 }
 
 data class CompositionLayer(
@@ -366,7 +366,10 @@ data class Composition(
         }
         layers.filter { it.type == LayerType.TEXT }.forEach { layer ->
             for (times in listOf(layer.text.source.keyframes.map { it.timeUs }, layer.text.size.keyframes.map { it.timeUs },
-                layer.text.fill.keyframes.map { it.timeUs })) {
+                layer.text.fill.keyframes.map { it.timeUs }, layer.text.tracking.keyframes.map { it.timeUs },
+                layer.text.leading.keyframes.map { it.timeUs }, layer.text.baselineShift.keyframes.map { it.timeUs },
+                layer.text.strokeColour.keyframes.map { it.timeUs }, layer.text.strokeWidth.keyframes.map { it.timeUs },
+                layer.text.strokeOverFill.keyframes.map { it.timeUs })) {
                 val frames = times.map { Markers.signedFrame(frameRate, Math.addExact(layer.resolvedKeyframeAnchorUs, it)) }
                 require(frames.distinct().size == frames.size) { "Text keys share a composition frame" }
             }

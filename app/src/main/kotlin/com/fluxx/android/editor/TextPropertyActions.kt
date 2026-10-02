@@ -4,7 +4,7 @@ import com.fluxx.android.model.*
 
 /** Typed tracks share the existing action/gesture transaction boundary. */
 internal object TextPropertyActions {
-    private val properties = setOf(AnimPropertyType.FONT_SIZE, AnimPropertyType.FILL_COLOUR, AnimPropertyType.SOURCE_TEXT)
+    private val properties = AnimPropertyType.entries.filter { it.ordinal >= AnimPropertyType.FONT_SIZE.ordinal }.toSet()
     fun apply(state: EditorState, action: EditorAction): EditorAction? {
         if (action is EditorAction.MoveKeyframe && action.property == null)
             return EditorAction.Batch(AnimPropertyType.entries.map { action.copy(property = it) })
@@ -13,7 +13,7 @@ internal object TextPropertyActions {
             is EditorAction.ToggleAnimated -> { id = action.id; property = action.property }
             is EditorAction.SetKeyframe -> { id = action.id; property = action.property }
             is EditorAction.SetStringKeyframe -> { id = action.id; property = AnimPropertyType.SOURCE_TEXT }
-            is EditorAction.SetColourKeyframe -> { id = action.id; property = AnimPropertyType.FILL_COLOUR }
+            is EditorAction.SetColourKeyframe -> { id = action.id; property = action.property }
             is EditorAction.RemoveKeyframe -> { id = action.id; property = action.property }
             is EditorAction.MoveKeyframe -> { id = action.id; property = requireNotNull(action.property) }
             is EditorAction.ResetPropertyAnimation -> { id = action.id; property = action.property }
@@ -24,8 +24,7 @@ internal object TextPropertyActions {
         if (layer.type != LayerType.TEXT) return EditorAction.Batch(emptyList())
         val text = layer.text
         if (action is EditorAction.ToggleAnimated) {
-            val enabled = when (property) { AnimPropertyType.SOURCE_TEXT -> text.source.isAnimated
-                AnimPropertyType.FONT_SIZE -> text.size.isAnimated; else -> text.fill.isAnimated }
+            val enabled = text.animated(property)
             if (enabled == action.enable) return EditorAction.Batch(emptyList())
         }
         val local = when (action) {
@@ -66,19 +65,22 @@ internal object TextPropertyActions {
                 val keys = edit(text.source.keyframes, { it.timeUs }, { k, t -> k.copy(timeUs = t) }) { StringKeyframe(time, value) }
                 text.copy(source = AnimatableString(keys.isNotEmpty(), if (action is EditorAction.ResetPropertyAnimation) "" else sampled, keys))
             }
-            AnimPropertyType.FONT_SIZE -> {
-                val sampled = text.size.evaluate(local)
+            AnimPropertyType.FONT_SIZE, AnimPropertyType.TRACKING, AnimPropertyType.LEADING, AnimPropertyType.BASELINE_SHIFT,
+            AnimPropertyType.STROKE_WIDTH, AnimPropertyType.STROKE_OVER_FILL -> {
+                val track = text.scalar(property)
+                val sampled = text.scalarValue(property, local)
                 val value = (action as? EditorAction.SetKeyframe)?.value ?: sampled
-                val keys = edit(text.size.keyframes, { it.timeUs }, { k, t -> k.copy(timeUs = t) }) {
+                val keys = edit(track.keyframes, { it.timeUs }, { k, t -> k.copy(timeUs = t) }) {
                     Keyframe1D(time, value, (action as? EditorAction.SetKeyframe)?.easing ?: EasingPreset.EASY_EASE) }
-                text.copy(size = AnimatableProperty1D(keys.isNotEmpty(), if (action is EditorAction.ResetPropertyAnimation) 72f else sampled, keys))
+                text.withScalar(property, AnimatableProperty1D(keys.isNotEmpty(), if (action is EditorAction.ResetPropertyAnimation) (if (property == AnimPropertyType.FONT_SIZE) 72f else 0f) else sampled, keys))
             }
-            AnimPropertyType.FILL_COLOUR -> {
-                val sampled = text.fill.evaluate(local)
+            AnimPropertyType.FILL_COLOUR, AnimPropertyType.STROKE_COLOUR -> {
+                val track = text.colour(property)
+                val sampled = track.evaluate(local)
                 val value = (action as? EditorAction.SetColourKeyframe)?.argb ?: sampled
-                val keys = edit(text.fill.keyframes, { it.timeUs }, { k, t -> k.copy(timeUs = t) }) {
+                val keys = edit(track.keyframes, { it.timeUs }, { k, t -> k.copy(timeUs = t) }) {
                     ColourKeyframe(time, value, (action as? EditorAction.SetColourKeyframe)?.easing ?: EasingPreset.EASY_EASE) }
-                text.copy(fill = AnimatableColour(keys.isNotEmpty(), if (action is EditorAction.ResetPropertyAnimation) -1 else sampled, keys))
+                text.withColour(property, AnimatableColour(keys.isNotEmpty(), if (action is EditorAction.ResetPropertyAnimation) (if (property == AnimPropertyType.FILL_COLOUR) -1 else 0xff000000.toInt()) else sampled, keys))
             }
             else -> error("Not a text property")
         }
@@ -94,4 +96,42 @@ fun CompositionLayer.propertyKeyTimes(property: AnimPropertyType): List<Long> = 
     AnimPropertyType.FONT_SIZE -> text.size.takeIf { it.isAnimated }?.keyframes?.map { it.timeUs }
     AnimPropertyType.FILL_COLOUR -> text.fill.takeIf { it.isAnimated }?.keyframes?.map { it.timeUs }
     AnimPropertyType.SOURCE_TEXT -> text.source.takeIf { it.isAnimated }?.keyframes?.map { it.timeUs }
+    AnimPropertyType.STROKE_COLOUR -> text.strokeColour.takeIf { it.isAnimated }?.keyframes?.map { it.timeUs }
+    else -> text.scalar(property).takeIf { it.isAnimated }?.keyframes?.map { it.timeUs }
 }.orEmpty()
+
+fun TextProperties.scalar(property: AnimPropertyType): AnimatableProperty1D = when (property) {
+    AnimPropertyType.FONT_SIZE -> size
+    AnimPropertyType.TRACKING -> tracking
+    AnimPropertyType.LEADING -> leading
+    AnimPropertyType.BASELINE_SHIFT -> baselineShift
+    AnimPropertyType.STROKE_WIDTH -> strokeWidth
+    AnimPropertyType.STROKE_OVER_FILL -> strokeOverFill
+    else -> error("Not a scalar text property")
+}
+fun TextProperties.scalarValue(property: AnimPropertyType, time: Long): Float =
+    if (property == AnimPropertyType.STROKE_OVER_FILL) scalar(property).hold(time) else scalar(property).evaluate(time)
+fun TextProperties.colour(property: AnimPropertyType): AnimatableColour = when (property) {
+    AnimPropertyType.FILL_COLOUR -> fill
+    AnimPropertyType.STROKE_COLOUR -> strokeColour
+    else -> error("Not a colour text property")
+}
+fun TextProperties.animated(property: AnimPropertyType): Boolean = when (property) {
+    AnimPropertyType.SOURCE_TEXT -> source.isAnimated
+    AnimPropertyType.FILL_COLOUR, AnimPropertyType.STROKE_COLOUR -> colour(property).isAnimated
+    else -> scalar(property).isAnimated
+}
+fun TextProperties.withScalar(property: AnimPropertyType, value: AnimatableProperty1D): TextProperties = when (property) {
+    AnimPropertyType.FONT_SIZE -> copy(size = value)
+    AnimPropertyType.TRACKING -> copy(tracking = value)
+    AnimPropertyType.LEADING -> copy(leading = value)
+    AnimPropertyType.BASELINE_SHIFT -> copy(baselineShift = value)
+    AnimPropertyType.STROKE_WIDTH -> copy(strokeWidth = value)
+    AnimPropertyType.STROKE_OVER_FILL -> copy(strokeOverFill = value)
+    else -> error("Not a scalar text property")
+}
+fun TextProperties.withColour(property: AnimPropertyType, value: AnimatableColour): TextProperties = when (property) {
+    AnimPropertyType.FILL_COLOUR -> copy(fill = value)
+    AnimPropertyType.STROKE_COLOUR -> copy(strokeColour = value)
+    else -> error("Not a colour text property")
+}

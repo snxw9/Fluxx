@@ -39,7 +39,7 @@ Fluxx is currently in **Phase 2: Timeline + Multiple Layers**.
   - [**Autosave & Persistence**](../checkpoints/AUTOSAVE.md)
   - [**Composition & Layer Markers**](../checkpoints/MARKERS.md) — implemented in source; tests and phone acceptance pending.
   - [**Timeline Layout & Automatic Duration**](../checkpoints/TIMELINE_LAYOUT.md) — compact separated ruler/tracks/inspector regions, frame-grid ticks, content-driven new projects; source implementation with validation pending.
-- **Current focus:** Phase 2 Step E. E1b/E1c accepted; E1d/E1e/E2/E3 are implemented in source, compiled, device-unverified; the final JVM run passed 150/150 tests. E2 uses the approved lazy 2048 R8 texture-array atlas and typed v9 source/size/fill properties. E3 includes text creation, fixed Edit Text controls, workspace IME handling, shared geometry and one undo entry per typing session. Device, golden and 16 KB acceptance remain outstanding. See [text checkpoint](../checkpoints/TEXT_LAYER.md#e2-implementation-and-approved-array-overflow).
+- **Current focus:** Phase 2 text F1 (approved). The user confirmed E1–E3 text behavior on device. [F1 checkpoint](../checkpoints/TEXT_F1_IMPLEMENTATION.md) records v10 property completion, spread evidence and outstanding F1 phone acceptance. E2 uses the approved lazy 2048 R8 texture-array atlas; E3 includes text creation, fixed Edit Text controls, workspace IME handling, shared geometry and one undo entry per typing session. Separate golden/16 KB evidence remains outstanding. The historical E1–E3 JVM run passed 150/150 tests; see the F1 checkpoint for current validation.
 
 ---
 
@@ -96,9 +96,14 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
   - Timeline inline diamond markers with 48dp Fitts's Law touch targets, magnetic snapping, and seek-on-tap.
   - Export fast-path guard ensuring animated single videos use layered Vulkan pipeline.
   - *Status: Implemented in source; awaiting user Android Studio build & phone review.*
-- [ ] **Step E: Text Layer Support**
-  - E1a A16 smoke and E1b/E1c acceptance are recorded in [TEXT_LAYER.md](../checkpoints/TEXT_LAYER.md). E1d/E1e/E2/E3 are implemented in source and compiled, with 150 passing JVM tests. Texture-array overflow, v9 and editor wiring are complete in source; 16 KB/golden/device acceptance remains outstanding.
-  - Text data model, typography editor, font layout, and Vulkan glyph/quad rendering are implemented in source. [E2/E3 animation contract](../checkpoints/TEXT_LAYER_IMPLEMENTATION_PLAN.md#31-universal-text-property-animation): size/fill and hold-keyed Source Text reuse the property framework; remaining text animation is future work. Step E stays unchecked until device acceptance.
+- [x] **Step E: Text Layer Support**
+  - E1a A16 smoke and E1b/E1c acceptance are recorded in [TEXT_LAYER.md](../checkpoints/TEXT_LAYER.md). E1d/E1e/E2/E3 are implemented in source and compiled, with 150 passing JVM tests. Texture-array overflow, v9 and editor wiring are complete in source; Separate 16 KB/golden evidence remains outstanding; E1–E3 device behavior is user-confirmed.
+  - User-confirmed E1–E3 device behavior is distinct from separate golden/16 KB verification. Text data model, typography editor, font layout, and Vulkan glyph/quad rendering are implemented in source. [E2/E3 animation contract](../checkpoints/TEXT_LAYER_IMPLEMENTATION_PLAN.md#31-universal-text-property-animation): size/fill and hold-keyed Source Text reuse the property framework; remaining text animation is future work. E1–E3 device behavior is user-confirmed; separate golden/16 KB evidence remains tracked in the checkpoint.
+
+- [ ] **Step F1: Text property completion**
+  - Approved with amendments: tracking, additive leading, baseline shift, centred SDF stroke colour/width and hold-keyed paint order through existing animation/gesture infrastructure; additive v10 persistence.
+  - Implemented in source with compile/JVM and host spread evidence; F1 phone, visual, parity and thermal acceptance remain user-run. [Implementation and exact user-run list](../checkpoints/TEXT_F1_IMPLEMENTATION.md).
+  - F2 animator engine and F3 animator UI remain separately gated; F2 may use additive v11 while retaining v10 loading.
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.
 
