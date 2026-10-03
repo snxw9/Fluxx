@@ -65,8 +65,14 @@ data class TextProperties(
     val strokeColour: AnimatableColour = AnimatableColour(staticValue = 0xff000000.toInt()),
     val strokeWidth: AnimatableProperty1D = AnimatableProperty1D(),
     val strokeOverFill: AnimatableProperty1D = AnimatableProperty1D(),
+    val animators: FrozenList<TextAnimator> = FrozenList.empty(),
+    val ligatures: AnimatableProperty1D = AnimatableProperty1D(staticValue = 1f),
 ) {
     init {
+        ligatures.validateRange(0f,1f,true)
+        require(animators.size <= 16 && animators.map { it.id }.distinct().size == animators.size)
+        val selectorIds = animators.flatMap { it.selectors.map { s -> s.id } }
+        require(selectorIds.distinct().size == selectorIds.size)
         require(fontId.isNotBlank() && fontId.length <= 128 && fontId.none { it == '\u0000' })
         TextLimits.validateSize(size.staticValue); size.keyframes.forEach { TextLimits.validateSize(it.value) }
         listOf(tracking, leading, baselineShift).forEach { p ->
@@ -77,7 +83,8 @@ data class TextProperties(
         validatePaintOrder(strokeOverFill.staticValue)
         strokeOverFill.keyframes.forEach { validatePaintOrder(it.value) }
     }
-    val layoutAnimated get() = source.isAnimated || size.isAnimated || tracking.isAnimated || leading.isAnimated || baselineShift.isAnimated
+    val layoutAnimated get() = source.isAnimated || size.isAnimated || tracking.isAnimated || leading.isAnimated || baselineShift.isAnimated || ligatures.isAnimated || animators.isNotEmpty()
+    fun effectiveLigatures(time: Long) = ligatures.hold(time) == 1f && tracking.evaluate(time) == 0f
     fun effectiveStrokeWidth(time: Long): Float = TextSdfLimits.strokeWidth(strokeWidth.evaluate(time), size.evaluate(time))
     fun paintOrder(time: Long): Int = strokeOverFill.hold(time).toInt()
     fun rebase(delta: Long) = copy(
@@ -85,7 +92,8 @@ data class TextProperties(
         size = size.copy(keyframes = FrozenList.of(size.keyframes.map { it.copy(timeUs = Math.subtractExact(it.timeUs, delta)) })),
         fill = fill.rebase(delta), tracking = tracking.rebase(delta), leading = leading.rebase(delta),
         baselineShift = baselineShift.rebase(delta), strokeColour = strokeColour.rebase(delta),
-        strokeWidth = strokeWidth.rebase(delta), strokeOverFill = strokeOverFill.rebase(delta))
+        strokeWidth = strokeWidth.rebase(delta), strokeOverFill = strokeOverFill.rebase(delta),
+        animators = FrozenList.of(animators.map { it.rebase(delta) }), ligatures = ligatures.shift(delta))
     fun sourceBytes(): Long = source.staticValue.toByteArray(Charsets.UTF_8).size.toLong() +
         source.keyframes.sumOf { it.value.toByteArray(Charsets.UTF_8).size.toLong() }
 }

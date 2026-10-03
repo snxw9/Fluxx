@@ -17,7 +17,7 @@ class FrozenList<out T> private constructor(private val values: List<T>) : List<
 object CompositionDefaults {
     const val WIDTH = 1080
     const val HEIGHT = 1920
-    const val PROJECT_VERSION = 10 // Typed text properties; existing slots and type ordinals retained.
+    const val PROJECT_VERSION = 11 // Additive animator tables; v10 remains permanently readable.
 }
 
 /** Convert from the absolute frame index, never by repeatedly adding a rounded frame period. */
@@ -369,7 +369,7 @@ data class Composition(
                 layer.text.fill.keyframes.map { it.timeUs }, layer.text.tracking.keyframes.map { it.timeUs },
                 layer.text.leading.keyframes.map { it.timeUs }, layer.text.baselineShift.keyframes.map { it.timeUs },
                 layer.text.strokeColour.keyframes.map { it.timeUs }, layer.text.strokeWidth.keyframes.map { it.timeUs },
-                layer.text.strokeOverFill.keyframes.map { it.timeUs })) {
+                layer.text.strokeOverFill.keyframes.map { it.timeUs }, layer.text.ligatures.keyframes.map { it.timeUs }) + layer.text.animators.flatMap { it.allKeyTimes() }) {
                 val frames = times.map { Markers.signedFrame(frameRate, Math.addExact(layer.resolvedKeyframeAnchorUs, it)) }
                 require(frames.distinct().size == frames.size) { "Text keys share a composition frame" }
             }

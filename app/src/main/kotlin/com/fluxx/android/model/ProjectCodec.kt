@@ -126,12 +126,13 @@ object ProjectCodec {
         }
         val tracking = scalar(text.tracking); val leading = scalar(text.leading); val baseline = scalar(text.baselineShift)
         val stroke = colour(text.strokeColour); val width = scalar(text.strokeWidth); val order = scalar(text.strokeOverFill)
-        return fluxx.schema.TextPayload.createTextPayload(b, source, size, fill, font, text.alignment.ordinal, 0,
-            tracking, leading, baseline, stroke, width, order)
+        val animators = TextAnimatorCodec.encode(b, text.animators)
+        return fluxx.schema.TextPayload.createTextPayload(b, source, size, fill, font, text.alignment.ordinal, animators,
+            tracking, leading, baseline, stroke, width, order, scalar(text.ligatures))
     }
-    private fun decodeText(payload: fluxx.schema.TextPayload?, byteCount: Int, consume: (Long) -> Unit): TextProperties {
+    private fun decodeText(payload: fluxx.schema.TextPayload?, byteCount: Int, version: Int, consume: (Long) -> Unit): TextProperties {
         if (payload == null) return TextProperties()
-        require(payload.textAnimatorsLength == 0) { "Text animators are not supported by this version" }
+        val animators = TextAnimatorCodec.decode(payload, byteCount, version)
         fun count(value: Int) { require(value in 0..byteCount / 4) { "Invalid text key count" } }
         fun source(buffer: ByteBuffer?): String {
             if (buffer == null) return ""
@@ -175,7 +176,8 @@ object ProjectCodec {
         return TextProperties(source, size, fill, payload.fontId ?: "fluxx.sans",
             requireNotNull(TextAlignment.entries.getOrNull(payload.alignment)),
             scalar(payload.tracking), scalar(payload.leading), scalar(payload.baselineShift), stroke,
-            scalar(payload.strokeWidth), scalar(payload.strokeOverFill))
+            scalar(payload.strokeWidth), scalar(payload.strokeOverFill), animators,
+            payload.ligatures?.let { scalar(it) } ?: AnimatableProperty1D(staticValue=1f))
     }
     private fun encodeMarkers(b: FlatBufferBuilder, markers: List<Marker>): IntArray = markers.map {
         val description = b.createString(it.description)
@@ -286,7 +288,7 @@ object ProjectCodec {
                 keyframeAnchorUs = l.keyframeAnchorUs.takeIf { l.hasKeyframeAnchor || it != -1L },
                 anchorX = l.anchorX, anchorY = l.anchorY,
                 markers = if (p.version >= 7) decodeMarkers(l.markersLength, bytes.size) { l.markers(it) } else FrozenList.empty(),
-                text = if (p.version >= 9) decodeText(l.textPayload, bytes.size) { count ->
+                text = if (p.version >= 9) decodeText(l.textPayload, bytes.size, p.version) { count ->
                     textBytes = Math.addExact(textBytes, count)
                     require(textBytes <= TextLimits.MAX_DOCUMENT_BYTES) { "Text payload exceeds document budget" }
                 } else TextProperties())

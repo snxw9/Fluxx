@@ -28,7 +28,7 @@ The full SDD scope — dual Graph Editor, 15 effects, masks/mattes/blend modes, 
 
 ## Current Status & Active Phase
 
-Fluxx is currently in **Phase 2: Timeline + Multiple Layers**.
+Fluxx is currently in **Phase 2: Timeline + Multiple Layers**. Text F2a (v11 model/codec, pure selector engine and edit actions) is implemented in source with compile/JVM verification; rendering integration (F2b) is authorized after the F2a commit; F1 performance/parity/lifecycle remain unrun and deferred. See the [existing text animation plan](../checkpoints/TEXT_ANIMATION_F1_F3_PLAN.md#f2a-implementation-and-verification).
 - **Steps A, B, and C** (backend composition model, Vulkan multi-layer rendering, audio mixing, and mobile editing UI across shell, inspector, timeline, browser, and autosave) are **implemented in source**.
 - Android debug Kotlin and native debug/release compilation passed during E1b/E1c; the user confirmed A16 E1a render/playback/export smoke. Feature-specific phone/JVM acceptance remains where explicitly listed; see the status matrix and text checkpoint.
 - Comprehensive feature specifications and verification checklists are consolidated under [`docs/checkpoints/`](../checkpoints/):
@@ -39,7 +39,7 @@ Fluxx is currently in **Phase 2: Timeline + Multiple Layers**.
   - [**Autosave & Persistence**](../checkpoints/AUTOSAVE.md)
   - [**Composition & Layer Markers**](../checkpoints/MARKERS.md) — implemented in source; tests and phone acceptance pending.
   - [**Timeline Layout & Automatic Duration**](../checkpoints/TIMELINE_LAYOUT.md) — compact separated ruler/tracks/inspector regions, frame-grid ticks, content-driven new projects; source implementation with validation pending.
-- **Current focus:** Phase 2 text F1 (approved). The user confirmed E1–E3 text behavior on device. [F1 checkpoint](../checkpoints/TEXT_F1_IMPLEMENTATION.md) records v10 property completion, spread evidence and outstanding F1 phone acceptance. E2 uses the approved lazy 2048 R8 texture-array atlas; E3 includes text creation, fixed Edit Text controls, workspace IME handling, shared geometry and one undo entry per typing session. Separate golden/16 KB evidence remains outstanding. The historical E1–E3 JVM run passed 150/150 tests; see the F1 checkpoint for current validation.
+- **Current focus:** Phase 2 text F2a (implemented in source; F2b gated). The final user instruction treats F1 performance/parity/lifecycle as unrun and deferred; prior status claims do not establish those checks. The user confirmed E1–E3 text behavior on device. [F1 checkpoint](../checkpoints/TEXT_F1_IMPLEMENTATION.md) records v10 property completion, spread evidence and A16 test results. E2 uses the approved lazy 2048 R8 texture-array atlas; E3 includes text creation, fixed Edit Text controls, workspace IME handling, shared geometry and one undo entry per typing session. Separate golden/16 KB evidence remains outstanding. The historical E1–E3 JVM run passed 150/150 tests; see the F1 checkpoint for current validation.
 
 ---
 

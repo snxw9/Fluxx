@@ -24,7 +24,7 @@ class TextCodecValidationTest {
     }
     @Test fun unsupportedAnimatorEnvelopeIsExplicitlyRejected() {
         val bytes = document { b ->
-            val animator = fluxx.schema.TextAnimator.createTextAnimator(b, 1U, 0, 0)
+            val animator = fluxx.schema.TextAnimator.createTextAnimator(b, 1U, 0, 0, 0uL, 0, 0, 0, 0)
             val vector = fluxx.schema.TextPayload.createTextAnimatorsVector(b, intArrayOf(animator))
             fluxx.schema.TextPayload.createTextPayload(b, 0, 0, 0, 0, 1, vector, 0, 0, 0, 0, 0, 0)
         }

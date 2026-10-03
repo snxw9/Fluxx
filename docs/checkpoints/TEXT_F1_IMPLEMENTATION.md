@@ -66,10 +66,10 @@ The fixture asserts 500+ shaped glyphs, warms 120 frames, then records 600 full-
 
 The host executable uses the production FreeType SDF path with manager-local experimental settings; production defaults do not change. It compares the same three-font Latin corpus and generates CPU-reference masks at 8/72/500px for A/V/g/y, half-strokes 0/.05/.10 em and requested softness 0/.03 em. Softness shares the same half-stroke budget. These masks do not establish Vulkan/device visual quality.
 
-| Settings | Requested glyphs | Bitmap area (texels) | Visible glyphs on page 1 | Visible glyphs on page 2 | Pages required | Rejected with two pages |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 48 ppem / 8 spread | 2,233 | 4,951,214 | 1,547 | 639 | 2 | 0 |
-| 64 ppem / 12 spread | 2,233 | 9,498,414 | 764 | 901 | 3 | 521 |
+| Settings            | Requested glyphs | Bitmap area (texels) | Visible glyphs on page 1 | Visible glyphs on page 2 | Pages required | Rejected with two pages |
+|---------------------|-----------------:|---------------------:|-------------------------:|-------------------------:|---------------:|------------------------:|
+| 48 ppem / 8 spread  |            2,233 |            4,951,214 |                    1,547 |                      639 |              2 |                       0 |
+| 64 ppem / 12 spread |            2,233 |            9,498,414 |                      764 |                      901 |              3 |                     521 |
 
 47 empty-outline glyphs do not consume placement area. Measured bitmap area increases 1.918×; atlas occupancy includes additional packing/guard overhead. Recommendation: keep 48/8, given the loss of two-page corpus coverage at 64/12. Any spread change requires separate user approval and new capacity/quality acceptance before F2.
 
@@ -96,7 +96,7 @@ py -3 tools/text/summarize_spread.py tools/text/results/f1-spread
 3. On A16, open Text → Spacing → Stroke. Edit every property statically, enable its diamond, set two keys, scrub, navigate previous/next keys, freeze, undo/redo. Each continuous scalar/colour edit should create one undo entry. Test cancel, colour picker, eyedropper and IME return.
 4. Use multiline Latin, spaces, NBSP, empty lines, Noto Serif `office` ligatures and `A` plus U+0301 combining mark. Animate tracking through negative/zero/positive values; verify no ligature pop. The bundled Inter shapes `office` as separate glyphs, so use Noto Serif for the ligature check. Test additive leading and baseline shift under left/centre/right alignment. Exclude RTL/complex scripts.
 5. At sizes 8/72/500, test requested stroke 0, half the size-dependent cap, the cap and an oversized request. Animate size 8→500 with requested width 20px: inspector must report 1.6px effective at size 8 while keeping the 20px request. Save/reopen and verify the request remains 20px.
-6. Test both paint orders using translucent contrasting fill/stroke, thin and thick glyphs, rotated/flipped/scaled text, and Full/Half/Quarter preview. Inspect round joins, clipping at glyph edges, overlap order and selection/fit/anchor bounds. Compare host 48/8 and 64/12 masks at 8/72/500; changing production spread still requires approval.
+6. Test both paint orders using translucent contrasting fill/stroke, thin and thick glyphs, rotated/flipped/scaled text, and Full/Half/Quarter preview. Explicitly test thick stroke plus tight/negative tracking in both orders: F1 composites per glyph, so a later glyph's stroke can cover an earlier glyph's fill. Inspect round joins, clipping, overlap order and selection/fit/anchor bounds. Include 300%+ scale and enlarged `g` contour kinks. Compare host 48/8 and 64/12 masks at 8/72/500; production spread changes and optional all-glyph two-pass scope require separate approval.
 7. Save/close/reopen a composition containing all six new animated properties. Repeat after duplicate, copy/paste, trim/extend and split; check key timing/navigation and undo.
 8. Run `TextF1AcceptanceTest.equalResolutionPreviewExportAndThumbnailPixelsMatch` with unique `textRunLabel`. It compares equal-resolution pixels at 0/5/10 seconds before encoding. Separately export MP4 and review it; codec output is not required to equal compositor bytes.
 9. Run `TextF1AcceptanceTest.fiveHundredGlyphsAllocateNothingColdAndAfterThreeMinutesLoad` on A16, with unique `textRunLabel`. The source is `"AV office gy 0123456789 \n".repeat(30)` in Noto Serif, exercising real ligatures and line spacing. Archive both JSON reports: 600 frames, worker/native allocation deltas zero, shape/rasterization/upload/generation unchanged, mesh/frame p50/p95/p99/max. The second window follows 180 seconds continuous load. Counter canaries must pass; unavailable counters are a failed proof, not a pass.
@@ -111,3 +111,14 @@ Passed compile-only checks for app/engine debug Kotlin and both instrumentation 
 Local logs are under the ignored `tools/text/results/` directory: `f1-acceptance-final.log` (Kotlin/JVM), `f1-native-membership-final.log` (both native configurations/ABIs), `f1-final.log` (instrumentation compilation), and `f1-fixture-final.log` (final Noto Serif acceptance fixture compilation). Spread data is in `f1-spread/`; generated results are deliberately excluded from the source commit and can be reproduced with the commands above.
 
 No APK was packaged or installed, and no device tests were run. A16 mesh/frame timings, allocation assertions, thermal repeat, pre-encode parity and visual acceptance remain user-run gates; successful host compilation does not establish them.
+
+### Authorized device execution, 2026-10-03
+
+The user successfully launched and completed `TextF1AcceptanceTest.fiveHundredGlyphsAllocateNothingColdAndAfterThreeMinutesLoad()` on the connected Samsung SM-A165F (A16) via Android Studio (`success=true`).
+
+Key verified results:
+- **Corpus & Fixture:** 500+ shaped glyphs in Noto Serif (`"AV office gy 0123456789 \n".repeat(30)`).
+- **Cold Window (Pass 0):** 600 full-resolution frames rendered with 0 Kotlin worker thread allocations and 0 C++ native allocations (`workerThreadAllocDelta = 0`, `nativeNewDelta = 0`).
+- **3-Minute Thermal Load:** Rendered continuous preview load for 180,000 ms (3 minutes).
+- **Thermal Window (Pass 1):** 600 full-resolution frames rendered with 0 Kotlin worker thread allocations and 0 C++ native allocations.
+- **Vulkan & Counters:** Vulkan validation enabled with 0 validation errors (`validationErrors = 0`), and prepared text counters (rasterizations, atlas uploads, shapes, atlas generation) remained completely unchanged across measurement windows.

@@ -66,13 +66,13 @@ internal object TextPropertyActions {
                 text.copy(source = AnimatableString(keys.isNotEmpty(), if (action is EditorAction.ResetPropertyAnimation) "" else sampled, keys))
             }
             AnimPropertyType.FONT_SIZE, AnimPropertyType.TRACKING, AnimPropertyType.LEADING, AnimPropertyType.BASELINE_SHIFT,
-            AnimPropertyType.STROKE_WIDTH, AnimPropertyType.STROKE_OVER_FILL -> {
+            AnimPropertyType.STROKE_WIDTH, AnimPropertyType.STROKE_OVER_FILL, AnimPropertyType.LIGATURES -> {
                 val track = text.scalar(property)
                 val sampled = text.scalarValue(property, local)
                 val value = (action as? EditorAction.SetKeyframe)?.value ?: sampled
                 val keys = edit(track.keyframes, { it.timeUs }, { k, t -> k.copy(timeUs = t) }) {
                     Keyframe1D(time, value, (action as? EditorAction.SetKeyframe)?.easing ?: EasingPreset.EASY_EASE) }
-                text.withScalar(property, AnimatableProperty1D(keys.isNotEmpty(), if (action is EditorAction.ResetPropertyAnimation) (if (property == AnimPropertyType.FONT_SIZE) 72f else 0f) else sampled, keys))
+                text.withScalar(property, AnimatableProperty1D(keys.isNotEmpty(), if (action is EditorAction.ResetPropertyAnimation) (when(property) { AnimPropertyType.FONT_SIZE -> 72f; AnimPropertyType.LIGATURES -> 1f; else -> 0f }) else sampled, keys))
             }
             AnimPropertyType.FILL_COLOUR, AnimPropertyType.STROKE_COLOUR -> {
                 val track = text.colour(property)
@@ -107,10 +107,11 @@ fun TextProperties.scalar(property: AnimPropertyType): AnimatableProperty1D = wh
     AnimPropertyType.BASELINE_SHIFT -> baselineShift
     AnimPropertyType.STROKE_WIDTH -> strokeWidth
     AnimPropertyType.STROKE_OVER_FILL -> strokeOverFill
+    AnimPropertyType.LIGATURES -> ligatures
     else -> error("Not a scalar text property")
 }
 fun TextProperties.scalarValue(property: AnimPropertyType, time: Long): Float =
-    if (property == AnimPropertyType.STROKE_OVER_FILL) scalar(property).hold(time) else scalar(property).evaluate(time)
+    if (property == AnimPropertyType.STROKE_OVER_FILL || property == AnimPropertyType.LIGATURES) scalar(property).hold(time) else scalar(property).evaluate(time)
 fun TextProperties.colour(property: AnimPropertyType): AnimatableColour = when (property) {
     AnimPropertyType.FILL_COLOUR -> fill
     AnimPropertyType.STROKE_COLOUR -> strokeColour
@@ -128,6 +129,7 @@ fun TextProperties.withScalar(property: AnimPropertyType, value: AnimatablePrope
     AnimPropertyType.BASELINE_SHIFT -> copy(baselineShift = value)
     AnimPropertyType.STROKE_WIDTH -> copy(strokeWidth = value)
     AnimPropertyType.STROKE_OVER_FILL -> copy(strokeOverFill = value)
+    AnimPropertyType.LIGATURES -> copy(ligatures = value)
     else -> error("Not a scalar text property")
 }
 fun TextProperties.withColour(property: AnimPropertyType, value: AnimatableColour): TextProperties = when (property) {

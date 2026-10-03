@@ -53,6 +53,7 @@ class EditorViewModel : ViewModel() {
         }
         val add = EditorAction.Add(source.movedTo(startUs).copy(
             id = id,
+            text = source.text.withFreshAnimatorIds(),
             // The fresh ID sorts first among tied z-orders, without risking Int overflow.
             zOrder = comp.layers.maxOfOrNull { it.zOrder } ?: 0,
             name = if (source.name.isNotBlank()) "${source.name} Copy" else "${source.type.name} $id",

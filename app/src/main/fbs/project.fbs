@@ -42,12 +42,42 @@ table ColourKeyframe { time_us: long; argb: int = -1; easing: EasingType = EASY_
 table StringKeyframe { time_us: long; value: string; }
 table AnimatableColour { is_animated: bool; static_value: int = -1; keyframes: [ColourKeyframe]; }
 table AnimatableString { is_animated: bool; static_value: string; keyframes: [StringKeyframe]; }
-table TextRangeSelector { version: uint = 1; }
-table TextPropertyOverride { version: uint = 1; property_id: uint; }
+table TextRangeSelector {
+  version: uint = 1;
+  id: ulong;
+  enabled: AnimatableProperty1D;
+  start: AnimatableProperty1D;
+  end: AnimatableProperty1D;
+  offset: AnimatableProperty1D;
+  units: AnimatableProperty1D;
+  based_on: AnimatableProperty1D;
+  shape: AnimatableProperty1D;
+  smoothness: AnimatableProperty1D;
+  ease_high: AnimatableProperty1D;
+  ease_low: AnimatableProperty1D;
+  mode: AnimatableProperty1D;
+  amount: AnimatableProperty1D;
+  min_amount: AnimatableProperty1D;
+  max_amount: AnimatableProperty1D;
+  randomize_order: AnimatableProperty1D;
+  seed: ulong;
+}
+table TextPropertyOverride {
+  version: uint = 1;
+  property_id: uint;
+  scalar: AnimatableProperty1D;
+  vector: AnimatableProperty2D;
+  colour: AnimatableColour;
+}
 table TextAnimator {
   version: uint = 1;
   range_selector: TextRangeSelector;
   property_overrides: [TextPropertyOverride];
+  id: ulong;
+  name: string;
+  enabled: AnimatableProperty1D;
+  selectors: [TextRangeSelector];
+  anchor_grouping: AnimatableProperty1D;
 }
 table TextPayload {
   source: AnimatableString;
@@ -63,6 +93,8 @@ table TextPayload {
   stroke_colour: AnimatableColour;
   stroke_width: AnimatableProperty1D;
   stroke_over_fill: AnimatableProperty1D;
+  // v11: default-on hold boolean. Effective only when evaluated layer tracking is zero.
+  ligatures: AnimatableProperty1D;
 }
 
 table Layer {

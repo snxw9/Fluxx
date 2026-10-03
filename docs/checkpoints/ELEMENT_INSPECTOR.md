@@ -279,3 +279,11 @@ Text enables Contextual Edit as Edit Text. Its controls stay fixed; only the sou
 A typing session captures the frame-snapped playhead and original editor state. Native metrics run on a dedicated worker, revisions reject stale results, and source/layout/allowed static Position compensation publish in one gesture preview. Done, focus loss and navigation await the latest draft and commit one existing gesture; Cancel restores the snapshot. Style changes await typing before applying their own gesture. No PreviewController API or gesture protocol changed.
 
 Text gets shared-metric natural-pixel bounds, handles, hit testing and anchor compensation. Fit Width/Height and Stretch preserve font size and use Scale; empty text disables fit and retains its anchor target. Media Info remains media-only. Timeline labels evaluate the held string. Add Content creates an assetless five-second text layer at the snapped playhead. See the exact [E3 device checklist](TEXT_LAYER.md#e3-editor-integration--implemented-in-source-device-unverified).
+
+### F2 final scope and status (2026-10-03)
+
+The user's final F2 instructions supersede earlier gates/addenda. F1 is accepted by the user; performance/parity/lifecycle remain unrun and deferred. F2a model/codec/pure selector engine/edit actions are implemented in source, device-unverified. F2b is authorized after the F2a commit; F3 and UI improvements are deferred. No PreviewController API or gesture-protocol changes, and no agent device runs.
+
+V11 adds default-on hold-keyed Ligatures: effective on only when layer tracking evaluates to zero. Animator tracking does not split ligatures. Both source/font/mode layouts and shared membership maps must be prepared ahead of playback. V10 loading is retained permanently. Per-animator grouping, averaged cluster influence, lookup-table easing, signed spatial influence with clamped colour influence, round SDF joins and bounded SDF softness are documented deviations/semantics. Paint order stays per glyph; no paint_scope or two-pass draw.
+
+Detailed stage evidence and the exact user-run list are maintained in [the existing text animation plan](TEXT_ANIMATION_F1_F3_PLAN.md). No animator UI is added; data/edit actions exist for later F3 diamonds/controls.

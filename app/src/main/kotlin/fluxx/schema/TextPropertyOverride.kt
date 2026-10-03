@@ -38,6 +38,33 @@ class TextPropertyOverride : Table() {
             val o = __offset(6)
             return if(o != 0) bb.getInt(o + bb_pos).toUInt() else 0u
         }
+    val scalar : fluxx.schema.AnimatableProperty1D? get() = scalar(fluxx.schema.AnimatableProperty1D())
+    fun scalar(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(8)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val vector : fluxx.schema.AnimatableProperty2D? get() = vector(fluxx.schema.AnimatableProperty2D())
+    fun vector(obj: fluxx.schema.AnimatableProperty2D) : fluxx.schema.AnimatableProperty2D? {
+        val o = __offset(10)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val colour : fluxx.schema.AnimatableColour? get() = colour(fluxx.schema.AnimatableColour())
+    fun colour(obj: fluxx.schema.AnimatableColour) : fluxx.schema.AnimatableColour? {
+        val o = __offset(12)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_25_2_10()
         fun getRootAsTextPropertyOverride(_bb: ByteBuffer): TextPropertyOverride = getRootAsTextPropertyOverride(_bb, TextPropertyOverride())
@@ -45,15 +72,21 @@ class TextPropertyOverride : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createTextPropertyOverride(builder: FlatBufferBuilder, version: UInt, propertyId: UInt) : Int {
-            builder.startTable(2)
+        fun createTextPropertyOverride(builder: FlatBufferBuilder, version: UInt, propertyId: UInt, scalarOffset: Int, vectorOffset: Int, colourOffset: Int) : Int {
+            builder.startTable(5)
+            addColour(builder, colourOffset)
+            addVector(builder, vectorOffset)
+            addScalar(builder, scalarOffset)
             addPropertyId(builder, propertyId)
             addVersion(builder, version)
             return endTextPropertyOverride(builder)
         }
-        fun startTextPropertyOverride(builder: FlatBufferBuilder) = builder.startTable(2)
+        fun startTextPropertyOverride(builder: FlatBufferBuilder) = builder.startTable(5)
         fun addVersion(builder: FlatBufferBuilder, version: UInt) = builder.addInt(0, version.toInt(), 1)
         fun addPropertyId(builder: FlatBufferBuilder, propertyId: UInt) = builder.addInt(1, propertyId.toInt(), 0)
+        fun addScalar(builder: FlatBufferBuilder, scalar: Int) = builder.addOffset(2, scalar, 0)
+        fun addVector(builder: FlatBufferBuilder, vector: Int) = builder.addOffset(3, vector, 0)
+        fun addColour(builder: FlatBufferBuilder, colour: Int) = builder.addOffset(4, colour, 0)
         fun endTextPropertyOverride(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

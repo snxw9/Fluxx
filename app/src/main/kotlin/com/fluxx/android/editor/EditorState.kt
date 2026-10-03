@@ -12,7 +12,7 @@ data class EditorState(
     val selectedLayer: CompositionLayer? get() = project.composition.layers.firstOrNull { it.id == selectedLayerId }
 }
 
-enum class AnimPropertyType { POSITION, SCALE, ROTATION, OPACITY, FONT_SIZE, FILL_COLOUR, SOURCE_TEXT, TRACKING, LEADING, BASELINE_SHIFT, STROKE_COLOUR, STROKE_WIDTH, STROKE_OVER_FILL }
+enum class AnimPropertyType { POSITION, SCALE, ROTATION, OPACITY, FONT_SIZE, FILL_COLOUR, SOURCE_TEXT, TRACKING, LEADING, BASELINE_SHIFT, STROKE_COLOUR, STROKE_WIDTH, STROKE_OVER_FILL, LIGATURES }
 
 sealed interface EditorAction {
     data class SelectMarker(val markerId: Long?) : EditorAction
@@ -44,6 +44,7 @@ sealed interface EditorAction {
     data class Remove(val id: Long) : EditorAction
     data class SetTransform(val id: Long, val transform: Transform) : EditorAction
     data class SetTextPayload(val id: Long, val text: TextProperties, val newPosition: Transform? = null) : EditorAction
+    data class EditTextAnimator(val id: Long, val edit: AnimatorEdit) : EditorAction
     data class SetStringKeyframe(val id: Long, val localTimeUs: Long, val value: String) : EditorAction
     data class SetColourKeyframe(val id: Long, val localTimeUs: Long, val argb: Int,
         val easing: EasingPreset = EasingPreset.EASY_EASE, val property: AnimPropertyType = AnimPropertyType.FILL_COLOUR) : EditorAction
@@ -78,6 +79,7 @@ sealed interface EditorAction {
 
 object EditorReducer {
     fun reduce(state: EditorState, action: EditorAction): EditorState {
+        if (action is EditorAction.EditTextAnimator) return reduce(state, TextAnimatorActions.apply(state, action))
         TextPropertyActions.apply(state, action)?.let { return reduce(state, it) }
         val comp = state.project.composition
         fun replaceLayers(layers: List<CompositionLayer>): EditorState {
@@ -210,7 +212,7 @@ object EditorReducer {
                 it.copy(text = action.text, transform = if (position == null) it.transform else
                     it.transform.copy(positionX = position.positionX, positionY = position.positionY))
             }
-            is EditorAction.SetStringKeyframe, is EditorAction.SetColourKeyframe -> error("Text action was not normalized")
+            is EditorAction.SetStringKeyframe, is EditorAction.SetColourKeyframe, is EditorAction.EditTextAnimator -> error("Text action was not normalized")
             is EditorAction.SetAnchorPoint -> update(action.id) {
                 require(action.anchorX.isFinite() && action.anchorY.isFinite())
                 // Compensation changes only static Position, never another channel or keyframe curve.

@@ -55,6 +55,53 @@ class TextAnimator : Table() {
         get() {
             val o = __offset(8); return if (o != 0) __vector_len(o) else 0
         }
+    val id : ULong
+        get() {
+            val o = __offset(10)
+            return if(o != 0) bb.getLong(o + bb_pos).toULong() else 0UL
+        }
+    val name : String?
+        get() {
+            val o = __offset(12)
+            return if (o != 0) {
+                __string(o + bb_pos)
+            } else {
+                null
+            }
+        }
+    val nameAsByteBuffer : ByteBuffer get() = __vector_as_bytebuffer(12, 1)
+    fun nameInByteBuffer(_bb: ByteBuffer) : ByteBuffer = __vector_in_bytebuffer(_bb, 12, 1)
+    val enabled : fluxx.schema.AnimatableProperty1D? get() = enabled(fluxx.schema.AnimatableProperty1D())
+    fun enabled(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(14)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    fun selectors(j: Int) : fluxx.schema.TextRangeSelector? = selectors(fluxx.schema.TextRangeSelector(), j)
+    fun selectors(obj: fluxx.schema.TextRangeSelector, j: Int) : fluxx.schema.TextRangeSelector? {
+        val o = __offset(16)
+        return if (o != 0) {
+            obj.__assign(__indirect(__vector(o) + j * 4), bb)
+        } else {
+            null
+        }
+    }
+    val selectorsLength : Int
+        get() {
+            val o = __offset(16); return if (o != 0) __vector_len(o) else 0
+        }
+    val anchorGrouping : fluxx.schema.AnimatableProperty1D? get() = anchorGrouping(fluxx.schema.AnimatableProperty1D())
+    fun anchorGrouping(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(18)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_25_2_10()
         fun getRootAsTextAnimator(_bb: ByteBuffer): TextAnimator = getRootAsTextAnimator(_bb, TextAnimator())
@@ -62,14 +109,19 @@ class TextAnimator : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createTextAnimator(builder: FlatBufferBuilder, version: UInt, rangeSelectorOffset: Int, propertyOverridesOffset: Int) : Int {
-            builder.startTable(3)
+        fun createTextAnimator(builder: FlatBufferBuilder, version: UInt, rangeSelectorOffset: Int, propertyOverridesOffset: Int, id: ULong, nameOffset: Int, enabledOffset: Int, selectorsOffset: Int, anchorGroupingOffset: Int) : Int {
+            builder.startTable(8)
+            addId(builder, id)
+            addAnchorGrouping(builder, anchorGroupingOffset)
+            addSelectors(builder, selectorsOffset)
+            addEnabled(builder, enabledOffset)
+            addName(builder, nameOffset)
             addPropertyOverrides(builder, propertyOverridesOffset)
             addRangeSelector(builder, rangeSelectorOffset)
             addVersion(builder, version)
             return endTextAnimator(builder)
         }
-        fun startTextAnimator(builder: FlatBufferBuilder) = builder.startTable(3)
+        fun startTextAnimator(builder: FlatBufferBuilder) = builder.startTable(8)
         fun addVersion(builder: FlatBufferBuilder, version: UInt) = builder.addInt(0, version.toInt(), 1)
         fun addRangeSelector(builder: FlatBufferBuilder, rangeSelector: Int) = builder.addOffset(1, rangeSelector, 0)
         fun addPropertyOverrides(builder: FlatBufferBuilder, propertyOverrides: Int) = builder.addOffset(2, propertyOverrides, 0)
@@ -81,6 +133,19 @@ class TextAnimator : Table() {
             return builder.endVector()
         }
         fun startPropertyOverridesVector(builder: FlatBufferBuilder, numElems: Int) = builder.startVector(4, numElems, 4)
+        fun addId(builder: FlatBufferBuilder, id: ULong) = builder.addLong(3, id.toLong(), 0)
+        fun addName(builder: FlatBufferBuilder, name: Int) = builder.addOffset(4, name, 0)
+        fun addEnabled(builder: FlatBufferBuilder, enabled: Int) = builder.addOffset(5, enabled, 0)
+        fun addSelectors(builder: FlatBufferBuilder, selectors: Int) = builder.addOffset(6, selectors, 0)
+        fun createSelectorsVector(builder: FlatBufferBuilder, data: IntArray) : Int {
+            builder.startVector(4, data.size, 4)
+            for (i in data.size - 1 downTo 0) {
+                builder.addOffset(data[i])
+            }
+            return builder.endVector()
+        }
+        fun startSelectorsVector(builder: FlatBufferBuilder, numElems: Int) = builder.startVector(4, numElems, 4)
+        fun addAnchorGrouping(builder: FlatBufferBuilder, anchorGrouping: Int) = builder.addOffset(7, anchorGrouping, 0)
         fun endTextAnimator(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

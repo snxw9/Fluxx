@@ -75,7 +75,7 @@ class TextF1Test {
         assertEquals(TextProperties(),ProjectCodec.decode(bytes(9)).composition.layers.first().text)
         for(width in listOf(-1f,Float.NaN,Float.POSITIVE_INFINITY)) assertThrows(IllegalArgumentException::class.java) { ProjectCodec.decode(bytes(10,width)) }
         assertThrows(IllegalArgumentException::class.java) { ProjectCodec.decode(bytes(10,order=2f)) }
-        assertThrows(IllegalArgumentException::class.java) { ProjectCodec.decode(bytes(11)) }
+        assertThrows(IllegalArgumentException::class.java) { ProjectCodec.decode(bytes(12)) }
     }
     @Test fun clusterTrackingAndLeadingBoundsUsePreparedMembership() {
         // One ligature cluster with two glyph quads followed by another cluster, plus an empty line.

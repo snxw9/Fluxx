@@ -138,6 +138,15 @@ class TextPayload : Table() {
             null
         }
     }
+    val ligatures : fluxx.schema.AnimatableProperty1D? get() = ligatures(fluxx.schema.AnimatableProperty1D())
+    fun ligatures(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(28)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_25_2_10()
         fun getRootAsTextPayload(_bb: ByteBuffer): TextPayload = getRootAsTextPayload(_bb, TextPayload())
@@ -145,8 +154,9 @@ class TextPayload : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createTextPayload(builder: FlatBufferBuilder, sourceOffset: Int, sizeOffset: Int, fillOffset: Int, fontIdOffset: Int, alignment: Int, textAnimatorsOffset: Int, trackingOffset: Int, leadingOffset: Int, baselineShiftOffset: Int, strokeColourOffset: Int, strokeWidthOffset: Int, strokeOverFillOffset: Int) : Int {
-            builder.startTable(12)
+        fun createTextPayload(builder: FlatBufferBuilder, sourceOffset: Int, sizeOffset: Int, fillOffset: Int, fontIdOffset: Int, alignment: Int, textAnimatorsOffset: Int, trackingOffset: Int, leadingOffset: Int, baselineShiftOffset: Int, strokeColourOffset: Int, strokeWidthOffset: Int, strokeOverFillOffset: Int, ligaturesOffset: Int = 0) : Int {
+            builder.startTable(13)
+            addLigatures(builder, ligaturesOffset)
             addStrokeOverFill(builder, strokeOverFillOffset)
             addStrokeWidth(builder, strokeWidthOffset)
             addStrokeColour(builder, strokeColourOffset)
@@ -161,7 +171,7 @@ class TextPayload : Table() {
             addSource(builder, sourceOffset)
             return endTextPayload(builder)
         }
-        fun startTextPayload(builder: FlatBufferBuilder) = builder.startTable(12)
+        fun startTextPayload(builder: FlatBufferBuilder) = builder.startTable(13)
         fun addSource(builder: FlatBufferBuilder, source: Int) = builder.addOffset(0, source, 0)
         fun addSize(builder: FlatBufferBuilder, size: Int) = builder.addOffset(1, size, 0)
         fun addFill(builder: FlatBufferBuilder, fill: Int) = builder.addOffset(2, fill, 0)
@@ -182,6 +192,7 @@ class TextPayload : Table() {
         fun addStrokeColour(builder: FlatBufferBuilder, strokeColour: Int) = builder.addOffset(9, strokeColour, 0)
         fun addStrokeWidth(builder: FlatBufferBuilder, strokeWidth: Int) = builder.addOffset(10, strokeWidth, 0)
         fun addStrokeOverFill(builder: FlatBufferBuilder, strokeOverFill: Int) = builder.addOffset(11, strokeOverFill, 0)
+        fun addLigatures(builder: FlatBufferBuilder, ligatures: Int) = builder.addOffset(12, ligatures, 0)
         fun endTextPayload(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

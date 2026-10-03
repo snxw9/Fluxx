@@ -33,6 +33,151 @@ class TextRangeSelector : Table() {
             val o = __offset(4)
             return if(o != 0) bb.getInt(o + bb_pos).toUInt() else 1u
         }
+    val id : ULong
+        get() {
+            val o = __offset(6)
+            return if(o != 0) bb.getLong(o + bb_pos).toULong() else 0UL
+        }
+    val enabled : fluxx.schema.AnimatableProperty1D? get() = enabled(fluxx.schema.AnimatableProperty1D())
+    fun enabled(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(8)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val start : fluxx.schema.AnimatableProperty1D? get() = start(fluxx.schema.AnimatableProperty1D())
+    fun start(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(10)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val end : fluxx.schema.AnimatableProperty1D? get() = end(fluxx.schema.AnimatableProperty1D())
+    fun end(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(12)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val offset : fluxx.schema.AnimatableProperty1D? get() = offset(fluxx.schema.AnimatableProperty1D())
+    fun offset(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(14)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val units : fluxx.schema.AnimatableProperty1D? get() = units(fluxx.schema.AnimatableProperty1D())
+    fun units(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(16)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val basedOn : fluxx.schema.AnimatableProperty1D? get() = basedOn(fluxx.schema.AnimatableProperty1D())
+    fun basedOn(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(18)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val shape : fluxx.schema.AnimatableProperty1D? get() = shape(fluxx.schema.AnimatableProperty1D())
+    fun shape(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(20)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val smoothness : fluxx.schema.AnimatableProperty1D? get() = smoothness(fluxx.schema.AnimatableProperty1D())
+    fun smoothness(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(22)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val easeHigh : fluxx.schema.AnimatableProperty1D? get() = easeHigh(fluxx.schema.AnimatableProperty1D())
+    fun easeHigh(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(24)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val easeLow : fluxx.schema.AnimatableProperty1D? get() = easeLow(fluxx.schema.AnimatableProperty1D())
+    fun easeLow(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(26)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val mode : fluxx.schema.AnimatableProperty1D? get() = mode(fluxx.schema.AnimatableProperty1D())
+    fun mode(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(28)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val amount : fluxx.schema.AnimatableProperty1D? get() = amount(fluxx.schema.AnimatableProperty1D())
+    fun amount(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(30)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val minAmount : fluxx.schema.AnimatableProperty1D? get() = minAmount(fluxx.schema.AnimatableProperty1D())
+    fun minAmount(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(32)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val maxAmount : fluxx.schema.AnimatableProperty1D? get() = maxAmount(fluxx.schema.AnimatableProperty1D())
+    fun maxAmount(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(34)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val randomizeOrder : fluxx.schema.AnimatableProperty1D? get() = randomizeOrder(fluxx.schema.AnimatableProperty1D())
+    fun randomizeOrder(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(36)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val seed : ULong
+        get() {
+            val o = __offset(38)
+            return if(o != 0) bb.getLong(o + bb_pos).toULong() else 0UL
+        }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_25_2_10()
         fun getRootAsTextRangeSelector(_bb: ByteBuffer): TextRangeSelector = getRootAsTextRangeSelector(_bb, TextRangeSelector())
@@ -40,13 +185,47 @@ class TextRangeSelector : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createTextRangeSelector(builder: FlatBufferBuilder, version: UInt) : Int {
-            builder.startTable(1)
+        fun createTextRangeSelector(builder: FlatBufferBuilder, version: UInt, id: ULong, enabledOffset: Int, startOffset: Int, endOffset: Int, offsetOffset: Int, unitsOffset: Int, basedOnOffset: Int, shapeOffset: Int, smoothnessOffset: Int, easeHighOffset: Int, easeLowOffset: Int, modeOffset: Int, amountOffset: Int, minAmountOffset: Int, maxAmountOffset: Int, randomizeOrderOffset: Int, seed: ULong) : Int {
+            builder.startTable(18)
+            addSeed(builder, seed)
+            addId(builder, id)
+            addRandomizeOrder(builder, randomizeOrderOffset)
+            addMaxAmount(builder, maxAmountOffset)
+            addMinAmount(builder, minAmountOffset)
+            addAmount(builder, amountOffset)
+            addMode(builder, modeOffset)
+            addEaseLow(builder, easeLowOffset)
+            addEaseHigh(builder, easeHighOffset)
+            addSmoothness(builder, smoothnessOffset)
+            addShape(builder, shapeOffset)
+            addBasedOn(builder, basedOnOffset)
+            addUnits(builder, unitsOffset)
+            addOffset(builder, offsetOffset)
+            addEnd(builder, endOffset)
+            addStart(builder, startOffset)
+            addEnabled(builder, enabledOffset)
             addVersion(builder, version)
             return endTextRangeSelector(builder)
         }
-        fun startTextRangeSelector(builder: FlatBufferBuilder) = builder.startTable(1)
+        fun startTextRangeSelector(builder: FlatBufferBuilder) = builder.startTable(18)
         fun addVersion(builder: FlatBufferBuilder, version: UInt) = builder.addInt(0, version.toInt(), 1)
+        fun addId(builder: FlatBufferBuilder, id: ULong) = builder.addLong(1, id.toLong(), 0)
+        fun addEnabled(builder: FlatBufferBuilder, enabled: Int) = builder.addOffset(2, enabled, 0)
+        fun addStart(builder: FlatBufferBuilder, start: Int) = builder.addOffset(3, start, 0)
+        fun addEnd(builder: FlatBufferBuilder, end: Int) = builder.addOffset(4, end, 0)
+        fun addOffset(builder: FlatBufferBuilder, offset: Int) = builder.addOffset(5, offset, 0)
+        fun addUnits(builder: FlatBufferBuilder, units: Int) = builder.addOffset(6, units, 0)
+        fun addBasedOn(builder: FlatBufferBuilder, basedOn: Int) = builder.addOffset(7, basedOn, 0)
+        fun addShape(builder: FlatBufferBuilder, shape: Int) = builder.addOffset(8, shape, 0)
+        fun addSmoothness(builder: FlatBufferBuilder, smoothness: Int) = builder.addOffset(9, smoothness, 0)
+        fun addEaseHigh(builder: FlatBufferBuilder, easeHigh: Int) = builder.addOffset(10, easeHigh, 0)
+        fun addEaseLow(builder: FlatBufferBuilder, easeLow: Int) = builder.addOffset(11, easeLow, 0)
+        fun addMode(builder: FlatBufferBuilder, mode: Int) = builder.addOffset(12, mode, 0)
+        fun addAmount(builder: FlatBufferBuilder, amount: Int) = builder.addOffset(13, amount, 0)
+        fun addMinAmount(builder: FlatBufferBuilder, minAmount: Int) = builder.addOffset(14, minAmount, 0)
+        fun addMaxAmount(builder: FlatBufferBuilder, maxAmount: Int) = builder.addOffset(15, maxAmount, 0)
+        fun addRandomizeOrder(builder: FlatBufferBuilder, randomizeOrder: Int) = builder.addOffset(16, randomizeOrder, 0)
+        fun addSeed(builder: FlatBufferBuilder, seed: ULong) = builder.addLong(17, seed.toLong(), 0)
         fun endTextRangeSelector(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o
