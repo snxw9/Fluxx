@@ -73,6 +73,10 @@ class TextLayoutMetrics private constructor(private val data: DoubleArray, val s
         animation.evaluate(time);val b=animation.inkBounds
         return logical(text,time).union(TextBounds(b[0],b[1],b[2],b[3]))
     }
+    @Synchronized fun strokeClampLabel(text: TextProperties,time: Long,start: Int,end: Int): String? {
+        val prepared=animation(text) ?: return null;prepared.evaluate(time)
+        return prepared.strokeClampLabel(start,end)
+    }
     companion object {
         fun fromNative(values: DoubleArray, sourceEmpty: Boolean,document: TextSourceDocument?=null): TextLayoutMetrics {
             require(values.size >= 6 && values.all { it.isFinite() } && values[0] > 0)

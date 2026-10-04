@@ -50,6 +50,7 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
     private val fill=IntArray(clusters);private val stroke=IntArray(clusters)
     private val width=DoubleArray(clusters);private val blur=DoubleArray(clusters);private val opacity=DoubleArray(clusters)
     private val sourceEdges=document?.boundaries?.filter { it<document.text.length && document.text[it]!='\n' }?.toIntArray() ?: IntArray(0)
+    private val sourceEnds=IntArray(sourceEdges.size) { i -> requireNotNull(document).boundaries[document.boundaries.binarySearch(sourceEdges[i])+1] }
     private val styles=Array(clusters) { c -> document?.runAt(sourceEdges.getOrNull(starts[c]) ?: 0)?.style ?: TextRunStyle() }
     private val manual=DoubleArray(characters).also { amounts ->
         if(document!=null) for(run in document.runs) for(k in run.style.manualKerning) {
@@ -66,6 +67,9 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
     val modifiers: ByteBuffer = ByteBuffer.allocateDirect(Math.multiplyExact(clusters,STRIDE)).order(ByteOrder.nativeOrder())
     val inkBounds=FloatArray(4)
     val logicalBounds=FloatArray(4)
+    private val strokeClamped=BooleanArray(clusters)
+    private var hasEvaluation=false
+    private var evaluatedTime=0L
     var selectorNs=0L;private set
     var geometryNs=0L;private set
     val coverageBuilds get()=engines.sumOf { it.coverageBuilds }
@@ -75,6 +79,7 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         for(c in 0 until clusters) { if(clusterLines[c]!=line) { line=clusterLines[c];ordinal=0 };ordinals[c]=ordinal++ }
     }
     fun evaluate(time: Long) {
+        if(hasEvaluation && evaluatedTime==time) { selectorNs=0;geometryNs=0;return }
         val began=System.nanoTime()
         val size=text.size.evaluate(time).toDouble();val factor=size/data[0]
         val tracking=text.tracking.evaluate(time).toDouble()*size/1000
@@ -160,7 +165,11 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         val distanceScale=48/(16*size)
         for(c in 0 until clusters) {
             val fontSize=size*runSizes[c]
-            width[c]=width[c].coerceIn(0.0,.20*fontSize);blur[c]=blur[c].coerceIn(0.0,max(0.0,.10*fontSize-width[c]/2))
+            // The static faux outline shift consumes the same encoded distance as stroke/blur.
+            val budget=(.10-if(styles[c].fauxBold) .025 else 0.0)*fontSize
+            val effectiveWidth=width[c].coerceIn(0.0,2*budget)
+            strokeClamped[c]=width[c]>effectiveWidth
+            width[c]=effectiveWidth;blur[c]=blur[c].coerceIn(0.0,max(0.0,budget-width[c]/2))
             val record=c*STRIDE
             for(k in 0..5) put(record+k*4,matrices[c*6+k])
             put(record+24,offset[c]);put(record+28,-runBaseline[c])
@@ -187,6 +196,20 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         else inkBounds.fill(0f)
         for(value in inkBounds) require(value.isFinite()) { "Text animator arithmetic exceeds finite bounds" }
         geometryNs=System.nanoTime()-began-selectorNs
+        evaluatedTime=time;hasEvaluation=true
+    }
+    /** UI-only summary; renderer evaluation never calls this allocating formatter. */
+    fun strokeClampLabel(start: Int,end: Int): String? {
+        var clamped=false;var low=Double.POSITIVE_INFINITY;var high=0.0
+        for(c in 0 until clusters) {
+            val index=sourceEdges.getOrNull(starts[c]) ?: 0
+            val limit=sourceEnds.getOrNull(ends[c]-1) ?: index+1
+            if(start!=end && (end<=index || start>=limit)) continue
+            clamped=clamped || strokeClamped[c];low=min(low,width[c]);high=max(high,width[c])
+        }
+        if(!clamped) return null
+        fun rounded(value: Double)=(round(value*100)/100).toFloat().toString()
+        return "Apply · clamp ${rounded(low)}–${rounded(high)} px"
     }
     private fun group(c: Int,kind: Int)=when(kind) {0->c;1->if(clusterWords[c]>=0) clusterWords[c] else words+c;2->clusterLines[c];else->0}
     private fun put(offset: Int,value: Double) { val f=value.toFloat();require(f.isFinite()) { "Text animator arithmetic exceeds finite geometry" };modifiers.putFloat(offset,f) }

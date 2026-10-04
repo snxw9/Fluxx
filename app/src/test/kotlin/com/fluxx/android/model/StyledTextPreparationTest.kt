@@ -62,6 +62,21 @@ class StyledTextPreparationTest {
         assertEquals(130f,prepared.logicalBounds[2],.001f);assertEquals(0f,prepared.modifiers.getFloat(24),0f)
         assertEquals(0f,prepared.modifiers.getFloat(PreparedTextAnimation.STRIDE+24),0f)
     }
+    @Test fun fauxOutlineStrokeAndSoftnessShareTheEncodedDistanceBudget() {
+        val document=TextSourceDocument("ab").format(0,1) { it.copy(sizeFactor=2f,fauxBold=true) }
+        val stroke=TextProperties(size=AnimatableProperty1D(staticValue=100f),strokeWidth=AnimatableProperty1D(staticValue=100f))
+        val prepared=PreparedTextAnimation(stroke,metrics(),SelectorEaseTable.shared,document);prepared.evaluate(0)
+        assertEquals(30f,prepared.modifiers.getFloat(76),.001f)
+        assertEquals(.225f,prepared.modifiers.getFloat(64),.001f)
+        assertEquals(100f,stroke.strokeWidth.staticValue,0f)
+        assertNotNull(prepared.strokeClampLabel(0,1))
+        val blur=stroke.copy(strokeWidth=AnimatableProperty1D(staticValue=0f),animators=FrozenList.of(listOf(TextAnimator(1,
+            selectors=FrozenList.of(listOf(TextRangeSelector(2,smoothness=AnimatableProperty1D(staticValue=0f)))),
+            properties=FrozenList.of(listOf(TextPropertyOverride(AnimatorProperty.BLUR,scalar=AnimatableProperty1D(staticValue=100f))))))))
+        val softened=PreparedTextAnimation(blur,metrics(),SelectorEaseTable.shared,document);softened.evaluate(0)
+        assertEquals(15f,softened.modifiers.getFloat(80),.001f)
+        assertEquals(.225f,softened.modifiers.getFloat(68),.001f)
+    }
     @Test fun richPreparedEvaluationAllocatesZeroAfterWarmup() {
         val document=TextSourceDocument("ab").format(0,1) { it.copy(sizeFactor=2f,trackingDelta=25f,baselineDelta=5f,fill=0x80446688.toInt()) }
         val prepared=PreparedTextAnimation(TextProperties(size=AnimatableProperty1D(staticValue=100f)),metrics(),SelectorEaseTable.shared,document)

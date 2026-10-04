@@ -357,7 +357,8 @@ std::shared_ptr<const Layout> FontManager::shapeStyled(const std::string& id,con
             if(p.cp=='\n') { flush();continue; }
             const auto category=hb_unicode_general_category(hb_unicode_funcs_get_default(),p.cp);
             const bool mark=category==HB_UNICODE_GENERAL_CATEGORY_NON_SPACING_MARK || category==HB_UNICODE_GENERAL_CATEGORY_SPACING_MARK || category==HB_UNICODE_GENERAL_CATEGORY_ENCLOSING_MARK;
-            const double scale=mark && !display.empty()?synthetic:(run.caps==2 && !small && p.cp!=p.upper?.7:1);
+            const bool lowercase=category==HB_UNICODE_GENERAL_CATEGORY_LOWERCASE_LETTER;
+            const double scale=mark && !display.empty()?synthetic:(run.caps==2 && !small && lowercase?.7:1);
             if(!display.empty() && (chunkLine!=p.line || synthetic!=scale)) flush();
             synthetic=scale;chunkLine=p.line;
             uint32_t cp=p.cp;

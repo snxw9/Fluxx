@@ -10,7 +10,7 @@ import com.fluxx.android.model.*
 /** Functional paged controls; each Apply or menu choice is one existing text-edit transaction. */
 @Composable
 internal fun CharacterControls(document: TextSourceDocument,start: Int,end: Int,layerFont: String,
-    edit: (Int,Int,(TextRunStyle)->TextRunStyle)->Unit) {
+    edit: (Int,Int,(TextRunStyle)->TextRunStyle)->Unit,strokeClamp: String?=null) {
     var page by remember { mutableIntStateOf(0) }
     val style=document.runAt(start)?.style ?: TextRunStyle()
     val inheritedFamily=layerFont.removeSuffix(".bold-italic").removeSuffix(".italic").removeSuffix(".bold")
@@ -48,7 +48,7 @@ internal fun CharacterControls(document: TextSourceDocument,start: Int,end: Int,
         }
         3 -> CharacterNumbers("Size factor",style.sizeFactor,"Horizontal %",style.horizontalScale) { a,b -> apply { it.copy(sizeFactor=a,horizontalScale=b) } }
         4 -> CharacterNumbers("Vertical %",style.verticalScale,"Baseline delta px",style.baselineDelta) { a,b -> apply { it.copy(verticalScale=a,baselineDelta=b) } }
-        5 -> CharacterNumbers("Tracking delta /1000 em",style.trackingDelta,"Stroke delta px",style.strokeDelta) { a,b -> apply { it.copy(trackingDelta=a,strokeDelta=b) } }
+        5 -> CharacterNumbers("Tracking delta /1000 em",style.trackingDelta,"Stroke delta px",style.strokeDelta,strokeClamp ?: "Apply") { a,b -> apply { it.copy(trackingDelta=a,strokeDelta=b) } }
         6 -> {
             var fill by remember(document,start,end) { mutableStateOf(style.fill?.toUInt()?.toString(16).orEmpty()) }
             var stroke by remember(document,start,end) { mutableStateOf(style.stroke?.toUInt()?.toString(16).orEmpty()) }
@@ -86,12 +86,12 @@ internal fun CharacterControls(document: TextSourceDocument,start: Int,end: Int,
         DropdownMenu(open,{open=false}) { choices.forEachIndexed { index,value -> DropdownMenuItem(text={Text(value)},onClick={open=false;choose(index)}) } }
     }
 }
-@Composable private fun CharacterNumbers(first: String,a: Float,second: String,b: Float,apply: (Float,Float)->Unit) {
+@Composable private fun CharacterNumbers(first: String,a: Float,second: String,b: Float,label: String="Apply",apply: (Float,Float)->Unit) {
     var x by remember(first,a) { mutableStateOf(a.toString()) };var y by remember(second,b) { mutableStateOf(b.toString()) }
     Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
         OutlinedTextField(x,{x=it},label={Text(first,maxLines=1,style=MaterialTheme.typography.labelSmall)},singleLine=true,modifier=Modifier.weight(1f))
         OutlinedTextField(y,{y=it},label={Text(second,maxLines=1,style=MaterialTheme.typography.labelSmall)},singleLine=true,modifier=Modifier.weight(1f))
     }
     val xx=x.toFloatOrNull()?.takeIf { it.isFinite() };val yy=y.toFloatOrNull()?.takeIf { it.isFinite() }
-    TextButton(enabled=xx!=null && yy!=null,onClick={apply(requireNotNull(xx),requireNotNull(yy))}) { Text("Apply") }
+    TextButton(enabled=xx!=null && yy!=null,onClick={apply(requireNotNull(xx),requireNotNull(yy))}) { Text(label,maxLines=1,style=MaterialTheme.typography.labelSmall) }
 }

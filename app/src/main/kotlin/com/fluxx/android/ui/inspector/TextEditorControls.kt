@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -116,7 +117,13 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
             Text("Layer tracking splits ligatures away from zero; combining marks stay together.", style = MaterialTheme.typography.labelSmall)
         }
         if (!compact && page == 3) {
-            CharacterControls(layer.text.source.evaluateDocument(local).replace(draft.text),draft.selection.min,draft.selection.max,layer.text.fontId,onCharacter)
+            val document=layer.text.source.evaluateDocument(local).replace(draft.text)
+            val context=LocalContext.current;val ligatures=layer.text.effectiveLigatures(local)
+            val metrics by produceState<TextLayoutMetrics?>(null,document,layer.text.fontId,ligatures) {
+                value=try { com.fluxx.android.render.TextMetricsRepository.get(context).measure(layer.text.fontId,document,ligatures) } catch(_:Exception) { null }
+            }
+            CharacterControls(document,draft.selection.min,draft.selection.max,layer.text.fontId,onCharacter,
+                metrics?.strokeClampLabel(layer.text,local,draft.selection.min,draft.selection.max))
         }
         if (!compact && page == 2) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
