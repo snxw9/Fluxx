@@ -94,7 +94,7 @@ fun EditorScreen(
     val textEditor = remember(editor, scope, metricsService) {
         TextEditController(editor, scope, metricsService::measure,
             changed = { latestPreview?.update(editor.displayedState.project, editor.displayedState.playheadUs, false) },
-            typingChanged = { textTyping = it })
+            typingChanged = { textTyping = it },measureWithLigatures=metricsService::measure)
     }
     DisposableEffect(textEditor) { onDispose { textEditor.cancel() } }
     val textErrors by TextLayerErrors.state.collectAsState()
@@ -104,9 +104,10 @@ fun EditorScreen(
     val playheadUs = displayedState.playheadUs
     val selectedLayer = displayedState.selectedLayer
     val selectedTextSource = selectedLayer?.text?.source?.evaluate(playheadUs - selectedLayer.resolvedKeyframeAnchorUs).orEmpty()
-    val selectedTextMetrics by produceState<TextLayoutMetrics?>(null, selectedLayer?.type, selectedLayer?.text?.fontId, selectedTextSource) {
+    val selectedLigatures=selectedLayer?.let { it.text.effectiveLigatures(playheadUs-it.resolvedKeyframeAnchorUs) } ?: true
+    val selectedTextMetrics by produceState<TextLayoutMetrics?>(null, selectedLayer?.type, selectedLayer?.text?.fontId, selectedTextSource,selectedLigatures) {
         value = null
-        if (selectedLayer?.type == LayerType.TEXT) try { value = metricsService.measure(selectedLayer.text.fontId, selectedTextSource) }
+        if (selectedLayer?.type == LayerType.TEXT) try { value = metricsService.measure(selectedLayer.text.fontId, selectedTextSource,selectedLigatures) }
         catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
         catch (_: Exception) { }
     }
@@ -145,7 +146,7 @@ fun EditorScreen(
             try {
                 val action = if (layer.type == LayerType.TEXT) {
                     val local = atTime - layer.resolvedKeyframeAnchorUs
-                    val metrics = metricsService.measure(layer.text.fontId, layer.text.source.evaluate(local))
+                    val metrics = metricsService.measure(layer.text.fontId, layer.text.source.evaluate(local),layer.text.effectiveLigatures(local))
                     EditorAction.FitText(layer.id, atTime, metrics.bounds(layer.text, local), mode)
                 } else withContext(Dispatchers.IO) {
                     val width: Int

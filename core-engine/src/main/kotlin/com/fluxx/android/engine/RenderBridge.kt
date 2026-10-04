@@ -2,7 +2,7 @@ package com.fluxx.android.engine
 
 /** Separate native devices/sessions for preview and export; each session has one owning worker. */
 object RenderBridge {
-    external fun upsertText(session: Long, font: String, text: String): Long
+    external fun upsertText(session: Long, font: String, text: String,ligatures: Boolean=true): Long
     external fun releaseText(session: Long, handle: Long)
     external fun textMetrics(session: Long, handle: Long): DoubleArray
     external fun prepareText(session: Long, handles: LongArray, proofOnly: Boolean = false): Boolean
@@ -11,7 +11,8 @@ object RenderBridge {
     external fun configureText(session: Long, pages: Int)
     external fun textLayer(session: Long, handle: Long, matrix: FloatArray, size: Float,
         alignment: Int, argb: Int, opacity: Float, tracking: Float = 0f, leading: Float = 0f,
-        baselineShift: Float = 0f, stroke: Int = 0xff000000.toInt(), strokeWidth: Float = 0f, paintOrder: Int = 0, softness: Float = 0f): Boolean
+        baselineShift: Float = 0f, stroke: Int = 0xff000000.toInt(), strokeWidth: Float = 0f, paintOrder: Int = 0, softness: Float = 0f,
+        modifiers: java.nio.ByteBuffer?=null): Boolean
     external fun textStats(session: Long): String
     /** Unsigned ARGB in a Long; -1 is failure. Call only on the owning paused render worker. */
     external fun readPreviewPixel(session: Long, normalizedX: Float, normalizedY: Float): Long

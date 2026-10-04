@@ -28,6 +28,16 @@ class TextEditingTest {
         assertTrue(editor.canUndo); editor.undo(); assertEquals(original, editor.state.project)
         assertFalse(editor.canUndo); editor.redo(); assertEquals(committed, editor.state.project)
     }
+    @Test fun sourceEditingUsesEffectiveLigatureModeWithoutChangingGestureProtocol() = runBlocking {
+        val editor=editor();val old=editor.state.selectedLayer!!.text
+        editor.dispatch(EditorAction.SetTextPayload(1,old.copy(tracking=AnimatableProperty1D(staticValue=100f))))
+        val modes=mutableListOf<Boolean>()
+        val controller=TextEditController(editor,this,{ _,source -> metrics(source) },measureWithLigatures={ _,source,mode ->
+            modes+=mode;metrics(source) })
+        controller.begin(1);controller.source("office");controller.finish();drain()
+        assertEquals(listOf(false,false),modes)
+        assertEquals("office",editor.state.selectedLayer!!.text.source.staticValue)
+    }
     @Test fun unchangedDraftCreatesNoKeyOrUndoAndCancelRemovesDraftKey() = runBlocking {
         val editor = editor(true); val original = editor.state.project
         val controller = TextEditController(editor, this, { _, source -> metrics(source) })

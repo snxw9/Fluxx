@@ -1,6 +1,6 @@
 # Phase 2 Status, Backend Architecture & UI Control Matrix
 
-**Text status (2026-10-01):** E1d, E1e, E2 and E3 are implemented in source and compiled; all new text device behavior remains unverified. Native debug/release compilation passed for arm64-v8a and x86_64, Kotlin debug/release and instrumentation sources compiled, and the final JVM run passed 150/150 tests. No APK was installed or launched. See [stage evidence and exact user-run checklists](TEXT_LAYER.md). The approved overflow policy uses lazy texture-array growth; range selectors and text animators remain future work.
+**Text status (2026-10-01):** E1d, E1e, E2 and E3 are implemented in source and compiled; E1–E3 device behavior was subsequently confirmed by the user; F2 remains device-unverified. Native debug/release compilation passed for arm64-v8a and x86_64, Kotlin debug/release and instrumentation sources compiled, and the final JVM run passed 150/150 tests. No APK was installed or launched. See [stage evidence and exact user-run checklists](TEXT_LAYER.md). The approved overflow policy uses lazy texture-array growth; F2 range selectors and animators are now implemented in source (see the current status below); F3 UI remains deferred.
 
 ---
 
@@ -111,10 +111,12 @@ The editing UI adheres to an immutable unidirectional state flow:
   3. `commitGesture()`: Commits final snapshot into history and disk save queue.
   4. `cancelGesture()`: Reverts transient changes cleanly on pointer cancellation.
 
-### F2 final scope and status (2026-10-03)
+### F2 implementation status (2026-10-04)
 
-The user's final F2 instructions supersede earlier gates/addenda. F1 is accepted by the user; performance/parity/lifecycle remain unrun and deferred. F2a model/codec/pure selector engine/edit actions are implemented in source, device-unverified. F2b is authorized after the F2a commit; F3 and UI improvements are deferred. No PreviewController API or gesture-protocol changes, and no agent device runs.
+F1 is user-accepted; its performance harness, pre-encode parity and lifecycle checks remain unrun and deferred under the final instruction. F2a and F2b are implemented in source, device-unverified. F3 and UI improvements remain deferred. No PreviewController API or gesture-protocol changes, no new animator UI and no agent device runs.
 
-V11 adds default-on hold-keyed Ligatures: effective on only when layer tracking evaluates to zero. Animator tracking does not split ligatures. Both source/font/mode layouts and shared membership maps must be prepared ahead of playback. V10 loading is retained permanently. Per-animator grouping, averaged cluster influence, lookup-table easing, signed spatial influence with clamped colour influence, round SDF joins and bounded SDF softness are documented deviations/semantics. Paint order stays per glyph; no paint_scope or two-pass draw.
+V11 adds default-on hold-keyed Ligatures: effective on only when layer tracking evaluates to zero. Animator tracking does not split ligatures. Both source/font/mode layouts, shared membership maps and seeded permutations for every source alternative are prepared ahead of playback. V10 loading is retained permanently. Per-animator grouping, averaged cluster influence, lookup-table easing, signed spatial influence with clamped colour influence, round SDF joins and bounded SDF softness are documented deviations/semantics. Paint order stays per glyph; no additional paint scope or two-pass draw.
 
 Detailed stage evidence and the exact user-run list are maintained in [the existing text animation plan](TEXT_ANIMATION_F1_F3_PLAN.md). No animator UI is added; data/edit actions exist for later F3 diamonds/controls.
+
+The text worker prepares both ligature layouts for every held source value, native character/cluster/word/line maps and all seeded variant permutations. Kotlin writes reusable 96-byte cluster modifier records to a prepared direct buffer; native code emits 68-byte per-glyph vertices in the existing indexed mesh. Fill/stroke, stroke threshold, softness, opacity and affine effects therefore vary by glyph without layer-wide property push constants. Preview, export and thumbnails use this same preparation/evaluation/shader path. Generic mixed-media scheduling retains its existing allocations; the prepared animator evaluator and text-only acceptance window are the zero-allocation contract. Actual 60fps and device allocation/parity evidence remain pending.

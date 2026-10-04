@@ -21,6 +21,25 @@ sealed interface AnimatorEdit {
 }
 
 object TextAnimatorActions {
+    /** Bulk timeline-key moves join the existing batch/undo transaction. */
+    fun moveAll(layer: CompositionLayer,from: Long,to: Long): List<EditorAction> {
+        if(layer.type!=LayerType.TEXT) return emptyList()
+        val result=mutableListOf<EditorAction>()
+        fun move(address: AnimatorTrackAddress) {
+            result.add(EditorAction.EditTextAnimator(layer.id,AnimatorEdit.Key(address,AnimatorKeyOperation.MOVE,from,to)))
+        }
+        fun scalar(address: AnimatorTrackAddress,p: AnimatableProperty1D) {
+            if(p.isAnimated && p.keyframes.any { it.timeUs==from }) move(address)
+        }
+        for(a in layer.text.animators) {
+            scalar(AnimatorTrackAddress(a.id),a.enabled)
+            scalar(AnimatorTrackAddress(a.id,grouping=true),a.anchorGrouping)
+            for(s in a.selectors) for(field in SelectorField.entries)
+                scalar(AnimatorTrackAddress(a.id,s.id,field),s.tracks[field.ordinal])
+            for(p in a.properties) if(from in p.activeKeyTimes()) move(AnimatorTrackAddress(a.id,property=p.property))
+        }
+        return result
+    }
     fun apply(state: EditorState,action: EditorAction.EditTextAnimator): EditorAction {
         val layer=requireNotNull(state.project.composition.layers.firstOrNull { it.id==action.id })
         require(layer.type==LayerType.TEXT)

@@ -42,14 +42,15 @@ struct VideoLayerState {
 
 class VulkanRenderer {
 public:
-    int64_t upsertText(const std::string& font, const std::string& utf8);
+    int64_t upsertText(const std::string& font, const std::string& utf8,bool ligatures=true);
     bool prepareText(const int64_t* handles, size_t count, bool proofOnly);
     bool reusePreparedText() {
         return !mPreparedTextHandles.empty() && prepareText(mPreparedTextHandles.data(),mPreparedTextHandles.size(),mPreparedProofOnly);
     }
     void configureText(unsigned pages) { mTextMaxPages=pages; }
     bool setTextLayer(int64_t handle, const float* matrix, float size, int alignment, uint32_t argb, float opacity, float tracking=0, float leading=0, float baselineShift=0,
-                      uint32_t stroke=0xff000000, float strokeWidth=0, int paintOrder=0, float softness=0);
+                      uint32_t stroke=0xff000000, float strokeWidth=0, int paintOrder=0, float softness=0,
+                      const fluxx::text::GlyphModifier* modifiers=nullptr,size_t modifierBytes=0);
     void releaseText(int64_t handle);
     std::vector<double> textMetrics(int64_t handle) const { return fluxx::text::layoutMetrics(*mTextLayouts.at(handle)); }
     bool validationEnabled() const { return mValidationEnabled; }

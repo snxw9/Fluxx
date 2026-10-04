@@ -78,7 +78,7 @@ class TextF1Test {
         assertThrows(IllegalArgumentException::class.java) { ProjectCodec.decode(bytes(12)) }
     }
     @Test fun clusterTrackingAndLeadingBoundsUsePreparedMembership() {
-        // One ligature cluster with two glyph quads followed by another cluster, plus an empty line.
+        // A combining-mark cluster with two glyph quads, another cluster, plus an empty line.
         val metrics=TextLayoutMetrics.fromNative(doubleArrayOf(1000.0,800.0,-200.0,0.0,2.0,3.0,
             1200.0,0.0,
             0.0,0.0,0.0,0.0,700.0,500.0,-700.0,
@@ -91,6 +91,23 @@ class TextF1Test {
         assertEquals(130f,logical.width,.001f); assertEquals(220f,logical.height,.001f);assertEquals(-80f,logical.top,.001f)
         val ink=metrics.ink(100f,TextAlignment.LEFT,100f,20f,10f,10f)
         assertTrue(ink.left<0);assertTrue(ink.width>130f)
+    }
+    @Test fun spacingBoundsSelectBothPreparedModesAndPopAtTrackingZero() {
+        fun prepared(clusters: Int,advance: Double): TextLayoutMetrics {
+            val data=DoubleArray(8+clusters*8)
+            data[0]=1000.0;data[1]=800.0;data[2]=-200.0;data[4]=1.0;data[5]=clusters.toDouble();data[6]=advance
+            data[7+clusters*7]=clusters.toDouble()
+            for(c in 0 until clusters) data[8+clusters*7+c]=c.toDouble()
+            return TextLayoutMetrics.fromNative(data,false)
+        }
+        val ligated=prepared(4,2000.0);val separate=prepared(6,2100.0)
+        val text=TextProperties(source=AnimatableString(staticValue="office"),size=AnimatableProperty1D(staticValue=100f),tracking=track(-100f,100f))
+        fun width(time: Long)=(if(text.effectiveLigatures(time)) ligated else separate).logical(text,time).width
+        assertEquals(160f,width(0),.001f);assertEquals(200f,width(500_000),.001f);assertEquals(260f,width(1_000_000),.001f)
+        assertEquals(210f,separate.logical(text,500_000).width,.001f)
+        assertFalse(text.copy(ligatures=AnimatableProperty1D(staticValue=0f)).effectiveLigatures(500_000))
+        assertTrue(text.copy(tracking=AnimatableProperty1D(),animators=FrozenList.of(listOf(TextAnimator(1,
+            properties=FrozenList.of(listOf(TextPropertyOverride(AnimatorProperty.TRACKING,scalar=AnimatableProperty1D(staticValue=100f)))))))).effectiveLigatures(0))
     }
     @Test fun gestureDuplicateClipboardAndSplitKeepEveryF1Track() {
         val text=TextProperties(tracking=track(-100f,100f),leading=track(0f,20f),baselineShift=track(0f,10f),

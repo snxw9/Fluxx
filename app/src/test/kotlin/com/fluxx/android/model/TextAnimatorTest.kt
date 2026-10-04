@@ -189,6 +189,18 @@ class TextAnimatorTest {
         assertEquals(500_000L,right.text.animators[0].selectors[0].start.keyframes[0].timeUs)
         assertEquals(-500_000L,right.text.animators[0].properties[0].keyTimes()[0])
     }
+    @Test fun timelineAggregationAndBulkMoveIncludeAnimatorTracksInOneUndo() {
+        val a=TextAnimator(7,selectors=FrozenList.of(listOf(TextRangeSelector(8,start=track(0f,10f)))),
+            properties=FrozenList.of(listOf(TextPropertyOverride(AnimatorProperty.TRACKING,scalar=track(0f,50f)))))
+        val editor=EditorViewModel();editor.dispatch(EditorAction.Load(project(a)));editor.dispatch(EditorAction.Select(1))
+        val original=editor.state.project
+        assertEquals(listOf(0L,1_000_000L),editor.state.selectedLayer!!.aggregateKeyTimes())
+        editor.dispatch(EditorAction.MoveKeyframe(1,oldTimeUs=1_000_000,newTimeUs=500_000))
+        val layer=editor.state.selectedLayer!!
+        assertEquals(listOf(0L,500_000L),layer.aggregateKeyTimes())
+        assertEquals(listOf(0L,500_000L),layer.text.animators[0].properties[0].keyTimes())
+        editor.undo();assertEquals(original,editor.state.project);assertFalse(editor.canUndo)
+    }
     @Test fun persistedMalformedVersionsEnumsNonfiniteSeedsAndKeysAreValidated() {
         val a=TextAnimator(7,selectors=FrozenList.of(listOf(TextRangeSelector(8,start=track(0f,10f),seed=Long.MIN_VALUE))),
             properties=FrozenList.of(listOf(TextPropertyOverride(AnimatorProperty.TRACKING,scalar=p(0f)))))

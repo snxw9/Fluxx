@@ -48,6 +48,26 @@ int main(int argc, char** argv) {
                 if(cluster.characterEnd-cluster.character>1) ligatureSpan=true;
             }
             require(ligatureSpan,"Ligature source-character span was lost");
+            const auto unligated=manager.shape("fluxx.serif","office A\xcc\x81 B\n\nC",false);
+            require(unligated->glyphs.size()>clustered->glyphs.size(),"Ligatures-off must split office");
+            require(unligated->characters.size()==clustered->characters.size(),"Shaping mode changes character membership");
+            require(unligated->lineClusterCounts[1]==0,"Unligated empty line lost");
+            const auto modeShapes=manager.stats().shapes;
+            for(int i=0;i<600;++i) {
+                require(manager.shape("fluxx.serif","office A\xcc\x81 B\n\nC",true)==clustered,"Ligated cache changed");
+                require(manager.shape("fluxx.serif","office A\xcc\x81 B\n\nC",false)==unligated,"Unligated cache changed");
+            }
+            require(manager.stats().shapes==modeShapes,"Prepared tracking zero crossings reshaped");
+            for(const auto& variant:{clustered,unligated}) {
+                const auto metrics=layoutMetrics(*variant);
+                const size_t prefix=6+variant->lineAdvances.size()*2+variant->glyphs.size()*8;
+                require(metrics[prefix]==271828,"Animator metadata marker missing");
+                require(metrics.size()==prefix+4+variant->clusters.size()*6+variant->characters.size()*4+variant->glyphs.size(),"Animator metadata size mismatch");
+                require(metrics[prefix+3]==4,"Word membership count mismatch");
+            }
+            const std::string maximum(4096,'A');
+            require(manager.shape("fluxx.sans",maximum,true)->glyphs.size()==4096,"Maximum ligated fixture glyph count");
+            require(manager.shape("fluxx.sans",maximum,false)->glyphs.size()==4096,"Maximum unligated fixture glyph count");
             auto layout = manager.shape("fluxx.sans", "AV");
             require(manager.shape("unknown.font", "AV") == layout, "Unknown font fallback/cache mismatch");
             require(manager.shape("fluxx.sans", "")->glyphs.empty(), "Empty text draws glyphs");
@@ -92,7 +112,7 @@ int main(int argc, char** argv) {
                 oversized.push_back(glyph);
             }
             require(packGlyphPages(oversized,4).rejected>0,"Four-page capacity must reject before draws");
-            std::cout << "PASS: fallback, newline, missing glyph, UTF8, pinned LRU/lifetime, concurrent shaping/rasterization\n";
+            std::cout << "PASS: dual ligature layouts/600 cached switches, cluster metadata, 4096-glyph modes, fallback, newline, missing glyph, UTF8, pinned LRU/lifetime, concurrent shaping/rasterization\n";
         } else throw std::runtime_error("Unknown CPU proof command");
         return 0;
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }

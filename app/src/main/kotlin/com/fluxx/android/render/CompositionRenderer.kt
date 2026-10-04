@@ -37,8 +37,13 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private data class FixtureLayout(val source: String, val font: String, val handle: Long)
     private val fixtureLayouts = mutableMapOf<Long, FixtureLayout>()
     private data class ProductLayout(val handle: Long, val metrics: TextLayoutMetrics)
-    private val textLayouts = LinkedHashMap<Pair<String, String>, ProductLayout>(64, .75f, true)
-    private class PreparedText(val layer: CompositionLayer, val sources: Array<String>, val layouts: Array<ProductLayout>)
+    private val textLayouts = LinkedHashMap<Triple<String, String, Boolean>, ProductLayout>(64, .75f, true)
+    private class PreparedText(val layer: CompositionLayer, val sources: Array<String>, val layouts: Array<ProductLayout>,
+        val animations: Array<PreparedTextAnimation>) {
+        var lastIndex=0
+        fun index(source: String,ligatures: Boolean): Int { var i=0;while(sources[i]!=source) i++;return i*2+(if(ligatures) 0 else 1) }
+    }
+    private val selectorEase by lazy { SelectorEaseTable() }
     private var preparedText = emptyArray<PreparedText>()
     private var preparedHandles = LongArray(0)
     private var nativePreparedTextProject: ProjectDocument? = null
@@ -48,10 +53,10 @@ class CompositionRenderer(private val context: Context, private val repository: 
         nativePreparedTextProject = null
         val layers = project.composition.layers
         onlyText = layers.isNotEmpty() && layers.all { it.type == LayerType.TEXT } && TextFixtureProvider.entries().isEmpty()
-        if (!onlyText) { preparedText = emptyArray(); return }
-        preparedText = layers.sortedWith(compareBy<CompositionLayer> { it.zOrder }.thenBy { it.id }).map { layer ->
+        preparedText = layers.filter { it.type==LayerType.TEXT }.sortedWith(compareBy<CompositionLayer> { it.zOrder }.thenBy { it.id }).map { layer ->
             val sources = (listOf(layer.text.source.staticValue) + layer.text.source.keyframes.map { it.value }).distinct().toTypedArray()
-            PreparedText(layer, sources, sources.map { textLayout(layer.text.fontId,it) }.toTypedArray())
+            val layouts=sources.flatMap { source -> listOf(textLayout(layer.text.fontId,source,true),textLayout(layer.text.fontId,source,false)) }.toTypedArray()
+            PreparedText(layer,sources,layouts,Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(layer.text,selectorEase)) })
         }.toTypedArray()
         preparedHandles = preparedText.flatMap { it.layouts.map { layout -> layout.handle } }.toLongArray()
         // Release obsolete layouts; active source-key layouts remain pinned until the next project preparation.
@@ -81,16 +86,18 @@ class CompositionRenderer(private val context: Context, private val repository: 
             val opacity = evaluatedTransform[5]; if (opacity == 0f) continue
             val local = time-layer.resolvedKeyframeAnchorUs
             val source = layer.text.source.evaluate(local)
-            var index = 0; while (entry.sources[index] != source) index++
+            val index = entry.index(source,layer.text.effectiveLigatures(local))
+            entry.lastIndex=index
             val layout = entry.layouts[index]; val text = layer.text
             val size = text.size.evaluate(local); val tracking = text.tracking.evaluate(local)
             val leading = text.leading.evaluate(local); val baseline = text.baselineShift.evaluate(local)
+            val animation=entry.animations[index];animation.evaluate(local)
             layout.metrics.logicalInto(size,tracking,leading,baseline,logicalBounds)
             LayerGeometry.textMatrixInto(matrix,evaluatedTransform,logicalBounds,comp.width,comp.height,
                 layer.referenceWidth.takeIf { it > 0 } ?: comp.width,layer.referenceHeight.takeIf { it > 0 } ?: comp.height,layer.anchorX,layer.anchorY)
             if (staged == 4) flush()
             check(RenderBridge.textLayer(session,layout.handle,matrix,size,text.alignment.ordinal,text.fill.evaluate(local),opacity,
-                tracking,leading,baseline,text.strokeColour.evaluate(local),text.strokeWidth.evaluate(local),text.paintOrder(local)))
+                tracking,leading,baseline,text.strokeColour.evaluate(local),text.strokeWidth.evaluate(local),text.paintOrder(local),modifiers=animation.modifiers))
             staged++
         }
         if (cancelled()) throw CancellationException("Superseded frame")
@@ -101,8 +108,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private var previewCompHeight = 0
     private var previewTargetWidth = 0
     private var previewTargetHeight = 0
-    private fun textLayout(font: String, source: String): ProductLayout = textLayouts.getOrPut(font to source) {
-        val handle = RenderBridge.upsertText(session, font, source)
+    private fun textLayout(font: String, source: String,ligatures: Boolean=true): ProductLayout = textLayouts.getOrPut(Triple(font,source,ligatures)) {
+        val handle = RenderBridge.upsertText(session, font, source,ligatures)
         try { ProductLayout(handle, TextLayoutMetrics.fromNative(RenderBridge.textMetrics(session, handle), source.isEmpty())) }
         catch (error: Exception) { RenderBridge.releaseText(session, handle); throw error }
     }
@@ -194,24 +201,22 @@ class CompositionRenderer(private val context: Context, private val repository: 
             }
         }
         val textForFrame = mutableMapOf<Long, ProductLayout>()
-        val textKeysForFrame = mutableSetOf<Pair<String, String>>()
+        val textAnimationsForFrame = mutableMapOf<Long,PreparedTextAnimation>()
         requireNotNull(plan).forEachActive(timeUs) { layer, _, _, _ ->
             if (layer.type == LayerType.TEXT && layer.evaluatedTransform(timeUs).opacity != 0f) {
                 val local = timeUs - layer.resolvedKeyframeAnchorUs
                 val source = layer.text.source.evaluate(local)
-                val key = layer.text.fontId to source
-                textKeysForFrame += key
-                textForFrame[layer.id] = textLayout(key.first, key.second)
-                if (layer.text.source.isAnimated) {
-                    val keys = layer.text.source.keyframes
-                    val next = PropertyTimeSearch.atOrBefore(keys, local) { it.timeUs } + 1
-                    keys.getOrNull(next)?.let { textLayout(layer.text.fontId, it.value) }
-                }
+                val entry=preparedText.first { it.layer.id==layer.id }
+                val index=entry.index(source,layer.text.effectiveLigatures(local))
+                entry.lastIndex=index
+                textForFrame[layer.id]=entry.layouts[index]
+                textAnimationsForFrame[layer.id]=entry.animations[index]
             }
         }
-        val handles = fixtures.map { requireNotNull(fixtureLayouts[it.id]).handle } + textForFrame.values.map { it.handle }
+        val handles = fixtures.map { requireNotNull(fixtureLayouts[it.id]).handle } + preparedHandles.toList()
         if (handles.isNotEmpty()) try {
-            check(RenderBridge.prepareText(session, handles.toLongArray(), fixtures.isNotEmpty() && textForFrame.isEmpty())) { "Text preparation failed" }
+            if(fixtures.isEmpty() && nativePreparedTextProject===project) check(RenderBridge.reusePreparedText(session))
+            else { check(RenderBridge.prepareText(session, handles.toLongArray(), fixtures.isNotEmpty() && preparedHandles.isEmpty())) { "Text preparation failed" };if(fixtures.isEmpty()) nativePreparedTextProject=project }
         } catch (error: TextCapacityException) {
             if (textForFrame.isEmpty()) throw error
             if (interactive) TextLayerErrors.capacity(project, textForFrame.keys.toSet(), error.message.orEmpty())
@@ -271,11 +276,12 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 val local = timeUs - layer.resolvedKeyframeAnchorUs
                 val layout = requireNotNull(textForFrame[layer.id])
                 val size = layer.text.size.evaluate(local)
+                val animation=requireNotNull(textAnimationsForFrame[layer.id]);animation.evaluate(local)
                 LayerGeometry.textMatrix(matrix, layer.evaluatedTransform(timeUs), layout.metrics.logical(layer.text, local),
                     comp.width, comp.height, referenceWidth, referenceHeight, layer.anchorX, layer.anchorY)
                 check(RenderBridge.textLayer(session, layout.handle, matrix, size, layer.text.alignment.ordinal,
                     layer.text.fill.evaluate(local), opacity, layer.text.tracking.evaluate(local), layer.text.leading.evaluate(local),
-                    layer.text.baselineShift.evaluate(local), layer.text.strokeColour.evaluate(local), layer.text.strokeWidth.evaluate(local), layer.text.paintOrder(local))) { "Could not composite text" }
+                    layer.text.baselineShift.evaluate(local), layer.text.strokeColour.evaluate(local), layer.text.strokeWidth.evaluate(local), layer.text.paintOrder(local),modifiers=animation.modifiers)) { "Could not composite text" }
             } else if(layer.type == LayerType.VIDEO) {
                 val uri=requireNotNull(layer.asset?.uri)
                 val decoder=decoder(uri)
@@ -303,15 +309,24 @@ class CompositionRenderer(private val context: Context, private val repository: 
         check(RenderBridge.finish(session)) { "Could not finish composition frame" }
         staged=0
         val iterator = textLayouts.entries.iterator()
-        var idle = textLayouts.keys.count { it !in textKeysForFrame }
+        var idle = textLayouts.values.count { it.handle !in preparedHandles }
         while (iterator.hasNext() && idle > 64) {
             val entry = iterator.next()
-            if (entry.key !in textKeysForFrame) { RenderBridge.releaseText(session, entry.value.handle); iterator.remove(); idle-- }
+            if (entry.value.handle !in preparedHandles) { RenderBridge.releaseText(session, entry.value.handle); iterator.remove(); idle-- }
         }
     }
     /** Harness reads the production layout handle after preparation; no alternate renderer. */
     internal fun preparedTextHandle(layerId: Long): Long {
         for (entry in preparedText) if (entry.layer.id == layerId) return entry.layouts[0].handle
+        error("Text layer has not been prepared")
+    }
+    internal fun textEvaluationCounters(layerId: Long,out: LongArray) {
+        require(out.size>=3)
+        for(entry in preparedText) if(entry.layer.id==layerId) {
+            val current=entry.animations[entry.lastIndex]
+            var builds=0L;for(animation in entry.animations) builds+=animation.coverageBuilds
+            out[0]=current.selectorNs;out[1]=current.geometryNs;out[2]=builds;return
+        }
         error("Text layer has not been prepared")
     }
     fun resize(width: Int,height: Int) = RenderBridge.resize(session,width,height)

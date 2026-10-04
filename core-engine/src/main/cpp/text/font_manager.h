@@ -54,7 +54,7 @@ public:
     ~FontManager();
     FontManager(const FontManager&) = delete;
     FontManager& operator=(const FontManager&) = delete;
-    std::shared_ptr<const Layout> shape(const std::string& fontId, const std::string& utf8);
+    std::shared_ptr<const Layout> shape(const std::string& fontId, const std::string& utf8, bool ligatures=true);
     std::shared_ptr<const SdfGlyph> sdf(const std::string& fontId, uint32_t glyphId, bool overlaps = true);
     std::vector<uint32_t> latinGlyphs(const std::string& fontId);
     uint32_t glyphForCodepoint(const std::string& fontId, uint32_t codepoint);

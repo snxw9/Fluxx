@@ -30,10 +30,11 @@ internal fun PreviewLayerOverlay(project: ProjectDocument, selected: Composition
     val comp = project.composition
     val context = LocalContext.current
     val textSource = selected?.text?.source?.evaluate(playheadUs - selected.resolvedKeyframeAnchorUs).orEmpty()
-    val textMetrics by produceState<TextLayoutMetrics?>(null, selected?.type, selected?.text?.fontId, textSource) {
+    val ligatures=selected?.let { it.text.effectiveLigatures(playheadUs-it.resolvedKeyframeAnchorUs) } ?: true
+    val textMetrics by produceState<TextLayoutMetrics?>(null, selected?.type, selected?.text?.fontId, textSource,ligatures) {
         value = null
         if (selected?.type == LayerType.TEXT) {
-            try { value = TextMetricsRepository.get(context).measure(selected.text.fontId, textSource) }
+            try { value = TextMetricsRepository.get(context).measure(selected.text.fontId, textSource,ligatures) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { }
         }

@@ -137,11 +137,11 @@ FontManager::FontManager(std::vector<FontInput> fonts, size_t budget, unsigned p
 }
 FontManager::~FontManager() = default;
 
-std::shared_ptr<const Layout> FontManager::shape(const std::string& id, const std::string& text) {
+std::shared_ptr<const Layout> FontManager::shape(const std::string& id, const std::string& text, bool ligatures) {
     validateUtf8(text);
     auto guard = impl_->lock();
     auto& face = impl_->resolve(id);
-    const std::string key = face.input.id + '\0' + text;
+    const std::string key = face.input.id + '\0' + (ligatures ? "1" : "0") + text;
     for (auto entry = impl_->layouts.begin(); entry != impl_->layouts.end(); ++entry) {
         if (entry->key == key) {
             auto value = entry->value;
@@ -168,7 +168,8 @@ std::shared_ptr<const Layout> FontManager::shape(const std::string& id, const st
         hb_buffer_set_cluster_level(buffer.get(), HB_BUFFER_CLUSTER_LEVEL_MONOTONE_GRAPHEMES);
         // Feed each line independently, then restore global UTF-8 byte clusters.
         hb_buffer_add_utf8(buffer.get(), text.data() + start, static_cast<int>(length), 0, static_cast<int>(length));
-        hb_shape(face.font, buffer.get(), nullptr, 0);
+        const hb_feature_t disabled[]={{HB_TAG('l','i','g','a'),0,0,UINT32_MAX},{HB_TAG('c','l','i','g'),0,0,UINT32_MAX}};
+        hb_shape(face.font, buffer.get(), ligatures?nullptr:disabled, ligatures?0:2);
         if (!hb_buffer_allocation_successful(buffer.get())) throw std::bad_alloc();
         unsigned count = 0;
         const auto* info = hb_buffer_get_glyph_infos(buffer.get(), &count);
@@ -324,6 +325,26 @@ std::vector<double> layoutMetrics(const Layout& layout) {
         if (previous != UINT32_MAX && previous != layout.glyphClusters[i]) ++ordinal;
         result.push_back(ordinal); previous=layout.glyphClusters[i];
     }
+    // F2 metadata follows the legacy metrics prefix; all preparation-only.
+    uint32_t words=0;
+    for(const auto& c:layout.characters) if(c.word!=UINT32_MAX) words=std::max(words,c.word+1);
+    result.push_back(271828); result.push_back(static_cast<double>(layout.clusters.size()));
+    result.push_back(static_cast<double>(layout.characters.size())); result.push_back(words);
+    std::vector<double> starts(layout.clusters.size()), advances(layout.clusters.size());
+    int64_t clusterPen=0; uint32_t clusterLine=UINT32_MAX,previousCluster=UINT32_MAX;
+    for(size_t i=0;i<layout.glyphs.size();++i) {
+        const auto& g=layout.glyphs[i];const auto c=layout.glyphClusters[i];
+        if(g.line!=clusterLine) { clusterPen=0;clusterLine=g.line;previousCluster=UINT32_MAX; }
+        if(c!=previousCluster) starts[c]=static_cast<double>(clusterPen);
+        advances[c]+=g.xAdvance;clusterPen+=g.xAdvance;previousCluster=c;
+    }
+    for(size_t i=0;i<layout.clusters.size();++i) {
+        const auto& c=layout.clusters[i];
+        for(double v:{double(c.character),double(c.characterEnd),double(c.line),c.word==UINT32_MAX?-1.0:double(c.word),starts[i],advances[i]}) result.push_back(v);
+    }
+    for(const auto& c:layout.characters) for(double v:{double(c.line),c.word==UINT32_MAX?-1.0:double(c.word),
+        c.nonSpaceCharacter==UINT32_MAX?-1.0:double(c.nonSpaceCharacter),c.space?1.0:0.0}) result.push_back(v);
+    for(auto c:layout.glyphClusters) result.push_back(c);
     return result;
 }
 std::string layoutJson(const Layout& layout) {

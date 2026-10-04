@@ -22,8 +22,8 @@ class FontSession(assets: AssetManager) : AutoCloseable {
         return block(handle)
     }
     @Synchronized
-    fun metrics(fontId: String, text: String): DoubleArray = withHandle {
-        TextNative.metrics(it, fontId, text.toByteArray(Charsets.UTF_8))
+    fun metrics(fontId: String, text: String, ligatures: Boolean=true): DoubleArray = withHandle {
+        TextNative.metrics(it, fontId, text.toByteArray(Charsets.UTF_8),ligatures)
     }
 
     @Synchronized
@@ -38,5 +38,5 @@ internal object TextNative {
     external fun create(assets: AssetManager): Long
     external fun close(handle: Long)
     external fun shape(handle: Long, font: String, utf8: ByteArray): String
-    external fun metrics(handle: Long, font: String, utf8: ByteArray): DoubleArray
+    external fun metrics(handle: Long, font: String, utf8: ByteArray,ligatures: Boolean): DoubleArray
 }

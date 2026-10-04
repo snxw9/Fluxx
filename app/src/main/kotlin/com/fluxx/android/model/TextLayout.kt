@@ -13,6 +13,8 @@ data class TextBounds(val left: Float, val top: Float, val width: Float, val hei
 
 /** Immutable design-unit metrics from the same HarfBuzz layout used by the GPU mesh. */
 class TextLayoutMetrics private constructor(private val data: DoubleArray, val sourceEmpty: Boolean) {
+    private var boundsText: TextProperties? = null
+    private var boundsAnimation: PreparedTextAnimation? = null
     private val lines = data[4].toInt()
     private val glyphs = data[5].toInt()
     private val membership = 6 + lines + glyphs * 7
@@ -22,7 +24,8 @@ class TextLayoutMetrics private constructor(private val data: DoubleArray, val s
         data[6 + line] * factor + (clusters(line)-1).coerceAtLeast(0) * tracking * size / 1000.0
     fun logical(text: TextProperties, time: Long) = logical(text.size.evaluate(time), text.tracking.evaluate(time),
         text.leading.evaluate(time), text.baselineShift.evaluate(time))
-    fun bounds(text: TextProperties, time: Long) = logical(text, time).union(ink(text.size.evaluate(time), text.alignment,
+    fun bounds(text: TextProperties, time: Long): TextBounds = if(text.animators.isNotEmpty() && data.size>6+lines*2+glyphs*8)
+        animatedBounds(text,time) else logical(text, time).union(ink(text.size.evaluate(time), text.alignment,
         text.tracking.evaluate(time), text.leading.evaluate(time), text.baselineShift.evaluate(time), text.effectiveStrokeWidth(time)))
     fun logical(size: Float, tracking: Float = 0f, leading: Float = 0f, baseline: Float = 0f): TextBounds {
         val out = FloatArray(4); logicalInto(size, tracking, leading, baseline, out)
@@ -57,11 +60,23 @@ class TextLayoutMetrics private constructor(private val data: DoubleArray, val s
         return result
     }
     fun bounds(size: Float, alignment: TextAlignment) = logical(size).union(ink(size, alignment))
+    internal fun prepareAnimation(text: TextProperties,ease: SelectorEaseTable): PreparedTextAnimation? =
+        if(data.size>6+lines*2+glyphs*8) PreparedTextAnimation(text,data,ease) else null
+    @Synchronized fun animatedBounds(text: TextProperties,time: Long): TextBounds {
+        if(boundsText!==text) { boundsAnimation=prepareAnimation(text,SelectorEaseTable.shared);boundsText=text }
+        val animation=boundsAnimation ?: return bounds(text,time)
+        animation.evaluate(time);val b=animation.inkBounds
+        return logical(text,time).union(TextBounds(b[0],b[1],b[2],b[3]))
+    }
     companion object {
         fun fromNative(values: DoubleArray, sourceEmpty: Boolean): TextLayoutMetrics {
             require(values.size >= 6 && values.all { it.isFinite() } && values[0] > 0)
             val lines = values[4].toInt(); val glyphs = values[5].toInt()
-            require(lines >= 0 && glyphs >= 0 && (values.size.toLong() == 6L + lines + glyphs * 7L || values.size.toLong() == 6L + lines*2L + glyphs * 8L))
+            require(lines >= 0 && glyphs >= 0)
+            val prefix=6L+lines*2L+glyphs*8L
+            require(values.size.toLong()==6L+lines+glyphs*7L || values.size.toLong()==prefix ||
+                (values.size.toLong()>=prefix+4 && values[prefix.toInt()]==271828.0 &&
+                    values.size.toLong()==prefix+4+values[prefix.toInt()+1].toLong()*6+values[prefix.toInt()+2].toLong()*4+glyphs))
             repeat(glyphs) { require(values[6 + lines + it * 7].toInt() in 0 until lines) }
             return TextLayoutMetrics(values.copyOf(), sourceEmpty)
         }

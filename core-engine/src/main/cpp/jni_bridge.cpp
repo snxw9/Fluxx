@@ -95,8 +95,8 @@ static void textFailure(JNIEnv* env,const std::exception& error) {
         "com/fluxx/android/engine/TextCapacityException":"java/lang/IllegalStateException";
     env->ThrowNew(env->FindClass(type),error.what());
 }
-JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_RenderBridge_upsertText(JNIEnv* env,jobject,jlong session,jstring font,jstring text) {
-    try { return reinterpret_cast<VulkanRenderer*>(session)->upsertText(textUtf8(env,font),textUtf8(env,text)); }
+JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_RenderBridge_upsertText(JNIEnv* env,jobject,jlong session,jstring font,jstring text,jboolean ligatures) {
+    try { return reinterpret_cast<VulkanRenderer*>(session)->upsertText(textUtf8(env,font),textUtf8(env,text),ligatures); }
     catch(const std::exception& error) { textFailure(env,error); return 0; }
 }
 JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_releaseText(JNIEnv*,jobject,jlong session,jlong handle) {
@@ -128,11 +128,14 @@ JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_reusePrepa
     catch(const std::exception& error) { textFailure(env,error); return false; }
 }
 JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_textLayer(JNIEnv* env,jobject,jlong session,jlong handle,jfloatArray matrix,
-    jfloat size,jint alignment,jint argb,jfloat opacity,jfloat tracking,jfloat leading,jfloat baselineShift,jint stroke,jfloat strokeWidth,jint paintOrder,jfloat softness) {
+    jfloat size,jint alignment,jint argb,jfloat opacity,jfloat tracking,jfloat leading,jfloat baselineShift,jint stroke,jfloat strokeWidth,jint paintOrder,jfloat softness,jobject modifiers) {
     try {
         if(!matrix || env->GetArrayLength(matrix)!=16) return false;
         float m[16]; env->GetFloatArrayRegion(matrix,0,16,m); if(env->ExceptionCheck()) return false;
-        return reinterpret_cast<VulkanRenderer*>(session)->setTextLayer(handle,m,size,alignment,static_cast<uint32_t>(argb),opacity,tracking,leading,baselineShift,static_cast<uint32_t>(stroke),strokeWidth,paintOrder,softness);
+        auto* data=modifiers?static_cast<const fluxx::text::GlyphModifier*>(env->GetDirectBufferAddress(modifiers)):nullptr;
+        const jlong capacity=modifiers?env->GetDirectBufferCapacity(modifiers):0;
+        if(modifiers && (capacity<0 || (!data && capacity))) throw std::invalid_argument("Text modifiers require direct storage");
+        return reinterpret_cast<VulkanRenderer*>(session)->setTextLayer(handle,m,size,alignment,static_cast<uint32_t>(argb),opacity,tracking,leading,baselineShift,static_cast<uint32_t>(stroke),strokeWidth,paintOrder,softness,data,static_cast<size_t>(capacity));
     } catch(const std::exception& error) { textFailure(env,error); return false; }
 }
 JNIEXPORT jstring JNICALL Java_com_fluxx_android_engine_RenderBridge_textStats(JNIEnv* env,jobject,jlong session) {

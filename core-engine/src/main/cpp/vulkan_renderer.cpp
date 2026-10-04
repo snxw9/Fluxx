@@ -1293,10 +1293,10 @@ bool VulkanRenderer::beginFrame(int width, int height, int presentationWidth, in
     }
     return true;
 }
-int64_t VulkanRenderer::upsertText(const std::string& font, const std::string& utf8) {
+int64_t VulkanRenderer::upsertText(const std::string& font, const std::string& utf8,bool ligatures) {
     if(!mText) mText=std::make_unique<fluxx::text::TextRenderer>(mPhysicalDevice,mDevice,mOffscreenRenderPass,mPipelineCache,mAssetManager,mTextMaxPages);
     if(mNextTextHandle==INT64_MAX) throw std::runtime_error("Text layout handles exhausted");
-    auto layout=mText->layout(font,utf8);
+    auto layout=mText->layout(font,utf8,ligatures);
     const int64_t handle=mNextTextHandle++; mTextLayouts.emplace(handle,std::move(layout)); return handle;
 }
 void VulkanRenderer::releaseText(int64_t handle) {
@@ -1321,21 +1321,15 @@ bool VulkanRenderer::prepareText(const int64_t* handles, size_t count, bool proo
     // No command submission yet: pack/capacity validation finishes before any draw.
     return true;
 }
-bool VulkanRenderer::setTextLayer(int64_t handle, const float* matrix, float size, int alignment, uint32_t argb, float opacity, float tracking, float leading, float baselineShift, uint32_t stroke, float strokeWidth, int paintOrder, float softness) {
+bool VulkanRenderer::setTextLayer(int64_t handle, const float* matrix, float size, int alignment, uint32_t argb, float opacity, float tracking, float leading, float baselineShift, uint32_t stroke, float strokeWidth, int paintOrder, float softness,const fluxx::text::GlyphModifier* modifiers,size_t modifierBytes) {
     if(!std::isfinite(strokeWidth) || strokeWidth<0 || !std::isfinite(softness) || softness<0 || paintOrder<0 || paintOrder>1) return false;
     if(!mInitialized || !mTextPrepared || mDrawOrder.size()>=4) return false;
     DrawEntry entry{}; entry.text=true;
-    entry.mesh=mText->mesh(*mTextLayouts.at(handle),size,alignment,nullptr,tracking,leading,baselineShift);
+    const auto& layout=*mTextLayouts.at(handle);
+    if(modifiers && modifierBytes!=layout.clusters.size()*sizeof(fluxx::text::GlyphModifier)) throw std::invalid_argument("Modifier buffer size does not match clusters");
+    entry.mesh=mText->mesh(layout,size,alignment,modifiers,tracking,leading,baselineShift,argb,stroke,strokeWidth,softness);
     std::copy(matrix,matrix+16,entry.push.matrix);
-    entry.push.fill[0]=((argb>>16)&255)/255.0f; entry.push.fill[1]=((argb>>8)&255)/255.0f;
-    entry.push.fill[2]=(argb&255)/255.0f; entry.push.fill[3]=((argb>>24)&255)/255.0f;
-    entry.push.stroke[0]=((stroke>>16)&255)/255.0f; entry.push.stroke[1]=((stroke>>8)&255)/255.0f;
-    entry.push.stroke[2]=(stroke&255)/255.0f; entry.push.stroke[3]=((stroke>>24)&255)/255.0f;
-    const float half=std::min(strokeWidth*.5f,size*.10f);
-    const float soft=std::min(softness,std::max(0.0f,size*.10f-half));
-    const float distanceScale=fluxx::text::FontManager::Ppem/(2.0f*fluxx::text::FontManager::Spread*size);
-    entry.push.sdf[0]=half*distanceScale; entry.push.sdf[1]=soft*distanceScale;
-    entry.push.sdf[2]=static_cast<float>(paintOrder); entry.push.sdf[3]=opacity;
+    entry.push.settings[0]=static_cast<float>(paintOrder);entry.push.settings[1]=opacity;
     mDrawOrder.push_back(entry); return true;
 }
 std::string VulkanRenderer::textStatsJson() const {

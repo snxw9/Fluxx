@@ -60,6 +60,7 @@ object SelectorMath {
 /** Prepared once: 21×21 ease pairs and 257 coverage samples. Trilinear interpolation
  * handles animated fractional ease without pow or rebuilding tables during evaluation. */
 class SelectorEaseTable {
+    companion object { val shared by lazy { SelectorEaseTable() } }
     private val samples=DoubleArray(21*21*257)
     init { for(l in 0..20) for(h in 0..20) for(i in 0..256) {
         val t=i/256.0; val p=2.0.pow((l*10-100)/100.0);val q=2.0.pow((h*10-100)/100.0)

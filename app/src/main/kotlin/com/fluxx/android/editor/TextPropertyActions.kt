@@ -6,8 +6,11 @@ import com.fluxx.android.model.*
 internal object TextPropertyActions {
     private val properties = AnimPropertyType.entries.filter { it.ordinal >= AnimPropertyType.FONT_SIZE.ordinal }.toSet()
     fun apply(state: EditorState, action: EditorAction): EditorAction? {
-        if (action is EditorAction.MoveKeyframe && action.property == null)
-            return EditorAction.Batch(AnimPropertyType.entries.map { action.copy(property = it) })
+        if (action is EditorAction.MoveKeyframe && action.property == null) {
+            val layer=requireNotNull(state.project.composition.layers.firstOrNull { it.id==action.id })
+            return EditorAction.Batch(AnimPropertyType.entries.map { action.copy(property = it) } +
+                TextAnimatorActions.moveAll(layer,action.oldTimeUs,action.newTimeUs))
+        }
         val id: Long; val property: AnimPropertyType
         when (action) {
             is EditorAction.ToggleAnimated -> { id = action.id; property = action.property }
@@ -99,6 +102,13 @@ fun CompositionLayer.propertyKeyTimes(property: AnimPropertyType): List<Long> = 
     AnimPropertyType.STROKE_COLOUR -> text.strokeColour.takeIf { it.isAnimated }?.keyframes?.map { it.timeUs }
     else -> text.scalar(property).takeIf { it.isAnimated }?.keyframes?.map { it.timeUs }
 }.orEmpty()
+
+/** Anchor-relative aggregation for the existing timeline model; no new UI controls. */
+fun CompositionLayer.aggregateKeyTimes(): List<Long> {
+    val properties=if(type==LayerType.TEXT) AnimPropertyType.entries else AnimPropertyType.entries.take(4)
+    return (properties.flatMap { propertyKeyTimes(it) } +
+        if(type==LayerType.TEXT) text.animators.flatMap { it.activeKeyTimes() } else emptyList()).distinct().sorted()
+}
 
 fun TextProperties.scalar(property: AnimPropertyType): AnimatableProperty1D = when (property) {
     AnimPropertyType.FONT_SIZE -> size

@@ -16,8 +16,11 @@ class NativeTextMetricsProvider(context: Context) : TextMetricsProvider, AutoClo
         FontSession(context.applicationContext.assets)
     }
     override fun measure(fontId: String, source: String): TextLayoutMetrics {
+        return measure(fontId,source,true)
+    }
+    fun measure(fontId: String,source: String,ligatures: Boolean): TextLayoutMetrics {
         check(Thread.currentThread() === owner && Looper.myLooper() != Looper.getMainLooper())
-        return TextLayoutMetrics.fromNative(session.metrics(fontId, source), source.isEmpty())
+        return TextLayoutMetrics.fromNative(session.metrics(fontId, source,ligatures), source.isEmpty())
     }
     override fun close() { check(Thread.currentThread() === owner); session.close() }
 }
@@ -26,15 +29,21 @@ class NativeTextMetricsProvider(context: Context) : TextMetricsProvider, AutoClo
 class TextMetricsRepository private constructor(context: Context) {
     private val app = context.applicationContext
     private val dispatcher = Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "Fluxx-text-metrics") }.asCoroutineDispatcher()
-    private val cache = object : LinkedHashMap<Pair<String, String>, TextLayoutMetrics>(64, .75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Pair<String, String>, TextLayoutMetrics>?) = size > 64
+    private val cache = object : LinkedHashMap<Triple<String, String,Boolean>, TextLayoutMetrics>(64, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Triple<String, String,Boolean>, TextLayoutMetrics>?) = size > 64
     }
     private var provider: NativeTextMetricsProvider? = null
-    suspend fun measure(font: String, source: String): TextLayoutMetrics = withContext(dispatcher) {
+    suspend fun measure(font: String, source: String,ligatures: Boolean=true): TextLayoutMetrics = withContext(dispatcher) {
         check(Looper.myLooper() != Looper.getMainLooper())
-        cache.getOrPut(font to source) {
+        // Prepare the partner layout too: a tracking zero crossing can reuse geometry immediately.
+        val partner=Triple(font,source,!ligatures)
+        if(!cache.containsKey(partner)) {
+            val native=provider ?: NativeTextMetricsProvider(app).also { provider=it }
+            cache[partner]=native.measure(font,source,!ligatures)
+        }
+        cache.getOrPut(Triple(font,source,ligatures)) {
             val native = provider ?: NativeTextMetricsProvider(app).also { provider = it }
-            native.measure(font, source)
+            native.measure(font, source,ligatures)
         }
     }
     companion object {

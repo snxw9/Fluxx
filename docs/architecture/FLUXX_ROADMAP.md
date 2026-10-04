@@ -28,7 +28,7 @@ The full SDD scope — dual Graph Editor, 15 effects, masks/mattes/blend modes, 
 
 ## Current Status & Active Phase
 
-Fluxx is currently in **Phase 2: Timeline + Multiple Layers**. Text F2a (v11 model/codec, pure selector engine and edit actions) is implemented in source with compile/JVM verification; rendering integration (F2b) is authorized after the F2a commit; F1 performance/parity/lifecycle remain unrun and deferred. See the [existing text animation plan](../checkpoints/TEXT_ANIMATION_F1_F3_PLAN.md#f2a-implementation-and-verification).
+Fluxx is currently in **Phase 2: Timeline + Multiple Layers**. F2a/F2b text animator engine is implemented in source with compile/JVM/host verification; device performance/parity/lifecycle remain unverified. F1 is user-accepted, with its performance/parity/lifecycle checks deferred. F3 animator UI remains future work. See the [existing text animation plan](../checkpoints/TEXT_ANIMATION_F1_F3_PLAN.md#f2b-implementation-and-verification).
 - **Steps A, B, and C** (backend composition model, Vulkan multi-layer rendering, audio mixing, and mobile editing UI across shell, inspector, timeline, browser, and autosave) are **implemented in source**.
 - Android debug Kotlin and native debug/release compilation passed during E1b/E1c; the user confirmed A16 E1a render/playback/export smoke. Feature-specific phone/JVM acceptance remains where explicitly listed; see the status matrix and text checkpoint.
 - Comprehensive feature specifications and verification checklists are consolidated under [`docs/checkpoints/`](../checkpoints/):
@@ -39,7 +39,7 @@ Fluxx is currently in **Phase 2: Timeline + Multiple Layers**. Text F2a (v11 mod
   - [**Autosave & Persistence**](../checkpoints/AUTOSAVE.md)
   - [**Composition & Layer Markers**](../checkpoints/MARKERS.md) — implemented in source; tests and phone acceptance pending.
   - [**Timeline Layout & Automatic Duration**](../checkpoints/TIMELINE_LAYOUT.md) — compact separated ruler/tracks/inspector regions, frame-grid ticks, content-driven new projects; source implementation with validation pending.
-- **Current focus:** Phase 2 text F2a (implemented in source; F2b gated). The final user instruction treats F1 performance/parity/lifecycle as unrun and deferred; prior status claims do not establish those checks. The user confirmed E1–E3 text behavior on device. [F1 checkpoint](../checkpoints/TEXT_F1_IMPLEMENTATION.md) records v10 property completion, spread evidence and A16 test results. E2 uses the approved lazy 2048 R8 texture-array atlas; E3 includes text creation, fixed Edit Text controls, workspace IME handling, shared geometry and one undo entry per typing session. Separate golden/16 KB evidence remains outstanding. The historical E1–E3 JVM run passed 150/150 tests; see the F1 checkpoint for current validation.
+- **Current focus:** Phase 2 text F2 engine (F2a/F2b implemented in source, device-unverified; F3 deferred). The final user instruction treats F1 performance/parity/lifecycle as unrun and deferred; prior status claims do not establish those checks. The user confirmed E1–E3 text behavior on device. [F1 checkpoint](../checkpoints/TEXT_F1_IMPLEMENTATION.md) records v10 property completion, spread evidence and outstanding A16 tests. E2 uses the approved lazy 2048 R8 texture-array atlas; E3 includes text creation, fixed Edit Text controls, workspace IME handling, shared geometry and one undo entry per typing session. Separate golden/16 KB evidence remains outstanding. The historical E1–E3 JVM run passed 150/150 tests; see the F1 checkpoint for current validation.
 
 ---
 
@@ -100,10 +100,13 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
   - E1a A16 smoke and E1b/E1c acceptance are recorded in [TEXT_LAYER.md](../checkpoints/TEXT_LAYER.md). E1d/E1e/E2/E3 are implemented in source and compiled, with 150 passing JVM tests. Texture-array overflow, v9 and editor wiring are complete in source; Separate 16 KB/golden evidence remains outstanding; E1–E3 device behavior is user-confirmed.
   - User-confirmed E1–E3 device behavior is distinct from separate golden/16 KB verification. Text data model, typography editor, font layout, and Vulkan glyph/quad rendering are implemented in source. [E2/E3 animation contract](../checkpoints/TEXT_LAYER_IMPLEMENTATION_PLAN.md#31-universal-text-property-animation): size/fill and hold-keyed Source Text reuse the property framework; remaining text animation is future work. E1–E3 device behavior is user-confirmed; separate golden/16 KB evidence remains tracked in the checkpoint.
 
-- [ ] **Step F1: Text property completion**
+- [x] **Step F1: Text property completion**
   - Approved with amendments: tracking, additive leading, baseline shift, centred SDF stroke colour/width and hold-keyed paint order through existing animation/gesture infrastructure; additive v10 persistence.
-  - Implemented in source with compile/JVM and host spread evidence; F1 phone, visual, parity and thermal acceptance remain user-run. [Implementation and exact user-run list](../checkpoints/TEXT_F1_IMPLEMENTATION.md).
-  - F2 animator engine and F3 animator UI remain separately gated; F2 may use additive v11 while retaining v10 loading.
+  - Implemented in source with compile/JVM and host spread evidence; the user accepts F1 device checks except performance/parity/lifecycle, which remain unrun and deferred. [Implementation and exact user-run list](../checkpoints/TEXT_F1_IMPLEMENTATION.md).
+- [x] **Step F2: Text animator engine (F2a then F2b)**
+  - Additive v11 codec/model, selector engine and editing actions; per-glyph prepared rendering and dual ligature layouts implemented in source. V10 loading is permanent. Compile/JVM/host results and exact device list are in [the existing animation plan](../checkpoints/TEXT_ANIMATION_F1_F3_PLAN.md#f2b-implementation-and-verification). Device 60fps/zero-allocation/parity/lifecycle remain unverified; no limits have been reduced.
+- [ ] **Step F3: Animator UI**
+  - Deferred: Add Animator picker, fixed selector pages, diamonds and preview range handles. No new UI in F2.
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.
 

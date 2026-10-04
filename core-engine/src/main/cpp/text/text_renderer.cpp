@@ -145,10 +145,12 @@ void TextRenderer::createPipeline() {
         VkVertexInputBindingDescription bindingDescription{0,sizeof(TextVertex),VK_VERTEX_INPUT_RATE_VERTEX};
         VkVertexInputAttributeDescription attributes[]={{0,0,VK_FORMAT_R32G32_SFLOAT,offsetof(TextVertex,x)},
             {1,0,VK_FORMAT_R32G32_SFLOAT,offsetof(TextVertex,u)},{2,0,VK_FORMAT_R32G32B32A32_SFLOAT,offsetof(TextVertex,colour)},
-            {3,0,VK_FORMAT_R32_SFLOAT,offsetof(TextVertex,page)}};
+            {3,0,VK_FORMAT_R32_SFLOAT,offsetof(TextVertex,page)},
+            {4,0,VK_FORMAT_R32G32B32A32_SFLOAT,offsetof(TextVertex,stroke)},
+            {5,0,VK_FORMAT_R32G32B32A32_SFLOAT,offsetof(TextVertex,sdf)}};
         VkPipelineVertexInputStateCreateInfo input{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
         input.vertexBindingDescriptionCount=1; input.pVertexBindingDescriptions=&bindingDescription;
-        input.vertexAttributeDescriptionCount=4; input.pVertexAttributeDescriptions=attributes;
+    input.vertexAttributeDescriptionCount=6; input.pVertexAttributeDescriptions=attributes;
         VkPipelineInputAssemblyStateCreateInfo assembly{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO}; assembly.topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         VkPipelineViewportStateCreateInfo viewport{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO}; viewport.viewportCount=1; viewport.scissorCount=1;
         VkPipelineRasterizationStateCreateInfo raster{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
@@ -173,8 +175,8 @@ void TextRenderer::createPipeline() {
     }
     vkDestroyShaderModule(device_,vert,nullptr); vkDestroyShaderModule(device_,frag,nullptr);
 }
-std::shared_ptr<const Layout> TextRenderer::layout(const std::string& font, const std::string& utf8) {
-    auto result=fonts_->shape(font,utf8);
+std::shared_ptr<const Layout> TextRenderer::layout(const std::string& font, const std::string& utf8, bool ligatures) {
+    auto result=fonts_->shape(font,utf8,ligatures);
     std::set<uint32_t> unique;
     for(const auto& glyph:result->glyphs) if(unique.insert(glyph.id).second) fonts_->sdf(result->fontId,glyph.id);
     return result;
@@ -244,12 +246,11 @@ void TextRenderer::prepareMesh(const std::shared_ptr<const Layout>& layout) {
     buffer(vertex_,vertices_.capacity()*sizeof(TextVertex),VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     buffer(index_,indices_.capacity()*sizeof(uint32_t),VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 }
-TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, const std::vector<GlyphModifier>* modifiers,
-                            float tracking, float leading, float baselineShift) {
+TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, const GlyphModifier* modifiers,
+                            float tracking, float leading, float baselineShift,uint32_t fill,uint32_t stroke,float strokeWidth,float softness) {
     const auto started=std::chrono::steady_clock::now();
     if(!std::isfinite(size) || size<=0 || alignment<0 || alignment>2 || !std::isfinite(tracking) ||
         !std::isfinite(leading) || !std::isfinite(baselineShift)) throw std::invalid_argument("Invalid text mesh inputs");
-    if(modifiers && modifiers->size()!=layout.glyphs.size()) throw std::invalid_argument("Glyph modifier count mismatch");
     const auto& prepared=preparedLayouts_.at(&layout);
     if(prepared.generation!=stats_.generation) throw std::logic_error("Stale text preparation");
     if(vertices_.size()+layout.glyphs.size()*4>vertices_.capacity() || indices_.size()+layout.glyphs.size()*6>indices_.capacity())
@@ -281,9 +282,23 @@ TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, con
             TextVertex quad[]={{x,y,p.u,p.v},{x+w,y,p.u+du,p.v},{x,y+h,p.u,p.v+dv},{x+w,y+h,p.u+du,p.v+dv}};
             for(auto& vertex:quad) {
                 vertex.page=static_cast<float>(p.page);
-                if(modifiers) { const auto& m=(*modifiers)[ordinal]; const float px=vertex.x-x,py=vertex.y-y;
-                    vertex.x=x+m.a*px+m.c*py+m.tx; vertex.y=y+m.b*px+m.d*py+m.ty;
-                    for(int c=0;c<4;++c) vertex.colour[c]=m.rgba[c]; vertex.colour[3]*=m.opacity; }
+                if(modifiers) { const auto& m=modifiers[layout.glyphClusters[ordinal]];
+                    const float px=vertex.x+m.offsetX,py=vertex.y+m.offsetY;
+                    vertex.x=m.a*px+m.c*py+m.tx;vertex.y=m.b*px+m.d*py+m.ty;
+                    std::copy(m.fill,m.fill+4,vertex.colour);std::copy(m.stroke,m.stroke+4,vertex.stroke);
+                    vertex.sdf[0]=m.halfStroke;vertex.sdf[1]=m.softness;vertex.sdf[2]=m.opacity;
+                } else {
+                    for(int channel=0;channel<4;++channel) {
+                        const unsigned shift=channel==3?24:16-channel*8;
+                        vertex.colour[channel]=((fill>>shift)&255)/255.0f;
+                        vertex.stroke[channel]=((stroke>>shift)&255)/255.0f;
+                    }
+                    const float half=std::min(strokeWidth*.5f,size*.10f),soft=std::min(softness,std::max(0.0f,size*.10f-half));
+                    const float distanceScale=FontManager::Ppem/(2.0f*FontManager::Spread*size);
+                    vertex.sdf[0]=half*distanceScale;vertex.sdf[1]=soft*distanceScale;vertex.sdf[2]=1;
+                }
+                if(!std::isfinite(vertex.x) || !std::isfinite(vertex.y))
+                    throw std::overflow_error("Text animator arithmetic exceeds finite mesh geometry");
                 vertices_.push_back(vertex);
             }
             for(uint32_t index:{0u,1u,2u,1u,3u,2u}) indices_.push_back(base+index);

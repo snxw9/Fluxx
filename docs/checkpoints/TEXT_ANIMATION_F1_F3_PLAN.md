@@ -1,6 +1,6 @@
 # Text Animation: F1–F3 Plan
 
-Status: final F2 instructions supersede all earlier amendments. F1 is user-accepted; performance/parity/lifecycle remain unrun and deferred. F2a then F2b are authorized in one pass, two commits. No device runs by the agent; no UI. F3 remains deferred.
+Status: F2a and F2b are implemented in source in two ordered commits, device-unverified. F1 is user-accepted; its performance harness, pre-encode parity and lifecycle checks remain unrun and deferred under the final instruction. F2a and F2b are implemented in source, device-unverified. F3 and UI improvements remain deferred. No PreviewController API or gesture-protocol changes, no new animator UI and no agent device runs.
 
 The approved amendments take precedence over the original plan: requested stroke width is stored unchanged and clamped per evaluated font size; stroke half-width and F2 softness share a 0.10em distance budget; the host spread spike compares 48/8 with 64/12 without changing production defaults; centred strokes compose in both orders with translucent fill, round joins and padded bounds; the final v11 Ligatures rule supersedes F1 cluster-preservation behavior; RTL/complex scripts remain excluded; F2 may introduce additive v11 while permanently retaining v10 loading; native new and Kotlin worker allocation canaries/deltas measure 600 frames and repeat after three minutes load, with p99; and cluster/character/word/line metadata is prepared once with the layout for F2 reuse.
 
@@ -68,7 +68,7 @@ Target zero allocations, shaping calls, rasterizations and atlas uploads during 
 
 ## F2 — Detailed animator engine plan
 
-Status: F2a is model/codec/pure engine/edit actions, followed by F2b rendering after its commit. F1 performance results are no longer a gate. Per-glyph painting remains; no paint_scope or two-pass path. PreviewController API and gesture protocol remain unchanged.
+Status: F2a is model/codec/pure engine/edit actions, followed by F2b rendering after its commit. F1 performance results are no longer a gate. Per-glyph painting remains; no additional paint scope or two-pass path. PreviewController API and gesture protocol remain unchanged.
 
 The formulas below define Fluxx behavior precisely; they do not claim numerical equivalence with AE's undocumented implementation. Adobe documents the selector controls but places Min/Max Amount under Wiggly selectors. Applying those controls to Fluxx range selectors is an explicit extension. Reference: [Adobe text animation](https://helpx.adobe.com/uk/after-effects/desktop/animating-text/text-animation/animating-text.html).
 
@@ -219,7 +219,7 @@ M = T(position×c) × T(pivot) × R(rotation×c)
 
 Use existing downward-positive local coordinates; F1 baseline shift remains positive upward.
 
-Anchor grouping choices: Characters (indivisible clusters), Words, Lines, All. Compute centres from post-spacing logical advance bounds, excluding SDF padding, stroke expansion and previous animator transforms. Word groups exclude separator spaces; separators fall back to their cluster pivot. Pivots remain fixed while animator matrices compose, avoiding order-dependent pivot drift.
+Anchor grouping choices: Characters (indivisible clusters), Words, Lines, All. Compute centres from post-spacing logical advance bounds, excluding SDF padding, stroke expansion and previous animator transforms. Baseline shift participates in these post-spacing pivot coordinates. Word groups exclude separator spaces; separators fall back to their cluster pivot. Pivots remain fixed while animator matrices compose, avoiding order-dependent pivot drift.
 
 Grouping is per animator here, per layer in AE: different animator pivots are intentional. Anchor offset moves glyphs by -c×anchor even with identity rotation/skew/scale. A JVM fixture verifies anchor-only animation is not a no-op.
 
@@ -257,7 +257,7 @@ Confirmed F1: one indexed draw, fill/stroke compositing per glyph in the fragmen
 
 Add F1 acceptance: thick contrasting stroke, translucent fill and negative tracking in both paint orders; AV, Noto Serif office, rotated text and animated overlap.
 
-Final decision: retain per-glyph composition in both orders, including overlap behavior. Do not add paint_scope or two-pass rendering. Per-glyph fill/stroke/softness/opacity must be attributes or indexed GPU data, not layer push constants.
+Final decision: retain per-glyph composition in both orders, including overlap behavior. Do not add an additional paint scope or two-pass rendering. Per-glyph fill/stroke/softness/opacity must be attributes or indexed GPU data, not layer push constants.
 
 ### 6. Evaluation, storage and performance
 
@@ -275,11 +275,11 @@ Per frame:
 8. Clamp stroke/softness, emit indexed mesh/bounds.
 9. Draw through the shared compositor.
 
-Glyph work is O(glyphs × selectors + glyphs × active properties), including linear member/line passes. Track lookup is additional and performed once per track using existing searches, not per glyph.
+Glyph work is O(glyphs × total selectors + glyphs × total properties), plus linear member/line and animator passes; source-character projection is bounded by the 4096 UTF-16-unit source limit. Track lookup is additional and performed once per track using existing searches, not per glyph.
 
 No allocation, shaping, rasterization, atlas upload or permutation generation in prepared evaluation. Structural edits/preparation may allocate. PreviewController API and gesture protocol remain unchanged.
 
-Proposed v11 limits: 16 animators per text layer, eight selectors per animator, one override per property per animator. These bound storage and evaluation; they are resource proposals, not evidence of A16 real-time performance.
+Implemented v11 limits: 16 animators per text layer, eight selectors per animator, one override per property per animator. These bound storage and evaluation; they are validated source limits, not evidence of A16 real-time performance.
 
 Fixtures:
 
@@ -290,7 +290,7 @@ Warm 120 frames, measure 600, repeat after 180 seconds continuous load. Archive 
 
 Report representative and maximum 60fps results separately, frames exceeding 16.67ms, cold/hot differences and thermal state. Revisit limits or optimization if supported workloads fail. No measured F2 numbers exist yet.
 
-Ease zero/zero uses an exact identity fast path. Otherwise use a prepared lookup table interpolating coverage and both ease inputs, including animated fractional ease, without per-frame pow/table rebuilding. Document/test approximation error. Skip disabled groups/selectors and cache static coverage until inputs/membership change. Lower limits if the 4,096-glyph maximum cannot meet 60fps.
+Ease zero/zero uses an exact identity fast path. Otherwise use a prepared lookup table interpolating coverage and both ease inputs, including animated fractional ease, without per-frame pow/table rebuilding. Document/test approximation error. Skip disabled groups/selectors and cache static coverage until inputs/membership change. Propose lower limits if the 4,096-glyph maximum cannot meet 60fps; do not silently change them.
 
 ### 7. Additive v11 schema and validation
 
@@ -300,6 +300,7 @@ Preserve all field ordinals and permanently retain the v10 loader.
 |----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | TextAnimator         | id:ulong, name:string, enabled:AnimatableProperty1D, selectors:[TextRangeSelector], anchor_grouping:AnimatableProperty1D                                                                     |
 | TextRangeSelector    | id:ulong; enabled, start, end, offset, units, based_on, shape, smoothness, ease_high, ease_low, mode, amount, min_amount, max_amount, randomize_order (all AnimatableProperty1D); seed:ulong |
+| TextPayload          | ligatures:AnimatableProperty1D (default-on, validated boolean, hold evaluation) |
 | TextPropertyOverride | scalar:AnimatableProperty1D, vector:AnimatableProperty2D, colour:AnimatableColour                                                                                                            |
 
 Existing property_id identifies one typed payload:
@@ -331,7 +332,7 @@ Validation:
 
 ### 8. Editing and persistence
 
-Address properties by (layerId, animatorId, selectorId?, propertyId), not list indices. Extend existing edit actions, auto-keying, diamonds, navigation, freeze/reset and timeline aggregation. Group/selector creation, removal and reordering each form one undo transaction.
+Address properties by (layerId, animatorId, selectorId?, propertyId), not list indices. Extend existing backend edit actions, auto-keying, diamond-state/key-time data, navigation, freeze/reset and timeline aggregation. `aggregateKeyTimes()` supplies the complete anchor-relative union; bulk `MoveKeyframe` moves animator keys atomically with layer keys. F3 exposes animator-specific controls and their diamonds; no new UI controls or timeline gesture protocol are introduced here. Group/selector creation, removal and reordering each form one undo transaction.
 
 Copy/paste and duplicate preserve seeds, values and order, assigning new object IDs. Trim/extend retain established keyframe origins. Split/clipboard rebasing shifts all numeric/discrete tracks with checked signed arithmetic; seeds/permutations do not change with time rebasing.
 
@@ -368,21 +369,32 @@ F2a and F2b are authorized in order; per-glyph painting is final. F1 performance
 
 ### F2a implementation and verification
 
-Final-decision stage verification: app debug Kotlin and all 174 JVM tests passed (17 animator tests), log `tools/text/results/f2a-final-decisions.log`. Existing host text-proof selftest passed. This includes Ligatures hold/zero-crossing selection, persistence, split/copy/duplicate, both selector projection assumptions and all four membership domains. Rendering/shaping changes are reserved for F2b after this stage's commit. No device run is part of this verification.
+Commit `c059f85` implements additive v11 typed tables/model/codec/validation, permanent v10 loading, pure selector/ease/mode/projection/permutation evaluation and backend edit/key/reorder/undo/copy/split integration. App debug Kotlin and 174 JVM tests passed, including 17 animator tests; zero failures/errors/skips. Existing host selftest passed. Log: `tools/text/results/f2a-final-decisions.log`. F2a did not change renderer, mesh, shaders or JNI.
 
-Implemented in source: additive v11 reserved-table extensions and generated Kotlin tables; typed immutable groups/selectors/overrides; strict codec/model validation including legacy v10 loading and ambiguous singular/vector rejection; pure selector shapes/modes, signed amounts, normalized crossed Min/Max, ligature projection, SplitMix64/Fisher–Yates; prepared four-variant permutations; static-coverage caching and disabled execution; backend edit actions, key navigation, reorder, undo/redo, fresh copy identities with preserved seeds, and split rebasing.
+The ease table is 21×21×257 doubles (about 0.91 MB) with exact zero/zero identity and endpoint paths. Sampled regression error is below 0.017; this is an approximation regression, not a formal global bound or an AE equivalence guarantee.
 
-The pure affine fixture applies the corrected anchor matrix; the line-shift helper uses tracking expansion rather than repeated whole-line width. Per-glyph integration remains F2b. Selector ease currently uses one prepared 21×21×257 double table (about 0.91 MB), with trilinear interpolation and exact identity/endpoint paths. JVM regression samples require absolute error below 0.017; this is an approximation test, not a formal global bound or AE equivalence claim.
+### F2b implementation and verification
 
-Compile/JVM evidence is recorded in ignored `tools/text/results/f2a-final.log`. App debug Kotlin, instrumentation Kotlin and the full JVM suite passed: 172 tests, zero failures/errors/skips, including 15 animator tests. The suite covers known SplitMix outputs/permutation, boundaries/shapes/modes, crossing easings, membership changes, caching, anchor-only motion, line anchoring, all property types, seed bits, v10 loading, malformed table versions/IDs/nonfinite values/duplicate keys, editor undo/copy/paste/reorder/split and key/reset operations.
+F2b prepares both ligature modes and all source alternatives once, extends the native F1 layout metadata and emits reusable 96-byte direct cluster modifier records into 68-byte glyph vertices. The existing indexed mesh/draw order remains. All per-glyph paint values are attributes; only layer transform/order/opacity remain shared. Both layouts and maps remain pinned through playback. Coverage caches, four variant permutations and disabled execution use the F2a engine. All transform, colour, spacing, pivot, budget and shader logic is shared by preview/export/thumbnail. No PreviewController API or gesture protocol changed. Existing geometry consumers gained ligature-mode selection only; there are no new controls or flows.
 
-No mesh, shader, renderer, JNI or UI code changes form part of F2a. On 2026-10-03, the user successfully executed `TextF1AcceptanceTest.fiveHundredGlyphsAllocateNothingColdAndAfterThreeMinutesLoad()` on the connected Samsung SM-A165F (A16) via Android Studio (`success=true`), passing both cold and 3-minute continuous load 600-frame allocation checks (0 C++ native allocations, 0 Kotlin worker thread allocations, zero Vulkan validation errors). See the F1 checkpoint for detailed results.
+Compile evidence: debug/release native arm64-v8a and x86_64, app/core Kotlin and both instrumentation source sets passed (`tools/text/results/f2b-native-instrumentation.log`). Final Kotlin/instrumentation/JVM results are in `tools/text/results/f2b-final-backend.log` and `f2b-final-tests.log`; native finite-geometry verification is in `f2b-complete.log`. Host Release build and selftest passed, including 600 cached dual-mode switches, combining marks, metadata layout and both 4096-glyph modes; all six independent shaping-reference cases passed. All 185 JVM tests passed, zero failures/errors/skips, including 18 animator tests, eight prepared-mesh/evaluation tests and the updated F1 spacing/bounds regression. Host prepared evaluation reported zero allocated bytes over its measured 600-frame window after 10,000 warm frames; this is a host JVM result only.
 
-### F2b authorization and user-run acceptance
+The evaluator has a host JVM allocation regression covering every property family, animated selector/ease and random membership, with 10,000 warm frames and a 600-frame zero-byte assertion. This does not replace ART and native device proof. Generic mixed-media scheduling retains its existing allocations outside the prepared animator evaluator. Device 60fps, pixel parity and native/ART allocation measurements remain unrun; no throughput claim or lowered limit is made.
 
-F2b is authorized immediately after the F2a commit. No agent device runs. Source acceptance fixtures cover representative 500+ glyphs x 8 animators x 4 selectors and maximum 4096 glyphs x 16 x 8; zero-allocation canaries/counters, warm 120, measure 600, and a 180-second load repeat, with p50/p95/p99/max. The user later runs these with the deferred F1 harness/parity/lifecycle checks. No device 60fps claim is made without measurements; propose lower limits if the supported maximum cannot meet 60fps.
+### Exact F2 user-run acceptance list (priority order)
 
-Preview/export/thumbnail equal-resolution pre-encode pixels must match at identical times, including random access/reverse scrubbing. Existing lifecycle, resource recovery and Vulkan validation checks remain mandatory user-run checks.
+Build the app and **androidTest** target in Android Studio; unitTest is the host JVM suite. Run instrumentation with a fresh `textRunLabel` for each invocation (for example `f2-a16-01`), using the app androidTest target. Reports are under the target app's external files `text/<label>/`. Archive the entire directory before rerunning.
+
+1. `TextF2AcceptanceTest.representativeLimitsColdAndThermal`: Noto Serif source `"AV office gy 0123456789 \n".repeat(30)`, assert 500+ shaped glyphs, eight animators × four selectors, all 13 property IDs, animated ease/offsets and seeded permutations. Archive `f2-representative/pass-0.json` and `pass-1.json`.
+2. `TextF2AcceptanceTest.maximumLimitsColdAndThermal`: `"A".repeat(4096)`, exactly 4096 glyphs, 16 animators × eight selectors, mixed shapes/modes/based-on and randomized order. Archive `f2-maximum/pass-0.json` and `pass-1.json`. These two fixtures each warm 120, measure 600, sustain 180 seconds load, warm again and measure 600. Canaries must work; native-new and Kotlin-worker deltas must be zero; shapes/rasterizations/uploads/atlas generation must stay unchanged. Reports include frame/selector/property-geometry/mesh p50/p95/p99/max, coverage builds, missed 16.667ms deadlines and Vulkan validation. p99 must meet 60fps; if not, return the JSON and propose revised limits without silently reducing the fixture. Both reports are written before assertions.
+3. `TextF2AcceptanceTest.exportVisualPropertyFixtures`: inspect `f2-visual/*.png` at 0/5/10 seconds. Check anchor-only movement, all four grouping pivots, Line Anchor 0/50/100 with animated tracking, six randomized shapes, per-glyph colours/stroke width, skew ±85 clamp, stroke/blur shared budget and size 8/72/500. Inspect thick negative-tracking translucent overlap in both paint orders, round joins, clipping and enlarged g; later strokes may cover earlier fills by the retained per-glyph order. Compare Ligatures off and the intentional tracking-zero pop; combining marks stay clustered. Animator tracking changes spacing without splitting the ligated layout. No animator controls are exposed yet.
+4. `TextF2AcceptanceTest.randomAndReversePreEncodePixelsMatch`: exact 1080×1920 preview/export/thumbnail pre-encode bytes at times 0,10s,5s,0,7.5s,5s,9s,2s, including held source alternatives, ligature mode switches, random selectors and reverse seeking. Archive `f2-parity/result.json`; encoded MP4 is a separate visual check.
+5. Run the host JVM suite, particularly `TextAnimatorTest`, `PreparedTextAnimationTest`, `TextEditingTest` and `TextF1Test`: every mode/shape/unit/map, boundary and fractional cases, negative first Subtract, crossed Min/Max easings, SplitMix64 vectors/permutations, partial ligature projection, anchor-only/order/pivots, spacing/budget, fresh copy IDs with preserved seeds, reorder/undo, key operations/navigation/aggregation, freeze/reset and checked trim/extend/split rebasing.
+6. Compatibility: load saved v10 projects (Ligatures defaults on), save/reopen v11 and repeat after duplicate/clipboard/split. Run codec malformed tests for versions, IDs, counts, duplicate properties, enum/boolean values, nonfinite inactive values/keys, key ordering and singular/vector ambiguity. Unsupported selector/property/table versions must reject with compatible-version guidance, never flatten.
+7. Existing `TextGpuAcceptanceTest` and `TextGpuProofTest`: mixed text/raster order, repack/capacity recovery, suspend/resume/recreate, teardown/resource recovery and validation enabled with zero errors. These source fixtures compile; device outcomes remain pending.
+8. Deferred F1 checks: run `TextF1AcceptanceTest.fiveHundredGlyphsAllocateNothingColdAndAfterThreeMinutesLoad` (archive both `f1-performance/pass-*.json`), `equalResolutionPreviewExportAndThumbnailPixelsMatch` and the existing lifecycle suite. The user accepted other F1 device behavior; these three checks remain unrun and deferred until the user chooses to run them.
+
+No agent device run or device JSON report exists for this F2 pass. Limits remain 16×8 and 4096 source units pending measured device acceptance. Wiggly selectors, 3D glyphs, text paths and expressions remain unsupported.
 
 ## F3 — Animator UI outline
 
@@ -394,7 +406,7 @@ F3 gets its own detailed design and approval after F2 acceptance.
 
 ## Schema impact
 
-The inspected [`project.fbs`](../../app/src/main/fbs/project.fbs) reserves the vector, but its selector and override tables cannot yet store the requested behavior. `TextRangeSelector` currently contains only a version field; `TextPropertyOverride` contains version and property ID.
+The reserved vector has been extended additively in [`project.fbs`](../../app/src/main/fbs/project.fbs). Version-2 animator/selector/override tables now carry all listed fields; v11 adds layer Ligatures. The singular selector slot remains reserved for compatibility and populated singular data is rejected. No paint-scope field was added.
 
 - F1: write v10; append typed text fields, retain old field positions and supply identity defaults when reading v9 or older documents.
 - F2: retain the reserved vector and extend its tables. F1 does not wait on F2 table design. F2 may bump additively to v11; permanently retain the v10 loader.
@@ -422,10 +434,10 @@ The adjusted executable/user-run list and completed host/JVM checks are recorded
 8. **Parity test:** capture shared renderer output at identical composition times for preview, export and thumbnail rendering. Compare equal-resolution pre-encode pixels exactly; review encoded MP4 separately.
 9. **A16 performance harness:** use `("AV office gy 0123456789 \n".repeat(30))`, assert at least 500 shaped glyphs, and animate all continuous F1 properties plus hold-keyed paint order. Warm 120 frames, measure 600 frames at Full preview; report selector/evaluation time where applicable, mesh-build and total frame p50/p95/p99/max. Repeat after approximately three minutes of continuous load.
 10. **Hot-path/resource test:** during the measured interval require zero debug native operator-new and Kotlin worker Debug.threadAllocCount deltas over the 600-frame window, with allocation canaries proving the counters work, unchanged shaping/rasterization/atlas-upload counters, no buffer growth and no Vulkan validation errors. Run the existing lifecycle/resource recovery checks.
-11. **F2 gate later:** selector boundaries and every supported shape/unit/mode; randomized seek/reopen parity; overlapping animators; all property tracks; 500+ glyph performance with declared animator/selector counts.
+11. **F2 source/device acceptance:** selector boundaries and every supported shape/unit/mode; randomized seek/reopen parity; overlapping animators; all property tracks; 500+ glyph performance with declared animator/selector counts.
 12. **F3 gate later:** picker, selector pages, preview handles, cancellation, key navigation and undo/redo on compact phone layouts.
 
-No A16 performance result is claimed yet. F2a is implemented and compile/JVM verified; F2b is authorized after the F2a commit; F3 remains deferred.
+No A16 performance result is claimed yet. F2a/F2b are implemented in source with compile/JVM/host verification; F3 remains deferred.
 
 ## Deferred scope
 

@@ -1,6 +1,6 @@
 # Fluxx — Phase 2 Changes & After Effects-Level Architecture Notes
 
-> Text status: E1d, E1e, E2 and E3 are implemented in source and compiled; all new text device behavior remains unverified. Native debug/release compilation passed for arm64-v8a and x86_64, Kotlin debug/release and instrumentation sources compiled, and the final JVM run passed 150/150 tests. No APK was installed or launched. See [stage evidence and exact user-run checklists](../checkpoints/TEXT_LAYER.md). The approved overflow policy uses lazy texture-array growth; range selectors and text animators remain future work.
+> Text status: E1d, E1e, E2 and E3 are implemented in source and compiled; E1–E3 device behavior was subsequently confirmed by the user; F2 remains device-unverified. Native debug/release compilation passed for arm64-v8a and x86_64, Kotlin debug/release and instrumentation sources compiled, and the final JVM run passed 150/150 tests. No APK was installed or launched. See [stage evidence and exact user-run checklists](../checkpoints/TEXT_LAYER.md). The approved overflow policy uses lazy texture-array growth; F2 range selectors and animators are now implemented in source (see the current status below); F3 UI remains deferred.
 
 ## Overall Direction
 
@@ -1532,10 +1532,12 @@ A new feature should ideally plug into existing systems for properties, animatio
 
 The long-term goal is for Fluxx to handle serious compositions with many layers, effects, masks, keyframes, expressions, precomps, text, shapes, audio and eventually 3D while still feeling intentionally designed for a touchscreen.
 
-### F2 final scope and status (2026-10-03)
+### F2 implementation status (2026-10-04)
 
-The user's final F2 instructions supersede earlier gates/addenda. F1 is accepted by the user; performance/parity/lifecycle remain unrun and deferred. F2a model/codec/pure selector engine/edit actions are implemented in source, device-unverified. F2b is authorized after the F2a commit; F3 and UI improvements are deferred. No PreviewController API or gesture-protocol changes, and no agent device runs.
+F1 is user-accepted; its performance harness, pre-encode parity and lifecycle checks remain unrun and deferred under the final instruction. F2a and F2b are implemented in source, device-unverified. F3 and UI improvements remain deferred. No PreviewController API or gesture-protocol changes, no new animator UI and no agent device runs.
 
-V11 adds default-on hold-keyed Ligatures: effective on only when layer tracking evaluates to zero. Animator tracking does not split ligatures. Both source/font/mode layouts and shared membership maps must be prepared ahead of playback. V10 loading is retained permanently. Per-animator grouping, averaged cluster influence, lookup-table easing, signed spatial influence with clamped colour influence, round SDF joins and bounded SDF softness are documented deviations/semantics. Paint order stays per glyph; no paint_scope or two-pass draw.
+V11 adds default-on hold-keyed Ligatures: effective on only when layer tracking evaluates to zero. Animator tracking does not split ligatures. Both source/font/mode layouts, shared membership maps and seeded permutations for every source alternative are prepared ahead of playback. V10 loading is retained permanently. Per-animator grouping, averaged cluster influence, lookup-table easing, signed spatial influence with clamped colour influence, round SDF joins and bounded SDF softness are documented deviations/semantics. Paint order stays per glyph; no additional paint scope or two-pass draw.
 
 Detailed stage evidence and the exact user-run list are maintained in [the existing text animation plan](../checkpoints/TEXT_ANIMATION_F1_F3_PLAN.md). No animator UI is added; data/edit actions exist for later F3 diamonds/controls.
+
+Explicit F2 differences from AE: anchor grouping is per animator instead of per layer; partial source-character selections average onto an indivisible cluster; the specified Fluxx selector profiles, signed modes and LUT ease approximation do not claim exact AE numerical equivalence; colour influence clamps while spatial influence extrapolates; joins remain round; SDF softness is bounded edge softness rather than Gaussian blur. Layer tracking now splits ligatures at every nonzero value and pops at zero by design. The assumption that animator tracking/line anchor never split ligatures is explicit. Per-glyph paint overlap remains intentional; there is no all-fills-over-all-strokes mode. Wiggly selectors, per-character 3D, text paths and expressions remain unsupported and version/property rejection reports compatible-version guidance.

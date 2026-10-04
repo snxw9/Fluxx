@@ -61,18 +61,18 @@ internal object TextAnimatorCodec {
                 val k=requireNotNull(p.keyframes(it));ColourKeyframe(k.timeUs,k.argb,easing(k.easing)) }))
         }
         return FrozenList.of((0 until payload.textAnimatorsLength).map { index ->
-            val a=requireNotNull(payload.textAnimators(index));require(a.version==2u)
+            val a=requireNotNull(payload.textAnimators(index));require(a.version==2u) { "Unsupported text animator version ${a.version}; open with a compatible Fluxx version. 3D, paths and expressions are not supported." }
             require(a.rangeSelector==null) { "Singular range_selector is unsupported/ambiguous with v11 selectors" }
             require(a.selectorsLength in 0..8);require(a.propertyOverridesLength in 0..AnimatorProperty.entries.size)
             val selectors=FrozenList.of((0 until a.selectorsLength).map { i ->
-                val s=requireNotNull(a.selectors(i));require(s.version==2u)
+                val s=requireNotNull(a.selectors(i));require(s.version==2u) { "Unsupported text selector version ${s.version}; only range selectors are supported. Wiggly selectors require a compatible Fluxx version." }
                 TextRangeSelector(s.id.toLong(),scalar(s.enabled),scalar(s.start),scalar(s.end),scalar(s.offset),scalar(s.units),
                     scalar(s.basedOn),scalar(s.shape),scalar(s.smoothness),scalar(s.easeHigh),scalar(s.easeLow),scalar(s.mode),
                     scalar(s.amount),scalar(s.minAmount),scalar(s.maxAmount),scalar(s.randomizeOrder),s.seed.toLong())
             })
             val properties=FrozenList.of((0 until a.propertyOverridesLength).map { i ->
-                val p=requireNotNull(a.propertyOverrides(i));require(p.version==2u)
-                require(p.propertyId in 1u..AnimatorProperty.entries.size.toUInt())
+                val p=requireNotNull(a.propertyOverrides(i));require(p.version==2u) { "Unsupported text property table version ${p.version}; open with a compatible Fluxx version." }
+                require(p.propertyId in 1u..AnimatorProperty.entries.size.toUInt()) { "Unsupported text animator property ${p.propertyId}; only the 13 supported 2D properties can be rendered. Open with a compatible Fluxx version." }
                 TextPropertyOverride(AnimatorProperty.entries[p.propertyId.toInt()-1],p.scalar?.let { scalar(it) },
                     p.vector?.let { vector(it) },p.colour?.let { colour(it) })
             })

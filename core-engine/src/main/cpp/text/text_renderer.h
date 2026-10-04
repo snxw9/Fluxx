@@ -9,15 +9,18 @@
 
 namespace fluxx::text {
 struct TextCapacityError : std::runtime_error { using std::runtime_error::runtime_error; };
-struct TextVertex { float x, y, u, v; float colour[4] = {1,1,1,1}; float page=0; };
+struct TextVertex { float x, y, u, v; float colour[4] = {1,1,1,1}; float page=0;
+    float stroke[4]={0,0,0,1}; float sdf[4]={0,0,1,0}; };
 struct GlyphModifier {
-    // Glyph-local affine transform, followed by the layer matrix.
+    // Global text-local affine after prepared spacing, followed by the layer matrix.
     float a=1, b=0, c=0, d=1, tx=0, ty=0;
-    float rgba[4]={1,1,1,1};
-    float opacity=1;
+    float offsetX=0,offsetY=0;
+    float fill[4]={1,1,1,1},stroke[4]={0,0,0,1};
+    float halfStroke=0,softness=0,opacity=1,strokePixels=0,blurPixels=0,reserved[3]={};
 };
+static_assert(sizeof(GlyphModifier)==96,"Kotlin direct modifier ABI");
 struct TextMesh { uint32_t firstIndex=0, indexCount=0; };
-struct TextPush { float matrix[16]; float fill[4]; float stroke[4]; float sdf[4]; };
+struct TextPush { float matrix[16]; float settings[4]; }; // Paint order and layer opacity only.
 struct TextGpuStats {
     uint64_t generation=0, uploads=0, uploadBytes=0, draws=0;
     uint64_t arrayRecreations=0, atlasPages=0;
@@ -33,14 +36,15 @@ public:
                  VkPipelineCache cache, AAssetManager* assets, unsigned maxPages);
     ~TextRenderer();
     TextRenderer(const TextRenderer&)=delete;
-    std::shared_ptr<const Layout> layout(const std::string& font, const std::string& utf8);
+    std::shared_ptr<const Layout> layout(const std::string& font, const std::string& utf8, bool ligatures=true);
     void collect(const std::shared_ptr<const Layout>& layout);
     // Called before recording draws. Throws a typed capacity error without a partial frame.
     void pack(bool proofOnly);
     void prepareMesh(const std::shared_ptr<const Layout>& layout);
     TextMesh mesh(const Layout& layout, float size, int alignment,
-                  const std::vector<GlyphModifier>* modifiers=nullptr,
-                  float tracking=0, float leading=0, float baselineShift=0);
+                  const GlyphModifier* modifiers=nullptr,
+                  float tracking=0, float leading=0, float baselineShift=0,
+                  uint32_t fill=0xffffffff,uint32_t stroke=0xff000000,float strokeWidth=0,float softness=0);
     void upload(VkCommandBuffer command);
     void draw(VkCommandBuffer command, const TextMesh& mesh, const TextPush& push);
     void begin();
