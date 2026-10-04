@@ -89,6 +89,8 @@ fun EditorScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var textTyping by remember { mutableStateOf(false) }
+    val fontLibrary=remember(context) { com.fluxx.android.fonts.FontLibraryRepository.getInstance(context) }
+    val libraryFonts by fontLibrary.state.collectAsState()
     val metricsService = remember(context) { TextMetricsRepository.get(context) }
     val latestPreview by rememberUpdatedState(previewController)
     val textEditor = remember(editor, scope, metricsService) {
@@ -105,7 +107,7 @@ fun EditorScreen(
     val selectedLayer = displayedState.selectedLayer
     val selectedTextSource = selectedLayer?.text?.source?.evaluateDocument(playheadUs - selectedLayer.resolvedKeyframeAnchorUs) ?: TextSourceDocument("")
     val selectedLigatures=selectedLayer?.let { it.text.effectiveLigatures(playheadUs-it.resolvedKeyframeAnchorUs) } ?: true
-    val selectedTextMetrics by produceState<TextLayoutMetrics?>(null, selectedLayer?.type, selectedLayer?.text?.fontId, selectedTextSource,selectedLigatures) {
+    val selectedTextMetrics by produceState<TextLayoutMetrics?>(null, selectedLayer?.type, selectedLayer?.text?.fontId, selectedTextSource,selectedLigatures,libraryFonts) {
         value = null
         if (selectedLayer?.type == LayerType.TEXT) try { value = metricsService.measure(selectedLayer.text.fontId, selectedTextSource,selectedLigatures) }
         catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
@@ -258,7 +260,7 @@ fun EditorScreen(
         }
     }
 
-    LaunchedEffect(previewController, project) {
+    LaunchedEffect(previewController, project,libraryFonts) {
         previewController?.let { pc ->
             if (!pc.state.value.playing) {
                 pc.update(project, playheadUs, false)

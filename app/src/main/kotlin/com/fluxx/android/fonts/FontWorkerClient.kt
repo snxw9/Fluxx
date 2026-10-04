@@ -1,0 +1,104 @@
+package com.fluxx.android.fonts
+
+import android.content.*
+import android.os.*
+import java.io.File
+import java.io.IOException
+import com.fluxx.android.model.TextFontRef
+import kotlinx.coroutines.*
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+
+/** Preparation only. Never called by a prepared frame evaluator or renderer draw. */
+class FontWorkerClient(context: Context) {
+    private val context=context.applicationContext
+    suspend fun inspect(input: File): String = withContext(Dispatchers.IO) {
+        require(input.length() in 1..FontWorkerService.MAX_FONT_BYTES.toLong()) { "Font files must be nonempty and at most 16 MiB" }
+        val output=File.createTempFile("font-metadata-",".json",context.cacheDir)
+        try {
+            withTimeout(60_000) { request(input,output) }
+            require(output.length() in 1..FontWorkerService.MAX_METADATA_BYTES.toLong()) { "Invalid font metadata size" }
+            output.readText(Charsets.UTF_8)
+        } finally { output.delete() }
+    }
+    data class FontInput(val id: String,val file: File,val reference: TextFontRef)
+    suspend fun prepare(input: ByteArray,fonts: List<FontInput>,ligatures: Boolean): ByteArray=withContext(Dispatchers.IO) {
+        require(input.size<=1024*1024 && fonts.size<=64)
+        require(fonts.sumOf { it.file.length() }<=32L*1024*1024) { "Imported font preparation exceeds 32 MiB; reduce distinct font faces" }
+        val source=File.createTempFile("font-layout-input-",".bin",context.cacheDir)
+        val output=File.createTempFile("font-layout-output-",".bin",context.cacheDir)
+        try {
+            source.writeBytes(input)
+            withTimeout(60_000) { request(source,output,FontWorkerService.PREPARE,fonts,ligatures) }
+            require(output.length() in 1..32L*1024*1024) { "Prepared text packet exceeds 32 MiB" }
+            output.readBytes()
+        } finally { source.delete();output.delete() }
+    }
+    internal suspend fun crashForTest(input: File) {
+        check(com.fluxx.android.BuildConfig.DEBUG)
+        val output=File.createTempFile("font-crash-proof-",".tmp",context.cacheDir)
+        try { withTimeout(15_000) { request(input,output,FontWorkerService.CRASH_PROOF) } }
+        finally { output.delete() }
+    }
+    private suspend fun request(input: File,output: File,operation: Int=FontWorkerService.INSPECT,
+        fonts: List<FontInput> = emptyList(),ligatures: Boolean=true)=withContext(Dispatchers.Main.immediate) {
+        suspendCancellableCoroutine<Unit> { pending ->
+            requests.incrementAndGet()
+            var bound=false
+            lateinit var connection: ServiceConnection
+            fun release() { if(bound) { bound=false;runCatching { context.unbindService(connection) } } }
+            fun failed(reason: String) { release();if(pending.isActive) pending.resumeWithException(IOException(reason)) }
+            val response=Messenger(object: Handler(Looper.getMainLooper()) {
+                override fun handleMessage(message: Message) {
+                    if(message.what!=operation || !pending.isActive) return
+                    if(message.data.getBoolean(FontWorkerService.OK)) { release();pending.resume(Unit) }
+                    else failed(message.data.getString(FontWorkerService.ERROR) ?: "Font validation failed")
+                }
+            })
+            connection=object: ServiceConnection {
+                override fun onServiceConnected(name: ComponentName,binder: IBinder) {
+                    if(!pending.isActive) { release();return }
+                    val descriptors=mutableListOf<ParcelFileDescriptor>()
+                    try {
+                        ParcelFileDescriptor.open(input,ParcelFileDescriptor.MODE_READ_ONLY).use { source ->
+                            ParcelFileDescriptor.open(output,ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_TRUNCATE).use { destination ->
+                                val message=Message.obtain(null,operation).apply {
+                                    replyTo=response
+                                    data=Bundle().apply {
+                                        putParcelable(FontWorkerService.INPUT,source);putParcelable(FontWorkerService.OUTPUT,destination)
+                                        putBoolean("ligatures",ligatures)
+                                        val rows=ArrayList<Bundle>()
+                                        for(font in fonts) {
+                                            val descriptor=ParcelFileDescriptor.open(font.file,ParcelFileDescriptor.MODE_READ_ONLY).also { descriptors.add(it) }
+                                            rows.add(Bundle().apply {
+                                                putParcelable(FontWorkerService.INPUT,descriptor);putString("id",font.id)
+                                                putInt("face",font.reference.faceIndex);putInt("instance",font.reference.namedInstance)
+                                                putString("tags",font.reference.axes.joinToString("") { it.tag })
+                                                putFloatArray("values",font.reference.axes.map { it.value.staticValue }.toFloatArray())
+                                            })
+                                        }
+                                        putParcelableArrayList(FontWorkerService.FONTS,rows)
+                                    }
+                                }
+                                Messenger(binder).send(message)
+                            }
+                        }
+                    } catch(e: Exception) { failed(e.message ?: "Cannot reach the isolated font worker") }
+                    finally { descriptors.forEach { runCatching { it.close() } } }
+                }
+                override fun onServiceDisconnected(name: ComponentName)=failed("The isolated font parser stopped. The font was not imported; try another font file.")
+                override fun onBindingDied(name: ComponentName)=failed("The isolated font parser died; the font was not imported.")
+                override fun onNullBinding(name: ComponentName)=failed("The isolated font worker is unavailable")
+            }
+            pending.invokeOnCancellation { Handler(Looper.getMainLooper()).post { release() } }
+            try {
+                bound=context.bindService(Intent(context,FontWorkerService::class.java),connection,Context.BIND_AUTO_CREATE)
+                if(!bound) failed("Cannot bind the isolated font worker")
+            } catch(e: Exception) { failed(e.message ?: "Cannot bind the isolated font worker") }
+        }
+    }
+    companion object {
+        private val requests=java.util.concurrent.atomic.AtomicLong()
+        val requestCount get()=requests.get()
+    }
+}

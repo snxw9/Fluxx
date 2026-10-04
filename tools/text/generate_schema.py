@@ -13,4 +13,6 @@ for p in (ROOT/'app/src/main/kotlin/fluxx/schema').glob('*.kt'):
         s=re.sub(r'(val (?:staticValue|value)AsByteBuffer : ByteBuffer)( get\(\))',r'\1?\2',s)
     if p.stem=='TextPayload':
         s=s.replace('ligaturesOffset: Int)', 'ligaturesOffset: Int = 0)')
+    if p.stem=='TextFontReference':
+        s=s.replace('styleNameOffset: Int)', 'styleNameOffset: Int = 0)')
     p.write_text(s,encoding='utf-8')

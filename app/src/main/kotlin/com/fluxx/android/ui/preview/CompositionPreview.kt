@@ -61,9 +61,11 @@ fun CompositionPreview(
     val density = LocalDensity.current
     val comp = project.composition
     val context = LocalContext.current
+    val fontLibrary=remember(context) { com.fluxx.android.fonts.FontLibraryRepository.getInstance(context) }
+    val libraryFonts by fontLibrary.state.collectAsState()
     val textRequests = comp.layers.filter { it.type == LayerType.TEXT && it.visible && it.timing.isActive(playheadUs) }
           .associate { val local=playheadUs-it.resolvedKeyframeAnchorUs;it.id to Triple(it.text.fontId,it.text.source.evaluateDocument(local),it.text.effectiveLigatures(local)) }
-    val textHitMetrics by produceState<Map<Long, TextLayoutMetrics>>(emptyMap(), textRequests) {
+    val textHitMetrics by produceState<Map<Long, TextLayoutMetrics>>(emptyMap(), textRequests,libraryFonts) {
         val result = mutableMapOf<Long, TextLayoutMetrics>()
         for ((id, request) in textRequests) try { result[id] = TextMetricsRepository.get(context).measure(request.first, request.second,request.third) }
         catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }

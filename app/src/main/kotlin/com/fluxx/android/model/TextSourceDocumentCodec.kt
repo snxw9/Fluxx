@@ -17,7 +17,8 @@ internal object TextSourceDocumentCodec {
                 val axisVector=fluxx.schema.TextFontReference.createAxesVector(b,axes)
                 val family=b.createString(f.family);val hash=f.sha256?.let(b::createString) ?: 0
                 val ps=b.createString(f.postScriptName)
-                fluxx.schema.TextFontReference.createTextFontReference(b,family,f.style.ordinal,hash,f.faceIndex,f.namedInstance,axisVector,ps)
+                val styleName=b.createString(f.styleName)
+                fluxx.schema.TextFontReference.createTextFontReference(b,family,f.style.ordinal,hash,f.faceIndex,f.namedInstance,axisVector,ps,styleName)
             } ?: 0
             val manual=s.manualKerning.map { fluxx.schema.TextManualKerning.createTextManualKerning(b,it.character,it.amount) }.toIntArray()
             val manualVector=fluxx.schema.TextStyleRun.createManualKerningVector(b,manual)
@@ -53,7 +54,7 @@ internal object TextSourceDocumentCodec {
                     require(v.keyframesLength==0 && !v.isAnimated) { "Animated variable-font axes are unsupported; use static axis values" }
                     TextFontAxis(requireNotNull(a.tag),AnimatableProperty1D(staticValue=v.staticValue))
                 }
-                TextFontRef(requireNotNull(f.family),choice(TextFaceStyle.entries,f.style),f.sha256,f.faceIndex,f.namedInstance,FrozenList.of(axes),f.postScriptName.orEmpty())
+                TextFontRef(requireNotNull(f.family),choice(TextFaceStyle.entries,f.style),f.sha256,f.faceIndex,f.namedInstance,FrozenList.of(axes),f.postScriptName.orEmpty(),f.styleName.orEmpty())
             }
             val manual=(0 until r.manualKerningLength).map { j -> val k=requireNotNull(r.manualKerning(j));TextManualKerning(k.character,k.amount) }
             TextStyleRun(r.start,r.end,TextRunStyle(font,r.sizeFactor,r.fill.takeIf { r.hasFill },r.stroke.takeIf { r.hasStroke },

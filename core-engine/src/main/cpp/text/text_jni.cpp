@@ -1,6 +1,7 @@
 #include "font_manager.h"
 #include "font_catalog.h"
 #include "prepared_text_packet.h"
+#include "font_inspection.h"
 #ifdef FLUXX_TEXT_DIAGNOSTICS
 #include "text_diagnostics.h"
 #endif
@@ -9,6 +10,9 @@
 #include <map>
 #include <mutex>
 #include <stdexcept>
+#include <unistd.h>
+#include <cmath>
+#include <algorithm>
 
 namespace {
 using fluxx::text::FontManager;
@@ -19,6 +23,7 @@ jlong nextSession = 1;
 void fail(JNIEnv* env, const std::exception& error) {
     if (!env->ExceptionCheck()) env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), error.what());
 }
+
 std::shared_ptr<FontManager> get(jlong id) {
     std::lock_guard<std::mutex> lock(registryMutex);
     const auto found = sessions.find(id);
@@ -49,6 +54,66 @@ std::vector<uint8_t> asset(AAssetManager* manager, const char* name) {
 }
 }
 
+extern "C" JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_IsolatedFontNative_prepare(JNIEnv* env,jobject,
+    jobject assets,jobjectArray ids,jobjectArray bytes,jintArray faceIndices,jintArray instanceIndices,
+    jobjectArray axisTags,jobjectArray axisValues,jbyteArray input,jboolean ligatures) {
+    try {
+        const auto uid=getuid()%100000;
+        if(uid<90000 || uid>99999) throw std::invalid_argument("Imported font preparation requires an isolated process");
+        if(!ids || !bytes || !faceIndices || !instanceIndices || !axisTags || !axisValues || !input)
+            throw std::invalid_argument("Missing font preparation arguments");
+        const auto count=env->GetArrayLength(ids);
+        if(count>64 || env->GetArrayLength(bytes)!=count || env->GetArrayLength(faceIndices)!=count ||
+            env->GetArrayLength(instanceIndices)!=count || env->GetArrayLength(axisTags)!=count || env->GetArrayLength(axisValues)!=count)
+            throw std::invalid_argument("Prepared text supports at most 64 imported font identities");
+        if(env->GetArrayLength(input)>1024*1024) throw std::invalid_argument("Styled input exceeds 1 MiB");
+        std::vector<jint> faces(count),instances(count);
+        if(count>0) { env->GetIntArrayRegion(faceIndices,0,count,faces.data());env->GetIntArrayRegion(instanceIndices,0,count,instances.data()); }
+        std::vector<fluxx::text::FontInput> fonts;size_t total=0;
+        auto* source=AAssetManager_fromJava(env,assets);
+        if(!source) throw std::invalid_argument("AssetManager is null");
+        const char* families[]={"fluxx.sans","fluxx.serif","fluxx.mono"};
+        const char* files[]={"Inter","NotoSerif","JetBrainsMono"};
+        const char* styles[]={"Regular","Bold","Italic","BoldItalic"};
+        const char* suffixes[]={"",".bold",".italic",".bold-italic"};
+        for(unsigned family=0;family<3;++family) for(unsigned style=0;style<4;++style)
+            fonts.push_back({std::string(families[family])+suffixes[style],asset(source,(std::string("fonts/")+files[family]+"-"+styles[style]+".ttf").c_str())});
+        for(jsize i=0;i<count;++i) {
+            const auto identity=static_cast<jstring>(env->GetObjectArrayElement(ids,i));
+            const auto data=static_cast<jbyteArray>(env->GetObjectArrayElement(bytes,i));
+            const auto tags=static_cast<jstring>(env->GetObjectArrayElement(axisTags,i));
+            const auto values=static_cast<jfloatArray>(env->GetObjectArrayElement(axisValues,i));
+            if(!data || !tags || !values) throw std::invalid_argument("Missing imported font arguments");
+            const auto length=env->GetArrayLength(data);const auto axes=env->GetArrayLength(values);
+            if(length<=0 || length>16*1024*1024 || axes>16 || faces[i]<0 || faces[i]>255 || instances[i]<-1 || instances[i]>255)
+                throw std::invalid_argument("Invalid imported font limits");
+            total+=static_cast<size_t>(length);if(total>32*1024*1024) throw std::invalid_argument("Imported font preparation exceeds 32 MiB; reduce distinct font faces");
+            fluxx::text::FontInput font;font.id=string(env,identity);font.faceIndex=static_cast<unsigned>(faces[i]);font.namedInstance=instances[i];
+            font.bytes.resize(length);env->GetByteArrayRegion(data,0,length,reinterpret_cast<jbyte*>(font.bytes.data()));
+            const auto tagString=string(env,tags);if(tagString.size()!=static_cast<size_t>(axes)*4) throw std::invalid_argument("Invalid variation tags");
+            std::vector<jfloat> coordinates(axes);if(axes>0) env->GetFloatArrayRegion(values,0,axes,coordinates.data());
+            for(jsize a=0;a<axes;++a) {
+                uint32_t tag=0;for(unsigned b=0;b<4;++b) { const auto c=static_cast<unsigned char>(tagString[static_cast<size_t>(a)*4+b]);
+                    if(c<32 || c>126) throw std::invalid_argument("Invalid variation tag");
+                    tag=(tag<<8)|c; }
+                font.variations.emplace_back(tag,coordinates[a]);
+            }
+            fonts.push_back(std::move(font));env->DeleteLocalRef(identity);env->DeleteLocalRef(data);env->DeleteLocalRef(tags);env->DeleteLocalRef(values);
+        }
+        if(env->ExceptionCheck()) return nullptr;
+        // Preparation only. No imported parser handles or bytes enter the application renderer.
+        FontManager manager(std::move(fonts));
+        std::vector<uint8_t> wire(static_cast<size_t>(env->GetArrayLength(input)));
+        env->GetByteArrayRegion(input,0,static_cast<jsize>(wire.size()),reinterpret_cast<jbyte*>(wire.data()));
+        if(env->ExceptionCheck()) return nullptr;
+        const auto styled=fluxx::text::decodeStyledInput(wire.data(),wire.size());
+        const auto layout=manager.shapeStyled("fluxx.sans",styled.text,styled.runs,styled.uppercase,ligatures);
+        const auto packet=fluxx::text::encodePreparedText(*layout,manager);
+        const auto result=env->NewByteArray(static_cast<jsize>(packet.size()));
+        if(result) env->SetByteArrayRegion(result,0,static_cast<jsize>(packet.size()),reinterpret_cast<const jbyte*>(packet.data()));
+        return result;
+    } catch(const std::exception& error) { fail(env,error);return nullptr; }
+}
 std::shared_ptr<FontManager> fluxx::text::acquireFontCatalog(AAssetManager* source) {
     std::lock_guard<std::mutex> lock(registryMutex);
     if (!source) throw std::invalid_argument("AssetManager is null");
@@ -78,6 +143,26 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_TextNative_crea
         if (nextSession == INT64_MAX) throw std::runtime_error("Font session IDs exhausted");
         const jlong id = nextSession++; sessions.emplace(id, manager); return id;
     } catch (const std::exception& error) { fail(env, error); return 0; }
+}
+extern "C" JNIEXPORT jstring JNICALL Java_com_fluxx_android_engine_IsolatedFontNative_inspect(JNIEnv* env,jobject,jbyteArray input) {
+    try {
+        // Android isolated/app-zygote isolated UIDs occupy 90000..99999 per user.
+        const auto uid=getuid()%100000;
+        if(uid<90000 || uid>99999) throw std::invalid_argument("Imported font parsing requires an isolated process");
+        if(!input || env->GetArrayLength(input)<=0 || env->GetArrayLength(input)>16*1024*1024)
+            throw std::invalid_argument("Font files must be nonempty and at most 16 MiB");
+        std::vector<uint8_t> bytes(static_cast<size_t>(env->GetArrayLength(input)));
+        env->GetByteArrayRegion(input,0,static_cast<jsize>(bytes.size()),reinterpret_cast<jbyte*>(bytes.data()));
+        if(env->ExceptionCheck()) return nullptr;
+        const auto metadata=fluxx::text::inspectFont(bytes.data(),bytes.size());
+        // Metadata may contain non-ASCII family/style names; JNI modified UTF-8 is unsuitable.
+        auto raw=env->NewByteArray(static_cast<jsize>(metadata.size()));
+        if(!raw) return nullptr;
+        env->SetByteArrayRegion(raw,0,static_cast<jsize>(metadata.size()),reinterpret_cast<const jbyte*>(metadata.data()));
+        const auto cls=env->FindClass("java/lang/String");const auto ctor=env->GetMethodID(cls,"<init>","([BLjava/lang/String;)V");
+        const auto encoding=env->NewStringUTF("UTF-8");
+        return static_cast<jstring>(env->NewObject(cls,ctor,raw,encoding));
+    } catch(const std::exception& error) { fail(env,error);return nullptr; }
 }
 extern "C" JNIEXPORT void JNICALL Java_com_fluxx_android_engine_TextNative_close(JNIEnv*, jobject, jlong id) {
     std::shared_ptr<FontManager> released;
@@ -133,6 +218,47 @@ extern "C" JNIEXPORT jdoubleArray JNICALL Java_com_fluxx_android_engine_TextNati
         const auto values=fluxx::text::layoutMetrics(*fluxx::text::decodePreparedText(buffer.data(),buffer.size()));
         auto result=env->NewDoubleArray(static_cast<jsize>(values.size()));
         if(result) env->SetDoubleArrayRegion(result,0,static_cast<jsize>(values.size()),values.data());return result;
+    } catch(const std::exception& error) { fail(env,error);return nullptr; }
+}
+extern "C" JNIEXPORT jintArray JNICALL Java_com_fluxx_android_engine_TextNative_preparedPreview(JNIEnv* env,jobject,jbyteArray input,jint width,jint height,jint colour) {
+    try {
+        if(!input || static_cast<size_t>(env->GetArrayLength(input))>fluxx::text::MaxPreparedPacketBytes || width<1 || width>1024 || height<1 || height>256)
+            throw std::invalid_argument("Invalid font preview limits");
+        std::vector<uint8_t> bytes(static_cast<size_t>(env->GetArrayLength(input)));
+        env->GetByteArrayRegion(input,0,static_cast<jsize>(bytes.size()),reinterpret_cast<jbyte*>(bytes.data()));
+        if(env->ExceptionCheck()) return nullptr;
+        const auto layout=fluxx::text::decodePreparedText(bytes.data(),bytes.size());
+        std::vector<jint> pixels(static_cast<size_t>(width)*height,0);
+        const double size=std::min(32.0,height/2.0);double pen=4;unsigned line=0;
+        for(size_t g=0;g<layout->glyphs.size();++g) {
+            const auto& glyph=layout->glyphs[g];const auto& geometry=layout->geometry[g];const auto& sdf=*layout->externalSdfs[g];
+            if(glyph.line!=line) { pen=4;line=glyph.line; }
+            const double sx=size*geometry.scaleX/48,sy=size*geometry.scaleY/48;
+            const double x=pen+size*geometry.xOffset/1000+sdf.left*sx;
+            const double y=size*1.3+line*size*1.2-size*geometry.yOffset/1000-sdf.top*sy;
+            if(sx>0 && sy>0 && sdf.width>0 && sdf.height>0) {
+                const int left=static_cast<int>(std::clamp(std::floor(x),0.0,double(width)));
+                const int right=static_cast<int>(std::clamp(std::ceil(x+sdf.width*sx),0.0,double(width)));
+                const int top=static_cast<int>(std::clamp(std::floor(y),0.0,double(height)));
+                const int bottom=static_cast<int>(std::clamp(std::ceil(y+sdf.height*sy),0.0,double(height)));
+                for(int py=top;py<bottom;++py) for(int px=left;px<right;++px) {
+                    const double u=std::clamp((px+.5-x)/sx-.5,0.0,double(sdf.width-1));
+                    const double v=std::clamp((py+.5-y)/sy-.5,0.0,double(sdf.height-1));
+                    const int a=static_cast<int>(std::floor(u)),b=static_cast<int>(std::floor(v));
+                    auto sample=[&](int ix,int iy) { return sdf.pixels[static_cast<size_t>(std::clamp(iy,0,sdf.height-1))*sdf.width+std::clamp(ix,0,sdf.width-1)]/255.0; };
+                    const double du=u-a,dv=v-b;
+                    const double value=(sample(a,b)*(1-du)+sample(a+1,b)*du)*(1-dv)+(sample(a,b+1)*(1-du)+sample(a+1,b+1)*du)*dv;
+                    const double alpha=std::clamp((value-128.0/255)*16*std::min(sx,sy)+.5,0.0,1.0);
+                    const auto index=static_cast<size_t>(py)*width+px;
+                    const double old=static_cast<uint32_t>(pixels[index])>>24;
+                    const auto combined=static_cast<uint32_t>(std::round(alpha*255+old*(1-alpha)));
+                    pixels[index]=static_cast<jint>((combined<<24)|(static_cast<uint32_t>(colour)&0xffffff));
+                }
+            }
+            pen+=geometry.advance*size/1000;
+        }
+        const auto result=env->NewIntArray(width*height);
+        if(result) env->SetIntArrayRegion(result,0,width*height,pixels.data());return result;
     } catch(const std::exception& error) { fail(env,error);return nullptr; }
 }
 extern "C" JNIEXPORT jdoubleArray JNICALL Java_com_fluxx_android_engine_TextNative_styledMetrics(JNIEnv* env,jobject,jlong id,jstring font,jbyteArray bytes,jboolean ligatures) {

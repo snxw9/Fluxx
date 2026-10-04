@@ -1779,5 +1779,15 @@
       "tag": "v2.304",
       "commit": "cd5227bd1f61dff3bbd6c814ceaf7ffd95e947d9"
     }
+  },
+  "test_fonts": {
+    "source-serif-variable-cff": {
+      "repo": "adobe-fonts/source-serif",
+      "tag": "4.005R",
+      "path": "tools/text/fixtures/SourceSerif4Variable-Roman.otf",
+      "sha256": "867b73c6a954a4a64616906d179f94572a748790a1d022ebeeff07f56ea0221a",
+      "license_path": "tools/text/fixtures/SourceSerif4-OFL.txt",
+      "license_sha256": "75784a295293a8992f5a8d99210566e0064a012e6dab6731305e3787f15896c7"
+    }
   }
 }

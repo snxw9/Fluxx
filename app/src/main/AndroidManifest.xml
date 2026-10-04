@@ -37,6 +37,8 @@
         </activity>
 
         <!-- Foreground Service for rendering and exporting compositions -->
+        <service android:name=".fonts.FontWorkerService" android:exported="false"
+            android:isolatedProcess="true" android:process=":font_worker" />
         <service
             android:name=".export.ExportService"
             android:enabled="true"

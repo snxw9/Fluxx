@@ -14,7 +14,7 @@ internal fun CharacterControls(document: TextSourceDocument,start: Int,end: Int,
     var page by remember { mutableIntStateOf(0) }
     val style=document.runAt(start)?.style ?: TextRunStyle()
     val inheritedFamily=layerFont.removeSuffix(".bold-italic").removeSuffix(".italic").removeSuffix(".bold")
-    val labels=listOf("Font","Appearance","Script / kerning","Size / width","Height / baseline","Spacing / stroke","Colours","Manual kerning")
+    val labels=listOf("Font","Appearance","Script / kerning","Size / width","Height / baseline","Spacing / stroke","Colours","Manual kerning","Font library","Variable axes")
     fun apply(change: (TextRunStyle)->TextRunStyle)=edit(start,end,change)
     Row(Modifier.fillMaxWidth()) {
         TextButton(onClick={page=(page+labels.lastIndex)%labels.size}) { Text("‹") }
@@ -29,7 +29,9 @@ internal fun CharacterControls(document: TextSourceDocument,start: Int,end: Int,
                 val family=listOf("fluxx.sans","fluxx.serif","fluxx.mono")[index]
                 apply { it.copy(font=TextFontRef(family,it.font?.style ?: TextFaceStyle.REGULAR)) }
             } }
-            Box(Modifier.weight(1f)) { CharacterChoice("Style: ${style.font?.style ?: TextFaceStyle.REGULAR}",TextFaceStyle.entries.map { it.name.replace('_',' ') }) { index ->
+            Box(Modifier.weight(1f)) { if(style.font?.sha256!=null) {
+                TextButton(onClick={page=8}) { Text(style.font.styleName.ifBlank { style.font.postScriptName.ifBlank { style.font.family } },maxLines=1) }
+            } else CharacterChoice("Style: ${style.font?.style ?: TextFaceStyle.REGULAR}",TextFaceStyle.entries.map { it.name.replace('_',' ') }) { index ->
                 apply { it.copy(font=TextFontRef(it.font?.family ?: inheritedFamily,TextFaceStyle.entries[index])) }
             } }
             }
@@ -77,6 +79,8 @@ internal fun CharacterControls(document: TextSourceDocument,start: Int,end: Int,
             TextButton(onClick={apply { it.copy(manualKerning=FrozenList.empty()) }}) { Text("Reset selected kerning") }
             }
         }
+        8 -> FontLibraryControls { ref -> apply { it.copy(font=ref) } }
+        9 -> FontAxisControls(style.font) { ref -> apply { it.copy(font=ref) } }
     }
 }
 

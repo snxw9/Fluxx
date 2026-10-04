@@ -65,6 +65,7 @@ android {
         compose = true
         prefab = true
     }
+    sourceSets.getByName("androidTest").assets.srcDir(rootProject.file("tools/text/fixtures"))
 }
 
 kotlin {

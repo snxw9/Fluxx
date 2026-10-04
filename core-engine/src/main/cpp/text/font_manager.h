@@ -4,10 +4,15 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace fluxx::text {
 
-struct FontInput { std::string id; std::vector<uint8_t> bytes; };
+struct FontInput {
+    std::string id; std::vector<uint8_t> bytes;
+    unsigned faceIndex=0;int namedInstance=-1;
+    std::vector<std::pair<uint32_t,float>> variations{};
+};
 struct Glyph {
     uint32_t id, cluster, line;
     int32_t xAdvance, yAdvance, xOffset, yOffset;

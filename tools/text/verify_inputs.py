@@ -23,6 +23,9 @@ def verify():
         name = Path(font['entry']).name
         check(ROOT / 'core-engine/src/main/assets/fonts' / name, font['sha256'])
         check(ROOT / 'core-engine/src/main/assets/licenses' / (Path(name).stem + '-OFL.txt'), font['license_sha256'])
+    for fixture in manifest.get('test_fonts', {}).values():
+        check(ROOT / fixture['path'], fixture['sha256'])
+        check(ROOT / fixture['license_path'], fixture['license_sha256'])
     for library, source, license_name in [('freetype', 'docs/FTL.TXT', 'FreeType-FTL.txt'), ('harfbuzz', 'COPYING', 'HarfBuzz-COPYING.txt')]:
         check(ROOT / 'core-engine/src/main/assets/licenses' / license_name, manifest[library]['files'][source])
     report = dict(passed=not errors, checked=checked, errors=errors)

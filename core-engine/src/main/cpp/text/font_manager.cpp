@@ -2,6 +2,8 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_MODULE_H
+#include FT_MULTIPLE_MASTERS_H
+#include FT_OUTLINE_H
 #include <hb.h>
 #include <hb-ot.h>
 #include <algorithm>
@@ -121,17 +123,42 @@ FontManager::FontManager(std::vector<FontInput> fonts, size_t budget, unsigned p
         if (!ids.insert(input.id).second || input.bytes.empty() || input.bytes.size() > 16 * 1024 * 1024) throw std::invalid_argument("Invalid font input");
         auto face = std::make_unique<Face>();
         face->input = std::move(input);
-        ftCheck(FT_New_Memory_Face(impl_->library, face->input.bytes.data(), static_cast<FT_Long>(face->input.bytes.size()), 0, &face->ft), "FT_New_Memory_Face");
-        if (FT_HAS_MULTIPLE_MASTERS(face->ft) || !FT_IS_SCALABLE(face->ft))
-            throw std::invalid_argument("Expected static scalable outline face");
+        if(face->input.faceIndex>255 || face->input.namedInstance< -1 || face->input.namedInstance>255 || face->input.variations.size()>16)
+            throw std::invalid_argument("Invalid font face or variation limits");
+        const FT_Long instanceIndex=face->input.namedInstance<0?0:static_cast<FT_Long>(face->input.namedInstance+1)<<16;
+        ftCheck(FT_New_Memory_Face(impl_->library, face->input.bytes.data(), static_cast<FT_Long>(face->input.bytes.size()),
+            instanceIndex|face->input.faceIndex,&face->ft), "FT_New_Memory_Face");
+        if (!FT_IS_SFNT(face->ft) || !FT_IS_SCALABLE(face->ft))
+            throw std::invalid_argument("Expected scalable sfnt outline face");
         ftCheck(FT_Select_Charmap(face->ft, FT_ENCODING_UNICODE), "Unicode charmap");
         face->blob = hb_blob_create(reinterpret_cast<const char*>(face->input.bytes.data()), static_cast<unsigned>(face->input.bytes.size()), HB_MEMORY_MODE_READONLY, nullptr, nullptr);
-        face->face = hb_face_create(face->blob, 0);
+        face->face = hb_face_create(face->blob, face->input.faceIndex);
         face->font = hb_font_create(face->face);
         hb_ot_font_set_funcs(face->font);
         const unsigned upem = hb_face_get_upem(face->face);
         if (!upem || upem != face->ft->units_per_EM) throw std::runtime_error("Font metric disagreement");
         hb_font_set_scale(face->font, static_cast<int>(upem), static_cast<int>(upem));
+        if(FT_HAS_MULTIPLE_MASTERS(face->ft)) {
+            FT_MM_Var* raw=nullptr;ftCheck(FT_Get_MM_Var(face->ft,&raw),"Read variation axes");
+            const auto release=[&](FT_MM_Var* value) { if(value) FT_Done_MM_Var(impl_->library,value); };
+            const std::unique_ptr<FT_MM_Var,decltype(release)> axes(raw,release);
+            if(!axes || axes->num_axis>16) throw std::invalid_argument("Variable fonts support at most 16 axes");
+            std::vector<FT_Fixed> coordinates(axes->num_axis);
+            ftCheck(FT_Get_Var_Design_Coordinates(face->ft,axes->num_axis,coordinates.data()),"Read variation coordinates");
+            std::set<uint32_t> seen;
+            for(const auto& requested:face->input.variations) {
+                if(!std::isfinite(requested.second) || !seen.insert(requested.first).second) throw std::invalid_argument("Invalid variation coordinate");
+                FT_UInt a=0;while(a<axes->num_axis && axes->axis[a].tag!=requested.first) ++a;
+                if(a==axes->num_axis) throw std::invalid_argument("Unknown variable-font axis");
+                const auto& axis=axes->axis[a];
+                const double fixed=std::clamp(double(requested.second)*65536.0,double(axis.minimum),double(axis.maximum));
+                coordinates[a]=static_cast<FT_Fixed>(std::round(fixed));
+            }
+            ftCheck(FT_Set_Var_Design_Coordinates(face->ft,axes->num_axis,coordinates.data()),"Set variation coordinates");
+            std::vector<hb_variation_t> variations(axes->num_axis);
+            for(FT_UInt a=0;a<axes->num_axis;++a) variations[a]={static_cast<hb_tag_t>(axes->axis[a].tag),static_cast<float>(coordinates[a]/65536.0)};
+            hb_font_set_variations(face->font,variations.data(),static_cast<unsigned>(variations.size()));
+        } else if(!face->input.variations.empty() || face->input.namedInstance>=0) throw std::invalid_argument("Static fonts have no axes or named instances");
         hb_font_make_immutable(face->font);
         impl_->faces.push_back(std::move(face));
     }
@@ -307,14 +334,17 @@ std::shared_ptr<const Layout> FontManager::shapeStyled(const std::string& id,con
            !std::isfinite(run.horizontal) || run.horizontal<0 || !std::isfinite(run.vertical) || run.vertical<0 || run.caps>2 || run.script>2)
             throw std::invalid_argument("Invalid styled run");
         end=run.end;
-        const auto font=run.fontId.empty()?id:run.fontId;
-        const bool small=run.caps==2 && hasFeature(font,HB_TAG('s','m','c','p'));
-        unsigned features=small?1u:0u;
-        if(small && hasFeature(font,HB_TAG('c','2','s','c'))) features|=2u;
-        const bool scriptFeature=run.script!=0 && hasFeature(font,run.script==1?HB_TAG('s','u','p','s'):HB_TAG('s','u','b','s'));
-        if(scriptFeature) features|=run.script==1?4u:8u;
-        const double scriptScale=run.script && !scriptFeature?.583:1;
-        const double scriptOffset=run.script && !scriptFeature?(run.script==1?-.333:.333)*run.size*1000:0;
+        const auto requestedFont=run.fontId.empty()?id:run.fontId;
+        auto font=requestedFont;bool small=false;unsigned features=0;double scriptScale=1,scriptOffset=0;
+        auto configure=[&]() {
+            small=run.caps==2 && hasFeature(font,HB_TAG('s','m','c','p'));features=small?1u:0u;
+            if(small && hasFeature(font,HB_TAG('c','2','s','c'))) features|=2u;
+            const bool scriptFeature=run.script!=0 && hasFeature(font,run.script==1?HB_TAG('s','u','p','s'):HB_TAG('s','u','b','s'));
+            if(scriptFeature) features|=run.script==1?4u:8u;
+            scriptScale=run.script && !scriptFeature?.583:1;
+            scriptOffset=run.script && !scriptFeature?(run.script==1?-.333:.333)*run.size*1000:0;
+        };
+        configure();
         std::string display;std::vector<uint32_t> mapping;double synthetic=1;uint32_t chunkLine=0;
         auto append=[](std::string& s,uint32_t cp) {
             if(cp<0x80) s.push_back(static_cast<char>(cp));
@@ -352,11 +382,33 @@ std::shared_ptr<const Layout> FontManager::shapeStyled(const std::string& id,con
             display.clear();mapping.clear();
         };
         while(point<points.size() && points[point].start<run.end) {
-            const auto& p=points[point++];
+            const auto current=point;const auto& p=points[point++];
             if(p.start<run.start || p.end>run.end) throw std::invalid_argument("Styled run splits a codepoint");
             if(p.cp=='\n') { flush();continue; }
             const auto category=hb_unicode_general_category(hb_unicode_funcs_get_default(),p.cp);
             const bool mark=category==HB_UNICODE_GENERAL_CATEGORY_NON_SPACING_MARK || category==HB_UNICODE_GENERAL_CATEGORY_SPACING_MARK || category==HB_UNICODE_GENERAL_CATEGORY_ENCLOSING_MARK;
+            if(!mark) {
+                // Keep a base and its combining marks in one face where coverage permits.
+                size_t stop=point;
+                while(stop<points.size() && points[stop].start<run.end) {
+                    const auto kind=hb_unicode_general_category(hb_unicode_funcs_get_default(),points[stop].cp);
+                    if(kind!=HB_UNICODE_GENERAL_CATEGORY_NON_SPACING_MARK && kind!=HB_UNICODE_GENERAL_CATEGORY_SPACING_MARK && kind!=HB_UNICODE_GENERAL_CATEGORY_ENCLOSING_MARK) break;
+                    ++stop;
+                }
+                auto covers=[&](const std::string& candidate) {
+                    const bool nativeSmall=run.caps==2 && hasFeature(candidate,HB_TAG('s','m','c','p'));
+                    for(size_t q=current;q<stop;++q) {
+                        auto cp=points[q].cp;
+                        if(run.caps==1 || (run.caps==2 && !nativeSmall)) if(glyphForCodepoint(candidate,points[q].upper)) cp=points[q].upper;
+                        if(!glyphForCodepoint(candidate,cp)) return false;
+                    }
+                    return true;
+                };
+                auto selected=requestedFont;
+                if(!covers(selected)) for(const char* fallback:{"fluxx.sans","fluxx.serif","fluxx.mono"})
+                    if(covers(fallback)) { selected=fallback;break; }
+                if(selected!=font) { flush();font=selected;configure(); }
+            }
             const bool lowercase=category==HB_UNICODE_GENERAL_CATEGORY_LOWERCASE_LETTER;
             const double scale=mark && !display.empty()?synthetic:(run.caps==2 && !small && lowercase?.7:1);
             if(!display.empty() && (chunkLine!=p.line || synthetic!=scale)) flush();
@@ -410,6 +462,11 @@ std::shared_ptr<const SdfGlyph> FontManager::sdf(const std::string& id, uint32_t
     auto result = std::make_shared<SdfGlyph>();
     result->fontId = face.input.id; result->glyphId = glyphId; result->overlaps = overlaps;
     if (face.ft->glyph->outline.n_contours != 0) {
+        FT_BBox bounds{};FT_Outline_Get_CBox(&face.ft->glyph->outline,&bounds);
+        const double pixelWidth=std::ceil((double(bounds.xMax)-double(bounds.xMin))/64)+2*impl_->spread;
+        const double pixelHeight=std::ceil((double(bounds.yMax)-double(bounds.yMin))/64)+2*impl_->spread;
+        if(pixelWidth>2048 || pixelHeight>2048 || pixelWidth<0 || pixelHeight<0)
+            throw std::invalid_argument("Font glyph exceeds the 2048-pixel SDF dimension limit; choose another font");
         ftCheck(FT_Render_Glyph(face.ft->glyph, FT_RENDER_MODE_SDF), "FT_Render_Glyph SDF");
         ++impl_->rasterizations;
         const auto& bitmap = face.ft->glyph->bitmap;

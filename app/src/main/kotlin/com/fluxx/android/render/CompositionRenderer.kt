@@ -36,7 +36,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private val evaluatedTransform = FloatArray(6)
     private data class FixtureLayout(val source: String, val font: String, val handle: Long)
     private val fixtureLayouts = mutableMapOf<Long, FixtureLayout>()
-    private data class ProductLayout(val handle: Long, val metrics: TextLayoutMetrics)
+    private data class ProductLayout(val handle: Long, val metrics: TextLayoutMetrics,val packetBytes: Int=0)
+    private val fontLibrary=com.fluxx.android.fonts.FontLibraryRepository.getInstance(context)
+    private var preparedFontRevision= -1L
     private val textLayouts = LinkedHashMap<Triple<String, TextSourceDocument, Boolean>, ProductLayout>(64, .75f, true)
     private class PreparedText(val layer: CompositionLayer, val sources: Array<TextSourceDocument>, val layouts: Array<ProductLayout>,
         val animations: Array<PreparedTextAnimation>) {
@@ -56,6 +58,13 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private fun prepareTextProject(project: ProjectDocument) {
         nativePreparedTextProject = null
         val layers = project.composition.layers
+        val wanted=layers.filter { it.type==LayerType.TEXT }.flatMap { layer ->
+            StyledTextPreparation.alternatives(layer.text.source).flatMap { source -> listOf(Triple(layer.text.fontId,source,true),Triple(layer.text.fontId,source,false)) }
+        }.toHashSet()
+        val obsolete=textLayouts.entries.iterator()
+        while(obsolete.hasNext()) { val entry=obsolete.next();if(entry.key !in wanted) {
+            RenderBridge.releaseText(session,entry.value.handle);obsolete.remove()
+        } }
         onlyText = layers.isNotEmpty() && layers.all { it.type == LayerType.TEXT } && TextFixtureProvider.entries().isEmpty()
         preparedText = layers.filter { it.type==LayerType.TEXT }.sortedWith(compareBy<CompositionLayer> { it.zOrder }.thenBy { it.id }).map { layer ->
             val sources = StyledTextPreparation.alternatives(layer.text.source)
@@ -114,8 +123,16 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private var previewTargetHeight = 0
     private fun textLayout(font: String, source: TextSourceDocument,ligatures: Boolean=true): ProductLayout = textLayouts.getOrPut(Triple(font,source,ligatures)) {
         require(source.boxWidth==0f && source.paragraphs.all { it==TextParagraphStyle() }) { "Paragraph/box/direction layout awaits T3/T5; the requested document is preserved" }
-        val handle = RenderBridge.upsertStyledText(session, font, StyledTextPreparation.encode(source,font),ligatures)
-        try { ProductLayout(handle, TextLayoutMetrics.fromNative(RenderBridge.textMetrics(session, handle), source.text.isEmpty(),source)) }
+        var packetBytes=0
+        val handle = if(com.fluxx.android.fonts.ImportedTextPreparation.needed(source)) {
+            val result=com.fluxx.android.fonts.ImportedTextPreparation.prepare(context,font,source,ligatures)
+            packetBytes=result.packet.size
+            require(textLayouts.values.sumOf { it.packetBytes.toLong() }+packetBytes<=64L*1024*1024) {
+                "Imported text preparation exceeds 64 MiB; reduce distinct source documents or font faces"
+            }
+            RenderBridge.upsertPreparedText(session,result.packet)
+        } else RenderBridge.upsertStyledText(session, font, StyledTextPreparation.encode(source,font),ligatures)
+        try { ProductLayout(handle, TextLayoutMetrics.fromNative(RenderBridge.textMetrics(session, handle), source.text.isEmpty(),source),packetBytes) }
         catch (error: Exception) { RenderBridge.releaseText(session, handle); throw error }
     }
     init { KeyframeEvaluator.easeProgress(0f, EasingPreset.EASY_EASE); RenderBridge.configureText(session, if(lowRam) 2 else 4) }
@@ -178,15 +195,22 @@ class CompositionRenderer(private val context: Context, private val repository: 
 
     private fun renderTarget(project: ProjectDocument, timeUs: Long, targetWidth: Int, targetHeight: Int,
         cancelled: () -> Boolean) {
+        // Export pins the prepared resource snapshot; interactive previews refresh library edits.
+        if((interactive || prepared!==project) && preparedFontRevision!=fontLibrary.revision) {
+            for(layout in textLayouts.values) RenderBridge.releaseText(session,layout.handle)
+            textLayouts.clear();prepared=null;preparedFontRevision=fontLibrary.revision
+        }
         if (prepared !== project) {
             val previousComp=prepared?.composition
             val nextComp=project.composition
             if (previousComp?.width != nextComp.width || previousComp?.height != nextComp.height) {
                 android.util.Log.i("Fluxx", "CompositionRenderer canvas ${nextComp.width}x${nextComp.height}; projecting preserved layer geometry")
             }
-            prepared=project
-            plan=FramePlan(project)
+            prepared=null // Preparation can release obsolete handles; a failure must never reuse the old frame plan.
+            val nextPlan=FramePlan(project)
             prepareTextProject(project)
+            plan=nextPlan
+            prepared=project
         }
         val comp=project.composition
         check(RenderBridge.begin(session,targetWidth,targetHeight,comp.width,comp.height)) { "Could not start composition frame" }

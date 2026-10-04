@@ -51,10 +51,15 @@ internal object TextNative {
     external fun styledMetrics(handle: Long,font: String,input: ByteArray,ligatures: Boolean): DoubleArray
     external fun preparedPacket(handle: Long,font: String,input: ByteArray,ligatures: Boolean): ByteArray
     external fun preparedMetrics(input: ByteArray): DoubleArray
+    external fun preparedPreview(input: ByteArray,width: Int,height: Int,colour: Int): IntArray
 }
 
 /** No imported font parsing: this validates an immutable prepared geometry/pixel packet. */
 object PreparedTextData {
+    fun preview(input: ByteArray,width: Int,height: Int,colour: Int): IntArray {
+        require(input.size<=32*1024*1024 && width in 1..1024 && height in 1..256)
+        return TextNative.preparedPreview(input,width,height,colour)
+    }
     fun metrics(input: ByteArray): DoubleArray {
         require(input.size<=32*1024*1024)
         return TextNative.preparedMetrics(input)

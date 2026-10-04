@@ -11,7 +11,7 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 
-class NativeTextMetricsProvider(context: Context) : TextMetricsProvider, AutoCloseable {
+class NativeTextMetricsProvider(private val context: Context) : TextMetricsProvider, AutoCloseable {
     private val owner = Thread.currentThread()
     private val session = run {
         check(Looper.myLooper() != Looper.getMainLooper()) { "Native text metrics require a worker" }
@@ -26,7 +26,10 @@ class NativeTextMetricsProvider(context: Context) : TextMetricsProvider, AutoClo
     }
     fun measure(fontId: String,source: TextSourceDocument,ligatures: Boolean): TextLayoutMetrics {
         check(Thread.currentThread() === owner && Looper.myLooper() != Looper.getMainLooper())
-        return TextLayoutMetrics.fromNative(session.styledMetrics(fontId,StyledTextPreparation.encode(source,fontId),ligatures),source.text.isEmpty(),source)
+        val metrics=if(com.fluxx.android.fonts.ImportedTextPreparation.needed(source)) {
+            com.fluxx.android.engine.PreparedTextData.metrics(com.fluxx.android.fonts.ImportedTextPreparation.prepare(context,fontId,source,ligatures).packet)
+        } else session.styledMetrics(fontId,StyledTextPreparation.encode(source,fontId),ligatures)
+        return TextLayoutMetrics.fromNative(metrics,source.text.isEmpty(),source)
     }
     override fun close() { check(Thread.currentThread() === owner); session.close() }
 }
@@ -39,10 +42,14 @@ class TextMetricsRepository private constructor(context: Context) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Triple<String, String,Boolean>, TextLayoutMetrics>?) = size > 64
     }
     private var provider: NativeTextMetricsProvider? = null
+    private val fontLibrary=com.fluxx.android.fonts.FontLibraryRepository.getInstance(app)
+    private var fontRevision= -1L
     private val richCache=object: LinkedHashMap<Triple<String,TextSourceDocument,Boolean>,TextLayoutMetrics>(64,.75f,true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Triple<String,TextSourceDocument,Boolean>,TextLayoutMetrics>?)=size>64
     }
     suspend fun measure(font: String,source: TextSourceDocument,ligatures: Boolean=true): TextLayoutMetrics = withContext(dispatcher) {
+        fontLibrary.load()
+        if(fontRevision!=fontLibrary.revision) { richCache.clear();fontRevision=fontLibrary.revision }
         require(source.boxWidth==0f && source.paragraphs.all { it==com.fluxx.android.model.TextParagraphStyle() }) { "Paragraph/box/direction layout awaits T3/T5" }
         val native=provider ?: NativeTextMetricsProvider(app).also { provider=it }
         val partner=Triple(font,source,!ligatures)

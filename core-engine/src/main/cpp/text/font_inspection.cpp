@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <stdexcept>
 #include <algorithm>
+#include <hb.h>
 
 namespace fluxx::text {
 namespace {
@@ -93,9 +94,24 @@ std::string inspectFont(const uint8_t* bytes,size_t length) {
         const auto family=name(face.get(),TT_NAME_ID_TYPOGRAPHIC_FAMILY,face->family_name);
         const auto style=name(face.get(),TT_NAME_ID_TYPOGRAPHIC_SUBFAMILY,face->style_name);
         const auto ps=name(face.get(),TT_NAME_ID_PS_NAME,FT_Get_Postscript_Name(face.get()));
+        std::string preview="Aa AV office";
+        if(std::any_of(preview.begin(),preview.end(),[&](unsigned char cp) { return FT_Get_Char_Index(face.get(),cp)==0; })) {
+            preview.clear();FT_UInt glyph=0;auto cp=FT_Get_First_Char(face.get(),&glyph);unsigned accepted=0,scanned=0;
+            while(glyph && accepted<12 && scanned++<65536) {
+                const auto category=hb_unicode_general_category(hb_unicode_funcs_get_default(),static_cast<hb_codepoint_t>(cp));
+                if(cp>=0x20 && cp<=0x10ffff && !(cp>=0x7f && cp<0xa0) && !(cp>=0xd800 && cp<=0xdfff) &&
+                    category!=HB_UNICODE_GENERAL_CATEGORY_FORMAT && category!=HB_UNICODE_GENERAL_CATEGORY_NON_SPACING_MARK &&
+                    category!=HB_UNICODE_GENERAL_CATEGORY_SPACING_MARK && category!=HB_UNICODE_GENERAL_CATEGORY_ENCLOSING_MARK) {
+                    if(!preview.empty()) preview.push_back(' ');
+                    utf8(preview,static_cast<uint32_t>(cp));++accepted;
+                }
+                cp=FT_Get_Next_Char(face.get(),cp,&glyph);
+            }
+            if(preview.empty()) throw std::invalid_argument("Font has no printable Unicode preview glyphs; choose another outline font");
+        }
         if(index) out<<',';
         out<<"{\"index\":"<<index<<",\"family\":"<<quote(family)<<",\"style\":"<<quote(style)<<",\"postscript\":"<<quote(ps)
-            <<",\"weight\":"<<(os2 && os2->usWeightClass?os2->usWeightClass:((face->style_flags&FT_STYLE_FLAG_BOLD)?700:400))
+            <<",\"preview\":"<<quote(preview)<<",\"weight\":"<<(os2 && os2->usWeightClass?os2->usWeightClass:((face->style_flags&FT_STYLE_FLAG_BOLD)?700:400))
             <<",\"width\":"<<(os2 && os2->usWidthClass?os2->usWidthClass:5)<<",\"slant\":"<<(post?post->italicAngle/65536.0:(italic?-12.0:0.0))<<",\"axes\":[";
         FT_MM_Var* raw=nullptr;
         if(FT_HAS_MULTIPLE_MASTERS(face.get())) check(FT_Get_MM_Var(face.get(),&raw),"Reading font axes");

@@ -1,6 +1,6 @@
 # Fluxx Roadmap: v0.1 → Full Vision
 
-**Text completion status (2026-10-04):** F1/F2 user-accepted. T1a foundation committed (`5772f10`); T1b styled rendering/Character editing is source-implemented with its compile/JVM gate passed. Authorized continuation permits stage sub-commits. T2 fonts → T3 paragraph/box text → T4 animator gaps → T5 Arabic/Hebrew direction remain ordered work. F1 perf/parity/lifecycle stay deferred; F3 animator UI remains later. [Current evidence](../checkpoints/TEXT_LAYER.md) and the [verbatim specification](TEXT_COMPLETION_SPEC.md) distinguish implementation from device verification.
+**Text completion status (2026-10-04):** F1/F2 user-accepted. T1a foundation (`5772f10`), T1b styled rendering/Character editing (`df056c4`) and T1c distance-budget follow-up (`57c4251`) are committed. T2a prepared transport/font metadata foundation is committed (`391aacf`); isolated inspection/private-library groundwork is next. T2 rendering/import controls/static variations are not complete. T3 paragraph/box text → T4 animator gaps → T5 Arabic/Hebrew direction remain ordered work. F1 perf/parity/lifecycle stay deferred; F3 animator UI remains later. [Current evidence](../checkpoints/TEXT_LAYER.md) and the [verbatim specification](TEXT_COMPLETION_SPEC.md) distinguish implementation from device verification.
 
 > Companion to `FLUXX_SDD.md`, which describes the complete target architecture. This document defines what actually gets built first, in what order, and why.
 
@@ -129,3 +129,6 @@ Sequence the remaining `FLUXX_SDD.md` scope from here: dual Graph Editor, remain
 - [ ] Test device matrix: at least one real ~4GB device + one flagship
 - [ ] Decide on crash reporting/telemetry now — cheap to add at v0.1, painful to retrofit into a hand-tuned zero-allocation hot path later
 - [ ] Git LFS for `/libs` if precompiled binaries grow large
+# T2b continuation status — 2026-10-04
+
+Font import/library, isolated untrusted-font preparation, missing-font preservation/fallback and static variable-font/named-instance controls are implemented in source, device-unverified. Character uses fixed Library/Variable Axes pages; Paragraph/box text, animator gaps and direction remain T3–T5 work. No PreviewController, gesture or batch/draw contract changes. Native Debug/Release (both ABIs), Kotlin Debug/Release, both instrumentation source sets and 205 JVM tests passed; host selftest, six shaping references, variable CFF/TTC proofs and 1,445 input checks passed. No device runs or APK packaging. F1 perf/parity/lifecycle remain deferred and unrun. Exact limits, deviations, size estimates and user-run tests are in [TEXT_LAYER.md](../checkpoints/TEXT_LAYER.md).

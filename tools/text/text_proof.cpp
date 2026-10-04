@@ -9,6 +9,9 @@
 #include <thread>
 #include <stdexcept>
 #include <cmath>
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include FT_MULTIPLE_MASTERS_H
 
 using namespace fluxx::text;
 std::vector<uint8_t> read(const std::filesystem::path& path) {
@@ -32,7 +35,38 @@ int main(int argc, char** argv) {
                 read(root/(std::string(files[family])+"-"+styles[style]+".ttf"))});
         FontManager manager(inputs);
         const std::string command(argv[2]);
-        if(command=="inspect" && argc==4) {
+        if(command=="importproof" && (argc==4 || argc==5)) {
+            const auto bytes=read(argv[3]);
+            const auto faceIndex=argc==5?static_cast<unsigned>(std::stoul(argv[4])):0u;
+            require(inspectFont(bytes.data(),bytes.size()).find("\"tag\":\"wght\"")!=std::string::npos,"Variable CFF fixture has no weight axis");
+            auto varied=inputs;
+            varied.push_back({"import.light",bytes,faceIndex,-1,{{0x77676874u,200.f},{0x6f70737au,20.f}}});
+            varied.push_back({"import.heavy",bytes,faceIndex,-1,{{0x77676874u,900.f},{0x6f70737au,20.f}}});
+            varied.push_back({"import.clamped",bytes,faceIndex,-1,{{0x77676874u,1000000.f},{0x6f70737au,20.f}}});
+            FontManager imported(std::move(varied));
+            const auto light=imported.shape("import.light","mmm",false,false);
+            const auto heavy=imported.shape("import.heavy","mmm",false,false);
+            const auto clamped=imported.shape("import.clamped","mmm",false,false);
+            require(light->lineAdvance(0)!=heavy->lineAdvance(0),"Variable axes did not change HB advances");
+            require(heavy->lineAdvance(0)==clamped->lineAdvance(0),"Variable axes were not clamped consistently");
+            const auto lowSdf=imported.sdf("import.light",light->glyphs[0].id);
+            const auto highSdf=imported.sdf("import.heavy",heavy->glyphs[0].id);
+            require(lowSdf->pixels!=highSdf->pixels,"Variable axes did not change FreeType outlines");
+            FT_Library ft=nullptr;require(FT_Init_FreeType(&ft)==0,"Cannot open independent FreeType proof");
+            FT_Face face=nullptr;require(FT_New_Memory_Face(ft,bytes.data(),static_cast<FT_Long>(bytes.size()),faceIndex,&face)==0,"Cannot open CFF proof face");
+            FT_MM_Var* axes=nullptr;require(FT_Get_MM_Var(face,&axes)==0,"Cannot read independent axes");
+            std::vector<FT_Fixed> coordinates(axes->num_axis);
+            for(FT_UInt a=0;a<axes->num_axis;++a) coordinates[a]=axes->axis[a].tag==0x77676874u?900*65536:axes->axis[a].tag==0x6f70737au?20*65536:axes->axis[a].def;
+            require(FT_Set_Var_Design_Coordinates(face,axes->num_axis,coordinates.data())==0,"Cannot set independent coordinates");
+            const auto gid=FT_Get_Char_Index(face,'m');require(FT_Load_Glyph(face,gid,FT_LOAD_NO_SCALE|FT_LOAD_NO_HINTING)==0,"Cannot load CFF proof glyph");
+            require(heavy->glyphs[0].xAdvance==face->glyph->metrics.horiAdvance,"HB and FreeType variable advances disagree");
+            FT_Done_MM_Var(ft,axes);FT_Done_Face(face);FT_Done_FreeType(ft);
+            StyledRun run;run.start=0;run.end=6;run.fontId="import.heavy";
+            const auto rich=imported.shapeStyled("fluxx.sans","office",{run},{'O','F','F','I','C','E'});
+            const auto packet=encodePreparedText(*rich,imported);
+            require(layoutMetrics(*decodePreparedText(packet.data(),packet.size()))==layoutMetrics(*rich),"Imported CFF transport changed rich metrics");
+            std::cout<<"PASS: CFF variable outline/advance changes, clamping, independent FT/HB advance agreement and prepared transport\n";
+        } else if(command=="inspect" && argc==4) {
             const auto bytes=read(argv[3]);std::cout<<inspectFont(bytes.data(),bytes.size())<<'\n';
         } else if (command == "shape" && argc == 5) {
             const std::string hex(argv[4]);
@@ -47,10 +81,25 @@ int main(int argc, char** argv) {
                 const auto metadata=inspectFont(input.bytes.data(),input.bytes.size());
                 require(metadata.find("\"version\":1")!=std::string::npos && metadata.find("\"axes\":[]")!=std::string::npos,"Static face inspection metadata missing");
             }
+            {
+                uint32_t cp=0;
+                for(uint32_t candidate=0x1f00;candidate<0x2000;++candidate)
+                    if(!manager.glyphForCodepoint("fluxx.mono",candidate) && manager.glyphForCodepoint("fluxx.serif",candidate)) { cp=candidate;break; }
+                require(cp!=0,"Pinned corpus has no fallback coverage fixture");
+                std::string value;value.push_back(static_cast<char>(0xe0|(cp>>12)));
+                value.push_back(static_cast<char>(0x80|((cp>>6)&63)));value.push_back(static_cast<char>(0x80|(cp&63)));
+                StyledRun run;run.start=0;run.end=3;run.fontId="fluxx.mono";
+                const auto fallback=manager.shapeStyled("fluxx.mono",value,{run},{cp});
+                require(fallback->glyphs.front().id!=0 && fallback->glyphFont(0)!="fluxx.mono","Styled glyph coverage did not select a bundled fallback");
+                require(fallback->characters.size()==1 && fallback->clusters.size()==1,"Font fallback changed logical membership");
+            }
             bool invalidFont=false;try { const uint8_t bytes[]={0,1,2,3};inspectFont(bytes,sizeof(bytes)); } catch(const std::invalid_argument&) { invalidFont=true; }
             require(invalidFont,"Invalid font accepted by inspection");
             {
                 StyledRun first;first.start=0;first.end=1;first.fontId="fluxx.sans.bold";first.size=2;first.horizontal=1.5;first.fauxBold=true;first.fauxItalic=true;
+                const auto empty=manager.shapeStyled("fluxx.sans","",{},{});
+                const auto emptyPacket=encodePreparedText(*empty,manager);
+                require(layoutMetrics(*decodePreparedText(emptyPacket.data(),emptyPacket.size()))==layoutMetrics(*empty),"Prepared empty text changed zero-glyph metrics");
                 StyledRun second;second.start=1;second.end=2;second.fontId="fluxx.serif.italic";second.script=1;
                 const auto rich=manager.shapeStyled("fluxx.sans","ab",{first,second},{'A','B'});
                 require(rich->glyphs.size()==2 && rich->characters.size()==2 && rich->clusters.size()==2,"Rich source membership changed");

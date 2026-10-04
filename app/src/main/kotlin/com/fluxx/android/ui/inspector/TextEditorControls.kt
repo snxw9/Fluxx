@@ -32,6 +32,14 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
     onDraftSelection: (String,Int,Int)->Unit = { value,_,_->onDraft(value) }) {
     val local = time - layer.resolvedKeyframeAnchorUs
     val evaluated = layer.text.source.evaluate(local)
+    val fontLibrary=com.fluxx.android.fonts.FontLibraryRepository.getInstance(LocalContext.current)
+    val libraryEntries by fontLibrary.state.collectAsState()
+    var fontLibraryReady by remember { mutableStateOf(false) }
+    LaunchedEffect(fontLibrary) { runCatching { fontLibrary.load() };fontLibraryReady=true }
+    val missingFonts=fontLibraryReady && (layer.text.fontId !in TextFontRef.BUNDLED_IDS || layer.text.source.evaluateDocument(local).runs.any { run ->
+        val font=run.style.font
+        font!=null && !fontLibrary.contains(font)
+    })
     var draft by remember(layer.id) { mutableStateOf(TextFieldValue(evaluated)) }
     var focused by remember(layer.id) { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
@@ -46,6 +54,7 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
             }
         }
         if (compact || page == 0) {
+        if(missingFonts) Text("Missing font · using Inter; requested reference retained",maxLines=1,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.labelSmall)
         if (!compact) Row(Modifier.fillMaxWidth()) {
             Text("Source Text · Hold", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall)
             TextPropertyDiamond(layer, AnimPropertyType.SOURCE_TEXT, time, onAction, onFocus)
@@ -119,7 +128,7 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
         if (!compact && page == 3) {
             val document=layer.text.source.evaluateDocument(local).replace(draft.text)
             val context=LocalContext.current;val ligatures=layer.text.effectiveLigatures(local)
-            val metrics by produceState<TextLayoutMetrics?>(null,document,layer.text.fontId,ligatures) {
+            val metrics by produceState<TextLayoutMetrics?>(null,document,layer.text.fontId,ligatures,libraryEntries) {
                 value=try { com.fluxx.android.render.TextMetricsRepository.get(context).measure(layer.text.fontId,document,ligatures) } catch(_:Exception) { null }
             }
             CharacterControls(document,draft.selection.min,draft.selection.max,layer.text.fontId,onCharacter,

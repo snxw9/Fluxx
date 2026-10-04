@@ -20,7 +20,7 @@ function(fluxx_font_dependencies)
     target_compile_features(fluxx_harfbuzz PUBLIC cxx_std_17)
     target_compile_definitions(fluxx_harfbuzz PRIVATE
         HB_NO_AAT HB_NO_BITMAP HB_NO_COLOR HB_NO_DRAW
-        HB_NO_MATH HB_NO_META HB_NO_VAR HB_NO_VERTICAL HB_NO_CFF HB_NO_GETENV)
+        HB_NO_MATH HB_NO_META HB_NO_VERTICAL HB_NO_GETENV)
     set_target_properties(fluxx_harfbuzz PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endfunction()
 fluxx_font_dependencies()

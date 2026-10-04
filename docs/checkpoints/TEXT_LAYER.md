@@ -1,5 +1,27 @@
 # Text layer checkpoint
 
+## Current handoff: T2b font library complete in source
+
+T2b implements SAF import, background isolated-process inspection/shaping/rasterization, an AtomicFile app-private SHA-256 font library, collection face selection, named instances and static variation axes. Requested project references survive missing files; the renderer uses the bundled sans fallback and the Text page reports missing fonts. Character controls include fixed Library and Variable Axes pages. Empty text now retains an insertion style. Interactive library changes invalidate prepared metrics and geometry; export pins its prepared font-resource epoch. No PreviewController API, gesture protocol or batch/draw contract changed.
+
+Verification: `tools/text/results/t2b-final-preview-safety.log` passed native Debug/Release for arm64-v8a and x86_64, Kotlin Debug/Release, both instrumentation source sets and all 205 JVM tests. Host Release/selftest, six shaping references, CFF variable-font and TTC face-1 proofs, and all 1,445 checksum checks passed. No APK packaging or device execution occurred. F1 perf/parity/lifecycle remain deferred and unrun. T3, T4 and T5 remain unimplemented; continue T3 next without awaiting device results. Earlier T2a-only handoffs below are historical.
+
+Limits: 16 MiB per imported file, 256 library files/256 MiB total, 256 faces per collection, 16 axes and 256 named instances per face; 64 imported identities/32 MiB font bytes per isolated preparation request; 32 MiB prepared packet and 64 MiB retained imported packets. Metadata and index are bounded to 4 MiB and 8 MiB. Excess limits fail explicitly. The 64-layout limit still covers held source documents × ligature mode; T3 must additionally prepare wrapping membership changes caused by animated size/tracking. It must neither freeze those memberships nor generate permutations during playback.
+
+Deviations/assumptions: collections import all valid faces by default and deletion removes the file/all its faces after confirmation. Collections containing any unsupported face are rejected as a whole. Fonts containing COLR/CBDT/sbix are rejected even if monochrome outlines also exist. Fallback first seeks one bundled face covering the complete base-plus-combining sequence; if none covers it, the requested face's missing glyph remains. Axes are static, clamped to metadata ranges, and committed through held Source Text. The library's CPU SDF preview is not a production-shader parity result. Isolated-process crash containment and the 60-second watchdog are implemented and have source acceptance fixtures; device crash containment and font fuzzing remain unverified.
+
+APK estimate: no new production font assets in T2; code/native size delta is unmeasured because packaging is prohibited. The 1,884,148-byte Source Serif variable CFF fixture and its OFL license are instrumentation assets only. T1's font assets remain approximately 1.86 MB ZIP-deflated.
+
+Exact T2b user-run list:
+
+1. Import TTF, CFF OTF and a multi-face TTC through Library. Select faces/named instances, adjust each axis, undo/redo, save/reopen, copy/paste/duplicate and split keyed Source Text. Verify imported references and styles persist, including empty-text insertion styles.
+2. Delete a referenced font with confirmation: the missing-font flag appears, bundled sans renders, and the requested reference remains unchanged. Reimport the same bytes and verify restoration. Check bounds, anchors, Fit/Stretch, overlays and hit testing before/after deletion.
+3. Run every `FontImportAcceptanceTest` method: isolated inspection/crash/retry, malformed rejection, app-process parser rejection, metadata round trips, CFF variants, named instances, both ligature modes and missing-font preservation. Test oversized files, invalid axes and colour/bitmap-only fonts; errors must retain the document.
+4. Run `TextF2AcceptanceTest.importedVariableRepresentativeColdAndThermal` and `importedVariableMaximumColdAndThermal` with unique `textRunLabel` values. Archive both cold/thermal JSON reports. Expect zero allocation/shaping/rasterization/upload/permutation and font-worker request deltas over each measured 600-frame window; inspect p50/p95/p99/max rather than assuming 60 fps.
+5. Run `TextF2AcceptanceTest.importedVariableRandomAndReversePreEncodePixelsMatch`, plus the existing rich-text parity fixture. Check equal-resolution preview/export/thumbnail pixels during random access and reverse scrubbing.
+6. Repeat the T1 character/bounds/paint-order checks, especially imported fonts at 8/72/500 px, tracking through zero, faux styles, combining marks and static axes. F1 performance/parity/lifecycle remain separate deferred checks.
+7. Reproduce host/JVM checks using `tools/text/build_android.py`, `build_host.py`, `verify_inputs.py`, `shaping_parity.py`, host `selftest`, and `importproof` with the CFF fixture and generated TTC face 1. Expected JVM count: 205; input checks: 1,445.
+
 The original T1–T5 specification is preserved verbatim in [TEXT_COMPLETION_SPEC.md](../architecture/TEXT_COMPLETION_SPEC.md). The continuation authorizes gated sub-commits: T1a foundation, then T1b functional character formatting, followed by T2–T5 in order.
 
 ## T1c distance-budget follow-up — 2026-10-04

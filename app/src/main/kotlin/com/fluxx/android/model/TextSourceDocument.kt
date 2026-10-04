@@ -16,7 +16,7 @@ data class TextFontAxis(val tag: String,val value: AnimatableProperty1D) {
 }
 data class TextFontRef(val family: String="fluxx.sans",val style: TextFaceStyle=TextFaceStyle.REGULAR,
     val sha256: String?=null,val faceIndex: Int=0,val namedInstance: Int=-1,
-    val axes: FrozenList<TextFontAxis> = FrozenList.empty(),val postScriptName: String="") {
+    val axes: FrozenList<TextFontAxis> = FrozenList.empty(),val postScriptName: String="",val styleName: String="") {
     init {
         require(family.isNotBlank() && family.length<=128 && '\u0000' !in family)
         require(sha256==null || sha256.matches(Regex("[a-f0-9]{64}"))) { "Font references require a lowercase SHA-256" }
@@ -24,8 +24,14 @@ data class TextFontRef(val family: String="fluxx.sans",val style: TextFaceStyle=
         require(sha256!=null || (faceIndex==0 && namedInstance==-1 && axes.isEmpty()))
         require(axes.size<=16 && axes.map { it.tag }.distinct().size==axes.size) { "A font reference supports at most 16 distinct axes" }
         require(postScriptName.length<=128 && '\u0000' !in postScriptName)
+        require(styleName.length<=128 && '\u0000' !in styleName)
     }
     val bundledId get()=family+when(style) { TextFaceStyle.REGULAR->"";TextFaceStyle.BOLD->".bold";TextFaceStyle.ITALIC->".italic";TextFaceStyle.BOLD_ITALIC->".bold-italic" }
+    companion object {
+        val BUNDLED_IDS=setOf("fluxx.sans","fluxx.serif","fluxx.mono").flatMap { family ->
+            listOf(family,"$family.bold","$family.italic","$family.bold-italic")
+        }.toSet()
+    }
 }
 /** Index is a UTF-16 source-character boundary, not a glyph or transformed display index. */
 data class TextManualKerning(val character: Int,val amount: Float) {
@@ -62,7 +68,8 @@ data class TextSourceDocument(val text: String,
         require(runs.size<=256) { "Source Text supports at most 256 style runs" }
         var end=0
         for(run in runs) {
-            require(run.start==end && run.end>run.start && run.end<=text.length) { "Style runs must be contiguous and cover Source Text" }
+            val insertion=text.isEmpty() && runs.size==1 && run.start==0 && run.end==0
+            require(insertion || run.start==end && run.end>run.start && run.end<=text.length) { "Style runs must be contiguous and cover Source Text" }
             require(boundaries.binarySearch(run.start)>=0 && boundaries.binarySearch(run.end)>=0) { "Style boundaries must not split a surrogate pair or combining-mark cluster" }
             for(k in run.style.manualKerning) require(k.character in run.start until run.end && boundaries.binarySearch(k.character)>=0) { "Manual kerning must address a source character in its run" }
             end=run.end
@@ -73,6 +80,7 @@ data class TextSourceDocument(val text: String,
     fun runAt(caret: Int): TextStyleRun? = runs.firstOrNull { caret in it.start until it.end } ?: runs.lastOrNull()
     fun format(start: Int,end: Int,change: (TextRunStyle)->TextRunStyle): TextSourceDocument {
         require(start in 0..text.length && end in start..text.length)
+        if(text.isEmpty()) return copy(runs=FrozenList.of(listOf(TextStyleRun(0,0,change(runAt(0)?.style ?: TextRunStyle())))))
         val a=if(start==end) 0 else TextSourceBoundaries.floor(boundaries,start)
         val b=if(start==end) text.length else TextSourceBoundaries.ceiling(boundaries,end)
         val out=mutableListOf<TextStyleRun>()
@@ -89,6 +97,9 @@ data class TextSourceDocument(val text: String,
     fun replace(value: String, editStart: Int = -1, editEnd: Int = -1): TextSourceDocument {
         TextLimits.validateSource(value)
         if(value==text) return this
+        if(value.isEmpty()) return copy(text=value,runs=FrozenList.of(listOf(TextStyleRun(0,0,
+            (runAt(if(editStart>=0) editStart else 0)?.style ?: TextRunStyle()).copy(manualKerning=FrozenList.empty())))),
+            paragraphs=if(paragraphs.isEmpty()) paragraphs else FrozenList.of(listOf(paragraphs.first())))
         val inserted=value.length-text.length+(editEnd-editStart)
         val hinted=editStart in 0..text.length && editEnd in editStart..text.length && inserted>=0 &&
             editStart+inserted<=value.length && value.regionMatches(0,text,0,editStart) &&
@@ -116,7 +127,7 @@ data class TextSourceDocument(val text: String,
         return copy(text=value,runs=merge(normalized),paragraphs=newParagraphs)
     }
     fun storageBytes(): Long = text.toByteArray(Charsets.UTF_8).size.toLong()+runs.sumOf {
-        96L+it.style.manualKerning.size*8L+(it.style.font?.let { f -> f.family.toByteArray().size+f.postScriptName.toByteArray().size+64L+f.axes.size*32L } ?: 0L)
+        96L+it.style.manualKerning.size*8L+(it.style.font?.let { f -> f.family.toByteArray().size+f.postScriptName.toByteArray().size+f.styleName.toByteArray().size+64L+f.axes.size*32L } ?: 0L)
     }+paragraphs.size*32L
     companion object {
         const val MAX_PREPARED_LAYOUTS=64

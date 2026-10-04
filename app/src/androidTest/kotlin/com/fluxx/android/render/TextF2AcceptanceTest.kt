@@ -49,7 +49,7 @@ class TextF2AcceptanceTest {
             check(!it.exists()) { "Archive the earlier reports and use a new textRunLabel" };check(it.mkdirs())
         }
     }
-    private fun fixture(maximum: Boolean,rich: Boolean=false): ProjectDocument {
+    private fun fixture(maximum: Boolean,rich: Boolean=false,font: TextFontRef?=null): ProjectDocument {
         val count=if(maximum) 16 else 8;val selectors=if(maximum) 8 else 4
         val source=if(maximum) "A".repeat(4096) else "AV office gy 0123456789 \n".repeat(30)
         val animators=List(count) { a -> TextAnimator(a+1L,anchorGrouping=scalar((a%4).toFloat()),
@@ -86,7 +86,8 @@ class TextF2AcceptanceTest {
                     kerning=if(part%2==0) TextKerning.METRICS else TextKerning.OFF) }
             }
         }
-        val text=TextProperties(fontId="fluxx.serif",source=AnimatableString(staticValue=source,document=document.takeIf { rich }),size=track(8f,72f),
+        if(font!=null) document=document.format(0,0) { it.copy(font=font) }
+        val text=TextProperties(fontId="fluxx.serif",source=AnimatableString(staticValue=source,document=document.takeIf { rich || font!=null }),size=track(8f,72f),
             tracking=track(-100f,100f),strokeWidth=track(20f,0f),strokeOverFill=track(0f,1f),
             ligatures=track(1f,0f),animators=FrozenList.of(animators))
         return ProjectDocument(Composition(width=1080,height=1920,durationUs=12_000_000,
@@ -96,16 +97,39 @@ class TextF2AcceptanceTest {
     @Test fun maximumLimitsColdAndThermal()=performance(true)
     @Test fun richRepresentativeColdAndThermal()=performance(false,true)
     @Test fun richMaximumColdAndThermal()=performance(true,true)
+    @Test fun importedVariableRepresentativeColdAndThermal()=withVariableFont { performance(false,true,it) }
+    @Test fun importedVariableMaximumColdAndThermal()=withVariableFont { performance(true,true,it) }
+    @Test fun importedVariableRandomAndReversePreEncodePixelsMatch()=withVariableFont { parity(true,it) }
 
-    @Suppress("DEPRECATION") private fun performance(maximum: Boolean,rich: Boolean=false) {
-        val directory=directory((if(rich) "t1-rich-" else "f2-")+(if(maximum) "maximum" else "representative"))
+    private fun withVariableFont(run: (TextFontRef)->Unit) {
+        val file=File.createTempFile("font-f2-proof-",".otf",context.cacheDir)
+        val library=com.fluxx.android.fonts.FontLibraryRepository.getInstance(context)
+        var added=false;var hash: String?=null
+        try {
+            instrumentation.context.assets.open("SourceSerif4Variable-Roman.otf").use { input -> file.outputStream().use { input.copyTo(it) } }
+            val entry=kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                library.load()
+                val digest=java.security.MessageDigest.getInstance("SHA-256").digest(file.readBytes()).joinToString("") { "%02x".format(it.toInt() and 255) }
+                library.state.value.find { it.sha256==digest } ?: library.import(android.net.Uri.fromFile(file)).also { added=true }
+            }
+            hash=entry.sha256
+            run(entry.faces.single().reference(entry.sha256,requested=mapOf("wght" to 400f,"opsz" to 20f)))
+        } finally {
+            if(added) hash?.let { key -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) { library.delete(key) } }
+            file.delete()
+        }
+    }
+
+    @Suppress("DEPRECATION") private fun performance(maximum: Boolean,rich: Boolean=false,font: TextFontRef?=null) {
+        val directory=directory((if(font!=null) "t2-variable-" else if(rich) "t1-rich-" else "f2-")+(if(maximum) "maximum" else "representative"))
         val host=instrumentation.startActivitySync(Intent(context,TextProofActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as TextProofActivity
         val worker=Executors.newSingleThreadExecutor()
         try {
             val surface=host.awaitSurface()
             worker.submit {
                 CompositionRenderer(context,MediaRepository(context),surface,1080,1920).use { renderer ->
-                    val project=fixture(maximum,rich)
+                    val project=fixture(maximum,rich,font)
+                    check(com.fluxx.android.fonts.FontWorkerClient.requestCount>=0L) // Initialize the counter outside the measured window.
                     repeat(120) { renderer.renderPreview(project,it*16_667L,PreviewResolution.FULL) }
                     val handle=renderer.preparedTextHandle(1)
                     val before=LongArray(6);val after=LongArray(6);val evaluation=LongArray(3)
@@ -128,6 +152,7 @@ class TextF2AcceptanceTest {
                             renderer.textEvaluationCounters(1,evaluation);val coverageBefore=evaluation[2]
                             TextDebugBridge.frameCounters(renderer.session,handle,before)
                             val nativeBefore=TextDebugBridge.allocationCount();val kotlinBefore=Debug.getThreadAllocCount()
+                            val fontRequestsBefore=com.fluxx.android.fonts.FontWorkerClient.requestCount
                             var frame=0;var missed=0
                             while(frame<600) {
                                 val began=System.nanoTime()
@@ -139,6 +164,7 @@ class TextF2AcceptanceTest {
                                 frame++
                             }
                             val kotlinDelta=Debug.getThreadAllocCount()-kotlinBefore;val nativeDelta=TextDebugBridge.allocationCount()-nativeBefore
+                            val fontRequestsDelta=com.fluxx.android.fonts.FontWorkerClient.requestCount-fontRequestsBefore
                             val report=JSONObject().put("pass",pass).put("glyphs",before[4]).put("animators",if(maximum) 16 else 8)
                                 .put("selectorsPerAnimator",if(maximum) 8 else 4).put("frames",600).put("warmFrames",120)
                                 .put("thermalLoadSeconds",if(pass==1) 180 else 0).put("nativeNewDelta",nativeDelta).put("workerThreadAllocDelta",kotlinDelta)
@@ -146,12 +172,14 @@ class TextF2AcceptanceTest {
                                 .put("selectorNs",percentiles(selectorNs)).put("propertyGeometryNs",percentiles(geometryNs))
                                 .put("framesAbove60fpsBudget",missed).put("holds60fps",frameNs[593]<=16_666_667)
                                 .put("coverageBuildsDelta",evaluation[2]-coverageBefore)
+                                .put("fontWorkerRequestsDelta",fontRequestsDelta)
                                 .put("rasterizationsDelta",after[1]-before[1]).put("atlasUploadsDelta",after[2]-before[2])
                                 .put("shapesDelta",after[3]-before[3]).put("atlasGenerationDelta",after[5]-before[5])
                             val stats=JSONObject(RenderBridge.textStats(renderer.session))
                             report.put("validationEnabled",stats.getBoolean("validationEnabled")).put("validationErrors",stats.getLong("validationErrors"))
                             File(directory,"pass-$pass.json").writeText(report.toString(2))
                             if(kotlinDelta!=0 || nativeDelta!=0L) failures.add("pass $pass allocation: Kotlin=$kotlinDelta native=$nativeDelta")
+                            if(fontRequestsDelta!=0L) failures.add("pass $pass imported-font IPC occurred during prepared evaluation")
                             for(i in intArrayOf(1,2,3,5)) if(before[i]!=after[i]) failures.add("pass $pass prepared counter $i changed")
                             if(frameNs[593]>16_666_667) failures.add("pass $pass p99 exceeds 60fps; report limits before lowering them")
                             if(!stats.getBoolean("validationEnabled") || stats.getLong("validationErrors")!=0L) failures.add("pass $pass Vulkan validation failure")
@@ -167,14 +195,14 @@ class TextF2AcceptanceTest {
     }
     @Test fun randomAndReversePreEncodePixelsMatch()=parity(false)
     @Test fun richRandomAndReversePreEncodePixelsMatch()=parity(true)
-    private fun parity(rich: Boolean) {
-        val directory=directory(if(rich) "t1-rich-parity" else "f2-parity")
+    private fun parity(rich: Boolean,font: TextFontRef?=null) {
+        val directory=directory(if(font!=null) "t2-variable-parity" else if(rich) "t1-rich-parity" else "f2-parity")
         val host=instrumentation.startActivitySync(Intent(context,TextProofActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as TextProofActivity
         try {
             CompositionRenderer(context,MediaRepository(context),host.awaitSurface(),1080,1920).use { preview ->
                 CompositionRenderer(context,MediaRepository(context)).use { export ->
                     CompositionRenderer(context,MediaRepository(context)).use { thumbnail ->
-                        val base=fixture(false,rich);val layer=base.composition.layers[0]
+                        val base=fixture(false,rich,font);val layer=base.composition.layers[0]
                         val source=layer.text.source.copy(isAnimated=true,keyframes=FrozenList.of(listOf(
                             StringKeyframe(0,layer.text.source.staticValue,layer.text.source.document),
                             StringKeyframe(7_000_000,"office A\u0301 B\n\nAV",if(rich) TextSourceDocument("office A\u0301 B\n\nAV").format(0,0) { it.copy(font=TextFontRef("fluxx.serif",TextFaceStyle.BOLD_ITALIC),fauxItalic=true,baselineDelta=5f) } else null))))

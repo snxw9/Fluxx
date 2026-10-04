@@ -40,7 +40,7 @@ table Marker {
 
 table ColourKeyframe { time_us: long; argb: int = -1; easing: EasingType = EASY_EASE; }
 table FontAxisValue { tag: string; value: AnimatableProperty1D; }
-table TextFontReference { family: string; style: int; sha256: string; face_index: int; named_instance: int = -1; axes: [FontAxisValue]; post_script_name: string; }
+table TextFontReference { family: string; style: int; sha256: string; face_index: int; named_instance: int = -1; axes: [FontAxisValue]; post_script_name: string; style_name: string; }
 table TextManualKerning { character: int; amount: float; }
 table TextStyleRun {
   start: int; end: int; font: TextFontReference; size_factor: float = 1;

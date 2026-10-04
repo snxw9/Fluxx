@@ -75,10 +75,11 @@ std::shared_ptr<const Layout> decodePreparedText(const uint8_t* bytes,size_t len
     out->ascent=in.signedInteger();out->descent=in.signedInteger();out->lineGap=in.signedInteger();
     out->styledAscent=in.real();out->styledDescent=in.real();out->styledLineGap=in.real();
     const auto fontCount=in.count(512);for(uint32_t i=0;i<fontCount;++i) out->fontIds.push_back(in.string());
-    const auto lines=in.count(4097);if(!lines) throw std::invalid_argument("Prepared text has no line");
+    const auto lines=in.count(4097);
     out->lineAdvances.resize(lines);out->styledLineAdvances.resize(lines);out->lineClusterCounts.resize(lines);
     for(uint32_t i=0;i<lines;++i) { out->styledLineAdvances[i]=in.real();out->lineClusterCounts[i]=in.count(4096); }
     const auto glyphs=in.count(MaxPreparedGlyphs);out->glyphs.reserve(glyphs);out->geometry.reserve(glyphs);std::vector<uint32_t> imageIndices;
+    if(!lines && glyphs) throw std::invalid_argument("Prepared glyphs have no line");
     for(uint32_t i=0;i<glyphs;++i) {
         Glyph g{};g.id=in.count(65535);g.cluster=in.count(16384);g.line=in.count(lines-1);
         g.xAdvance=in.signedInteger();g.yAdvance=in.signedInteger();g.xOffset=in.signedInteger();g.yOffset=in.signedInteger();
@@ -90,7 +91,9 @@ std::shared_ptr<const Layout> decodePreparedText(const uint8_t* bytes,size_t len
         if(v.scaleX<0 || v.scaleY<0 || v.fontSize<=0 || v.fontSize>100 || std::abs(v.shear)>1 || v.bold<0 || v.bold>1) throw std::invalid_argument("Invalid prepared glyph style");
         out->glyphs.push_back(g);out->geometry.push_back(v);out->glyphClusters.push_back(in.count(4095));imageIndices.push_back(in.count(MaxPreparedGlyphs-1));
     }
-    const auto characters=in.count(4096);for(uint32_t i=0;i<characters;++i) {
+    const auto characters=in.count(4096);
+    if(!lines && characters) throw std::invalid_argument("Prepared characters have no line");
+    for(uint32_t i=0;i<characters;++i) {
         Layout::Character c{};c.byteStart=in.count(16384);c.byteEnd=in.count(16384);c.line=in.count(lines-1);
         c.word=static_cast<uint32_t>(in.integer());c.nonSpaceCharacter=static_cast<uint32_t>(in.integer());c.space=in.count(1)!=0;
         if(c.byteEnd<=c.byteStart || (i && c.byteStart<out->characters.back().byteEnd) || (c.word!=UINT32_MAX && c.word>=characters) ||
