@@ -11,10 +11,12 @@ import kotlinx.coroutines.*
 class TextEditController(private val editor: EditorViewModel, private val scope: CoroutineScope,
     private val measure: suspend (String, String) -> TextLayoutMetrics,
     private val changed: () -> Unit = {}, private val typingChanged: (Boolean) -> Unit = {},
-    private val measureWithLigatures: (suspend (String,String,Boolean) -> TextLayoutMetrics)? = null) {
+    private val measureWithLigatures: (suspend (String,String,Boolean) -> TextLayoutMetrics)? = null,
+    private val measureDocument: (suspend (String,TextSourceDocument,Boolean)->TextLayoutMetrics)?=null) {
     private class Session(val state: EditorState, val layer: CompositionLayer, val time: Long, val token: Long,
         val typing: Boolean) {
         var revision = 0L; var job: Job? = null; var finishing = false
+        var draft = layer.text
         val after = mutableListOf<() -> Unit>()
     }
     private var session: Session? = null
@@ -34,9 +36,10 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
             requireNotNull(editor.activeGestureId), typing)
         error = null; typingChanged(typing)
     }
-    fun source(value: String) {
+    fun source(value: String) = sourceSelection(value,-1,-1)
+    fun sourceSelection(value: String,start: Int,end: Int) {
         val s = session ?: return
-        try { TextLimits.validateSource(value); preview(TextEdits.source(s.layer, s.time, value)) }
+        try { TextLimits.validateSource(value); preview(TextEdits.source(s.layer.copy(text=s.draft), s.time, value,start,end)) }
         catch (failure: IllegalArgumentException) { s.revision++; s.job?.cancel(); error = failure.message }
     }
     fun size(value: Float) {
@@ -46,6 +49,7 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
     fun preview(text: TextProperties) {
         val s = session ?: return
         if (s.finishing) return
+        s.draft=text
         val revision = ++s.revision
         s.job?.cancel()
         s.job = scope.launch {
@@ -53,8 +57,8 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
                 val local = s.time - s.layer.resolvedKeyframeAnchorUs
                 val old = s.layer.text
                 val oldSource = old.source.evaluate(local); val newSource = text.source.evaluate(local)
-                val oldMetrics = measureWithLigatures?.invoke(old.fontId,oldSource,old.effectiveLigatures(local)) ?: measure(old.fontId, oldSource)
-                val newMetrics = measureWithLigatures?.invoke(text.fontId,newSource,text.effectiveLigatures(local)) ?: measure(text.fontId, newSource)
+                val oldMetrics = measureDocument?.invoke(old.fontId,old.source.evaluateDocument(local),old.effectiveLigatures(local)) ?: measureWithLigatures?.invoke(old.fontId,oldSource,old.effectiveLigatures(local)) ?: measure(old.fontId, oldSource)
+                val newMetrics = measureDocument?.invoke(text.fontId,text.source.evaluateDocument(local),text.effectiveLigatures(local)) ?: measureWithLigatures?.invoke(text.fontId,newSource,text.effectiveLigatures(local)) ?: measure(text.fontId, newSource)
                 ensureActive()
                 if (session !== s || revision != s.revision || editor.activeGestureId != s.token || editor.state.project !== s.state.project) return@launch
                 val position = if (!old.layoutAnimated && !text.layoutAnimated && !s.layer.animTransform.position.isAnimated)
@@ -94,14 +98,22 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
         val current = editor.state.project.composition.layers.first { it.id == id }.text
         begin(id, false); preview(current.copy(fontId = text.fontId, alignment = text.alignment)); finish()
     } }
+    fun format(id: Long,start: Int,end: Int,change: (TextRunStyle)->TextRunStyle) { finish {
+        val layer=editor.state.project.composition.layers.first { it.id==id }
+        val time=editor.state.project.composition.frameRate.snap(editor.state.playheadUs)
+        val document=layer.text.source.evaluateDocument(time-layer.resolvedKeyframeAnchorUs)
+        val a=start.coerceIn(0,document.text.length);val b=end.coerceIn(a,document.text.length)
+        val formatted=try { document.format(a,b,change) } catch(failure: IllegalArgumentException) { error=failure.message;return@finish }
+        begin(id,false);preview(TextEdits.document(layer,time,formatted));finish()
+    } }
 }
 
 object TextEdits {
     private fun local(layer: CompositionLayer, time: Long) = Math.subtractExact(time, layer.resolvedKeyframeAnchorUs)
-    fun source(layer: CompositionLayer, time: Long, value: String): TextProperties {
+    fun source(layer: CompositionLayer, time: Long, value: String,start: Int=-1,end: Int=-1): TextProperties {
         val p = layer.text.source; val t = local(layer, time)
         if (value == p.evaluate(t)) return layer.text
-        return document(layer,time,p.evaluateDocument(t).replace(value))
+        return document(layer,time,p.evaluateDocument(t).replace(value,start,end))
     }
     fun document(layer: CompositionLayer,time: Long,value: TextSourceDocument): TextProperties {
         val p=layer.text.source;val t=local(layer,time)

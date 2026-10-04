@@ -13,7 +13,7 @@ void main() {
     // Keep AA within the encoded spread, including heavily minified glyphs.
     float width = min(max(fwidth(distance), 1.0 / 255.0), 0.125);
     float band = width * 0.5 + sdf.y;
-    float centre = 128.0 / 255.0;
+    float centre = 128.0 / 255.0 - sdf.w;
     float fillCoverage = smoothstep(centre-band, centre+band, distance);
     float outer = smoothstep(centre-sdf.x-band, centre-sdf.x+band, distance);
     float inner = smoothstep(centre+sdf.x-band, centre+sdf.x+band, distance);

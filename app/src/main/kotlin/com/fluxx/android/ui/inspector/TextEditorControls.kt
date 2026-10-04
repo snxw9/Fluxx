@@ -14,6 +14,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.fluxx.android.editor.*
 import com.fluxx.android.model.*
@@ -25,19 +26,21 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
     onBeginSource: () -> Unit, onDraft: (String) -> Unit, onFinish: () -> Unit, onCancel: () -> Unit,
     onStyle: (TextProperties) -> Unit, onSizeBegin: () -> Unit, onSizePreview: (Float) -> Unit,
     onSizeCommit: () -> Unit, onOpenFill: (AnimPropertyType) -> Unit, error: String?,
-    onScalarPreview: (AnimPropertyType, Float) -> Unit) {
+    onScalarPreview: (AnimPropertyType, Float) -> Unit,
+    onCharacter: (Int,Int,(TextRunStyle)->TextRunStyle)->Unit = { _,_,_-> },
+    onDraftSelection: (String,Int,Int)->Unit = { value,_,_->onDraft(value) }) {
     val local = time - layer.resolvedKeyframeAnchorUs
     val evaluated = layer.text.source.evaluate(local)
-    var draft by remember(layer.id) { mutableStateOf(evaluated) }
+    var draft by remember(layer.id) { mutableStateOf(TextFieldValue(evaluated)) }
     var focused by remember(layer.id) { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
-    LaunchedEffect(evaluated, focused) { if (!focused) draft = evaluated }
+    LaunchedEffect(evaluated, focused) { if (!focused && draft.text!=evaluated) draft = TextFieldValue(evaluated) }
     fun done() { focusManager.clearFocus(); onFinish() }
     var page by remember(layer.id) { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (!compact) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            listOf("Text", "Spacing", "Stroke").forEachIndexed { index, label ->
-                TextButton(onClick = { done(); page = index; onFocus(null) }) { Text(label,
+            listOf("Text", "Spacing", "Stroke", "Character").forEachIndexed { index, label ->
+                TextButton(modifier=Modifier.weight(1f),contentPadding=PaddingValues(0.dp),onClick = { done(); page = index; onFocus(null) }) { Text(label,style=MaterialTheme.typography.labelSmall,maxLines=1,
                     color = if (page == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }
             }
         }
@@ -47,7 +50,13 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
             TextPropertyDiamond(layer, AnimPropertyType.SOURCE_TEXT, time, onAction, onFocus)
         }
         OutlinedTextField(value = draft, onValueChange = {
-            draft = it; onDraft(it)
+            val previous=draft;val changed=previous.text!=it.text;draft = it
+            if(changed) {
+                val delta=it.text.length-previous.text.length
+                val start=if(previous.selection.collapsed && delta<0) it.selection.min else previous.selection.min
+                val end=if(previous.selection.collapsed && delta<0) start-delta else previous.selection.max
+                onDraftSelection(it.text,start,end)
+            }
         }, modifier = Modifier.fillMaxWidth().weight(1f).onFocusChanged {
             if (it.isFocused && !focused) { onFocus(AnimPropertyType.SOURCE_TEXT); onBeginSource() }
             if (!it.isFocused && focused) onFinish()
@@ -104,7 +113,10 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
             TextScalarControl(layer, time, AnimPropertyType.TRACKING, "Tracking · 1/1000 em", -500f..1000f, onAction, onFocus, onSizeBegin, onScalarPreview, onSizeCommit)
             TextScalarControl(layer, time, AnimPropertyType.LEADING, "Additional leading · px", -500f..500f, onAction, onFocus, onSizeBegin, onScalarPreview, onSizeCommit)
             TextScalarControl(layer, time, AnimPropertyType.BASELINE_SHIFT, "Baseline shift · px", -500f..500f, onAction, onFocus, onSizeBegin, onScalarPreview, onSizeCommit)
-            Text("Tracking preserves ligatures and combining marks.", style = MaterialTheme.typography.labelSmall)
+            Text("Layer tracking splits ligatures away from zero; combining marks stay together.", style = MaterialTheme.typography.labelSmall)
+        }
+        if (!compact && page == 3) {
+            CharacterControls(layer.text.source.evaluateDocument(local).replace(draft.text),draft.selection.min,draft.selection.max,layer.text.fontId,onCharacter)
         }
         if (!compact && page == 2) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {

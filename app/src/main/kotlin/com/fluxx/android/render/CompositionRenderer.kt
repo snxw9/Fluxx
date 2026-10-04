@@ -37,11 +37,15 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private data class FixtureLayout(val source: String, val font: String, val handle: Long)
     private val fixtureLayouts = mutableMapOf<Long, FixtureLayout>()
     private data class ProductLayout(val handle: Long, val metrics: TextLayoutMetrics)
-    private val textLayouts = LinkedHashMap<Triple<String, String, Boolean>, ProductLayout>(64, .75f, true)
-    private class PreparedText(val layer: CompositionLayer, val sources: Array<String>, val layouts: Array<ProductLayout>,
+    private val textLayouts = LinkedHashMap<Triple<String, TextSourceDocument, Boolean>, ProductLayout>(64, .75f, true)
+    private class PreparedText(val layer: CompositionLayer, val sources: Array<TextSourceDocument>, val layouts: Array<ProductLayout>,
         val animations: Array<PreparedTextAnimation>) {
+        private val sourceIndices=java.util.IdentityHashMap<TextSourceDocument,Int>().also { map ->
+            for(document in listOf(layer.text.source.sourceDocument)+layer.text.source.keyframes.map { it.sourceDocument })
+                map[document]=sources.indexOf(document)
+        }
         var lastIndex=0
-        fun index(source: String,ligatures: Boolean): Int { var i=0;while(sources[i]!=source) i++;return i*2+(if(ligatures) 0 else 1) }
+        fun index(source: TextSourceDocument,ligatures: Boolean): Int = requireNotNull(sourceIndices[source])*2+(if(ligatures) 0 else 1)
     }
     private val selectorEase by lazy { SelectorEaseTable() }
     private var preparedText = emptyArray<PreparedText>()
@@ -54,14 +58,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
         val layers = project.composition.layers
         onlyText = layers.isNotEmpty() && layers.all { it.type == LayerType.TEXT } && TextFixtureProvider.entries().isEmpty()
         preparedText = layers.filter { it.type==LayerType.TEXT }.sortedWith(compareBy<CompositionLayer> { it.zOrder }.thenBy { it.id }).map { layer ->
-            layer.text.source.sourceDocument.requireLegacyLayout()
-            for(key in layer.text.source.keyframes) key.sourceDocument.requireLegacyLayout()
-            val sources = (listOf(layer.text.source.staticValue) + layer.text.source.keyframes.map { it.value }).distinct().toTypedArray()
-            require(sources.size<=com.fluxx.android.model.TextSourceDocument.MAX_PREPARED_LAYOUTS/2) {
-                "Text layer exceeds the 64 prepared-layout limit; reduce distinct Source Text alternatives to at most 32"
-            }
+            val sources = StyledTextPreparation.alternatives(layer.text.source)
             val layouts=sources.flatMap { source -> listOf(textLayout(layer.text.fontId,source,true),textLayout(layer.text.fontId,source,false)) }.toTypedArray()
-            PreparedText(layer,sources,layouts,Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(layer.text,selectorEase)) })
+            PreparedText(layer,sources,layouts,Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(layer.text,selectorEase,sources[it/2])) })
         }.toTypedArray()
         preparedHandles = preparedText.flatMap { it.layouts.map { layout -> layout.handle } }.toLongArray()
         // Release obsolete layouts; active source-key layouts remain pinned until the next project preparation.
@@ -90,14 +89,14 @@ class CompositionRenderer(private val context: Context, private val repository: 
             layer.evaluatedTransformInto(time,evaluatedTransform)
             val opacity = evaluatedTransform[5]; if (opacity == 0f) continue
             val local = time-layer.resolvedKeyframeAnchorUs
-            val source = layer.text.source.evaluate(local)
+            val source = layer.text.source.evaluateDocument(local)
             val index = entry.index(source,layer.text.effectiveLigatures(local))
             entry.lastIndex=index
             val layout = entry.layouts[index]; val text = layer.text
             val size = text.size.evaluate(local); val tracking = text.tracking.evaluate(local)
             val leading = text.leading.evaluate(local); val baseline = text.baselineShift.evaluate(local)
             val animation=entry.animations[index];animation.evaluate(local)
-            layout.metrics.logicalInto(size,tracking,leading,baseline,logicalBounds)
+            animation.logicalBounds.copyInto(logicalBounds)
             LayerGeometry.textMatrixInto(matrix,evaluatedTransform,logicalBounds,comp.width,comp.height,
                 layer.referenceWidth.takeIf { it > 0 } ?: comp.width,layer.referenceHeight.takeIf { it > 0 } ?: comp.height,layer.anchorX,layer.anchorY)
             if (staged == 4) flush()
@@ -113,9 +112,10 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private var previewCompHeight = 0
     private var previewTargetWidth = 0
     private var previewTargetHeight = 0
-    private fun textLayout(font: String, source: String,ligatures: Boolean=true): ProductLayout = textLayouts.getOrPut(Triple(font,source,ligatures)) {
-        val handle = RenderBridge.upsertText(session, font, source,ligatures)
-        try { ProductLayout(handle, TextLayoutMetrics.fromNative(RenderBridge.textMetrics(session, handle), source.isEmpty())) }
+    private fun textLayout(font: String, source: TextSourceDocument,ligatures: Boolean=true): ProductLayout = textLayouts.getOrPut(Triple(font,source,ligatures)) {
+        require(source.boxWidth==0f && source.paragraphs.all { it==TextParagraphStyle() }) { "Paragraph/box/direction layout awaits T3/T5; the requested document is preserved" }
+        val handle = RenderBridge.upsertStyledText(session, font, StyledTextPreparation.encode(source,font),ligatures)
+        try { ProductLayout(handle, TextLayoutMetrics.fromNative(RenderBridge.textMetrics(session, handle), source.text.isEmpty(),source)) }
         catch (error: Exception) { RenderBridge.releaseText(session, handle); throw error }
     }
     init { KeyframeEvaluator.easeProgress(0f, EasingPreset.EASY_EASE); RenderBridge.configureText(session, if(lowRam) 2 else 4) }
@@ -210,7 +210,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         requireNotNull(plan).forEachActive(timeUs) { layer, _, _, _ ->
             if (layer.type == LayerType.TEXT && layer.evaluatedTransform(timeUs).opacity != 0f) {
                 val local = timeUs - layer.resolvedKeyframeAnchorUs
-                val source = layer.text.source.evaluate(local)
+                val source = layer.text.source.evaluateDocument(local)
                 val entry=preparedText.first { it.layer.id==layer.id }
                 val index=entry.index(source,layer.text.effectiveLigatures(local))
                 entry.lastIndex=index
@@ -282,7 +282,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 val layout = requireNotNull(textForFrame[layer.id])
                 val size = layer.text.size.evaluate(local)
                 val animation=requireNotNull(textAnimationsForFrame[layer.id]);animation.evaluate(local)
-                LayerGeometry.textMatrix(matrix, layer.evaluatedTransform(timeUs), layout.metrics.logical(layer.text, local),
+                layer.evaluatedTransformInto(timeUs,evaluatedTransform)
+                LayerGeometry.textMatrixInto(matrix, evaluatedTransform, animation.logicalBounds,
                     comp.width, comp.height, referenceWidth, referenceHeight, layer.anchorX, layer.anchorY)
                 check(RenderBridge.textLayer(session, layout.handle, matrix, size, layer.text.alignment.ordinal,
                     layer.text.fill.evaluate(local), opacity, layer.text.tracking.evaluate(local), layer.text.leading.evaluate(local),

@@ -1,6 +1,6 @@
 # Element Inspector & Layer Actions
 
-**T1–T5 current work (2026-10-04):** the rich Source Text data model is drafted, including run-relative Character fields and paragraph/box records held with each source value. Functional Character/Paragraph pages, source selection formatting, library controls and box gestures are not implemented. The existing fixed/paged Edit Text sheet remains the approved integration point; no scrolling sheet, F3 animator UI, PreviewController API or gesture-protocol change is authorized. See [current implementation evidence](TEXT_LAYER.md).
+**T1–T5 current work (2026-10-04):** T1a rich Source Text/v12 foundation is committed. T1b adds selection-based Character editing in the existing fixed/paged Edit Text sheet: eight compact subpages for faces, faux/caps, script/kerning, scales/size, baseline, spacing/stroke, ARGB overrides and manual kerning. An empty selection applies to all text; formatting writes an atomic held Source Text value and one undo transaction. Paragraph/library/box controls remain T2/T3 work. No scrolling sheet, F3 animator UI, PreviewController or gesture change. Controls are source-implemented, device-unverified; see [current evidence](TEXT_LAYER.md).
 
 **Status:** Implemented in source. Android debug Kotlin compilation passed during E1b/E1c; the feature-specific JVM/phone checks below remain pending. This document owns inspector navigation, layer actions and trim/extend/split.
 

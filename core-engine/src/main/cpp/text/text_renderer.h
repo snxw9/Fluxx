@@ -37,6 +37,7 @@ public:
     ~TextRenderer();
     TextRenderer(const TextRenderer&)=delete;
     std::shared_ptr<const Layout> layout(const std::string& font, const std::string& utf8, bool ligatures=true);
+    std::shared_ptr<const Layout> styledLayout(const std::string& font,const StyledInput& input,bool ligatures);
     void collect(const std::shared_ptr<const Layout>& layout);
     // Called before recording draws. Throws a typed capacity error without a partial frame.
     void pack(bool proofOnly);

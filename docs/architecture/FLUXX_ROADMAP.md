@@ -1,6 +1,6 @@
 # Fluxx Roadmap: v0.1 → Full Vision
 
-**Text completion status (2026-10-04):** F1/F2 user-accepted. T1 Character formatting → T2 fonts → T3 paragraph/box text → T4 animator gaps → T5 Arabic/Hebrew direction is authorized as five ordered gated commits. Work currently consists of uncommitted T1 model/codec/font-asset preparation; none of these five stages is complete. F1 device perf/parity/lifecycle checks remain deferred. F3 animator UI remains later work. [Current evidence](../checkpoints/TEXT_LAYER.md) distinguishes preparation from working renderer/UI support.
+**Text completion status (2026-10-04):** F1/F2 user-accepted. T1a foundation committed (`5772f10`); T1b styled rendering/Character editing is source-implemented with its compile/JVM gate passed. Authorized continuation permits stage sub-commits. T2 fonts → T3 paragraph/box text → T4 animator gaps → T5 Arabic/Hebrew direction remain ordered work. F1 perf/parity/lifecycle stay deferred; F3 animator UI remains later. [Current evidence](../checkpoints/TEXT_LAYER.md) and the [verbatim specification](TEXT_COMPLETION_SPEC.md) distinguish implementation from device verification.
 
 > Companion to `FLUXX_SDD.md`, which describes the complete target architecture. This document defines what actually gets built first, in what order, and why.
 

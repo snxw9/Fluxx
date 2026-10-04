@@ -94,7 +94,7 @@ fun EditorScreen(
     val textEditor = remember(editor, scope, metricsService) {
         TextEditController(editor, scope, metricsService::measure,
             changed = { latestPreview?.update(editor.displayedState.project, editor.displayedState.playheadUs, false) },
-            typingChanged = { textTyping = it },measureWithLigatures=metricsService::measure)
+            typingChanged = { textTyping = it },measureWithLigatures=metricsService::measure,measureDocument=metricsService::measure)
     }
     DisposableEffect(textEditor) { onDispose { textEditor.cancel() } }
     val textErrors by TextLayerErrors.state.collectAsState()
@@ -103,7 +103,7 @@ fun EditorScreen(
     val composition = project.composition
     val playheadUs = displayedState.playheadUs
     val selectedLayer = displayedState.selectedLayer
-    val selectedTextSource = selectedLayer?.text?.source?.evaluate(playheadUs - selectedLayer.resolvedKeyframeAnchorUs).orEmpty()
+    val selectedTextSource = selectedLayer?.text?.source?.evaluateDocument(playheadUs - selectedLayer.resolvedKeyframeAnchorUs) ?: TextSourceDocument("")
     val selectedLigatures=selectedLayer?.let { it.text.effectiveLigatures(playheadUs-it.resolvedKeyframeAnchorUs) } ?: true
     val selectedTextMetrics by produceState<TextLayoutMetrics?>(null, selectedLayer?.type, selectedLayer?.text?.fontId, selectedTextSource,selectedLigatures) {
         value = null
@@ -146,7 +146,7 @@ fun EditorScreen(
             try {
                 val action = if (layer.type == LayerType.TEXT) {
                     val local = atTime - layer.resolvedKeyframeAnchorUs
-                    val metrics = metricsService.measure(layer.text.fontId, layer.text.source.evaluate(local),layer.text.effectiveLigatures(local))
+                    val metrics = metricsService.measure(layer.text.fontId, layer.text.source.evaluateDocument(local),layer.text.effectiveLigatures(local))
                     EditorAction.FitText(layer.id, atTime, metrics.bounds(layer.text, local), mode)
                 } else withContext(Dispatchers.IO) {
                     val width: Int
@@ -518,9 +518,11 @@ fun EditorScreen(
                         textError = textEditor.error ?: textErrors?.takeIf { it.project === project && layer.id in it.layerIds }?.message,
                         onTextBegin = { previewController?.pause(); textEditor.begin(layer.id) },
                         onTextDraft = textEditor::source,
+                        onTextDraftSelection = textEditor::sourceSelection,
                         onTextFinish = { textEditor.finish() },
                         onTextCancel = textEditor::cancel,
                         onTextStyle = { textEditor.edit(layer.id, it) },
+                        onTextCharacter = { start,end,change -> previewController?.pause();textEditor.format(layer.id,start,end,change) },
                         onTextSizeBegin = { previewController?.pause()
                             if (textEditor.typing) textEditor.finish { textEditor.begin(layer.id, false) } else textEditor.begin(layer.id, false) },
                         onTextSizePreview = { value ->

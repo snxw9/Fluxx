@@ -86,13 +86,18 @@ data class TextSourceDocument(val text: String,
         return copy(runs=merge(out))
     }
     /** Minimal replacement range inherits the style at the caret; untouched ranges retain formatting. */
-    fun replace(value: String): TextSourceDocument {
+    fun replace(value: String, editStart: Int = -1, editEnd: Int = -1): TextSourceDocument {
         TextLimits.validateSource(value)
         if(value==text) return this
-        var prefix=0;while(prefix<minOf(text.length,value.length) && text[prefix]==value[prefix]) prefix++
+        val inserted=value.length-text.length+(editEnd-editStart)
+        val hinted=editStart in 0..text.length && editEnd in editStart..text.length && inserted>=0 &&
+            editStart+inserted<=value.length && value.regionMatches(0,text,0,editStart) &&
+            value.regionMatches(editStart+inserted,text,editEnd,text.length-editEnd)
+        var prefix=if(hinted) editStart else 0
+        if(!hinted) while(prefix<minOf(text.length,value.length) && text[prefix]==value[prefix]) prefix++
         prefix=TextSourceBoundaries.floor(boundaries,prefix)
-        var suffix=0
-        while(suffix<minOf(text.length-prefix,value.length-prefix) && text[text.lastIndex-suffix]==value[value.lastIndex-suffix]) suffix++
+        var suffix=if(hinted) text.length-editEnd else 0
+        if(!hinted) while(suffix<minOf(text.length-prefix,value.length-prefix) && text[text.lastIndex-suffix]==value[value.lastIndex-suffix]) suffix++
         val oldEnd=TextSourceBoundaries.ceiling(boundaries,text.length-suffix)
         suffix=text.length-oldEnd
         val newEnd=value.length-suffix;val delta=value.length-text.length
@@ -113,12 +118,6 @@ data class TextSourceDocument(val text: String,
     fun storageBytes(): Long = text.toByteArray(Charsets.UTF_8).size.toLong()+runs.sumOf {
         96L+it.style.manualKerning.size*8L+(it.style.font?.let { f -> f.family.toByteArray().size+f.postScriptName.toByteArray().size+64L+f.axes.size*32L } ?: 0L)
     }+paragraphs.size*32L
-    /** Keep the unfinished rich-layout integration from silently displaying an unformatted string. */
-    fun requireLegacyLayout() {
-        require(boxWidth==0f && paragraphs.isEmpty() && runs.all { it.style==TextRunStyle() }) {
-            "Rich text layout is not implemented in this source checkpoint; formatting has been preserved but cannot be rendered yet"
-        }
-    }
     companion object {
         const val MAX_PREPARED_LAYOUTS=64
         private fun defaultRuns(text: String)=if(text.isEmpty()) FrozenList.empty() else FrozenList.of(listOf(TextStyleRun(0,text.length)))

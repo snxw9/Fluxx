@@ -123,6 +123,16 @@ JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_prepareTex
 JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_configureText(JNIEnv*,jobject,jlong session,jint pages) {
     reinterpret_cast<VulkanRenderer*>(session)->configureText(pages==2?2:4);
 }
+JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_RenderBridge_upsertStyledText(JNIEnv* env,jobject,jlong session,jstring font,jbyteArray bytes,jboolean ligatures) {
+    try {
+        if(!bytes || env->GetArrayLength(bytes)>1024*1024) throw std::invalid_argument("Invalid styled text bytes");
+        std::vector<uint8_t> buffer(static_cast<size_t>(env->GetArrayLength(bytes)));
+        env->GetByteArrayRegion(bytes,0,static_cast<jsize>(buffer.size()),reinterpret_cast<jbyte*>(buffer.data()));
+        if(env->ExceptionCheck()) return 0;
+        const auto input=fluxx::text::decodeStyledInput(buffer.data(),buffer.size());
+        return reinterpret_cast<VulkanRenderer*>(session)->upsertStyledText(textUtf8(env,font),input,ligatures);
+    } catch(const std::exception& error) { textFailure(env,error);return 0; }
+}
 JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_reusePreparedText(JNIEnv* env,jobject,jlong session) {
     try { return reinterpret_cast<VulkanRenderer*>(session)->reusePreparedText(); }
     catch(const std::exception& error) { textFailure(env,error); return false; }

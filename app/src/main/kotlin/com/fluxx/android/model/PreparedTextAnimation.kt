@@ -7,7 +7,7 @@ import kotlin.math.*
 /** Immutable native layout metadata plus reusable per-frame working storage.
  * The direct record ABI is shared with text_renderer.h; no objects are emitted per glyph. */
 class PreparedTextAnimation(private val text: TextProperties,private val data: DoubleArray,
-    ease: SelectorEaseTable) {
+    ease: SelectorEaseTable,document: TextSourceDocument?=null) {
     private val lines=data[4].toInt();private val glyphs=data[5].toInt()
     private val prefix=6+lines*2+glyphs*8
     private val clusters=data[prefix+1].toInt();private val characters=data[prefix+2].toInt()
@@ -42,19 +42,35 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
     private val boundary=DoubleArray(clusters);private val offset=DoubleArray(clusters)
     private val lineTotals=DoubleArray(lines);private val lineShift=DoubleArray(lines);private val ownTotals=DoubleArray(lines)
     private val baseAdvances=DoubleArray(lines);private val advances=DoubleArray(lines)
+    private val rawAdvances=DoubleArray(lines);private val runTotals=DoubleArray(lines)
     private val clusterX=DoubleArray(clusters)
     private val matrices=DoubleArray(clusters*6);private val affine=DoubleArray(6)
     private val groupSizes=intArrayOf(clusters,words+clusters,lines,1)
     private val groups=Array(4) { DoubleArray(groupSizes[it]*4) }
     private val fill=IntArray(clusters);private val stroke=IntArray(clusters)
     private val width=DoubleArray(clusters);private val blur=DoubleArray(clusters);private val opacity=DoubleArray(clusters)
+    private val sourceEdges=document?.boundaries?.filter { it<document.text.length && document.text[it]!='\n' }?.toIntArray() ?: IntArray(0)
+    private val styles=Array(clusters) { c -> document?.runAt(sourceEdges.getOrNull(starts[c]) ?: 0)?.style ?: TextRunStyle() }
+    private val manual=DoubleArray(characters).also { amounts ->
+        if(document!=null) for(run in document.runs) for(k in run.style.manualKerning) {
+            val character=sourceEdges.binarySearch(k.character);if(character>=0) amounts[character]+=k.amount
+        }
+    }
+    private val runSpacing=DoubleArray(clusters) { c ->
+        styles[c].trackingDelta.toDouble()
+    }
+    private val runManual=DoubleArray(clusters) { c -> var amount=0.0;for(character in starts[c] until ends[c]) amount+=manual[character];amount }
+    private val tail=glyphBase+glyphs
+    private val runSizes=DoubleArray(clusters) { if(data.size==tail+2+clusters) data[tail+2+it] else styles[it].sizeFactor.toDouble() }
+    private val runBaseline=DoubleArray(clusters) { styles[it].baselineDelta.toDouble() }
     val modifiers: ByteBuffer = ByteBuffer.allocateDirect(Math.multiplyExact(clusters,STRIDE)).order(ByteOrder.nativeOrder())
     val inkBounds=FloatArray(4)
+    val logicalBounds=FloatArray(4)
     var selectorNs=0L;private set
     var geometryNs=0L;private set
     val coverageBuilds get()=engines.sumOf { it.coverageBuilds }
     init {
-        require(data[prefix]==271828.0 && data.size==glyphBase+glyphs)
+        require(data[prefix]==271828.0 && (data.size==tail || (data.size==tail+2+clusters && data[tail]==314159.0 && data[tail+1]==clusters.toDouble())))
         var ordinal=0;var line=-1
         for(c in 0 until clusters) { if(clusterLines[c]!=line) { line=clusterLines[c];ordinal=0 };ordinals[c]=ordinal++ }
     }
@@ -64,9 +80,14 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         val tracking=text.tracking.evaluate(time).toDouble()*size/1000
         val leading=text.leading.evaluate(time).toDouble();val baseline=text.baselineShift.evaluate(time).toDouble()
         val step=(data[1]-data[2]+max(0.0,data[3]))*factor+leading
-        boundary.fill(0.0);lineTotals.fill(0.0);lineShift.fill(0.0)
+        boundary.fill(0.0);lineTotals.fill(0.0);lineShift.fill(0.0);runTotals.fill(0.0)
         val baseFill=text.fill.evaluate(time);val baseStroke=text.strokeColour.evaluate(time)
         val baseWidth=text.strokeWidth.evaluate(time).toDouble()
+        for(c in 0 until clusters) {
+            val spacingScale=runSizes[c]*styles[c].horizontalScale/100
+            val delta=runManual[c]*size*spacingScale/1000+(if(nextInLine[c]) runSpacing[c]*size*spacingScale/1000+tracking*(spacingScale-1) else 0.0)
+            boundary[c]+=delta;runTotals[clusterLines[c]]+=delta
+        }
         for(a in engines.indices) {
             val animator=text.animators[a]
             active[a]=animator.enabled.hold(time)!=0f
@@ -83,31 +104,37 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
             }
             ownTotals.fill(0.0)
             if(present[a][AnimatorProperty.TRACKING.ordinal]) for(c in 0 until clusters) if(nextInLine[c]) {
-                val delta=coverage[a][c]*values[a][AnimatorProperty.TRACKING.ordinal*2]*size/1000
+                val delta=coverage[a][c]*values[a][AnimatorProperty.TRACKING.ordinal*2]*size*runSizes[c]/1000
                 boundary[c]+=delta;ownTotals[clusterLines[c]]+=delta
             }
             val anchor=values[a][AnimatorProperty.LINE_ANCHOR.ordinal*2]
             for(l in 0 until lines) { lineTotals[l]+=ownTotals[l];lineShift[l]+=SelectorMath.lineShift(anchor,ownTotals[l]) }
         }
         selectorNs=System.nanoTime()-began
-        var oldMax=0.0;var newMax=0.0
+        var oldMax=0.0;var newMax=0.0;var rawMax=0.0
         for(l in 0 until lines) {
-            baseAdvances[l]=data[6+l]*factor+(data[6+lines+glyphs*7+l].toInt()-1).coerceAtLeast(0)*tracking
+            rawAdvances[l]=data[6+l]*factor+(data[6+lines+glyphs*7+l].toInt()-1).coerceAtLeast(0)*tracking
+            rawMax=max(rawMax,rawAdvances[l]);baseAdvances[l]=rawAdvances[l]+runTotals[l]
             advances[l]=baseAdvances[l]+lineTotals[l];oldMax=max(oldMax,baseAdvances[l]);newMax=max(newMax,advances[l])
         }
+        val last=(lines-1).coerceAtLeast(0)*step
+        logicalBounds[0]=0f;logicalBounds[1]=(-data[1]*factor+min(0.0,last)).toFloat()
+        logicalBounds[2]=oldMax.coerceAtLeast(0.0).toFloat();logicalBounds[3]=(abs(last)+(data[1]-data[2])*factor).toFloat()
+        if(lines==0) logicalBounds.fill(0f)
         var pen=0.0;var line=-1;val align=text.alignment.ordinal/2.0
         for(c in 0 until clusters) {
             val l=clusterLines[c];if(l!=line) { line=l;pen=0.0 }
-            offset[c]=pen+lineShift[l]+((newMax-advances[l])-(oldMax-baseAdvances[l]))*align
-            clusterX[c]=data[clusterBase+c*6+4]*factor+ordinals[c]*tracking+(oldMax-baseAdvances[l])*align+offset[c]
+            offset[c]=pen+lineShift[l]+((newMax-advances[l])-(rawMax-rawAdvances[l]))*align
+            clusterX[c]=data[clusterBase+c*6+4]*factor+ordinals[c]*tracking+(rawMax-rawAdvances[l])*align+offset[c]
             pen+=boundary[c]
-            fill[c]=baseFill;stroke[c]=baseStroke;width[c]=baseWidth;blur[c]=0.0;opacity[c]=1.0
+            fill[c]=styles[c].fill ?: baseFill;stroke[c]=styles[c].stroke ?: baseStroke
+            width[c]=baseWidth+styles[c].strokeDelta;blur[c]=0.0;opacity[c]=1.0
             val i=c*6;matrices[i]=1.0;matrices[i+1]=0.0;matrices[i+2]=0.0;matrices[i+3]=1.0;matrices[i+4]=0.0;matrices[i+5]=0.0
         }
         for(g in groups) { var i=0;while(i<g.size) { g[i]=Double.POSITIVE_INFINITY;g[i+1]=Double.POSITIVE_INFINITY;g[i+2]=Double.NEGATIVE_INFINITY;g[i+3]=Double.NEGATIVE_INFINITY;i+=4 } }
         for(c in 0 until clusters) for(kind in 0..3) {
             val group=group(c,kind);val b=groups[kind];val i=group*4
-            val x=clusterX[c];val right=x+data[clusterBase+c*6+5]*factor;val y=clusterLines[c]*step-baseline
+            val x=clusterX[c];val right=x+data[clusterBase+c*6+5]*factor;val y=clusterLines[c]*step-baseline-runBaseline[c]
             b[i]=min(b[i],min(x,right));b[i+1]=min(b[i+1],y-data[1]*factor)
             b[i+2]=max(b[i+2],max(x,right));b[i+3]=max(b[i+3],y-data[2]*factor)
         }
@@ -132,21 +159,22 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         }
         val distanceScale=48/(16*size)
         for(c in 0 until clusters) {
-            width[c]=width[c].coerceIn(0.0,.20*size);blur[c]=blur[c].coerceIn(0.0,max(0.0,.10*size-width[c]/2))
+            val fontSize=size*runSizes[c]
+            width[c]=width[c].coerceIn(0.0,.20*fontSize);blur[c]=blur[c].coerceIn(0.0,max(0.0,.10*fontSize-width[c]/2))
             val record=c*STRIDE
             for(k in 0..5) put(record+k*4,matrices[c*6+k])
-            put(record+24,offset[c]);put(record+28,0.0)
+            put(record+24,offset[c]);put(record+28,-runBaseline[c])
             colour(record+32,fill[c]);colour(record+48,stroke[c])
-            put(record+64,width[c]/2*distanceScale);put(record+68,blur[c]*distanceScale)
+            put(record+64,width[c]/2*distanceScale/runSizes[c]);put(record+68,blur[c]*distanceScale/runSizes[c])
             put(record+72,opacity[c]);put(record+76,width[c]);put(record+80,blur[c])
         }
         var left=Double.POSITIVE_INFINITY;var top=left;var right=Double.NEGATIVE_INFINITY;var bottom=right
         for(g in 0 until glyphs) {
             val i=6+lines+g*7;val c=glyphClusters[g];val l=data[i].toInt()
             if(data[i+5]<=0 || data[i+6]>=0) continue
-            val padding=width[c]/2+blur[c]+size/48
-            val x=(data[i+1]+data[i+3])*factor+ordinals[c]*tracking+(oldMax-baseAdvances[l])*align+offset[c]-padding
-            val y=l*step+(data[i+2]-data[i+4])*factor-baseline-padding
+            val padding=(width[c]/2+blur[c]+size*runSizes[c]/48)*max(styles[c].horizontalScale,styles[c].verticalScale)/100*(if(styles[c].fauxItalic) 1.213 else 1.0)
+            val x=(data[i+1]+data[i+3])*factor+ordinals[c]*tracking+(rawMax-rawAdvances[l])*align+offset[c]-padding
+            val y=l*step+(data[i+2]-data[i+4])*factor-baseline-runBaseline[c]-padding
             val w=data[i+5]*factor+padding*2;val h=-data[i+6]*factor+padding*2;val m=c*6
             for(corner in 0..3) {
                 val xx=x+(if(corner and 1!=0) w else 0.0);val yy=y+(if(corner and 2!=0) h else 0.0)

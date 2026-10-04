@@ -110,6 +110,18 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_fluxx_android_engine_TextNative_sh
         return env->NewStringUTF(json.c_str());
     } catch (const std::exception& error) { fail(env, error); return nullptr; }
 }
+extern "C" JNIEXPORT jdoubleArray JNICALL Java_com_fluxx_android_engine_TextNative_styledMetrics(JNIEnv* env,jobject,jlong id,jstring font,jbyteArray bytes,jboolean ligatures) {
+    try {
+        if(!bytes || env->GetArrayLength(bytes)>1024*1024) throw std::invalid_argument("Invalid styled text bytes");
+        std::vector<uint8_t> buffer(static_cast<size_t>(env->GetArrayLength(bytes)));
+        env->GetByteArrayRegion(bytes,0,static_cast<jsize>(buffer.size()),reinterpret_cast<jbyte*>(buffer.data()));
+        if(env->ExceptionCheck()) return nullptr;
+        const auto input=fluxx::text::decodeStyledInput(buffer.data(),buffer.size());
+        const auto values=fluxx::text::layoutMetrics(*get(id)->shapeStyled(string(env,font),input.text,input.runs,input.uppercase,ligatures));
+        auto result=env->NewDoubleArray(static_cast<jsize>(values.size()));
+        if(result) env->SetDoubleArrayRegion(result,0,static_cast<jsize>(values.size()),values.data());return result;
+    } catch(const std::exception& error) { fail(env,error);return nullptr; }
+}
 #ifdef FLUXX_TEXT_DIAGNOSTICS
 extern "C" JNIEXPORT void JNICALL Java_com_fluxx_android_engine_TextDebugBridge_dump(JNIEnv* env, jobject, jlong id, jstring directory) {
     try { fluxx::text::dumpDiagnostics(*get(id), string(env, directory)); }

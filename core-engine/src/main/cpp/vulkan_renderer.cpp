@@ -1304,6 +1304,12 @@ void VulkanRenderer::releaseText(int64_t handle) {
     if(found!=mTextLayouts.end() && mText) mText->forget(found->second.get());
     mTextLayouts.erase(handle); mPreparedTextHandles.clear();
 }
+int64_t VulkanRenderer::upsertStyledText(const std::string& font,const fluxx::text::StyledInput& input,bool ligatures) {
+    if(!mText) mText=std::make_unique<fluxx::text::TextRenderer>(mPhysicalDevice,mDevice,mOffscreenRenderPass,mPipelineCache,mAssetManager,mTextMaxPages);
+    if(mNextTextHandle==INT64_MAX) throw std::runtime_error("Text layout handles exhausted");
+    auto layout=mText->styledLayout(font,input,ligatures);
+    const int64_t handle=mNextTextHandle++;mTextLayouts.emplace(handle,std::move(layout));return handle;
+}
 bool VulkanRenderer::prepareText(const int64_t* handles, size_t count, bool proofOnly) {
     if(!mInitialized || !mDrawOrder.empty() || !mFirstBatch) throw std::logic_error("Text preparation must precede composition draws");
     if(!count) return true;

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <thread>
 #include <stdexcept>
+#include <cmath>
 
 using namespace fluxx::text;
 std::vector<uint8_t> read(const std::filesystem::path& path) {
@@ -38,6 +39,31 @@ int main(int argc, char** argv) {
         } else if (command == "dump" && argc == 4) {
             dumpDiagnostics(manager, argv[3]); std::cout << "CPU dump complete: " << argv[3] << '\n';
         } else if (command == "selftest") {
+            {
+                StyledRun first;first.start=0;first.end=1;first.fontId="fluxx.sans.bold";first.size=2;first.horizontal=1.5;first.fauxBold=true;first.fauxItalic=true;
+                StyledRun second;second.start=1;second.end=2;second.fontId="fluxx.serif.italic";second.script=1;
+                const auto rich=manager.shapeStyled("fluxx.sans","ab",{first,second},{'A','B'});
+                require(rich->glyphs.size()==2 && rich->characters.size()==2 && rich->clusters.size()==2,"Rich source membership changed");
+                require(rich->glyphFont(0)==first.fontId && rich->glyphFont(1)==second.fontId,"Rich fonts were flattened");
+                require(rich->geometry[0].scaleX==3 && rich->geometry[0].bold==.075 && rich->geometry[0].shear>0,"Rich affine/faux geometry missing");
+                const auto regular=manager.shape(first.fontId,"a");
+                require(std::abs(rich->geometry[0].advance-regular->glyphs[0].xAdvance*3000.0/regular->upem)<.0001,"Horizontal scale did not scale advance");
+                const auto values=layoutMetrics(*rich);
+                require(values[values.size()-4]==314159 && values[values.size()-3]==2,"Rich effective-size metadata missing");
+                StyledRun caps;caps.start=0;caps.end=2;caps.caps=1;
+                const auto upper=manager.shapeStyled("fluxx.sans","ab",{caps},{'A','B'});
+                require(upper->glyphs[0].id==manager.glyphForCodepoint("fluxx.sans",'A'),"Simple uppercase was not shaped");
+                require(upper->characters.size()==2,"Uppercase changed logical membership");
+                StyledRun kern;kern.start=0;kern.end=2;
+                const auto on=manager.shapeStyled("fluxx.sans","AV",{kern},{'A','V'});kern.kerning=false;
+                const auto off=manager.shapeStyled("fluxx.sans","AV",{kern},{'A','V'});
+                require(on->lineAdvance(0)<off->lineAdvance(0),"Kerning switch does not reach HarfBuzz");
+                kern.vertical=2;
+                const auto tall=manager.shapeStyled("fluxx.sans","AV",{kern},{'A','V'});
+                require(tall->styledAscent==off->styledAscent && tall->styledDescent==off->styledDescent,"Vertical scaling changed leading");
+                bool malformed=false;try { const uint8_t bytes[]={0,0,0,2};decodeStyledInput(bytes,4); } catch(const std::invalid_argument&) { malformed=true; }
+                require(malformed,"Unsupported styled input version accepted");
+            }
             for (unsigned family=0; family<3; ++family) for (unsigned style=0; style<3; ++style) {
                 const std::string id=std::string(families[family])+suffixes[style];
                 const auto face=manager.shape(id,"AV office");

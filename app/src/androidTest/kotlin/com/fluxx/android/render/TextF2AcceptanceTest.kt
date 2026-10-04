@@ -33,7 +33,7 @@ class TextF2AcceptanceTest {
             check(!it.exists()) { "Archive the earlier reports and use a new textRunLabel" };check(it.mkdirs())
         }
     }
-    private fun fixture(maximum: Boolean): ProjectDocument {
+    private fun fixture(maximum: Boolean,rich: Boolean=false): ProjectDocument {
         val count=if(maximum) 16 else 8;val selectors=if(maximum) 8 else 4
         val source=if(maximum) "A".repeat(4096) else "AV office gy 0123456789 \n".repeat(30)
         val animators=List(count) { a -> TextAnimator(a+1L,anchorGrouping=scalar((a%4).toFloat()),
@@ -57,7 +57,20 @@ class TextF2AcceptanceTest {
                     })
                 }
             })) }
-        val text=TextProperties(fontId="fluxx.serif",source=AnimatableString(staticValue=source),size=track(8f,72f),
+        var document=TextSourceDocument(source)
+        if(rich) {
+            val boundaries=document.boundaries
+            for(part in 0 until 12) {
+                val start=boundaries[part*boundaries.lastIndex/12];val end=boundaries[(part+1)*boundaries.lastIndex/12]
+                document=document.format(start,end) { it.copy(font=TextFontRef(listOf("fluxx.sans","fluxx.serif","fluxx.mono")[part%3],TextFaceStyle.entries[part%4]),
+                    sizeFactor=1f+part*.02f,horizontalScale=90f+part,verticalScale=110f-part,
+                    fauxBold=part%2==0,fauxItalic=part%3==0,caps=TextCaps.entries[part%3],script=TextScriptPosition.entries[part%3],
+                    trackingDelta=part.toFloat(),baselineDelta=(part%3).toFloat(),strokeDelta=.1f,
+                    fill=if(part%2==0) 0x80ff4400.toInt() else null,stroke=if(part%2!=0) 0x800088ff.toInt() else null,
+                    kerning=if(part%2==0) TextKerning.METRICS else TextKerning.OFF) }
+            }
+        }
+        val text=TextProperties(fontId="fluxx.serif",source=AnimatableString(staticValue=source,document=document.takeIf { rich }),size=track(8f,72f),
             tracking=track(-100f,100f),strokeWidth=track(20f,0f),strokeOverFill=track(0f,1f),
             ligatures=track(1f,0f),animators=FrozenList.of(animators))
         return ProjectDocument(Composition(width=1080,height=1920,durationUs=12_000_000,
@@ -65,16 +78,18 @@ class TextF2AcceptanceTest {
     }
     @Test fun representativeLimitsColdAndThermal()=performance(false)
     @Test fun maximumLimitsColdAndThermal()=performance(true)
+    @Test fun richRepresentativeColdAndThermal()=performance(false,true)
+    @Test fun richMaximumColdAndThermal()=performance(true,true)
 
-    @Suppress("DEPRECATION") private fun performance(maximum: Boolean) {
-        val directory=directory(if(maximum) "f2-maximum" else "f2-representative")
+    @Suppress("DEPRECATION") private fun performance(maximum: Boolean,rich: Boolean=false) {
+        val directory=directory((if(rich) "t1-rich-" else "f2-")+(if(maximum) "maximum" else "representative"))
         val host=instrumentation.startActivitySync(Intent(context,TextProofActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as TextProofActivity
         val worker=Executors.newSingleThreadExecutor()
         try {
             val surface=host.awaitSurface()
             worker.submit {
                 CompositionRenderer(context,MediaRepository(context),surface,1080,1920).use { renderer ->
-                    val project=fixture(maximum)
+                    val project=fixture(maximum,rich)
                     repeat(120) { renderer.renderPreview(project,it*16_667L,PreviewResolution.FULL) }
                     val handle=renderer.preparedTextHandle(1)
                     val before=LongArray(6);val after=LongArray(6);val evaluation=LongArray(3)
@@ -134,16 +149,19 @@ class TextF2AcceptanceTest {
     private fun percentiles(values: LongArray): JSONObject {
         values.sort();return JSONObject().put("p50",values[299]).put("p95",values[569]).put("p99",values[593]).put("max",values[599])
     }
-    @Test fun randomAndReversePreEncodePixelsMatch() {
-        val directory=directory("f2-parity")
+    @Test fun randomAndReversePreEncodePixelsMatch()=parity(false)
+    @Test fun richRandomAndReversePreEncodePixelsMatch()=parity(true)
+    private fun parity(rich: Boolean) {
+        val directory=directory(if(rich) "t1-rich-parity" else "f2-parity")
         val host=instrumentation.startActivitySync(Intent(context,TextProofActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as TextProofActivity
         try {
             CompositionRenderer(context,MediaRepository(context),host.awaitSurface(),1080,1920).use { preview ->
                 CompositionRenderer(context,MediaRepository(context)).use { export ->
                     CompositionRenderer(context,MediaRepository(context)).use { thumbnail ->
-                        val base=fixture(false);val layer=base.composition.layers[0]
+                        val base=fixture(false,rich);val layer=base.composition.layers[0]
                         val source=layer.text.source.copy(isAnimated=true,keyframes=FrozenList.of(listOf(
-                            StringKeyframe(0,layer.text.source.staticValue),StringKeyframe(7_000_000,"office A\u0301 B\n\nAV"))))
+                            StringKeyframe(0,layer.text.source.staticValue,layer.text.source.document),
+                            StringKeyframe(7_000_000,"office A\u0301 B\n\nAV",if(rich) TextSourceDocument("office A\u0301 B\n\nAV").format(0,0) { it.copy(font=TextFontRef("fluxx.serif",TextFaceStyle.BOLD_ITALIC),fauxItalic=true,baselineDelta=5f) } else null))))
                         val project=base.copy(composition=base.composition.copy(layers=FrozenList.of(listOf(layer.copy(text=layer.text.copy(source=source))))))
                         val renderers=arrayOf(preview,export,thumbnail);val buffers=Array(3) { ByteBuffer.allocateDirect(1080*1920*4) }
                         val times=longArrayOf(0,10_000_000,5_000_000,0,7_500_000,5_000_000,9_000_000,2_000_000)

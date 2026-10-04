@@ -3,6 +3,7 @@ package com.fluxx.android.engine
 /** Separate native devices/sessions for preview and export; each session has one owning worker. */
 object RenderBridge {
     external fun upsertText(session: Long, font: String, text: String,ligatures: Boolean=true): Long
+    external fun upsertStyledText(session: Long,font: String,input: ByteArray,ligatures: Boolean): Long
     external fun releaseText(session: Long, handle: Long)
     external fun textMetrics(session: Long, handle: Long): DoubleArray
     external fun prepareText(session: Long, handles: LongArray, proofOnly: Boolean = false): Boolean

@@ -29,7 +29,7 @@ internal fun PreviewLayerOverlay(project: ProjectDocument, selected: Composition
     repository: MediaRepository?, settings: ViewSettings, anchorMode: Boolean) {
     val comp = project.composition
     val context = LocalContext.current
-    val textSource = selected?.text?.source?.evaluate(playheadUs - selected.resolvedKeyframeAnchorUs).orEmpty()
+    val textSource = selected?.text?.source?.evaluateDocument(playheadUs - selected.resolvedKeyframeAnchorUs) ?: TextSourceDocument("")
     val ligatures=selected?.let { it.text.effectiveLigatures(playheadUs-it.resolvedKeyframeAnchorUs) } ?: true
     val textMetrics by produceState<TextLayoutMetrics?>(null, selected?.type, selected?.text?.fontId, textSource,ligatures) {
         value = null

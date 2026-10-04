@@ -183,9 +183,19 @@ std::shared_ptr<const Layout> TextRenderer::layout(const std::string& font, cons
 }
 void TextRenderer::begin() { previousRequired_=std::move(required_); required_.clear(); vertices_.clear(); indices_.clear(); }
 void TextRenderer::retireBatch() { vertices_.clear(); indices_.clear(); }
+std::shared_ptr<const Layout> TextRenderer::styledLayout(const std::string& font,const StyledInput& input,bool ligatures) {
+    auto result=fonts_->shapeStyled(font,input.text,input.runs,input.uppercase,ligatures);
+    std::set<Key> unique;
+    for(size_t i=0;i<result->glyphs.size();++i) {
+        Key key{result->glyphFont(i),result->glyphs[i].id};
+        if(unique.insert(key).second) fonts_->sdf(key.first,key.second);
+    }
+    return result;
+}
 void TextRenderer::collect(const std::shared_ptr<const Layout>& layout) {
-    for(const auto& glyph:layout->glyphs) {
-        Key key{layout->fontId,glyph.id};
+    for(size_t i=0;i<layout->glyphs.size();++i) {
+        const auto& glyph=layout->glyphs[i];
+        Key key{layout->glyphFont(i),glyph.id};
         if(required_.count(key)) continue;
         auto found=retained_.find(key);
         auto previous=previousRequired_.find(key);
@@ -231,7 +241,7 @@ void TextRenderer::prepareMesh(const std::shared_ptr<const Layout>& layout) {
     if (prepared.generation==stats_.generation) return;
     prepared.glyphs.resize(layout->glyphs.size());
     for(size_t i=0;i<layout->glyphs.size();++i) {
-        const Key key{layout->fontId,layout->glyphs[i].id};
+        const Key key{layout->glyphFont(i),layout->glyphs[i].id};
         const auto found=placements_.find(key);
         auto& out=prepared.glyphs[i]; out={};
         if(found!=placements_.end()) {
@@ -260,27 +270,36 @@ TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, con
     const double spacing=static_cast<double>(tracking)*size/1000.0;
     double maximum=0;
     for(size_t i=0;i<layout.lineAdvances.size();++i) maximum=std::max(maximum,
-        layout.lineAdvances[i]*factor+std::max(0,static_cast<int>(layout.lineClusterCounts[i])-1)*spacing);
-    const double lineHeight=(layout.ascent-layout.descent+std::max(0,layout.lineGap))*factor+leading;
+        layout.lineAdvance(i)*factor+std::max(0,static_cast<int>(layout.lineClusterCounts[i])-1)*spacing);
+    const double lineHeight=(layout.styled?layout.styledAscent-layout.styledDescent+std::max(0.0,layout.styledLineGap):
+        layout.ascent-layout.descent+std::max(0,layout.lineGap))*factor+leading;
     double pen=0; uint32_t line=0,previousCluster=UINT32_MAX,clusterOrdinal=0;
     for(size_t ordinal=0;ordinal<layout.glyphs.size();++ordinal) {
         const auto& glyph=layout.glyphs[ordinal];
+        const auto* geometry=layout.styled?&layout.geometry[ordinal]:nullptr;
         if(glyph.line!=line) { line=glyph.line; pen=0; previousCluster=UINT32_MAX; clusterOrdinal=0; }
         if(previousCluster!=UINT32_MAX && previousCluster!=layout.glyphClusters[ordinal]) ++clusterOrdinal;
         previousCluster=layout.glyphClusters[ordinal];
         const auto& p=prepared.glyphs[ordinal];
         if(p.sdf) {
             const auto& sdf=*p.sdf;
-            const double advance=layout.lineAdvances[line]*factor+std::max(0,static_cast<int>(layout.lineClusterCounts[line])-1)*spacing;
+            const double advance=layout.lineAdvance(line)*factor+std::max(0,static_cast<int>(layout.lineClusterCounts[line])-1)*spacing;
             const double align=(maximum-advance)*(alignment==0?0:alignment==1?0.5:1);
             // SDF bitmap already includes the full spread padding: half-stroke + AA stays inside it.
-            const float x=static_cast<float>(pen+clusterOrdinal*spacing+glyph.xOffset*factor+align+sdf.left*size/FontManager::Ppem);
-            const float y=static_cast<float>(line*lineHeight-glyph.yOffset*factor-sdf.top*size/FontManager::Ppem-baselineShift);
-            const float w=sdf.width*size/FontManager::Ppem,h=sdf.height*size/FontManager::Ppem;
+            const double pixelX=size*(geometry?geometry->scaleX:1)/FontManager::Ppem;
+            const double pixelY=size*(geometry?geometry->scaleY:1)/FontManager::Ppem;
+            const float x=static_cast<float>(pen+clusterOrdinal*spacing+(geometry?geometry->xOffset:glyph.xOffset)*factor+align+sdf.left*pixelX);
+            const float y=static_cast<float>(line*lineHeight-(geometry?geometry->yOffset:glyph.yOffset)*factor-sdf.top*pixelY-baselineShift);
+            const float w=static_cast<float>(sdf.width*pixelX),h=static_cast<float>(sdf.height*pixelY);
             const float du=sdf.width/2048.0f,dv=sdf.height/2048.0f;
             const uint32_t base=static_cast<uint32_t>(vertices_.size());
             TextVertex quad[]={{x,y,p.u,p.v},{x+w,y,p.u+du,p.v},{x,y+h,p.u,p.v+dv},{x+w,y+h,p.u+du,p.v+dv}};
             for(auto& vertex:quad) {
+                if(geometry) {
+                    const double baseline=line*lineHeight-baselineShift+geometry->baseline*factor;
+                    vertex.x-=static_cast<float>(geometry->shear*(vertex.y-baseline));
+                    vertex.sdf[3]=static_cast<float>(geometry->bold);
+                }
                 vertex.page=static_cast<float>(p.page);
                 if(modifiers) { const auto& m=modifiers[layout.glyphClusters[ordinal]];
                     const float px=vertex.x+m.offsetX,py=vertex.y+m.offsetY;
@@ -303,7 +322,7 @@ TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, con
             }
             for(uint32_t index:{0u,1u,2u,1u,3u,2u}) indices_.push_back(base+index);
         }
-        pen+=glyph.xAdvance*factor;
+        pen+=(geometry?geometry->advance:glyph.xAdvance)*factor;
     }
     result.indexCount=static_cast<uint32_t>(indices_.size())-result.firstIndex;
     stats_.meshBuildNs=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-started).count();

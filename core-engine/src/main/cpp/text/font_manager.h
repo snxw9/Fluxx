@@ -26,7 +26,29 @@ struct Layout {
     std::vector<Character> characters;
     std::vector<Cluster> clusters;
     std::vector<uint32_t> glyphClusters, lineClusterCounts;
+    struct Geometry {
+        uint32_t fontIndex=0;
+        double advance=0,xOffset=0,yOffset=0,xBearing=0,yBearing=0,inkWidth=0,inkHeight=0;
+        double scaleX=1,scaleY=1,fontSize=1,baseline=0,shear=0,bold=0;
+    };
+    // Optional styled geometry uses the layout's common design units; legacy layouts stay unchanged.
+    std::vector<std::string> fontIds;
+    bool styled=false;
+    std::vector<Geometry> geometry;
+    std::vector<double> styledLineAdvances;
+    double styledAscent=0,styledDescent=0,styledLineGap=0;
+    const std::string& glyphFont(size_t i) const { return geometry.empty()?fontId:fontIds[geometry[i].fontIndex]; }
+    double lineAdvance(size_t i) const { return styledLineAdvances.empty()?static_cast<double>(lineAdvances[i]):styledLineAdvances[i]; }
 };
+struct StyledRun {
+    uint32_t start=0,end=0;
+    std::string fontId;
+    double size=1,horizontal=1,vertical=1;
+    unsigned caps=0,script=0;
+    bool kerning=true,fauxBold=false,fauxItalic=false;
+};
+struct StyledInput { std::string text;std::vector<StyledRun> runs;std::vector<uint32_t> uppercase; };
+StyledInput decodeStyledInput(const uint8_t* bytes,size_t length);
 struct SdfGlyph {
     std::string fontId;
     uint32_t glyphId;
@@ -54,7 +76,11 @@ public:
     ~FontManager();
     FontManager(const FontManager&) = delete;
     FontManager& operator=(const FontManager&) = delete;
-    std::shared_ptr<const Layout> shape(const std::string& fontId, const std::string& utf8, bool ligatures=true);
+    std::shared_ptr<const Layout> shape(const std::string& fontId, const std::string& utf8, bool ligatures=true,
+                                      bool kerning=true,unsigned features=0);
+    std::shared_ptr<const Layout> shapeStyled(const std::string& fontId,const std::string& utf8,
+        const std::vector<StyledRun>& runs,const std::vector<uint32_t>& uppercase,bool ligatures=true);
+    bool hasFeature(const std::string& fontId,uint32_t tag);
     std::shared_ptr<const SdfGlyph> sdf(const std::string& fontId, uint32_t glyphId, bool overlaps = true);
     std::vector<uint32_t> latinGlyphs(const std::string& fontId);
     uint32_t glyphForCodepoint(const std::string& fontId, uint32_t codepoint);

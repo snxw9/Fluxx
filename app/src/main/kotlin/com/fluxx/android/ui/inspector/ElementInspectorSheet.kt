@@ -119,8 +119,10 @@ fun ElementInspectorSheet(
     textTyping: Boolean = false,
     textError: String? = null,
     onTextBegin: () -> Unit = {}, onTextDraft: (String) -> Unit = {},
+    onTextDraftSelection: (String,Int,Int)->Unit = { value,_,_->onTextDraft(value) },
     onTextFinish: () -> Unit = {}, onTextCancel: () -> Unit = {},
     onTextStyle: (TextProperties) -> Unit = {},
+    onTextCharacter: (Int,Int,(TextRunStyle)->TextRunStyle)->Unit = { _,_,_-> },
     onTextSizeBegin: () -> Unit = {}, onTextSizePreview: (Float) -> Unit = {}, onTextSizeCommit: () -> Unit = {},
     onTextScalarPreview: (AnimPropertyType, Float) -> Unit = { _, _ -> },
     onTextColourChange: (AnimPropertyType, Int) -> Unit = { _, _ -> },
@@ -255,7 +257,7 @@ fun ElementInspectorSheet(
                                 InspectorSection.CONTEXTUAL_EDIT -> if (layer.type == LayerType.TEXT && !textFill) TextEditorControls(
                                     layer, playheadUs, textTyping, onAction, onPropertyFocus,
                                     onTextBegin, onTextDraft, onTextFinish, onTextCancel, onTextStyle,
-                                    onTextSizeBegin, onTextSizePreview, onTextSizeCommit, { textColourProperty = it; textFill = true }, textError, onTextScalarPreview)
+                                    onTextSizeBegin, onTextSizePreview, onTextSizeCommit, { textColourProperty = it; textFill = true }, textError, onTextScalarPreview,onTextCharacter,onTextDraftSelection)
                                 else FluxxColorPicker(FluxxColor.fromArgb(if (layer.type == LayerType.TEXT)
                                     layer.text.colour(textColourProperty).evaluate(playheadUs - layer.resolvedKeyframeAnchorUs) else layer.solidColorArgb),
                                     { if (layer.type == LayerType.TEXT) onTextColourChange(textColourProperty, it.toArgb()) else onColorChange(it.toArgb()) }, ColorPickerConfig(),
@@ -650,7 +652,7 @@ private fun OverhauledTransformSectionContent(
     val halfReferenceW = refW / 2f
     val halfReferenceH = refH / 2f
     val context = LocalContext.current
-    val heldSource = layer.text.source.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs)
+    val heldSource = layer.text.source.evaluateDocument(playheadUs - layer.resolvedKeyframeAnchorUs)
     val ligatures=layer.text.effectiveLigatures(playheadUs-layer.resolvedKeyframeAnchorUs)
     val source by produceState<AnchorSource?>(null, layer.type, layer.asset, mediaRepository, refW, refH, layer.text.fontId, heldSource,ligatures) {
         value = null

@@ -62,7 +62,7 @@ fun CompositionPreview(
     val comp = project.composition
     val context = LocalContext.current
     val textRequests = comp.layers.filter { it.type == LayerType.TEXT && it.visible && it.timing.isActive(playheadUs) }
-          .associate { val local=playheadUs-it.resolvedKeyframeAnchorUs;it.id to Triple(it.text.fontId,it.text.source.evaluate(local),it.text.effectiveLigatures(local)) }
+          .associate { val local=playheadUs-it.resolvedKeyframeAnchorUs;it.id to Triple(it.text.fontId,it.text.source.evaluateDocument(local),it.text.effectiveLigatures(local)) }
     val textHitMetrics by produceState<Map<Long, TextLayoutMetrics>>(emptyMap(), textRequests) {
         val result = mutableMapOf<Long, TextLayoutMetrics>()
         for ((id, request) in textRequests) try { result[id] = TextMetricsRepository.get(context).measure(request.first, request.second,request.third) }
