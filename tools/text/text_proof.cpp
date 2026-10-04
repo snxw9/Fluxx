@@ -1,4 +1,6 @@
 #include "font_manager.h"
+#include "prepared_text_packet.h"
+#include "font_inspection.h"
 #include "text_diagnostics.h"
 #include "atlas_packer.h"
 #include <filesystem>
@@ -30,7 +32,9 @@ int main(int argc, char** argv) {
                 read(root/(std::string(files[family])+"-"+styles[style]+".ttf"))});
         FontManager manager(inputs);
         const std::string command(argv[2]);
-        if (command == "shape" && argc == 5) {
+        if(command=="inspect" && argc==4) {
+            const auto bytes=read(argv[3]);std::cout<<inspectFont(bytes.data(),bytes.size())<<'\n';
+        } else if (command == "shape" && argc == 5) {
             const std::string hex(argv[4]);
             require(hex.size() % 2 == 0, "Invalid UTF8 hex");
             std::string text;
@@ -39,6 +43,12 @@ int main(int argc, char** argv) {
         } else if (command == "dump" && argc == 4) {
             dumpDiagnostics(manager, argv[3]); std::cout << "CPU dump complete: " << argv[3] << '\n';
         } else if (command == "selftest") {
+            for(const auto& input:inputs) {
+                const auto metadata=inspectFont(input.bytes.data(),input.bytes.size());
+                require(metadata.find("\"version\":1")!=std::string::npos && metadata.find("\"axes\":[]")!=std::string::npos,"Static face inspection metadata missing");
+            }
+            bool invalidFont=false;try { const uint8_t bytes[]={0,1,2,3};inspectFont(bytes,sizeof(bytes)); } catch(const std::invalid_argument&) { invalidFont=true; }
+            require(invalidFont,"Invalid font accepted by inspection");
             {
                 StyledRun first;first.start=0;first.end=1;first.fontId="fluxx.sans.bold";first.size=2;first.horizontal=1.5;first.fauxBold=true;first.fauxItalic=true;
                 StyledRun second;second.start=1;second.end=2;second.fontId="fluxx.serif.italic";second.script=1;
@@ -50,10 +60,36 @@ int main(int argc, char** argv) {
                 require(std::abs(rich->geometry[0].advance-regular->glyphs[0].xAdvance*3000.0/regular->upem)<.0001,"Horizontal scale did not scale advance");
                 const auto values=layoutMetrics(*rich);
                 require(values[values.size()-4]==314159 && values[values.size()-3]==2,"Rich effective-size metadata missing");
+                const auto packet=encodePreparedText(*rich,manager);
+                const auto restored=decodePreparedText(packet.data(),packet.size());
+                require(layoutMetrics(*restored)==values,"Prepared transport changed layout/membership values");
+                require(restored->externalSdfs.size()==rich->glyphs.size() && !restored->externalSdfs[0]->pixels.empty(),"Prepared transport lost owned SDF pixels");
+                for(size_t length=0;length<packet.size();length+=17) {
+                    bool rejected=false;try { decodePreparedText(packet.data(),length); } catch(const std::invalid_argument&) { rejected=true; }
+                    require(rejected,"Truncated prepared transport accepted");
+                }
+                auto unsupported=packet;unsupported[7]=2;
+                bool rejected=false;try { decodePreparedText(unsupported.data(),unsupported.size()); } catch(const std::invalid_argument&) { rejected=true; }
+                require(rejected,"Unsupported prepared transport accepted");
+                auto excessive=packet;const auto fontCountOffset=8+4+rich->fontId.size()+16+24;
+                for(size_t i=0;i<4;++i) excessive[fontCountOffset+i]=255;
+                rejected=false;try { decodePreparedText(excessive.data(),excessive.size()); } catch(const std::invalid_argument&) { rejected=true; }
+                require(rejected,"Excessive prepared font count accepted");
+                size_t geometryOffset=fontCountOffset+4;for(const auto& id:rich->fontIds) geometryOffset+=4+id.size();
+                geometryOffset+=4+12*rich->lineAdvances.size()+4+44+4;
+                auto nonfinite=packet;for(size_t i=0;i<8;++i) nonfinite[geometryOffset+i]=0;
+                nonfinite[geometryOffset]=0x7f;nonfinite[geometryOffset+1]=0xf8;
+                rejected=false;try { decodePreparedText(nonfinite.data(),nonfinite.size()); } catch(const std::invalid_argument&) { rejected=true; }
+                require(rejected,"Nonfinite prepared geometry accepted");
                 StyledRun caps;caps.start=0;caps.end=2;caps.caps=1;
                 const auto upper=manager.shapeStyled("fluxx.sans","ab",{caps},{'A','B'});
                 require(upper->glyphs[0].id==manager.glyphForCodepoint("fluxx.sans",'A'),"Simple uppercase was not shaped");
                 require(upper->characters.size()==2,"Uppercase changed logical membership");
+                if(!manager.hasFeature("fluxx.mono",0x736d6370u)) {
+                    StyledRun small;small.start=0;small.end=2;small.caps=2;
+                    const auto sharp=manager.shapeStyled("fluxx.mono","\xc3\x9f",{small},{0xdf});
+                    require(sharp->geometry[0].fontSize==.7,"Synthetic small caps must scale lowercase sharp-s despite its unchanged simple uppercase mapping");
+                }
                 StyledRun kern;kern.start=0;kern.end=2;
                 const auto on=manager.shapeStyled("fluxx.sans","AV",{kern},{'A','V'});kern.kerning=false;
                 const auto off=manager.shapeStyled("fluxx.sans","AV",{kern},{'A','V'});

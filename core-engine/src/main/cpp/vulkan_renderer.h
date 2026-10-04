@@ -44,6 +44,7 @@ class VulkanRenderer {
 public:
     int64_t upsertText(const std::string& font, const std::string& utf8,bool ligatures=true);
     int64_t upsertStyledText(const std::string& font,const fluxx::text::StyledInput& input,bool ligatures);
+    int64_t upsertPreparedText(const uint8_t* bytes,size_t length);
     bool prepareText(const int64_t* handles, size_t count, bool proofOnly);
     bool reusePreparedText() {
         return !mPreparedTextHandles.empty() && prepareText(mPreparedTextHandles.data(),mPreparedTextHandles.size(),mPreparedProofOnly);

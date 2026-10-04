@@ -4,6 +4,8 @@ package com.fluxx.android.engine
 object RenderBridge {
     external fun upsertText(session: Long, font: String, text: String,ligatures: Boolean=true): Long
     external fun upsertStyledText(session: Long,font: String,input: ByteArray,ligatures: Boolean): Long
+    /** Preparation only: validated geometry/SDF pixels, never imported font bytes. */
+    external fun upsertPreparedText(session: Long,input: ByteArray): Long
     external fun releaseText(session: Long, handle: Long)
     external fun textMetrics(session: Long, handle: Long): DoubleArray
     external fun prepareText(session: Long, handles: LongArray, proofOnly: Boolean = false): Boolean

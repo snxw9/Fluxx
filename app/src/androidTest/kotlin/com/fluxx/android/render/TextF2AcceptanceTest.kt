@@ -20,6 +20,22 @@ import java.util.concurrent.TimeUnit
 /** Acceptance source only: production renderer, fixed declared limits, no reduced workload. */
 @RunWith(AndroidJUnit4::class)
 class TextF2AcceptanceTest {
+    @Test fun preparedTransportPreservesRichMetrics() {
+        val worker=Executors.newSingleThreadExecutor()
+        try { worker.submit {
+            val text=fixture(false,true).composition.layers.single().text
+            val input=StyledTextPreparation.encode(text.source.evaluateDocument(0),text.fontId)
+            FontSession(context.assets).use { fonts ->
+                for(ligatures in listOf(true,false)) {
+                    val expected=fonts.styledMetrics(text.fontId,input,ligatures)
+                    val packet=fonts.preparedPacket(text.fontId,input,ligatures)
+                    assertArrayEquals(expected,PreparedTextData.metrics(packet),0.0)
+                    val invalid=packet.copyOf();invalid[7]=2
+                    assertThrows(IllegalStateException::class.java) { PreparedTextData.metrics(invalid) }
+                }
+            }
+        }.get(1,TimeUnit.MINUTES) } finally { worker.shutdownNow() }
+    }
     @Volatile private var allocationCanary: Any? = null
     private val instrumentation get()=InstrumentationRegistry.getInstrumentation()
     private val context get()=instrumentation.targetContext

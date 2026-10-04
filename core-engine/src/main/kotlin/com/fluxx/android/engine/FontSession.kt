@@ -29,6 +29,11 @@ class FontSession(assets: AssetManager) : AutoCloseable {
     fun styledMetrics(fontId: String,input: ByteArray,ligatures: Boolean): DoubleArray = withHandle {
         TextNative.styledMetrics(it,fontId,input,ligatures)
     }
+    @Synchronized
+    fun preparedPacket(fontId: String,input: ByteArray,ligatures: Boolean): ByteArray = withHandle {
+        require(input.size<=1024*1024)
+        TextNative.preparedPacket(it,fontId,input,ligatures)
+    }
 
     @Synchronized
     override fun close() {
@@ -44,4 +49,14 @@ internal object TextNative {
     external fun shape(handle: Long, font: String, utf8: ByteArray): String
     external fun metrics(handle: Long, font: String, utf8: ByteArray,ligatures: Boolean): DoubleArray
     external fun styledMetrics(handle: Long,font: String,input: ByteArray,ligatures: Boolean): DoubleArray
+    external fun preparedPacket(handle: Long,font: String,input: ByteArray,ligatures: Boolean): ByteArray
+    external fun preparedMetrics(input: ByteArray): DoubleArray
+}
+
+/** No imported font parsing: this validates an immutable prepared geometry/pixel packet. */
+object PreparedTextData {
+    fun metrics(input: ByteArray): DoubleArray {
+        require(input.size<=32*1024*1024)
+        return TextNative.preparedMetrics(input)
+    }
 }

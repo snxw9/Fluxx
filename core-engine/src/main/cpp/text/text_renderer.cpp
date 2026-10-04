@@ -199,7 +199,8 @@ void TextRenderer::collect(const std::shared_ptr<const Layout>& layout) {
         if(required_.count(key)) continue;
         auto found=retained_.find(key);
         auto previous=previousRequired_.find(key);
-        required_[key]=found!=retained_.end()?found->second:previous!=previousRequired_.end()?previous->second:fonts_->sdf(key.first,key.second);
+        required_[key]=found!=retained_.end()?found->second:previous!=previousRequired_.end()?previous->second:
+            !layout->externalSdfs.empty()?layout->externalSdfs.at(i):fonts_->sdf(key.first,key.second);
     }
 }
 void TextRenderer::pack(bool proofOnly) {

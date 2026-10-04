@@ -1,4 +1,5 @@
 #include "vulkan_renderer.h"
+#include "text/prepared_text_packet.h"
 #include "logger.h"
 #include <vulkan/vulkan_android.h>
 #include <stdexcept>
@@ -1308,6 +1309,12 @@ int64_t VulkanRenderer::upsertStyledText(const std::string& font,const fluxx::te
     if(!mText) mText=std::make_unique<fluxx::text::TextRenderer>(mPhysicalDevice,mDevice,mOffscreenRenderPass,mPipelineCache,mAssetManager,mTextMaxPages);
     if(mNextTextHandle==INT64_MAX) throw std::runtime_error("Text layout handles exhausted");
     auto layout=mText->styledLayout(font,input,ligatures);
+    const int64_t handle=mNextTextHandle++;mTextLayouts.emplace(handle,std::move(layout));return handle;
+}
+int64_t VulkanRenderer::upsertPreparedText(const uint8_t* bytes,size_t length) {
+    auto layout=fluxx::text::decodePreparedText(bytes,length);
+    if(!mText) mText=std::make_unique<fluxx::text::TextRenderer>(mPhysicalDevice,mDevice,mOffscreenRenderPass,mPipelineCache,mAssetManager,mTextMaxPages);
+    if(mNextTextHandle==INT64_MAX) throw std::runtime_error("Text layout handles exhausted");
     const int64_t handle=mNextTextHandle++;mTextLayouts.emplace(handle,std::move(layout));return handle;
 }
 bool VulkanRenderer::prepareText(const int64_t* handles, size_t count, bool proofOnly) {

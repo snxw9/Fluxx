@@ -13,6 +13,7 @@ struct Glyph {
     int32_t xAdvance, yAdvance, xOffset, yOffset;
     int32_t xBearing = 0, yBearing = 0, inkWidth = 0, inkHeight = 0;
 };
+struct SdfGlyph;
 struct Layout {
     std::string fontId;
     uint32_t upem;
@@ -35,6 +36,9 @@ struct Layout {
     std::vector<std::string> fontIds;
     bool styled=false;
     std::vector<Geometry> geometry;
+    // Imported fonts are parsed/shaped/rasterized in an isolated process. The renderer owns
+    // validated immutable results, never their untrusted font bytes or parser handles.
+    std::vector<std::shared_ptr<const SdfGlyph>> externalSdfs;
     std::vector<double> styledLineAdvances;
     double styledAscent=0,styledDescent=0,styledLineGap=0;
     const std::string& glyphFont(size_t i) const { return geometry.empty()?fontId:fontIds[geometry[i].fontIndex]; }

@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include "engine_core.h"
 #include "gpu_ledger.h"
+#include "text/prepared_text_packet.h"
 
 extern "C" {
 JNIEXPORT jint JNICALL Java_com_fluxx_android_engine_FluxxEngine_nativePing(JNIEnv*, jobject, jint value) { return value + 1; }
@@ -131,6 +132,15 @@ JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_RenderBridge_upsertStyledT
         if(env->ExceptionCheck()) return 0;
         const auto input=fluxx::text::decodeStyledInput(buffer.data(),buffer.size());
         return reinterpret_cast<VulkanRenderer*>(session)->upsertStyledText(textUtf8(env,font),input,ligatures);
+    } catch(const std::exception& error) { textFailure(env,error);return 0; }
+}
+JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_RenderBridge_upsertPreparedText(JNIEnv* env,jobject,jlong session,jbyteArray bytes) {
+    try {
+        if(!bytes || static_cast<size_t>(env->GetArrayLength(bytes))>fluxx::text::MaxPreparedPacketBytes) throw std::invalid_argument("Invalid prepared text bytes");
+        std::vector<uint8_t> buffer(static_cast<size_t>(env->GetArrayLength(bytes)));
+        env->GetByteArrayRegion(bytes,0,static_cast<jsize>(buffer.size()),reinterpret_cast<jbyte*>(buffer.data()));
+        if(env->ExceptionCheck()) return 0;
+        return reinterpret_cast<VulkanRenderer*>(session)->upsertPreparedText(buffer.data(),buffer.size());
     } catch(const std::exception& error) { textFailure(env,error);return 0; }
 }
 JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_reusePreparedText(JNIEnv* env,jobject,jlong session) {
