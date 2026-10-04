@@ -1,5 +1,7 @@
 # Element Inspector & Layer Actions
 
+**T1–T5 current work (2026-10-04):** the rich Source Text data model is drafted, including run-relative Character fields and paragraph/box records held with each source value. Functional Character/Paragraph pages, source selection formatting, library controls and box gestures are not implemented. The existing fixed/paged Edit Text sheet remains the approved integration point; no scrolling sheet, F3 animator UI, PreviewController API or gesture-protocol change is authorized. See [current implementation evidence](TEXT_LAYER.md).
+
 **Status:** Implemented in source. Android debug Kotlin compilation passed during E1b/E1c; the feature-specific JVM/phone checks below remain pending. This document owns inspector navigation, layer actions and trim/extend/split.
 
 **Text pass:** E1d, E1e, E2 and E3 are implemented in source and compiled; E1–E3 device behavior was subsequently confirmed by the user; F2 remains device-unverified. Native debug/release compilation passed for arm64-v8a and x86_64, Kotlin debug/release and instrumentation sources compiled, and the final JVM run passed 150/150 tests. No APK was installed or launched. See [stage evidence and exact user-run checklists](TEXT_LAYER.md). The approved overflow policy uses lazy texture-array growth; F2 range selectors and animators are now implemented in source (see the current status below); F3 UI remains deferred.

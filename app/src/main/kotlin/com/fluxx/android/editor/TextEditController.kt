@@ -101,8 +101,12 @@ object TextEdits {
     fun source(layer: CompositionLayer, time: Long, value: String): TextProperties {
         val p = layer.text.source; val t = local(layer, time)
         if (value == p.evaluate(t)) return layer.text
-        return layer.text.copy(source = if (!p.isAnimated) p.copy(staticValue = value) else p.copy(
-            keyframes = FrozenList.of((p.keyframes.filterNot { it.timeUs == t } + StringKeyframe(t, value)).sortedBy { it.timeUs })))
+        return document(layer,time,p.evaluateDocument(t).replace(value))
+    }
+    fun document(layer: CompositionLayer,time: Long,value: TextSourceDocument): TextProperties {
+        val p=layer.text.source;val t=local(layer,time)
+        return layer.text.copy(source=if(!p.isAnimated) p.copy(staticValue=value.text,document=value) else p.copy(
+            keyframes=FrozenList.of((p.keyframes.filterNot { it.timeUs==t }+StringKeyframe(t,value.text,value)).sortedBy { it.timeUs })))
     }
     fun size(layer: CompositionLayer, time: Long, value: Float): TextProperties {
         TextLimits.validateSize(value)

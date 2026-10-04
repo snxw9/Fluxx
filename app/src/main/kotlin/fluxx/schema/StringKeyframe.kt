@@ -44,6 +44,15 @@ class StringKeyframe : Table() {
         }
     val valueAsByteBuffer : ByteBuffer? get() = __vector_as_bytebuffer(6, 1)
     fun valueInByteBuffer(_bb: ByteBuffer) : ByteBuffer = __vector_in_bytebuffer(_bb, 6, 1)
+    val document : fluxx.schema.TextSourceDocument? get() = document(fluxx.schema.TextSourceDocument())
+    fun document(obj: fluxx.schema.TextSourceDocument) : fluxx.schema.TextSourceDocument? {
+        val o = __offset(8)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_25_2_10()
         fun getRootAsStringKeyframe(_bb: ByteBuffer): StringKeyframe = getRootAsStringKeyframe(_bb, StringKeyframe())
@@ -51,15 +60,17 @@ class StringKeyframe : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createStringKeyframe(builder: FlatBufferBuilder, timeUs: Long, valueOffset: Int) : Int {
-            builder.startTable(2)
+        fun createStringKeyframe(builder: FlatBufferBuilder, timeUs: Long, valueOffset: Int, documentOffset: Int = 0) : Int {
+            builder.startTable(3)
             addTimeUs(builder, timeUs)
+            addDocument(builder, documentOffset)
             addValue(builder, valueOffset)
             return endStringKeyframe(builder)
         }
-        fun startStringKeyframe(builder: FlatBufferBuilder) = builder.startTable(2)
+        fun startStringKeyframe(builder: FlatBufferBuilder) = builder.startTable(3)
         fun addTimeUs(builder: FlatBufferBuilder, timeUs: Long) = builder.addLong(0, timeUs, 0L)
         fun addValue(builder: FlatBufferBuilder, value: Int) = builder.addOffset(1, value, 0)
+        fun addDocument(builder: FlatBufferBuilder, document: Int) = builder.addOffset(2, document, 0)
         fun endStringKeyframe(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

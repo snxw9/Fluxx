@@ -57,6 +57,13 @@ std::shared_ptr<FontManager> fluxx::text::acquireFontCatalog(AAssetManager* sour
         fonts.push_back({"fluxx.sans", asset(source, "fonts/Inter-Regular.ttf")});
         fonts.push_back({"fluxx.serif", asset(source, "fonts/NotoSerif-Regular.ttf")});
         fonts.push_back({"fluxx.mono", asset(source, "fonts/JetBrainsMono-Regular.ttf")});
+        const char* families[] = {"fluxx.sans", "fluxx.serif", "fluxx.mono"};
+        const char* files[] = {"Inter", "NotoSerif", "JetBrainsMono"};
+        const char* styles[] = {"Bold", "Italic", "BoldItalic"};
+        const char* suffixes[] = {".bold", ".italic", ".bold-italic"};
+        for (unsigned family=0; family<3; ++family) for (unsigned style=0; style<3; ++style)
+            fonts.push_back({std::string(families[family])+suffixes[style],
+                asset(source, (std::string("fonts/")+files[family]+"-"+styles[style]+".ttf").c_str())});
         manager = std::make_shared<FontManager>(std::move(fonts));
         catalog = manager;
     }

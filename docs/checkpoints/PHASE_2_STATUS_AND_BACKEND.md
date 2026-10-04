@@ -1,5 +1,7 @@
 # Phase 2 Status, Backend Architecture & UI Control Matrix
 
+**T1–T5 current work (2026-10-04):** incomplete, uncommitted preparation only. Rich Source Text model/v12 codec and twelve bundled font faces are present; rich shaping/rendering and Character/Paragraph controls are not implemented. T2–T5 remain planned. See the current [text checkpoint](TEXT_LAYER.md) for evidence and limitations. F1/F2 are user-accepted; F1 perf/parity/lifecycle device runs remain deferred. No device runs occurred.
+
 **Text status (2026-10-01):** E1d, E1e, E2 and E3 are implemented in source and compiled; E1–E3 device behavior was subsequently confirmed by the user; F2 remains device-unverified. Native debug/release compilation passed for arm64-v8a and x86_64, Kotlin debug/release and instrumentation sources compiled, and the final JVM run passed 150/150 tests. No APK was installed or launched. See [stage evidence and exact user-run checklists](TEXT_LAYER.md). The approved overflow policy uses lazy texture-array growth; F2 range selectors and animators are now implemented in source (see the current status below); F3 UI remains deferred.
 
 ---

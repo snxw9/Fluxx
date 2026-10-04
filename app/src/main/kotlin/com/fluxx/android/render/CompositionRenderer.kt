@@ -54,7 +54,12 @@ class CompositionRenderer(private val context: Context, private val repository: 
         val layers = project.composition.layers
         onlyText = layers.isNotEmpty() && layers.all { it.type == LayerType.TEXT } && TextFixtureProvider.entries().isEmpty()
         preparedText = layers.filter { it.type==LayerType.TEXT }.sortedWith(compareBy<CompositionLayer> { it.zOrder }.thenBy { it.id }).map { layer ->
+            layer.text.source.sourceDocument.requireLegacyLayout()
+            for(key in layer.text.source.keyframes) key.sourceDocument.requireLegacyLayout()
             val sources = (listOf(layer.text.source.staticValue) + layer.text.source.keyframes.map { it.value }).distinct().toTypedArray()
+            require(sources.size<=com.fluxx.android.model.TextSourceDocument.MAX_PREPARED_LAYOUTS/2) {
+                "Text layer exceeds the 64 prepared-layout limit; reduce distinct Source Text alternatives to at most 32"
+            }
             val layouts=sources.flatMap { source -> listOf(textLayout(layer.text.fontId,source,true),textLayout(layer.text.fontId,source,false)) }.toTypedArray()
             PreparedText(layer,sources,layouts,Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(layer.text,selectorEase)) })
         }.toTypedArray()

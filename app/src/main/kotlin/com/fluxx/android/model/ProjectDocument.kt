@@ -17,7 +17,7 @@ class FrozenList<out T> private constructor(private val values: List<T>) : List<
 object CompositionDefaults {
     const val WIDTH = 1080
     const val HEIGHT = 1920
-    const val PROJECT_VERSION = 11 // Additive animator tables; v10 remains permanently readable.
+    const val PROJECT_VERSION = 12 // Atomic rich Source Text; v10/v11 remain permanently readable.
 }
 
 /** Convert from the absolute frame index, never by repeatedly adding a rounded frame period. */

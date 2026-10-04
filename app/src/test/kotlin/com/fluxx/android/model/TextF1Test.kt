@@ -75,7 +75,7 @@ class TextF1Test {
         assertEquals(TextProperties(),ProjectCodec.decode(bytes(9)).composition.layers.first().text)
         for(width in listOf(-1f,Float.NaN,Float.POSITIVE_INFINITY)) assertThrows(IllegalArgumentException::class.java) { ProjectCodec.decode(bytes(10,width)) }
         assertThrows(IllegalArgumentException::class.java) { ProjectCodec.decode(bytes(10,order=2f)) }
-        assertThrows(IllegalArgumentException::class.java) { ProjectCodec.decode(bytes(12)) }
+        assertThrows(IllegalArgumentException::class.java) { ProjectCodec.decode(bytes(CompositionDefaults.PROJECT_VERSION+1)) }
     }
     @Test fun clusterTrackingAndLeadingBoundsUsePreparedMembership() {
         // A combining-mark cluster with two glyph quads, another cluster, plus an empty line.

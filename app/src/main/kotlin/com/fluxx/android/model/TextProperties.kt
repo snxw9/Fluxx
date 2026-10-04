@@ -12,13 +12,19 @@ object PropertyTimeSearch {
     }
 }
 
-data class StringKeyframe(val timeUs: Long, val value: String) { init { TextLimits.validateSource(value) } }
+data class StringKeyframe(val timeUs: Long, val value: String,val document: TextSourceDocument?=null) {
+    val sourceDocument=document ?: TextSourceDocument(value)
+    init { TextLimits.validateSource(value);require(sourceDocument.text==value) }
+}
 data class ColourKeyframe(val timeUs: Long, val argb: Int, val easing: EasingPreset = EasingPreset.EASY_EASE)
 data class AnimatableString(val isAnimated: Boolean = false, val staticValue: String = "",
-    val keyframes: FrozenList<StringKeyframe> = FrozenList.empty()) {
-    init { TextLimits.validateSource(staticValue); TextLimits.ordered(keyframes.map { it.timeUs }) }
+    val keyframes: FrozenList<StringKeyframe> = FrozenList.empty(),val document: TextSourceDocument?=null) {
+    val sourceDocument=document ?: TextSourceDocument(staticValue)
+    init { TextLimits.validateSource(staticValue); TextLimits.ordered(keyframes.map { it.timeUs });require(sourceDocument.text==staticValue) }
     fun evaluate(timeUs: Long): String = if (!isAnimated || keyframes.isEmpty()) staticValue
         else keyframes[PropertyTimeSearch.atOrBefore(keyframes, timeUs) { it.timeUs }.coerceAtLeast(0)].value
+    fun evaluateDocument(timeUs: Long): TextSourceDocument = if(!isAnimated || keyframes.isEmpty()) sourceDocument
+        else keyframes[PropertyTimeSearch.atOrBefore(keyframes,timeUs) { it.timeUs }.coerceAtLeast(0)].sourceDocument
 }
 data class AnimatableColour(val isAnimated: Boolean = false, val staticValue: Int = -1,
     val keyframes: FrozenList<ColourKeyframe> = FrozenList.empty()) {
@@ -95,7 +101,8 @@ data class TextProperties(
         strokeWidth = strokeWidth.rebase(delta), strokeOverFill = strokeOverFill.rebase(delta),
         animators = FrozenList.of(animators.map { it.rebase(delta) }), ligatures = ligatures.shift(delta))
     fun sourceBytes(): Long = source.staticValue.toByteArray(Charsets.UTF_8).size.toLong() +
-        source.keyframes.sumOf { it.value.toByteArray(Charsets.UTF_8).size.toLong() }
+        (source.document?.storageBytes() ?: 0L) +
+        source.keyframes.sumOf { it.value.toByteArray(Charsets.UTF_8).size.toLong() + (it.document?.storageBytes() ?: 0L) }
 }
 
 /** Hold sampling uses the same scalar track/storage, without interpolating discrete paint order. */

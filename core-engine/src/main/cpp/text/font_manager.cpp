@@ -120,8 +120,8 @@ FontManager::FontManager(std::vector<FontInput> fonts, size_t budget, unsigned p
         auto face = std::make_unique<Face>();
         face->input = std::move(input);
         ftCheck(FT_New_Memory_Face(impl_->library, face->input.bytes.data(), static_cast<FT_Long>(face->input.bytes.size()), 0, &face->ft), "FT_New_Memory_Face");
-        if (FT_HAS_MULTIPLE_MASTERS(face->ft) || !FT_IS_SCALABLE(face->ft) ||
-            (face->ft->style_flags & (FT_STYLE_FLAG_BOLD | FT_STYLE_FLAG_ITALIC))) throw std::invalid_argument("Expected static scalable Regular face");
+        if (FT_HAS_MULTIPLE_MASTERS(face->ft) || !FT_IS_SCALABLE(face->ft))
+            throw std::invalid_argument("Expected static scalable outline face");
         ftCheck(FT_Select_Charmap(face->ft, FT_ENCODING_UNICODE), "Unicode charmap");
         face->blob = hb_blob_create(reinterpret_cast<const char*>(face->input.bytes.data()), static_cast<unsigned>(face->input.bytes.size()), HB_MEMORY_MODE_READONLY, nullptr, nullptr);
         face->face = hb_face_create(face->blob, 0);

@@ -39,9 +39,22 @@ table Marker {
 }
 
 table ColourKeyframe { time_us: long; argb: int = -1; easing: EasingType = EASY_EASE; }
-table StringKeyframe { time_us: long; value: string; }
+table FontAxisValue { tag: string; value: AnimatableProperty1D; }
+table TextFontReference { family: string; style: int; sha256: string; face_index: int; named_instance: int = -1; axes: [FontAxisValue]; post_script_name: string; }
+table TextManualKerning { character: int; amount: float; }
+table TextStyleRun {
+  start: int; end: int; font: TextFontReference; size_factor: float = 1;
+  has_fill: bool; fill: int = -1; has_stroke: bool; stroke: int = -16777216;
+  stroke_delta: float; tracking_delta: float; baseline_delta: float;
+  faux_bold: bool; faux_italic: bool; caps: int; script_position: int;
+  horizontal_scale: float = 100; vertical_scale: float = 100; kerning: int;
+  manual_kerning: [TextManualKerning];
+}
+table TextParagraphStyle { alignment: int = -1; indent_left: float; indent_right: float; indent_first: float; space_before: float; space_after: float; direction: int; }
+table TextSourceDocument { version: uint = 1; text: string; runs: [TextStyleRun]; paragraphs: [TextParagraphStyle]; box_width: float; }
+table StringKeyframe { time_us: long; value: string; document: TextSourceDocument; }
 table AnimatableColour { is_animated: bool; static_value: int = -1; keyframes: [ColourKeyframe]; }
-table AnimatableString { is_animated: bool; static_value: string; keyframes: [StringKeyframe]; }
+table AnimatableString { is_animated: bool; static_value: string; keyframes: [StringKeyframe]; document: TextSourceDocument; }
 table TextRangeSelector {
   version: uint = 1;
   id: ulong;

@@ -1,5 +1,37 @@
 # Text layer checkpoint
 
+The original T1–T5 specification is preserved verbatim in [TEXT_COMPLETION_SPEC.md](../architecture/TEXT_COMPLETION_SPEC.md). The continuation authorizes gated sub-commits: T1a foundation, then T1b functional character formatting, followed by T2–T5 in order.
+
+## T1a foundation gate — 2026-10-04
+
+T1a is implemented in source, device-unverified. The continuation gate passed app Kotlin Debug/Release, instrumentation-source compilation and the full JVM suite (190 tests, zero failures/errors/skips; `tools/text/results/t1a-gate.log`). The earlier native Debug/Release checks for both ABIs, host Release/selftest, six shaping references and all 1,443 checksum checks cover the unchanged foundation sources. This commit contains the rich document/codec/validation, held-source editing preservation, bundled style faces/checksums/licenses and tests, plus explicit guards preventing unfinished rich rendering from degrading silently. T1b rendering and functional controls are next; no T2–T5 functionality is claimed.
+
+Assumptions/limits and the relative-size deviation are recorded below and in the specification. Font assets add 3,646,029 bytes uncompressed; ZIP-deflate estimate 1,855,388 bytes. Actual APK delta remains unmeasured; no APK packaging or device execution occurred. PreviewController, gestures and batching/drawing are unchanged.
+
+Exact T1a user-run checks (host/JVM; no new phone fixture yet):
+
+1. `py -3 tools/text/build_android.py --label t1a-user --task :app:compileDebugKotlin --task :app:compileReleaseKotlin --task :app:compileDebugAndroidTestKotlin --task :app:testDebugUnitTest`; expect 190 tests, zero failures/errors/skips. `TextSourceDocumentTest` covers cluster-safe selections, inherited/merged runs, held document identity, rich codec round trips/unknown fonts and invalid models.
+2. `py -3 tools/text/verify_inputs.py`; expect all 1,443 inputs to pass, including nine added font/OFL pairs.
+3. `py -3 tools/text/build_host.py`, then `tools/text/results/host-build/Release/text-proof.exe core-engine/src/main/assets/fonts selftest`; expect all nine style faces to shape/rasterize without Regular fallback, plus the existing CPU checks.
+4. `py -3 tools/text/shaping_parity.py --proof tools/text/results/host-build/Release/text-proof.exe`; expect all six shaping references to pass.
+5. Existing F1 perf/pre-encode parity/lifecycle device runs remain deferred; T1b will supply the functional rich-text device list.
+
+## T1–T5 completion pass — work in progress, 2026-10-04
+
+F1 and F2 are user-accepted. The user's F1 performance, pre-encode parity and lifecycle runs remain deferred; they are not implementation gates. No agent device execution is authorized for this pass.
+
+T1 is **incomplete and uncommitted**. Source Text now has an atomic held rich-document model and additive v12 codec: contiguous cluster-safe style runs (maximum 256), requested font references, run-relative attributes and manual kerning, paragraph records, and nonnegative box width. Legacy v10/v11 strings acquire a default run. Formatting survives string insertion/deletion and Source Text key freeze/reset; unknown requested font references are retained. The aggregate 1 MiB budget includes explicit rich-document metadata and the second on-wire string copy. Legacy preparation enforces a 64-layout limit (32 distinct source alternatives × two ligature modes), with an explicit error when exceeded. The rich-document/box/direction combination preparer is outstanding.
+
+Nine real Bold/Italic/Bold Italic static faces for Inter, Noto Serif and JetBrains Mono have been added with per-face OFL files and pinned checksums in `TEXT_INPUTS.json`. The native catalog and host proof load all twelve bundled faces. Added assets: 3,646,029 bytes uncompressed; ZIP deflate-level-6 estimate: 1,855,388 bytes. Actual APK size delta is unmeasured because no APK was packaged.
+
+Styled shaping, glyph geometry/paint integration, Character controls and the rest of T1 are outstanding. The renderer explicitly rejects rich formatting at preparation rather than silently showing an unformatted string. T2 font import/library/variations, T3 box/paragraph layout and controls, T4 animator gaps, and T5 Arabic/Hebrew direction are **not implemented** in this pass. Paragraph/box/font-axis schema reservations do not establish support. No T1–T5 gated commit has been created.
+
+Preparatory verification: pinned-input checksum verification passed (1,443 inputs); the full JVM recheck passed 190/190 with zero failures/errors/skips. The initial 188/190 run exposed schema-generator nullable-accessor compatibility and an obsolete v12 future-version assertion; both were corrected. Host Release compilation and runtime selftest passed, including all nine added style faces; all six independent shaping references passed. Native Debug/Release compilation passed for arm64-v8a and x86_64; app/core Kotlin Debug/Release and instrumentation-source compilation passed. The final Debug/instrumentation compile recheck passed with the latest renderer guards. Logs: `tools/text/results/t1-model-recheck.log` and `t1-final-guards.log`. No APK packaging or device execution occurred. These checks do not establish complete T1 functionality.
+
+Preparatory validation choices: size factors `(0,100]`; horizontal/vertical scales `[0,10000]%`; manual kerning `[-10000,10000]` thousandths em; font face indices `0..255`; named-instance indices `-1..65535`; at most 16 distinct four-ASCII-character axis tags; family/PostScript labels at most 128 UTF-16 units without NUL. Imported-font axes accept static tracks only in this checkpoint. Formatting selections expand to whole source-character clusters. Inserted text inherits the run at the caret (the last run at end-of-text); newly joined combining clusters inherit their initial character's style. Paragraph-record retention during string edits is provisional until T3; paragraph rendering currently fails explicitly.
+
+No new user-run acceptance list is ready until the corresponding stage is implemented. Existing F1/F2 fixtures remain the applicable device list. Future acceptance must add selected-range rich-text edits and held keys; style-face/caps/small-caps/script/kerning/bounds parity; font import/deletion/missing-font/variable-axis cases; wrapping/justification/box gestures; deterministic wiggly and replacement-character parity; and Arabic/Hebrew logical-selector versus visual-layout parity, each with the existing allocation/counter/canary protocol.
+
 ## E1d implementation pass — 2026-10-01
 
 The user accepted E1b/E1c and explicitly authorized E1d, E1e, E2 and E3 in one ordered pass, superseding the earlier stop gates for implementation. The selected GPU default is one **lazy 2048×2048 R8 atlas per renderer**. Previous 16 KB/golden checks remain outstanding verification evidence; they no longer block this authorized source work.

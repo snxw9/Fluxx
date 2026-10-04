@@ -57,6 +57,15 @@ class AnimatableString : Table() {
         get() {
             val o = __offset(8); return if (o != 0) __vector_len(o) else 0
         }
+    val document : fluxx.schema.TextSourceDocument? get() = document(fluxx.schema.TextSourceDocument())
+    fun document(obj: fluxx.schema.TextSourceDocument) : fluxx.schema.TextSourceDocument? {
+        val o = __offset(10)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_25_2_10()
         fun getRootAsAnimatableString(_bb: ByteBuffer): AnimatableString = getRootAsAnimatableString(_bb, AnimatableString())
@@ -64,14 +73,15 @@ class AnimatableString : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createAnimatableString(builder: FlatBufferBuilder, isAnimated: Boolean, staticValueOffset: Int, keyframesOffset: Int) : Int {
-            builder.startTable(3)
+        fun createAnimatableString(builder: FlatBufferBuilder, isAnimated: Boolean, staticValueOffset: Int, keyframesOffset: Int, documentOffset: Int = 0) : Int {
+            builder.startTable(4)
+            addDocument(builder, documentOffset)
             addKeyframes(builder, keyframesOffset)
             addStaticValue(builder, staticValueOffset)
             addIsAnimated(builder, isAnimated)
             return endAnimatableString(builder)
         }
-        fun startAnimatableString(builder: FlatBufferBuilder) = builder.startTable(3)
+        fun startAnimatableString(builder: FlatBufferBuilder) = builder.startTable(4)
         fun addIsAnimated(builder: FlatBufferBuilder, isAnimated: Boolean) = builder.addBoolean(0, isAnimated, false)
         fun addStaticValue(builder: FlatBufferBuilder, staticValue: Int) = builder.addOffset(1, staticValue, 0)
         fun addKeyframes(builder: FlatBufferBuilder, keyframes: Int) = builder.addOffset(2, keyframes, 0)
@@ -83,6 +93,7 @@ class AnimatableString : Table() {
             return builder.endVector()
         }
         fun startKeyframesVector(builder: FlatBufferBuilder, numElems: Int) = builder.startVector(4, numElems, 4)
+        fun addDocument(builder: FlatBufferBuilder, document: Int) = builder.addOffset(3, document, 0)
         fun endAnimatableString(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

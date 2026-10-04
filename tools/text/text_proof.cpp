@@ -20,6 +20,13 @@ int main(int argc, char** argv) {
         const std::filesystem::path root(argv[1]);
         std::vector<FontInput> inputs{{"fluxx.sans", read(root / "Inter-Regular.ttf")},
             {"fluxx.serif", read(root / "NotoSerif-Regular.ttf")}, {"fluxx.mono", read(root / "JetBrainsMono-Regular.ttf")}};
+        const char* families[] = {"fluxx.sans", "fluxx.serif", "fluxx.mono"};
+        const char* files[] = {"Inter", "NotoSerif", "JetBrainsMono"};
+        const char* styles[] = {"Bold", "Italic", "BoldItalic"};
+        const char* suffixes[] = {".bold", ".italic", ".bold-italic"};
+        for (unsigned family=0; family<3; ++family) for (unsigned style=0; style<3; ++style)
+            inputs.push_back({std::string(families[family])+suffixes[style],
+                read(root/(std::string(files[family])+"-"+styles[style]+".ttf"))});
         FontManager manager(inputs);
         const std::string command(argv[2]);
         if (command == "shape" && argc == 5) {
@@ -31,6 +38,14 @@ int main(int argc, char** argv) {
         } else if (command == "dump" && argc == 4) {
             dumpDiagnostics(manager, argv[3]); std::cout << "CPU dump complete: " << argv[3] << '\n';
         } else if (command == "selftest") {
+            for (unsigned family=0; family<3; ++family) for (unsigned style=0; style<3; ++style) {
+                const std::string id=std::string(families[family])+suffixes[style];
+                const auto face=manager.shape(id,"AV office");
+                require(face->fontId==id,"Bundled style silently fell back to Regular");
+                require(!face->glyphs.empty(),"Bundled style produced no glyphs");
+                const auto image=manager.sdf(id,face->glyphs.front().id);
+                require(image->fontId==id && !image->pixels.empty(),"Bundled style SDF failed");
+            }
             const auto clustered=manager.shape("fluxx.serif","office A\xcc\x81 B\n\nC");
             require(clustered->glyphClusters.size()==clustered->glyphs.size(),"Missing glyph membership");
             require(clustered->lineClusterCounts.size()==3 && clustered->lineClusterCounts[1]==0,"Empty line membership lost");

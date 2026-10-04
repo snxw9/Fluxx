@@ -63,10 +63,11 @@ internal object TextPropertyActions {
         }
         val next = when (property) {
             AnimPropertyType.SOURCE_TEXT -> {
-                val sampled = text.source.evaluate(local)
-                val value = (action as? EditorAction.SetStringKeyframe)?.value ?: sampled
-                val keys = edit(text.source.keyframes, { it.timeUs }, { k, t -> k.copy(timeUs = t) }) { StringKeyframe(time, value) }
-                text.copy(source = AnimatableString(keys.isNotEmpty(), if (action is EditorAction.ResetPropertyAnimation) "" else sampled, keys))
+                val sampled = text.source.evaluateDocument(local)
+                val value = (action as? EditorAction.SetStringKeyframe)?.value?.let(sampled::replace) ?: sampled
+                val keys = edit(text.source.keyframes, { it.timeUs }, { k, t -> k.copy(timeUs = t) }) { StringKeyframe(time, value.text,value) }
+                val held=if(action is EditorAction.ResetPropertyAnimation) TextSourceDocument("") else sampled
+                text.copy(source = AnimatableString(keys.isNotEmpty(),held.text,keys,held))
             }
             AnimPropertyType.FONT_SIZE, AnimPropertyType.TRACKING, AnimPropertyType.LEADING, AnimPropertyType.BASELINE_SHIFT,
             AnimPropertyType.STROKE_WIDTH, AnimPropertyType.STROKE_OVER_FILL, AnimPropertyType.LIGATURES -> {

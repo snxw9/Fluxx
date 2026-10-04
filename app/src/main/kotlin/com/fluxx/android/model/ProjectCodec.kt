@@ -98,11 +98,13 @@ object ProjectCodec {
     private fun encodeText(b: FlatBufferBuilder, text: TextProperties): Int {
         val strings = text.source.keyframes.map { k ->
             val value = b.createString(k.value)
-            fluxx.schema.StringKeyframe.createStringKeyframe(b, k.timeUs, value)
+            val document=k.document?.let { TextSourceDocumentCodec.encode(b,it) } ?: 0
+            fluxx.schema.StringKeyframe.createStringKeyframe(b, k.timeUs, value, document)
         }.toIntArray()
         val stringKeys = fluxx.schema.AnimatableString.createKeyframesVector(b, strings)
         val value = b.createString(text.source.staticValue)
-        val source = fluxx.schema.AnimatableString.createAnimatableString(b, text.source.isAnimated, value, stringKeys)
+        val document=text.source.document?.let { TextSourceDocumentCodec.encode(b,it) } ?: 0
+        val source = fluxx.schema.AnimatableString.createAnimatableString(b, text.source.isAnimated, value, stringKeys, document)
         val sizes = text.size.keyframes.map { fluxx.schema.Keyframe1D.createKeyframe1D(b, it.timeUs, it.value,
             (if (it.easing == EasingPreset.LINEAR) 0 else 1).toByte()) }.toIntArray()
         val sizeKeys = fluxx.schema.AnimatableProperty1D.createKeyframesVector(b, sizes)
@@ -146,8 +148,11 @@ object ProjectCodec {
             return if (value.toInt() == 0) EasingPreset.LINEAR else EasingPreset.EASY_EASE }
         val source = payload.source?.let { p ->
             count(p.keyframesLength)
-            AnimatableString(p.isAnimated, source(p.staticValueAsByteBuffer), FrozenList.of((0 until p.keyframesLength).map {
-                val k = requireNotNull(p.keyframes(it)); StringKeyframe(k.timeUs, source(k.valueAsByteBuffer)) }))
+            val value=source(p.staticValueAsByteBuffer)
+            val document=TextSourceDocumentCodec.decode(p.document,value,version,byteCount,consume)
+            AnimatableString(p.isAnimated, value, FrozenList.of((0 until p.keyframesLength).map {
+                val k = requireNotNull(p.keyframes(it)); val v=source(k.valueAsByteBuffer)
+                StringKeyframe(k.timeUs, v, TextSourceDocumentCodec.decode(k.document,v,version,byteCount,consume)) }), document)
         } ?: AnimatableString()
         val size = payload.size?.let { p ->
             count(p.keyframesLength)

@@ -1,5 +1,7 @@
 # Fluxx — Phase 2 Changes & After Effects-Level Architecture Notes
 
+**T1–T5 current work (2026-10-04):** only uncommitted model/codec/font-asset preparation is present; character formatting, font import/variation, box paragraphs, animator gaps and direction are not complete. Run sizes are specified as factors of the animated layer size, a deviation from AE absolute per-range sizes. Existing text layer transforms remain separate from glyph geometry and derivative-based AA remains in use; future 3D needs 4×4 matrices and Z properties. Shapes/masks from text, text on path, per-character 3D, expression selectors, optical kerning and animated variable axes remain unsupported. See [current text checkpoint](../checkpoints/TEXT_LAYER.md).
+
 > Text status: E1d, E1e, E2 and E3 are implemented in source and compiled; E1–E3 device behavior was subsequently confirmed by the user; F2 remains device-unverified. Native debug/release compilation passed for arm64-v8a and x86_64, Kotlin debug/release and instrumentation sources compiled, and the final JVM run passed 150/150 tests. No APK was installed or launched. See [stage evidence and exact user-run checklists](../checkpoints/TEXT_LAYER.md). The approved overflow policy uses lazy texture-array growth; F2 range selectors and animators are now implemented in source (see the current status below); F3 UI remains deferred.
 
 ## Overall Direction
