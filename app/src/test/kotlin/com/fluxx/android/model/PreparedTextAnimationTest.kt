@@ -52,13 +52,13 @@ class PreparedTextAnimationTest {
         val bean=java.lang.management.ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
         assertTrue(bean.isThreadAllocatedMemorySupported);bean.isThreadAllocatedMemoryEnabled=true
         val keys=FrozenList.of(listOf(Keyframe1D(0,-10f,EasingPreset.LINEAR),Keyframe1D(1_000_000,10f,EasingPreset.EASY_EASE)))
-        val overrides=AnimatorProperty.entries.take(13).map { p -> when(p.kind) {
+        val overrides=AnimatorProperty.entries.take(23).map { p -> when(p.kind) {
             2 -> TextPropertyOverride(p,vector=AnimatableProperty2D(staticX=if(p==AnimatorProperty.SCALE) 101f else 1f,staticY=if(p==AnimatorProperty.SCALE) 99f else 1f))
             3 -> TextPropertyOverride(p,colour=AnimatableColour(staticValue=0x80ff0000.toInt()))
             else -> TextPropertyOverride(p,scalar=scalar(if(p==AnimatorProperty.OPACITY) 90f else 1f))
         } }
         val animator=TextAnimator(1,selectors=FrozenList.of(listOf(TextRangeSelector(2,offset=AnimatableProperty1D(true,0f,keys),
-            shape=scalar(3f),easeLow=scalar(20f),easeHigh=scalar(-20f),randomizeOrder=scalar(1f)))),properties=FrozenList.of(overrides))
+            shape=scalar(3f),easeLow=scalar(20f),easeHigh=scalar(-20f),randomizeOrder=scalar(1f),kind=scalar(1f),lockDimensions=scalar(0f)))),properties=FrozenList.of(overrides))
         val prepared=evaluate(TextProperties(size=scalar(100f),animators=FrozenList.of(listOf(animator))))
         for(i in 0 until 10_000) prepared.evaluate((i%600)*1667L)
         val id=Thread.currentThread().id;val before=bean.getThreadAllocatedBytes(id)
@@ -96,5 +96,33 @@ class PreparedTextAnimationTest {
         assertEquals(1f,disabled.modifiers.getFloat(0),0f);assertEquals(0L,disabled.coverageBuilds)
         val parsed=TextLayoutMetrics.fromNative(metrics(),false)
         assertTrue(parsed.bounds(source,500_000).width>0)
+    }
+    @Test fun fillAndStrokeOpacityAndHsbRemainIndependent() {
+        val source=text(TextPropertyOverride(AnimatorProperty.FILL_OPACITY,scalar=scalar(50f)),
+            TextPropertyOverride(AnimatorProperty.STROKE_OPACITY,scalar=scalar(25f)),
+            TextPropertyOverride(AnimatorProperty.FILL_HUE,scalar=scalar(120f)),
+            TextPropertyOverride(AnimatorProperty.STROKE_HUE,scalar=scalar(120f))).copy(
+                fill=AnimatableColour(staticValue=0x80ff0000.toInt()),strokeColour=AnimatableColour(staticValue=0x800000ff.toInt()))
+        val prepared=evaluate(source)
+        assertEquals(0f,prepared.modifiers.getFloat(32),0f);assertEquals(1f,prepared.modifiers.getFloat(36),0f)
+        assertEquals(64/255f,prepared.modifiers.getFloat(44),0f)
+        assertEquals(1f,prepared.modifiers.getFloat(48),0f);assertEquals(0f,prepared.modifiers.getFloat(52),0f)
+        assertEquals(32/255f,prepared.modifiers.getFloat(60),0f)
+        assertEquals(0x80ff0000.toInt(),source.fill.staticValue)
+    }
+    @Test fun groupingAlignmentOffsetsScalePivotAndAnchorIdentityRemainsMeaningful() {
+        val base=text(TextPropertyOverride(AnimatorProperty.SCALE,vector=AnimatableProperty2D(staticX=200f,staticY=100f)),
+            TextPropertyOverride(AnimatorProperty.GROUPING_ALIGNMENT,vector=AnimatableProperty2D(staticX=50f,staticY=0f)))
+        val all=base.copy(animators=FrozenList.of(listOf(base.animators[0].copy(anchorGrouping=scalar(3f)))))
+        assertEquals(-120f,evaluate(all).modifiers.getFloat(16),.001f)
+    }
+    @Test fun unlockedWigglyDimensionsDriveDifferentPositionComponents() {
+        val base=text(TextPropertyOverride(AnimatorProperty.POSITION,vector=AnimatableProperty2D(staticX=10f,staticY=20f)))
+        val selector=TextRangeSelector(2,kind=scalar(1f),lockDimensions=scalar(0f),correlation=scalar(0f),seed=42)
+        val prepared=evaluate(base.copy(animators=FrozenList.of(listOf(base.animators[0].copy(selectors=FrozenList.of(listOf(selector)))))))
+        assertNotEquals(prepared.modifiers.getFloat(16)/10,prepared.modifiers.getFloat(20)/20,.0001f)
+        prepared.evaluate(500000);val expected=prepared.modifiers.getFloat(20)
+        prepared.evaluate(1000000);prepared.evaluate(0);prepared.evaluate(500000)
+        assertEquals(expected,prepared.modifiers.getFloat(20),0f)
     }
 }

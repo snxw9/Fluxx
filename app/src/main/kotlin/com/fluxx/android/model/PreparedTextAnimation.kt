@@ -39,6 +39,12 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         linePool,lines,lineCapacity) }
     private val properties=Array(text.animators.size) { text.animators[it].properties.toTypedArray() }
     private val coverage=Array(text.animators.size) { DoubleArray(clusters) }
+    private val independent=BooleanArray(text.animators.size) { a->text.animators[a].selectors.any { s->
+        (s.kind.staticValue!=0f || s.kind.keyframes.any { it.value!=0f }) &&
+            (s.lockDimensions.staticValue==0f || s.lockDimensions.keyframes.any { it.value==0f })
+    } }
+    private val coverageY=Array(text.animators.size) { if(independent[it]) DoubleArray(clusters) else coverage[it] }
+    private val coverageZ=Array(text.animators.size) { if(independent[it]) DoubleArray(clusters) else coverage[it] }
     private val values=Array(text.animators.size) { DoubleArray(AnimatorProperty.entries.size*2) }
     private val colours=Array(text.animators.size) { IntArray(AnimatorProperty.entries.size) }
     private val present=Array(text.animators.size) { a -> BooleanArray(AnimatorProperty.entries.size).also { out -> text.animators[a].properties.forEach { out[it.property.ordinal]=true } } }
@@ -49,6 +55,7 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
     private val lineTotals=DoubleArray(lineCapacity);private val lineShift=DoubleArray(lineCapacity);private val ownTotals=DoubleArray(lineCapacity)
     private val baseAdvances=DoubleArray(lineCapacity);private val advances=DoubleArray(lineCapacity)
     private val rawAdvances=DoubleArray(lineCapacity);private val runTotals=DoubleArray(lineCapacity)
+    private val lineCharacters=IntArray(lineCapacity);private val extraSpacing=DoubleArray(lineCapacity);private val lineOffsets=DoubleArray(lineCapacity)
     private val clusterX=DoubleArray(clusters)
     private val matrices=DoubleArray(clusters*6);private val affine=DoubleArray(6)
     private val groupSizes=intArrayOf(clusters,words+clusters,lineCapacity,1)
@@ -88,13 +95,9 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
     val linePermutationBuilds get()=linePool.builds
     val linePermutationBytes get()=linePool.bytes
     init {
-        require(text.animators.all { a->a.properties.all { it.property.ordinal<13 } }) {
-            "T4 animator property rendering is not integrated yet; retain the document and finish T4b"
+        require(text.animators.all { a->a.properties.all { it.property.ordinal<23 } }) {
+            "Character offset/value require T4c prepared cmap integration; retain the document"
         }
-        require(text.animators.all { a->a.selectors.all { s->
-            val wiggly=s.kind.staticValue!=0f || s.kind.keyframes.any { it.value!=0f }
-            !wiggly || (s.lockDimensions.staticValue==1f && s.lockDimensions.keyframes.all { it.value==1f })
-        } }) { "Unlocked wiggly dimensions require T4b renderer integration; retain the document" }
         require(lines<=LinePermutationPool.MAX_LINES) { "Text exceeds 256 lines per layer; reduce explicit paragraphs" }
         require(data[prefix]==271828.0 && (data.size==tail || (data.size==tail+2+clusters && data[tail]==314159.0 && data[tail+1]==clusters.toDouble())))
         var ordinal=0;var line=-1
@@ -115,6 +118,8 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
             membership.updateLines(clusterLines,workingLines)
         }
         boundary.fill(0.0);lineTotals.fill(0.0);lineShift.fill(0.0);runTotals.fill(0.0)
+        lineCharacters.fill(0);extraSpacing.fill(0.0)
+        for(c in 0 until clusters) lineCharacters[clusterLines[c]]+=ends[c]-starts[c]
         val baseFill=text.fill.evaluate(time);val baseStroke=text.strokeColour.evaluate(time)
         val baseWidth=text.strokeWidth.evaluate(time).toDouble()
         if(paragraph==null) for(c in 0 until clusters) {
@@ -126,7 +131,9 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
             val animator=text.animators[a]
             active[a]=animator.enabled.hold(time)!=0f
             if(!active[a]) continue
-            engines[a].evaluate(time,coverage[a]);values[a].fill(0.0)
+            engines[a].evaluate(time,coverage[a])
+            if(independent[a]) { engines[a].evaluate(time,coverageY[a],1);engines[a].evaluate(time,coverageZ[a],2) }
+            values[a].fill(0.0)
             grouping[a]=animator.anchorGrouping.hold(time).toInt()
             for(p in properties[a]) {
                 val i=p.property.ordinal
@@ -143,7 +150,15 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
             }
             val anchor=values[a][AnimatorProperty.LINE_ANCHOR.ordinal*2]
             for(l in 0 until workingLines) { lineTotals[l]+=ownTotals[l];lineShift[l]+=SelectorMath.lineShift(anchor,ownTotals[l]) }
+            if(present[a][AnimatorProperty.LINE_SPACING.ordinal]) {
+                ownTotals.fill(0.0)
+                for(c in 0 until clusters) ownTotals[clusterLines[c]]+=coverage[a][c]*(ends[c]-starts[c])
+                val value=values[a][AnimatorProperty.LINE_SPACING.ordinal*2]
+                for(l in 0 until workingLines) if(lineCharacters[l]>0) extraSpacing[l]+=value*ownTotals[l]/lineCharacters[l]
+            }
         }
+        var accumulatedSpacing=0.0
+        for(l in 0 until workingLines) { lineOffsets[l]=accumulatedSpacing;accumulatedSpacing+=extraSpacing[l] }
         selectorNs=System.nanoTime()-began
         var oldMax=0.0;var newMax=0.0;var rawMax=0.0
         for(l in 0 until lines) {
@@ -158,6 +173,14 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         logicalBounds[0]=0f;logicalBounds[1]=(-data[1]*factor+min(0.0,last)).toFloat()
         logicalBounds[2]=oldMax.coerceAtLeast(0.0).toFloat();logicalBounds[3]=(abs(last)+(data[1]-data[2])*factor).toFloat()
         if(lines==0) logicalBounds.fill(0f)
+        else if(paragraph==null) {
+            var first=Double.POSITIVE_INFINITY;var final=Double.NEGATIVE_INFINITY
+            for(l in 0 until workingLines) {
+                val y=l*step+lineOffsets[l]
+                first=min(first,y-data[1]*factor);final=max(final,y-data[2]*factor)
+            }
+            logicalBounds[1]=first.toFloat();logicalBounds[3]=(final-first).toFloat()
+        }
         if(paragraph!=null) {
             val source=requireNotNull(document)
             var left=0.0;var right=source.boxWidth.toDouble()
@@ -166,8 +189,8 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
                 if(source.boxWidth==0f) {
                     left=min(left,paragraph.origins[l]);right=max(right,paragraph.origins[l]+baseAdvances[l])
                 }
-                top=min(top,paragraph.lineTop[l]-data[1]*factor)
-                bottom=max(bottom,paragraph.lineTop[l]-data[2]*factor)
+                top=min(top,paragraph.lineTop[l]+lineOffsets[l]-data[1]*factor)
+                bottom=max(bottom,paragraph.lineTop[l]+lineOffsets[l]-data[2]*factor)
             }
             logicalBounds[0]=left.toFloat();logicalBounds[1]=top.toFloat()
             logicalBounds[2]=max(0.0,right-left).toFloat();logicalBounds[3]=max(0.0,bottom-top).toFloat()
@@ -179,10 +202,10 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
             val rawX=data[clusterBase+c*6+4]*factor+ordinals[c]*tracking+(rawMax-rawAdvances[rawLine])*align
             if(paragraph!=null) {
                 clusterX[c]=paragraph.x[c]+pen+lineShift[l]-lineTotals[l]*paragraph.align[l]
-                offset[c]=clusterX[c]-rawX;yOffsets[c]=paragraph.y[c]-rawLine*step-runBaseline[c]
+                offset[c]=clusterX[c]-rawX;yOffsets[c]=paragraph.y[c]+lineOffsets[l]-rawLine*step-runBaseline[c]
             } else {
                 offset[c]=pen+lineShift[l]+((newMax-advances[l])-(rawMax-rawAdvances[l]))*align
-                clusterX[c]=rawX+offset[c];yOffsets[c]=-runBaseline[c]
+                clusterX[c]=rawX+offset[c];yOffsets[c]=lineOffsets[l]-runBaseline[c]
             }
             pen+=boundary[c]
             fill[c]=styles[c].fill ?: baseFill;stroke[c]=styles[c].stroke ?: baseStroke
@@ -199,19 +222,28 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         for(a in engines.indices) if(active[a]) {
             val v=values[a];val has=present[a]
             for(c in 0 until clusters) {
-                val weight=coverage[a][c];if(weight==0.0) continue
+                val weight=coverage[a][c];val weightY=coverageY[a][c];val weightZ=coverageZ[a][c]
+                if(weight==0.0 && weightY==0.0 && weightZ==0.0) continue
                 val kind=grouping[a];val bounds=groups[kind];val gi=group(c,kind)*4
-                val px=(bounds[gi]+bounds[gi+2])*.5;val py=(bounds[gi+1]+bounds[gi+3])*.5
+                val px=(bounds[gi]+bounds[gi+2])*.5+v[AnimatorProperty.GROUPING_ALIGNMENT.ordinal*2]/100*(bounds[gi+2]-bounds[gi])
+                val py=(bounds[gi+1]+bounds[gi+3])*.5+v[AnimatorProperty.GROUPING_ALIGNMENT.ordinal*2+1]/100*(bounds[gi+3]-bounds[gi+1])
                 SelectorMath.affine(affine,weight,v[0],v[1],px,py,v[12],v[13],v[4],
-                    if(has[1]) v[2] else 100.0,if(has[1]) v[3] else 100.0,v[8],v[10])
+                    if(has[1]) v[2] else 100.0,if(has[1]) v[3] else 100.0,v[8],v[10],weightY)
                 val i=c*6;val a0=matrices[i];val a1=matrices[i+1];val a2=matrices[i+2];val a3=matrices[i+3];val a4=matrices[i+4];val a5=matrices[i+5]
                 matrices[i]=affine[0]*a0+affine[2]*a1;matrices[i+1]=affine[1]*a0+affine[3]*a1
                 matrices[i+2]=affine[0]*a2+affine[2]*a3;matrices[i+3]=affine[1]*a2+affine[3]*a3
                 matrices[i+4]=affine[0]*a4+affine[2]*a5+affine[4];matrices[i+5]=affine[1]*a4+affine[3]*a5+affine[5]
                 if(has[3]) opacity[c]*=(1+weight*(v[6]/100-1)).coerceIn(0.0,1.0)
                 val colourWeight=weight.coerceIn(0.0,1.0).toFloat()
-                if(has[7]) fill[c]=interpolateColour(fill[c],colours[a][7],colourWeight)
-                if(has[8]) stroke[c]=interpolateColour(stroke[c],colours[a][8],colourWeight)
+                if(has[7]) fill[c]=if(independent[a]) TextAnimatorColour.blend(fill[c],colours[a][7],weight,weightY,weightZ) else interpolateColour(fill[c],colours[a][7],colourWeight)
+                if(has[8]) stroke[c]=if(independent[a]) TextAnimatorColour.blend(stroke[c],colours[a][8],weight,weightY,weightZ) else interpolateColour(stroke[c],colours[a][8],colourWeight)
+                val cw=colourWeight.toDouble();val cy=weightY.coerceIn(0.0,1.0);val cz=weightZ.coerceIn(0.0,1.0)
+                if(has[AnimatorProperty.FILL_OPACITY.ordinal]) fill[c]=TextAnimatorColour.opacity(fill[c],v[AnimatorProperty.FILL_OPACITY.ordinal*2],cw)
+                if(has[AnimatorProperty.STROKE_OPACITY.ordinal]) stroke[c]=TextAnimatorColour.opacity(stroke[c],v[AnimatorProperty.STROKE_OPACITY.ordinal*2],cw)
+                fill[c]=TextAnimatorColour.hsb(fill[c],v[AnimatorProperty.FILL_HUE.ordinal*2]*cw,
+                    v[AnimatorProperty.FILL_SATURATION.ordinal*2]*cy,v[AnimatorProperty.FILL_BRIGHTNESS.ordinal*2]*cz)
+                stroke[c]=TextAnimatorColour.hsb(stroke[c],v[AnimatorProperty.STROKE_HUE.ordinal*2]*cw,
+                    v[AnimatorProperty.STROKE_SATURATION.ordinal*2]*cy,v[AnimatorProperty.STROKE_BRIGHTNESS.ordinal*2]*cz)
                 width[c]+=weight*v[18];blur[c]+=weight*v[24]
             }
         }

@@ -104,4 +104,14 @@ class PreparedParagraphLayoutTest {
         val inserted=source.replace("a\nb\nX\nc",3,3)
         assertEquals(listOf(0f,9f,9f,0f),inserted.paragraphs.map { it.indentLeft })
     }
+    @Test fun selectedLineSpacingIsAppliedOncePerLineBeforeBoundsAndPivots() {
+        val source=TextSourceDocument("AB",boxWidth=100f)
+        val animator=TextAnimator(1,selectors=FrozenList.of(listOf(TextRangeSelector(2))),
+            properties=FrozenList.of(listOf(TextPropertyOverride(AnimatorProperty.LINE_SPACING,scalar=scalar(20f)))))
+        val text=TextProperties(alignment=TextAlignment.LEFT,size=scalar(100f),animators=FrozenList.of(listOf(animator)))
+        val prepared=PreparedTextAnimation(text,metrics(2),SelectorEaseTable.shared,source,breaks=intArrayOf(0,2),paragraphKernel=ParagraphOracle)
+        prepared.evaluate(0)
+        assertEquals(120f,prepared.modifiers.getFloat(96+28),.001f)
+        assertEquals(220f,prepared.logicalBounds[3],.001f)
+    }
 }

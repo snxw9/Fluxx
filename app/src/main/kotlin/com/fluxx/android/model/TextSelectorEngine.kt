@@ -42,18 +42,18 @@ object SelectorMath {
     fun lineShift(lineAnchor: Double, selectedTrackingSum: Double) = -lineAnchor/100*selectedTrackingSum
     /** Anchor-only animation moves by -c*anchor even when R/Skew/S are identity. */
     fun affine(out: DoubleArray,c: Double,posX: Double,posY: Double,pivotX: Double,pivotY: Double,
-        anchorX: Double,anchorY: Double,rotation: Double,scaleX: Double,scaleY: Double,skew: Double=0.0,axis: Double=0.0) {
+        anchorX: Double,anchorY: Double,rotation: Double,scaleX: Double,scaleY: Double,skew: Double=0.0,axis: Double=0.0,weightY: Double=c) {
         require(out.size>=6)
         val r=Math.toRadians(rotation*c);val a=Math.toRadians(axis)
         val k=tan(Math.toRadians((skew*c).coerceIn(-85.0,85.0)))
         val ca=cos(a);val sa=sin(a);val cr=cos(r);val sr=sin(r)
-        val sx=1+c*(scaleX/100-1);val sy=1+c*(scaleY/100-1)
+        val sx=1+c*(scaleX/100-1);val sy=1+weightY*(scaleY/100-1)
         val h00=1-ca*sa*k; val h01=ca*ca*k;val h10=-sa*sa*k;val h11=1+ca*sa*k
         val m00=(cr*h00-sr*h10)*sx;val m01=(cr*h01-sr*h11)*sy
         val m10=(sr*h00+cr*h10)*sx;val m11=(sr*h01+cr*h11)*sy
         out[0]=m00;out[1]=m10;out[2]=m01;out[3]=m11
-        out[4]=posX*c+pivotX-m00*(pivotX+c*anchorX)-m01*(pivotY+c*anchorY)
-        out[5]=posY*c+pivotY-m10*(pivotX+c*anchorX)-m11*(pivotY+c*anchorY)
+        out[4]=posX*c+pivotX-m00*(pivotX+c*anchorX)-m01*(pivotY+weightY*anchorY)
+        out[5]=posY*weightY+pivotY-m10*(pivotX+c*anchorX)-m11*(pivotY+weightY*anchorY)
     }
 }
 
