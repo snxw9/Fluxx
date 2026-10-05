@@ -1,6 +1,7 @@
 #include "font_manager.h"
 #include "prepared_text_packet.h"
 #include "font_inspection.h"
+#include "paragraph_layout.h"
 #include "text_diagnostics.h"
 #include "atlas_packer.h"
 #include <filesystem>
@@ -77,6 +78,29 @@ int main(int argc, char** argv) {
         } else if (command == "dump" && argc == 4) {
             dumpDiagnostics(manager, argv[3]); std::cout << "CPU dump complete: " << argv[3] << '\n';
         } else if (command == "selftest") {
+            {
+                const std::vector<BreakCluster> letters{{10,false,false},{5,true,true},{10,false,false},{5,true,true},{10,false,false}};
+                ParagraphFormat paragraph;paragraph.end=5;
+                const auto wrapped=layoutParagraphs(letters,{paragraph},26,20);
+                require(wrapped.lines.size()==2 && wrapped.lines[0].end==4 && wrapped.lines[0].advance==25,"Word wrapping/trailing-space hanging failed");
+                paragraph.alignment=ParagraphAlign::JustifyLastRight;
+                const auto justified=layoutParagraphs(letters,{paragraph},26,20);
+                require(justified.lines[0].wordExpansion==1 && justified.lines[1].origin==16,"Justification/last-right alignment failed");
+                paragraph.alignment=ParagraphAlign::Centre;
+                const auto centred=layoutParagraphs(letters,{paragraph},60,20);
+                require(centred.lines[0].origin==10 && centred.lines[0].advance==40,"Box centre alignment failed");
+                paragraph.first=7;paragraph.left=3;paragraph.right=2;
+                const auto indented=layoutParagraphs(letters,{paragraph},0,20);
+                require(indented.lines.size()==1 && indented.lines[0].origin==10,"Point text unexpectedly wrapped or lost indent");
+                ParagraphFormat empty;empty.before=99;empty.after=3;
+                ParagraphFormat next;next.end=5;next.before=4;
+                const auto paragraphs=layoutParagraphs(letters,{empty,next},0,20);
+                require(paragraphs.lines.size()==2 && paragraphs.lines[0].top==0 && paragraphs.lines[1].top==27,"Empty paragraph/first space-before semantics failed");
+                const auto overflow=layoutParagraphs({{40,false,false},{20,false,false}},{ParagraphFormat{0,2}},8,20);
+                require(overflow.lines.size()==2 && overflow.lines[0].advance==40,"Unbreakable cluster overflow was clipped");
+                bool rejected=false;try { layoutParagraphs(letters,{ParagraphFormat{0,4}},26,20); } catch(const std::invalid_argument&) { rejected=true; }
+                require(rejected,"Incomplete paragraph coverage accepted");
+            }
             for(const auto& input:inputs) {
                 const auto metadata=inspectFont(input.bytes.data(),input.bytes.size());
                 require(metadata.find("\"version\":1")!=std::string::npos && metadata.find("\"axes\":[]")!=std::string::npos,"Static face inspection metadata missing");

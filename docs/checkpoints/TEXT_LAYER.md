@@ -1,5 +1,15 @@
 # Text layer checkpoint
 
+## T3a paragraph foundation — 2026-10-05
+
+T2b is committed as `e4e6def`. T3a adds cluster-safe paragraph selection editing, preparation-only Android ICU/UAX14 break opportunities and a portable native greedy line builder over shaped clusters. The native builder supports all seven alignment choices, indents, hanging trailing spaces, word-space justification, explicit/empty paragraphs, first-paragraph space-before suppression and unclipped overflow. Oversized unbreakable sequences use emergency cluster breaks; an indivisible oversized cluster remains overflowing. This is a preparation foundation, not integrated box rendering: existing renderer guards remain active. No protected API, gesture or batch/draw changes.
+
+The T3a gate passed native Debug/Release on both ABIs, Kotlin Debug/Release, both instrumentation source sets and all 208 JVM tests, zero failures/errors/skips (`tools/text/results/t3a-paragraph-foundation.log`). Host Release/selftest and six shaping references passed. Three new JVM tests cover selection endpoints, collapsed/all-text selection, empty paragraphs and atomic paragraph/box codec round trips. Host fixtures cover wrapping/hanging spaces, justification, physical alignment, indents, empty paragraphs, spacing, overflow and malformed coverage. Device-unverified. Asset/APK increment: zero assets; code delta unmeasured, no packaging.
+
+T3b remains required: wire the ICU opportunities and styled cluster advances into native layout preparation; enumerate bounded wrapping/membership variants under animated layer size/tracking; prepare selectors/permutations for each; integrate paragraph positions, bounds/anchors/Fit/hit tests, the fixed Paragraph pages and box-width preview handle using the existing gesture protocol; add wrapping parity/performance instrumentation fixtures. The current 64-layout cap is not yet proven for animated wrapping. Do not claim T3 complete or relax the preparation/per-frame requirements. T4 and T5 follow T3; no device results are required to continue.
+
+Exact T3a user-run tests: run the full compile/JVM tasks from `t3a-paragraph-foundation.log`, then `py -3 tools/text/build_host.py`, host `selftest`, and `shaping_parity.py`. There are no new T3 device controls/fixtures yet; the T2b/T1 lists remain valid. F1 performance/parity/lifecycle remain deferred and unrun.
+
 ## Current handoff: T2b font library complete in source
 
 T2b implements SAF import, background isolated-process inspection/shaping/rasterization, an AtomicFile app-private SHA-256 font library, collection face selection, named instances and static variation axes. Requested project references survive missing files; the renderer uses the bundled sans fallback and the Text page reports missing fonts. Character controls include fixed Library and Variable Axes pages. Empty text now retains an insertion style. Interactive library changes invalidate prepared metrics and geometry; export pins its prepared font-resource epoch. No PreviewController API, gesture protocol or batch/draw contract changed.

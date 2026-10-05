@@ -78,6 +78,19 @@ data class TextSourceDocument(val text: String,
         require(paragraphs.isEmpty() || paragraphs.size==text.count { it=='\n' }+1) { "Paragraph style count must match explicit paragraphs" }
     }
     fun runAt(caret: Int): TextStyleRun? = runs.firstOrNull { caret in it.start until it.end } ?: runs.lastOrNull()
+    /** A collapsed selection formats all text; a nonempty selection addresses touched paragraphs.
+     * A selection ending at the next paragraph's start does not touch that paragraph. */
+    fun formatParagraphs(start: Int,end: Int,change: (TextParagraphStyle)->TextParagraphStyle): TextSourceDocument {
+        require(start in 0..text.length && end in start..text.length)
+        val count=text.count { it=='\n' }+1
+        val first=if(start==end) 0 else text.take(start).count { it=='\n' }
+        val last=if(start==end) count-1 else text.take(end-1).count { it=='\n' }
+        val updated=List(count) { index ->
+            val current=paragraphs.getOrNull(index) ?: TextParagraphStyle()
+            if(index in first..last) change(current) else current
+        }
+        return copy(paragraphs=if(updated.all { it==TextParagraphStyle() }) FrozenList.empty() else FrozenList.of(updated))
+    }
     fun format(start: Int,end: Int,change: (TextRunStyle)->TextRunStyle): TextSourceDocument {
         require(start in 0..text.length && end in start..text.length)
         if(text.isEmpty()) return copy(runs=FrozenList.of(listOf(TextStyleRun(0,0,change(runAt(0)?.style ?: TextRunStyle())))))
