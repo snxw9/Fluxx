@@ -178,6 +178,73 @@ class TextRangeSelector : Table() {
             val o = __offset(38)
             return if(o != 0) bb.getLong(o + bb_pos).toULong() else 0UL
         }
+    val kind : fluxx.schema.AnimatableProperty1D? get() = kind(fluxx.schema.AnimatableProperty1D())
+    fun kind(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(40)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val wigglesPerSecond : fluxx.schema.AnimatableProperty1D? get() = wigglesPerSecond(fluxx.schema.AnimatableProperty1D())
+    fun wigglesPerSecond(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(42)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val correlation : fluxx.schema.AnimatableProperty1D? get() = correlation(fluxx.schema.AnimatableProperty1D())
+    fun correlation(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(44)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val temporalPhase : fluxx.schema.AnimatableProperty1D? get() = temporalPhase(fluxx.schema.AnimatableProperty1D())
+    fun temporalPhase(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(46)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val spatialPhase : fluxx.schema.AnimatableProperty1D? get() = spatialPhase(fluxx.schema.AnimatableProperty1D())
+    fun spatialPhase(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(48)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    val lockDimensions : fluxx.schema.AnimatableProperty1D? get() = lockDimensions(fluxx.schema.AnimatableProperty1D())
+    fun lockDimensions(obj: fluxx.schema.AnimatableProperty1D) : fluxx.schema.AnimatableProperty1D? {
+        val o = __offset(50)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
+    fun seedKeyframes(j: Int) : fluxx.schema.TextSeedKeyframe? = seedKeyframes(fluxx.schema.TextSeedKeyframe(), j)
+    fun seedKeyframes(obj: fluxx.schema.TextSeedKeyframe, j: Int) : fluxx.schema.TextSeedKeyframe? {
+        val o = __offset(52)
+        return if (o != 0) {
+            obj.__assign(__indirect(__vector(o) + j * 4), bb)
+        } else {
+            null
+        }
+    }
+    val seedKeyframesLength : Int
+        get() {
+            val o = __offset(52); return if (o != 0) __vector_len(o) else 0
+        }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_25_2_10()
         fun getRootAsTextRangeSelector(_bb: ByteBuffer): TextRangeSelector = getRootAsTextRangeSelector(_bb, TextRangeSelector())
@@ -185,10 +252,17 @@ class TextRangeSelector : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createTextRangeSelector(builder: FlatBufferBuilder, version: UInt, id: ULong, enabledOffset: Int, startOffset: Int, endOffset: Int, offsetOffset: Int, unitsOffset: Int, basedOnOffset: Int, shapeOffset: Int, smoothnessOffset: Int, easeHighOffset: Int, easeLowOffset: Int, modeOffset: Int, amountOffset: Int, minAmountOffset: Int, maxAmountOffset: Int, randomizeOrderOffset: Int, seed: ULong) : Int {
-            builder.startTable(18)
+        fun createTextRangeSelector(builder: FlatBufferBuilder, version: UInt, id: ULong, enabledOffset: Int, startOffset: Int, endOffset: Int, offsetOffset: Int, unitsOffset: Int, basedOnOffset: Int, shapeOffset: Int, smoothnessOffset: Int, easeHighOffset: Int, easeLowOffset: Int, modeOffset: Int, amountOffset: Int, minAmountOffset: Int, maxAmountOffset: Int, randomizeOrderOffset: Int, seed: ULong, kindOffset: Int = 0, wigglesPerSecondOffset: Int = 0, correlationOffset: Int = 0, temporalPhaseOffset: Int = 0, spatialPhaseOffset: Int = 0, lockDimensionsOffset: Int = 0, seedKeyframesOffset: Int = 0) : Int {
+            builder.startTable(25)
             addSeed(builder, seed)
             addId(builder, id)
+            addSeedKeyframes(builder, seedKeyframesOffset)
+            addLockDimensions(builder, lockDimensionsOffset)
+            addSpatialPhase(builder, spatialPhaseOffset)
+            addTemporalPhase(builder, temporalPhaseOffset)
+            addCorrelation(builder, correlationOffset)
+            addWigglesPerSecond(builder, wigglesPerSecondOffset)
+            addKind(builder, kindOffset)
             addRandomizeOrder(builder, randomizeOrderOffset)
             addMaxAmount(builder, maxAmountOffset)
             addMinAmount(builder, minAmountOffset)
@@ -207,7 +281,7 @@ class TextRangeSelector : Table() {
             addVersion(builder, version)
             return endTextRangeSelector(builder)
         }
-        fun startTextRangeSelector(builder: FlatBufferBuilder) = builder.startTable(18)
+        fun startTextRangeSelector(builder: FlatBufferBuilder) = builder.startTable(25)
         fun addVersion(builder: FlatBufferBuilder, version: UInt) = builder.addInt(0, version.toInt(), 1)
         fun addId(builder: FlatBufferBuilder, id: ULong) = builder.addLong(1, id.toLong(), 0)
         fun addEnabled(builder: FlatBufferBuilder, enabled: Int) = builder.addOffset(2, enabled, 0)
@@ -226,6 +300,21 @@ class TextRangeSelector : Table() {
         fun addMaxAmount(builder: FlatBufferBuilder, maxAmount: Int) = builder.addOffset(15, maxAmount, 0)
         fun addRandomizeOrder(builder: FlatBufferBuilder, randomizeOrder: Int) = builder.addOffset(16, randomizeOrder, 0)
         fun addSeed(builder: FlatBufferBuilder, seed: ULong) = builder.addLong(17, seed.toLong(), 0)
+        fun addKind(builder: FlatBufferBuilder, kind: Int) = builder.addOffset(18, kind, 0)
+        fun addWigglesPerSecond(builder: FlatBufferBuilder, wigglesPerSecond: Int) = builder.addOffset(19, wigglesPerSecond, 0)
+        fun addCorrelation(builder: FlatBufferBuilder, correlation: Int) = builder.addOffset(20, correlation, 0)
+        fun addTemporalPhase(builder: FlatBufferBuilder, temporalPhase: Int) = builder.addOffset(21, temporalPhase, 0)
+        fun addSpatialPhase(builder: FlatBufferBuilder, spatialPhase: Int) = builder.addOffset(22, spatialPhase, 0)
+        fun addLockDimensions(builder: FlatBufferBuilder, lockDimensions: Int) = builder.addOffset(23, lockDimensions, 0)
+        fun addSeedKeyframes(builder: FlatBufferBuilder, seedKeyframes: Int) = builder.addOffset(24, seedKeyframes, 0)
+        fun createSeedKeyframesVector(builder: FlatBufferBuilder, data: IntArray) : Int {
+            builder.startVector(4, data.size, 4)
+            for (i in data.size - 1 downTo 0) {
+                builder.addOffset(data[i])
+            }
+            return builder.endVector()
+        }
+        fun startSeedKeyframesVector(builder: FlatBufferBuilder, numElems: Int) = builder.startVector(4, numElems, 4)
         fun endTextRangeSelector(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

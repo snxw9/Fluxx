@@ -112,6 +112,15 @@ class LinePermutationPool {
     private val stored=HashMap<Pair<Long,Int>,IntArray>()
     var bytes=0L;private set
     var builds=0L;private set
+    fun rank(seed: Long,count: Int): IntArray {
+        require(count in 0..4096)
+        return stored.getOrPut(seed to count) {
+            val cost=count*4L
+            require(bytes+cost<=MAX_BYTES) { "Text permutations exceed 32 MiB per layer; reduce seeds or randomized selectors" }
+            bytes+=cost;builds++
+            SelectorMath.permutation(count,seed)
+        }
+    }
     fun prepare(seed: Long,minimum: Int,maximum: Int): Array<IntArray?> {
         require(minimum in 0..maximum && maximum<=MAX_LINES)
         return arrayOfNulls<IntArray>(maximum+1).also { result ->
@@ -128,19 +137,32 @@ class LinePermutationPool {
 class PreparedSelectorEngine(private val animator: TextAnimator, private val membership: SelectorMembership,
     private val ease: SelectorEaseTable,linePool: LinePermutationPool?=null,lineMinimum: Int=0,lineMaximum: Int=membership.counts[3]) {
     private val weights=DoubleArray(membership.characterCount)
-    private val ranks=Array(animator.selectors.size) { s -> Array(4) { v -> SelectorMath.permutation(membership.counts[v],animator.selectors[s].seed) } }
+    private val pool=linePool ?: LinePermutationPool()
+    private val seeds=Array(animator.selectors.size) { s ->
+        val p=animator.selectors[s]
+        (listOf(p.seed)+p.seedKeyframes.map { it.seed }).distinct().toLongArray().also {
+            require(it.size<=64) { "Selector exceeds 64 distinct prepared seeds; reduce seed alternatives" }
+        }
+    }
+    private val ranks=Array(animator.selectors.size) { s -> Array(seeds[s].size) { k ->
+        Array(4) { v -> pool.rank(seeds[s][k],membership.counts[v]) }
+    } }
     private val cache=Array(animator.selectors.size) { DoubleArray(membership.characterCount) }
-    private val static=BooleanArray(animator.selectors.size) { i -> animator.selectors[i].tracks.none { it.isAnimated && it.keyframes.isNotEmpty() } }
+    private val static=BooleanArray(animator.selectors.size) { i ->
+        val p=animator.selectors[i]
+        p.kind.staticValue==0f && p.kind.keyframes.none { it.value!=0f } && p.seedKeyframes.isEmpty() &&
+            p.tracks.none { it.isAnimated && it.keyframes.isNotEmpty() }
+    }
     private val ready=BooleanArray(animator.selectors.size)
     private val revisions=LongArray(animator.selectors.size) { -1 }
     private val lineRanks=Array(animator.selectors.size) { s ->
         val selector=animator.selectors[s]
         val random=selector.randomizeOrder.staticValue!=0f || selector.randomizeOrder.keyframes.any { it.value!=0f }
         val lines=selector.basedOn.staticValue==3f || selector.basedOn.keyframes.any { it.value==3f }
-        if(linePool!=null && random && lines) linePool.prepare(selector.seed,lineMinimum,lineMaximum) else null
+        if(linePool!=null && random && lines) Array(seeds[s].size) { k -> pool.prepare(seeds[s][k],lineMinimum,lineMaximum) } else null
     }
     var coverageBuilds: Long = 0; private set
-    fun evaluate(time: Long,out: DoubleArray) {
+    fun evaluate(time: Long,out: DoubleArray,dimension: Int=0) {
         require(out.size==membership.starts.size)
         out.fill(0.0)
         if(animator.enabled.hold(time)==0f) return
@@ -151,7 +173,7 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
             val mode=SelectorMode.entries[selector.mode.hold(time).toInt()]
             if(first) { weights.fill(SelectorMath.initial(mode));first=false }
             if(!static[s] || !ready[s] || revisions[s]!=membership.revision) {
-                coverage(selector,s,time,cache[s]);ready[s]=true;revisions[s]=membership.revision;coverageBuilds++
+                coverage(selector,s,time,cache[s],dimension);ready[s]=true;revisions[s]=membership.revision;coverageBuilds++
             }
             for(i in weights.indices) weights[i]=SelectorMath.combine(weights[i],cache[s][i],mode)
         }
@@ -161,8 +183,21 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
             out[c]=sum/(membership.ends[c]-membership.starts[c])
         }
     }
-    private fun coverage(p: TextRangeSelector,index: Int,time: Long,out: DoubleArray) {
+    private fun coverage(p: TextRangeSelector,index: Int,time: Long,out: DoubleArray,dimension: Int) {
         val variant=p.basedOn.hold(time).toInt();val n=membership.counts[variant]
+        if(p.kind.hold(time)==1f) {
+            val a=p.minAmount.evaluate(time).toDouble();val b=p.maxAmount.evaluate(time).toDouble()
+            val lo=min(a,b)/100;val hi=max(a,b)/100;val amount=p.amount.evaluate(time)/100.0
+            val seed=p.seedAt(time);val frequency=p.wigglesPerSecond.evaluate(time).toDouble()
+            val correlation=p.correlation.evaluate(time).toDouble();val temporal=p.temporalPhase.evaluate(time).toDouble()
+            val spatial=p.spatialPhase.evaluate(time).toDouble();val locked=p.lockDimensions.hold(time)!=0f
+            for(i in out.indices) {
+                val member=membership.maps[variant][i]
+                out[i]=if(member<0) 0.0 else (amount*(lo+(hi-lo)*(WigglySelectorMath.value(seed,member,time,frequency,
+                    correlation,temporal,spatial,dimension,locked)+1)/2)).coerceIn(-1.0,1.0)
+            }
+            return
+        }
         val factor=if(p.units.hold(time)==0f) n/100.0 else 1.0
         val a=(p.start.evaluate(time).toDouble()+p.offset.evaluate(time))*factor
         val b=(p.end.evaluate(time).toDouble()+p.offset.evaluate(time))*factor
@@ -173,12 +208,14 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
         val av=p.minAmount.evaluate(time).toDouble();val bv=p.maxAmount.evaluate(time).toDouble()
         val lo=min(av,bv);val hi=max(av,bv);val amount=p.amount.evaluate(time)/100.0
         val random=p.randomizeOrder.hold(time)!=0f
+        val seed=p.seedAt(time);var seedIndex=0
+        while(seeds[index][seedIndex]!=seed) seedIndex++
         for(i in out.indices) {
             val member=membership.maps[variant][i]
             if(member<0) { out[i]=0.0;continue }
-            val permutation=if(variant==3 && lineRanks[index]!=null) requireNotNull(lineRanks[index]!![n]) {
+            val permutation=if(variant==3 && lineRanks[index]!=null) requireNotNull(lineRanks[index]!![seedIndex][n]) {
                 "Wrapped line count has no prepared permutation"
-            } else ranks[index][variant]
+            } else ranks[index][seedIndex][variant]
             val x=(if(random) permutation[member] else member)+0.5
             var e=1.0;var v=1.0
             if(shape==SelectorShape.SQUARE) {

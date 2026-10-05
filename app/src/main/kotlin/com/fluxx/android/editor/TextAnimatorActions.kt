@@ -2,9 +2,10 @@ package com.fluxx.android.editor
 
 import com.fluxx.android.model.*
 
-enum class SelectorField { ENABLED, START, END, OFFSET, UNITS, BASED_ON, SHAPE, SMOOTHNESS, EASE_HIGH, EASE_LOW, MODE, AMOUNT, MIN_AMOUNT, MAX_AMOUNT, RANDOMIZE_ORDER }
+enum class SelectorField { ENABLED, START, END, OFFSET, UNITS, BASED_ON, SHAPE, SMOOTHNESS, EASE_HIGH, EASE_LOW, MODE, AMOUNT, MIN_AMOUNT, MAX_AMOUNT, RANDOMIZE_ORDER,
+    KIND, WIGGLES_PER_SECOND, CORRELATION, TEMPORAL_PHASE, SPATIAL_PHASE, LOCK_DIMENSIONS }
 data class AnimatorTrackAddress(val animatorId: Long,val selectorId: Long?=null,
-    val field: SelectorField?=null,val property: AnimatorProperty?=null,val grouping: Boolean=false)
+    val field: SelectorField?=null,val property: AnimatorProperty?=null,val grouping: Boolean=false,val seed: Boolean=false)
 enum class AnimatorKeyOperation { SET, REMOVE, MOVE, ENABLE, FREEZE, RESET }
 sealed interface AnimatorEdit {
     data class Put(val animator: TextAnimator): AnimatorEdit
@@ -17,7 +18,7 @@ sealed interface AnimatorEdit {
     data class RemoveProperty(val animatorId: Long,val property: AnimatorProperty): AnimatorEdit
     data class Key(val address: AnimatorTrackAddress,val operation: AnimatorKeyOperation,val localTimeUs: Long,
         val newTimeUs: Long=localTimeUs,val value: Float?=null,val y: Float?=null,val argb: Int?=null,
-        val easing: EasingPreset=EasingPreset.EASY_EASE): AnimatorEdit
+        val easing: EasingPreset=EasingPreset.EASY_EASE,val seedValue: Long?=null): AnimatorEdit
 }
 
 object TextAnimatorActions {
@@ -36,6 +37,7 @@ object TextAnimatorActions {
             scalar(AnimatorTrackAddress(a.id,grouping=true),a.anchorGrouping)
             for(s in a.selectors) for(field in SelectorField.entries)
                 scalar(AnimatorTrackAddress(a.id,s.id,field),s.tracks[field.ordinal])
+            for(s in a.selectors) if(s.seedKeyframes.any { it.timeUs==from }) move(AnimatorTrackAddress(a.id,s.id,seed=true))
             for(p in a.properties) if(from in p.activeKeyTimes()) move(AnimatorTrackAddress(a.id,property=p.property))
         }
         return result
@@ -105,7 +107,8 @@ object TextAnimatorActions {
             val k=keys(p.keyframes,{ it.timeUs },{ key,t -> key.copy(timeUs=t) }) { Keyframe1D(time,e.value ?: sample,e.easing) }
             val reset=when {
                 e.address.selectorId!=null -> TextRangeSelector(1).tracks[requireNotNull(e.address.field).ordinal].staticValue
-                e.address.property==AnimatorProperty.OPACITY -> 100f
+                e.address.property==AnimatorProperty.OPACITY || e.address.property==AnimatorProperty.FILL_OPACITY ||
+                    e.address.property==AnimatorProperty.STROKE_OPACITY -> 100f
                 e.address.property!=null || e.address.grouping -> 0f
                 else -> 1f
             }
@@ -114,9 +117,17 @@ object TextAnimatorActions {
         val address=e.address
         if(address.selectorId!=null) {
             require(address.property==null && !address.grouping)
-            val field=requireNotNull(address.field)
             val s=requireNotNull(a.selectors.firstOrNull { it.id==address.selectorId })
-            val hold=field in listOf(SelectorField.ENABLED,SelectorField.UNITS,SelectorField.BASED_ON,SelectorField.SHAPE,SelectorField.MODE,SelectorField.RANDOMIZE_ORDER)
+            if(address.seed) {
+                require(address.field==null)
+                val sample=s.seedAt(time)
+                val k=keys(s.seedKeyframes,{ it.timeUs },{ key,t->key.copy(timeUs=t) }) { TextSeedKeyframe(time,e.seedValue ?: sample) }
+                val next=s.copy(seed=if(e.operation==AnimatorKeyOperation.RESET) 0L else sample,seedKeyframes=k)
+                return a.copy(selectors=FrozenList.of(a.selectors.map { if(it.id==next.id) next else it }))
+            }
+            val field=requireNotNull(address.field)
+            val hold=field in listOf(SelectorField.ENABLED,SelectorField.UNITS,SelectorField.BASED_ON,SelectorField.SHAPE,SelectorField.MODE,SelectorField.RANDOMIZE_ORDER,
+                SelectorField.KIND,SelectorField.LOCK_DIMENSIONS)
             val p=scalar(s.tracks[field.ordinal],hold)
             val next=when(field) {
                 SelectorField.ENABLED -> s.copy(enabled=p);SelectorField.START -> s.copy(start=p);SelectorField.END -> s.copy(end=p)
@@ -124,10 +135,13 @@ object TextAnimatorActions {
                 SelectorField.SHAPE -> s.copy(shape=p);SelectorField.SMOOTHNESS -> s.copy(smoothness=p);SelectorField.EASE_HIGH -> s.copy(easeHigh=p)
                 SelectorField.EASE_LOW -> s.copy(easeLow=p);SelectorField.MODE -> s.copy(mode=p);SelectorField.AMOUNT -> s.copy(amount=p)
                 SelectorField.MIN_AMOUNT -> s.copy(minAmount=p);SelectorField.MAX_AMOUNT -> s.copy(maxAmount=p);SelectorField.RANDOMIZE_ORDER -> s.copy(randomizeOrder=p)
+                SelectorField.KIND -> s.copy(kind=p);SelectorField.WIGGLES_PER_SECOND -> s.copy(wigglesPerSecond=p)
+                SelectorField.CORRELATION -> s.copy(correlation=p);SelectorField.TEMPORAL_PHASE -> s.copy(temporalPhase=p)
+                SelectorField.SPATIAL_PHASE -> s.copy(spatialPhase=p);SelectorField.LOCK_DIMENSIONS -> s.copy(lockDimensions=p)
             }
             return a.copy(selectors=FrozenList.of(a.selectors.map { if(it.id==next.id) next else it }))
         }
-        require(address.field==null)
+        require(address.field==null && !address.seed)
         val property=address.property
         if(property==null) return if(address.grouping) a.copy(anchorGrouping=scalar(a.anchorGrouping,true)) else a.copy(enabled=scalar(a.enabled,true))
         require(!address.grouping)
@@ -156,7 +170,8 @@ object TextAnimatorActions {
             when {
                 address.selectorId!=null -> a.selectors.filter { it.id==address.selectorId }.flatMap {
                     val tracks=address.field?.let { field -> listOf(it.tracks[field.ordinal]) } ?: it.tracks
-                    tracks.filter { p -> p.isAnimated }.flatMap { p -> p.keyframes.map { k -> k.timeUs } }
+                    (if(address.seed) emptyList() else tracks.filter { p -> p.isAnimated }.flatMap { p -> p.keyframes.map { k -> k.timeUs } }) +
+                        (if(address.seed || address.field==null) it.seedKeyframes.map { k->k.timeUs } else emptyList())
                 }
                 address.property!=null -> a.properties.filter { it.property==address.property }.flatMap { it.activeKeyTimes() }
                 else -> (if(address.grouping) a.anchorGrouping else a.enabled).let { if(it.isAnimated) it.keyframes.map { k -> k.timeUs } else emptyList() }

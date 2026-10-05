@@ -36,12 +36,12 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         SelectorMembership(maps,intArrayOf(characters,nonSpaces,words,lines),starts,ends)
     }
     private val engines=Array(text.animators.size) { PreparedSelectorEngine(text.animators[it],membership,ease,
-        if(paragraphActive) linePool else null,lines,lineCapacity) }
+        linePool,lines,lineCapacity) }
     private val properties=Array(text.animators.size) { text.animators[it].properties.toTypedArray() }
     private val coverage=Array(text.animators.size) { DoubleArray(clusters) }
-    private val values=Array(text.animators.size) { DoubleArray(26) }
-    private val colours=Array(text.animators.size) { IntArray(13) }
-    private val present=Array(text.animators.size) { a -> BooleanArray(13).also { out -> text.animators[a].properties.forEach { out[it.property.ordinal]=true } } }
+    private val values=Array(text.animators.size) { DoubleArray(AnimatorProperty.entries.size*2) }
+    private val colours=Array(text.animators.size) { IntArray(AnimatorProperty.entries.size) }
+    private val present=Array(text.animators.size) { a -> BooleanArray(AnimatorProperty.entries.size).also { out -> text.animators[a].properties.forEach { out[it.property.ordinal]=true } } }
     private val active=BooleanArray(text.animators.size)
     private val grouping=IntArray(text.animators.size)
     private val vector=FloatArray(2)
@@ -88,6 +88,13 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
     val linePermutationBuilds get()=linePool.builds
     val linePermutationBytes get()=linePool.bytes
     init {
+        require(text.animators.all { a->a.properties.all { it.property.ordinal<13 } }) {
+            "T4 animator property rendering is not integrated yet; retain the document and finish T4b"
+        }
+        require(text.animators.all { a->a.selectors.all { s->
+            val wiggly=s.kind.staticValue!=0f || s.kind.keyframes.any { it.value!=0f }
+            !wiggly || (s.lockDimensions.staticValue==1f && s.lockDimensions.keyframes.all { it.value==1f })
+        } }) { "Unlocked wiggly dimensions require T4b renderer integration; retain the document" }
         require(lines<=LinePermutationPool.MAX_LINES) { "Text exceeds 256 lines per layer; reduce explicit paragraphs" }
         require(data[prefix]==271828.0 && (data.size==tail || (data.size==tail+2+clusters && data[tail]==314159.0 && data[tail+1]==clusters.toDouble())))
         var ordinal=0;var line=-1

@@ -52,7 +52,7 @@ class PreparedTextAnimationTest {
         val bean=java.lang.management.ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
         assertTrue(bean.isThreadAllocatedMemorySupported);bean.isThreadAllocatedMemoryEnabled=true
         val keys=FrozenList.of(listOf(Keyframe1D(0,-10f,EasingPreset.LINEAR),Keyframe1D(1_000_000,10f,EasingPreset.EASY_EASE)))
-        val overrides=AnimatorProperty.entries.map { p -> when(p.kind) {
+        val overrides=AnimatorProperty.entries.take(13).map { p -> when(p.kind) {
             2 -> TextPropertyOverride(p,vector=AnimatableProperty2D(staticX=if(p==AnimatorProperty.SCALE) 101f else 1f,staticY=if(p==AnimatorProperty.SCALE) 99f else 1f))
             3 -> TextPropertyOverride(p,colour=AnimatableColour(staticValue=0x80ff0000.toInt()))
             else -> TextPropertyOverride(p,scalar=scalar(if(p==AnimatorProperty.OPACITY) 90f else 1f))

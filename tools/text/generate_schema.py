@@ -15,4 +15,7 @@ for p in (ROOT/'app/src/main/kotlin/fluxx/schema').glob('*.kt'):
         s=s.replace('ligaturesOffset: Int)', 'ligaturesOffset: Int = 0)')
     if p.stem=='TextFontReference':
         s=s.replace('styleNameOffset: Int)', 'styleNameOffset: Int = 0)')
+    if p.stem=='TextRangeSelector':
+        for field in ('kindOffset','wigglesPerSecondOffset','correlationOffset','temporalPhaseOffset','spatialPhaseOffset','lockDimensionsOffset','seedKeyframesOffset'):
+            s=s.replace(field+': Int',field+': Int = 0')
     p.write_text(s,encoding='utf-8')

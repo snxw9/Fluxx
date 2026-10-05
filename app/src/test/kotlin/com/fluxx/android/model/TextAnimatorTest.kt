@@ -220,7 +220,7 @@ class TextAnimatorTest {
             assertThrows(IllegalArgumentException::class.java) { ProjectCodec.decode(bytes) }
         }
         malformed { b,g,_ -> b.putInt(field(b,g,0),3) }
-        malformed { b,_,s -> b.putInt(field(b,s,0),3) }
+        malformed { b,_,s -> b.putInt(field(b,s,0),99) }
         malformed { b,g,_ -> b.putLong(field(b,g,3),0) }
         malformed { b,_,s -> b.putLong(field(b,s,1),0) }
         malformed { b,_,s -> val track=child(b,s,4);b.putFloat(field(b,track,1),Float.NaN) }

@@ -55,6 +55,7 @@ table TextSourceDocument { version: uint = 1; text: string; runs: [TextStyleRun]
 table StringKeyframe { time_us: long; value: string; document: TextSourceDocument; }
 table AnimatableColour { is_animated: bool; static_value: int = -1; keyframes: [ColourKeyframe]; }
 table AnimatableString { is_animated: bool; static_value: string; keyframes: [StringKeyframe]; document: TextSourceDocument; }
+table TextSeedKeyframe { time_us:long; seed:ulong; }
 table TextRangeSelector {
   version: uint = 1;
   id: ulong;
@@ -74,6 +75,14 @@ table TextRangeSelector {
   max_amount: AnimatableProperty1D;
   randomize_order: AnimatableProperty1D;
   seed: ulong;
+  // v12/T4: range and deterministic wiggly selectors share universal tracks.
+  kind: AnimatableProperty1D;
+  wiggles_per_second: AnimatableProperty1D;
+  correlation: AnimatableProperty1D;
+  temporal_phase: AnimatableProperty1D;
+  spatial_phase: AnimatableProperty1D;
+  lock_dimensions: AnimatableProperty1D;
+  seed_keyframes: [TextSeedKeyframe];
 }
 table TextPropertyOverride {
   version: uint = 1;

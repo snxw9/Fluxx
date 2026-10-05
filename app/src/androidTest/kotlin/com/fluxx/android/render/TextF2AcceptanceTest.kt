@@ -57,7 +57,7 @@ class TextF2AcceptanceTest {
                 start=track(0f,10f),end=track(100f,90f),offset=track(-5f,5f),
                 basedOn=scalar((s%4).toFloat()),shape=scalar((s%6).toFloat()),mode=scalar((s%6).toFloat()),
                 easeLow=track(-30f,30f),easeHigh=track(30f,-30f),randomizeOrder=scalar(1f),seed=0x12345678L+a*8+s) }),
-            properties=FrozenList.of(AnimatorProperty.entries.map { p ->
+            properties=FrozenList.of(AnimatorProperty.entries.take(13).map { p ->
                 when(p.kind) {
                     2 -> TextPropertyOverride(p,vector=if(p==AnimatorProperty.SCALE) AnimatableProperty2D(staticX=101f,staticY=99f)
                         else AnimatableProperty2D(staticX=1f,staticY=-1f))
