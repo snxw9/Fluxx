@@ -320,6 +320,10 @@ fun EditorScreen(
                     isExpanded = isExpandedPreview,
                     onFitScaleChanged = { previewFitScale = it },
                     anchorMode = anchorMode && isInspectorOpen,
+                    boxWidthEditing = isInspectorOpen && selectedLayer?.type==LayerType.TEXT && !textTyping,
+                    onBoxBegin = { selectedLayer?.let { previewController?.pause();textEditor.begin(it.id,false) } },
+                    onBoxPreview = textEditor::boxWidth,
+                    onBoxCommit = { textEditor.finish() },onBoxCancel = textEditor::cancel,
                     eyedropperActive = eyedropperLayerId != null,
                     sampledColorArgb = sampledColor,
                     onSampleColor = { x,y,released ->
@@ -525,6 +529,8 @@ fun EditorScreen(
                         onTextCancel = textEditor::cancel,
                         onTextStyle = { textEditor.edit(layer.id, it) },
                         onTextCharacter = { start,end,change -> previewController?.pause();textEditor.format(layer.id,start,end,change) },
+                        onTextParagraph = { start,end,change -> previewController?.pause();textEditor.paragraph(layer.id,start,end,change) },
+                        onTextBoxWidth = { width -> previewController?.pause();textEditor.editBoxWidth(layer.id,width) },
                         onTextSizeBegin = { previewController?.pause()
                             if (textEditor.typing) textEditor.finish { textEditor.begin(layer.id, false) } else textEditor.begin(layer.id, false) },
                         onTextSizePreview = { value ->

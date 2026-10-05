@@ -136,7 +136,14 @@ data class TextSourceDocument(val text: String,
             val index=edges[i];val style=out.firstOrNull { index in it.start until it.end }?.style ?: TextRunStyle()
             normalized.add(TextStyleRun(index,edges[i+1],style.copy(manualKerning=FrozenList.of(style.manualKerning.filter { it.character==index }))))
         }
-        val newParagraphs=if(paragraphs.isEmpty()) paragraphs else FrozenList.of(List(value.count { it=='\n' }+1) { paragraphs[minOf(it,paragraphs.lastIndex)] })
+        val newParagraphs=if(paragraphs.isEmpty()) paragraphs else {
+            val paragraphStarts=ArrayList<Int>();paragraphStarts.add(0)
+            value.forEachIndexed { index,cp -> if(cp=='\n') paragraphStarts.add(index+1) }
+            FrozenList.of(paragraphStarts.map { position ->
+                val original=when { position<=prefix->position;position>=newEnd->position-delta;else->prefix }
+                paragraphs[text.take(original.coerceIn(0,text.length)).count { it=='\n' }]
+            })
+        }
         return copy(text=value,runs=merge(normalized),paragraphs=newParagraphs)
     }
     fun storageBytes(): Long = text.toByteArray(Charsets.UTF_8).size.toLong()+runs.sumOf {

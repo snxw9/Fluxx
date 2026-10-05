@@ -50,7 +50,7 @@ class TextMetricsRepository private constructor(context: Context) {
     suspend fun measure(font: String,source: TextSourceDocument,ligatures: Boolean=true): TextLayoutMetrics = withContext(dispatcher) {
         fontLibrary.load()
         if(fontRevision!=fontLibrary.revision) { richCache.clear();fontRevision=fontLibrary.revision }
-        require(source.boxWidth==0f && source.paragraphs.all { it==com.fluxx.android.model.TextParagraphStyle() }) { "Paragraph/box/direction layout awaits T3/T5" }
+        require(source.paragraphs.all { it.direction==com.fluxx.android.model.ParagraphDirection.LTR }) { "RTL layout requires T5; requested direction is preserved" }
         val native=provider ?: NativeTextMetricsProvider(app).also { provider=it }
         val partner=Triple(font,source,!ligatures)
         if(!richCache.containsKey(partner)) richCache[partner]=native.measure(font,source,!ligatures)

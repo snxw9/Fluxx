@@ -19,4 +19,11 @@ struct ParagraphLayout { std::vector<VisualLine> lines;std::vector<double> posit
 // overflow is retained. Trailing spaces hang outside the alignment/justification width.
 ParagraphLayout layoutParagraphs(const std::vector<BreakCluster>& clusters,
     const std::vector<ParagraphFormat>& paragraphs,double boxWidth,double lineStep);
+struct WrapCluster { double advance;uint32_t space,breakAfter;double tracking; };
+struct WrapParagraph { uint32_t begin,end,alignment,reserved;double left,right,first,before,after; };
+struct WrapLine { uint32_t begin,end,paragraph,reserved;double origin,advance,top,wordExpansion; };
+static_assert(sizeof(WrapCluster)==24 && sizeof(WrapParagraph)==56 && sizeof(WrapLine)==48,"Prepared wrapping buffer ABI");
+// Borrowed, pre-sized storage. No allocation, shaping or permutation work on success.
+uint32_t wrapParagraphs(const WrapCluster* clusters,uint32_t count,const WrapParagraph* paragraphs,
+    uint32_t paragraphCount,double boxWidth,double lineStep,double* positions,WrapLine* lines,uint32_t capacity);
 }

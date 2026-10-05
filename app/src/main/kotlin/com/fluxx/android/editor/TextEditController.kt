@@ -106,6 +106,24 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
         val formatted=try { document.format(a,b,change) } catch(failure: IllegalArgumentException) { error=failure.message;return@finish }
         begin(id,false);preview(TextEdits.document(layer,time,formatted));finish()
     } }
+    fun boxWidth(value: Float) {
+        val s=session ?: return
+        try {
+            require(value.isFinite() && value>=0) { "Box width must be nonnegative and finite" }
+            val layer=s.layer.copy(text=s.draft)
+            val document=s.draft.source.evaluateDocument(s.time-layer.resolvedKeyframeAnchorUs)
+            preview(TextEdits.document(layer,s.time,document.copy(boxWidth=value)))
+        } catch(failure: IllegalArgumentException) { error=failure.message }
+    }
+    fun paragraph(id: Long,start: Int,end: Int,change: (TextParagraphStyle)->TextParagraphStyle) { finish {
+        val layer=editor.state.project.composition.layers.first { it.id==id }
+        val time=editor.state.project.composition.frameRate.snap(editor.state.playheadUs)
+        val document=layer.text.source.evaluateDocument(time-layer.resolvedKeyframeAnchorUs)
+        val a=start.coerceIn(0,document.text.length);val b=end.coerceIn(a,document.text.length)
+        val formatted=try { document.formatParagraphs(a,b,change) } catch(failure: IllegalArgumentException) { error=failure.message;return@finish }
+        begin(id,false);preview(TextEdits.document(layer,time,formatted));finish()
+    } }
+    fun editBoxWidth(id: Long,value: Float) { finish { begin(id,false);boxWidth(value);finish() } }
 }
 
 object TextEdits {

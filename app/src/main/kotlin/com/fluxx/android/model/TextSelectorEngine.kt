@@ -85,9 +85,19 @@ class SelectorEaseTable {
 /** Inputs supplied from the F1 prepared map in F2b; never independently reshapes text.
  * Each map has one member index per source character, -1 for excluded whitespace. */
 class SelectorMembership(maps: Array<IntArray>,counts: IntArray,starts: IntArray,ends: IntArray) {
+    var revision=0L;private set
     val maps=Array(4) { maps[it].copyOf() }; val counts=counts.copyOf()
     val starts=starts.copyOf(); val ends=ends.copyOf()
     val characterCount=this.maps[0].size
+    fun updateLines(clusterLines: IntArray,lineCount: Int) {
+        require(clusterLines.size==starts.size && lineCount in 0..LinePermutationPool.MAX_LINES)
+        var changed=counts[3]!=lineCount
+        for(c in starts.indices) for(i in starts[c] until ends[c]) {
+            if(this.maps[3][i]!=clusterLines[c]) { this.maps[3][i]=clusterLines[c];changed=true }
+        }
+        counts[3]=lineCount
+        if(changed) revision++
+    }
     init {
         require(maps.size==4 && counts.size==4 && starts.size==ends.size)
         require(this.maps.all { it.size==characterCount })
@@ -96,15 +106,39 @@ class SelectorMembership(maps: Array<IntArray>,counts: IntArray,starts: IntArray
     }
 }
 
+/** Shared across both modes and source alternatives in a layer. Preparation only. */
+class LinePermutationPool {
+    companion object { const val MAX_LINES=256;const val MAX_BYTES=32L*1024*1024 }
+    private val stored=HashMap<Pair<Long,Int>,IntArray>()
+    var bytes=0L;private set
+    var builds=0L;private set
+    fun prepare(seed: Long,minimum: Int,maximum: Int): Array<IntArray?> {
+        require(minimum in 0..maximum && maximum<=MAX_LINES)
+        return arrayOfNulls<IntArray>(maximum+1).also { result ->
+            for(count in minimum..maximum) result[count]=stored.getOrPut(seed to count) {
+                require(bytes+count*4L<=MAX_BYTES) { "Randomized wrapped-line permutations exceed 32 MiB per layer; reduce distinct selector seeds" }
+                bytes+=count*4L;builds++;SelectorMath.permutation(count,seed)
+            }
+        }
+    }
+}
+
 /** Sparse execution; immutable animator snapshot makes invalidation explicit: rebuild on edits.
  * All four maps/permutations exist before evaluation. Units changes need no extra permutation. */
 class PreparedSelectorEngine(private val animator: TextAnimator, private val membership: SelectorMembership,
-    private val ease: SelectorEaseTable) {
+    private val ease: SelectorEaseTable,linePool: LinePermutationPool?=null,lineMinimum: Int=0,lineMaximum: Int=membership.counts[3]) {
     private val weights=DoubleArray(membership.characterCount)
     private val ranks=Array(animator.selectors.size) { s -> Array(4) { v -> SelectorMath.permutation(membership.counts[v],animator.selectors[s].seed) } }
     private val cache=Array(animator.selectors.size) { DoubleArray(membership.characterCount) }
     private val static=BooleanArray(animator.selectors.size) { i -> animator.selectors[i].tracks.none { it.isAnimated && it.keyframes.isNotEmpty() } }
     private val ready=BooleanArray(animator.selectors.size)
+    private val revisions=LongArray(animator.selectors.size) { -1 }
+    private val lineRanks=Array(animator.selectors.size) { s ->
+        val selector=animator.selectors[s]
+        val random=selector.randomizeOrder.staticValue!=0f || selector.randomizeOrder.keyframes.any { it.value!=0f }
+        val lines=selector.basedOn.staticValue==3f || selector.basedOn.keyframes.any { it.value==3f }
+        if(linePool!=null && random && lines) linePool.prepare(selector.seed,lineMinimum,lineMaximum) else null
+    }
     var coverageBuilds: Long = 0; private set
     fun evaluate(time: Long,out: DoubleArray) {
         require(out.size==membership.starts.size)
@@ -116,7 +150,9 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
             if(selector.enabled.hold(time)==0f) continue
             val mode=SelectorMode.entries[selector.mode.hold(time).toInt()]
             if(first) { weights.fill(SelectorMath.initial(mode));first=false }
-            if(!static[s] || !ready[s]) { coverage(selector,s,time,cache[s]);ready[s]=true;coverageBuilds++ }
+            if(!static[s] || !ready[s] || revisions[s]!=membership.revision) {
+                coverage(selector,s,time,cache[s]);ready[s]=true;revisions[s]=membership.revision;coverageBuilds++
+            }
             for(i in weights.indices) weights[i]=SelectorMath.combine(weights[i],cache[s][i],mode)
         }
         if(first) return
@@ -140,7 +176,10 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
         for(i in out.indices) {
             val member=membership.maps[variant][i]
             if(member<0) { out[i]=0.0;continue }
-            val x=(if(random) ranks[index][variant][member] else member)+0.5
+            val permutation=if(variant==3 && lineRanks[index]!=null) requireNotNull(lineRanks[index]!![n]) {
+                "Wrapped line count has no prepared permutation"
+            } else ranks[index][variant]
+            val x=(if(random) permutation[member] else member)+0.5
             var e=1.0;var v=1.0
             if(shape==SelectorShape.SQUARE) {
                 e=if(smooth==0.0) { if(x>=a && x<b) 1.0 else 0.0 } else

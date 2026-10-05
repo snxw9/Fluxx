@@ -84,13 +84,13 @@ internal fun CharacterControls(document: TextSourceDocument,start: Int,end: Int,
     }
 }
 
-@Composable private fun CharacterChoice(label: String,choices: List<String>,choose: (Int)->Unit) {
+@Composable internal fun CharacterChoice(label: String,choices: List<String>,choose: (Int)->Unit) {
     var open by remember { mutableStateOf(false) }
     Box { TextButton(onClick={open=true}) { Text(label,maxLines=1) }
         DropdownMenu(open,{open=false}) { choices.forEachIndexed { index,value -> DropdownMenuItem(text={Text(value)},onClick={open=false;choose(index)}) } }
     }
 }
-@Composable private fun CharacterNumbers(first: String,a: Float,second: String,b: Float,label: String="Apply",apply: (Float,Float)->Unit) {
+@Composable internal fun CharacterNumbers(first: String,a: Float,second: String,b: Float,label: String="Apply",apply: (Float,Float)->Unit) {
     var x by remember(first,a) { mutableStateOf(a.toString()) };var y by remember(second,b) { mutableStateOf(b.toString()) }
     Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
         OutlinedTextField(x,{x=it},label={Text(first,maxLines=1,style=MaterialTheme.typography.labelSmall)},singleLine=true,modifier=Modifier.weight(1f))

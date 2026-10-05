@@ -68,8 +68,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
         onlyText = layers.isNotEmpty() && layers.all { it.type == LayerType.TEXT } && TextFixtureProvider.entries().isEmpty()
         preparedText = layers.filter { it.type==LayerType.TEXT }.sortedWith(compareBy<CompositionLayer> { it.zOrder }.thenBy { it.id }).map { layer ->
             val sources = StyledTextPreparation.alternatives(layer.text.source)
+            val linePool=LinePermutationPool()
             val layouts=sources.flatMap { source -> listOf(textLayout(layer.text.fontId,source,true),textLayout(layer.text.fontId,source,false)) }.toTypedArray()
-            PreparedText(layer,sources,layouts,Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(layer.text,selectorEase,sources[it/2])) })
+            PreparedText(layer,sources,layouts,Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(layer.text,selectorEase,sources[it/2],linePool)) })
         }.toTypedArray()
         preparedHandles = preparedText.flatMap { it.layouts.map { layout -> layout.handle } }.toLongArray()
         // Release obsolete layouts; active source-key layouts remain pinned until the next project preparation.
@@ -122,7 +123,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private var previewTargetWidth = 0
     private var previewTargetHeight = 0
     private fun textLayout(font: String, source: TextSourceDocument,ligatures: Boolean=true): ProductLayout = textLayouts.getOrPut(Triple(font,source,ligatures)) {
-        require(source.boxWidth==0f && source.paragraphs.all { it==TextParagraphStyle() }) { "Paragraph/box/direction layout awaits T3/T5; the requested document is preserved" }
+        require(source.paragraphs.all { it.direction==ParagraphDirection.LTR }) { "RTL layout requires T5; the requested document is preserved" }
         var packetBytes=0
         val handle = if(com.fluxx.android.fonts.ImportedTextPreparation.needed(source)) {
             val result=com.fluxx.android.fonts.ImportedTextPreparation.prepare(context,font,source,ligatures)
@@ -356,6 +357,14 @@ class CompositionRenderer(private val context: Context, private val repository: 
             val current=entry.animations[entry.lastIndex]
             var builds=0L;for(animation in entry.animations) builds+=animation.coverageBuilds
             out[0]=current.selectorNs;out[1]=current.geometryNs;out[2]=builds;return
+        }
+        error("Text layer has not been prepared")
+    }
+    internal fun textLinePermutationCounters(layerId: Long,out: LongArray) {
+        require(out.size>=2)
+        for(entry in preparedText) if(entry.layer.id==layerId) {
+            val animation=entry.animations[0]
+            out[0]=animation.linePermutationBuilds;out[1]=animation.linePermutationBytes;return
         }
         error("Text layer has not been prepared")
     }

@@ -82,6 +82,20 @@ int main(int argc, char** argv) {
                 const std::vector<BreakCluster> letters{{10,false,false},{5,true,true},{10,false,false},{5,true,true},{10,false,false}};
                 ParagraphFormat paragraph;paragraph.end=5;
                 const auto wrapped=layoutParagraphs(letters,{paragraph},26,20);
+                const WrapCluster raw[]={{10,0,0,0},{5,1,1,0},{10,0,0,0},{5,1,1,0},{10,0,0,0}};
+                const WrapParagraph rawParagraph{0,5,0,0,0,0,0,0,0};
+                double rawPositions[5]{};WrapLine rawLines[256]{};
+                for(unsigned frame=0;frame<600;++frame) {
+                    const auto count=wrapParagraphs(raw,5,&rawParagraph,1,26,20,rawPositions,rawLines,256);
+                    require(count==wrapped.lines.size(),"Reusable wrapping changed line count");
+                    for(unsigned line=0;line<count;++line) require(rawLines[line].begin==wrapped.lines[line].begin && rawLines[line].end==wrapped.lines[line].end && rawLines[line].advance==wrapped.lines[line].advance,"Reusable/native reference wrapping differs");
+                    for(unsigned cluster=0;cluster<5;++cluster) require(rawPositions[cluster]==wrapped.positions[cluster],"Reusable wrapped positions differ");
+                }
+                const WrapCluster tracked[]={{10,0,0,10},{10,0,0,10},{10,0,0,0}};
+                const WrapParagraph trackedParagraph{0,3,0,0,0,0,0,0,0};
+                require(wrapParagraphs(tracked,3,&trackedParagraph,1,30,20,rawPositions,rawLines,256)==2 && rawLines[0].end==2 && rawLines[0].advance==30,"Wrapping counted tracking after the line's final cluster");
+                bool lineCap=false;try { wrapParagraphs(tracked,3,&trackedParagraph,1,1,20,rawPositions,rawLines,2); } catch(const std::invalid_argument&) { lineCap=true; }
+                require(lineCap,"Wrapped line overflow did not reject at the prepared cap");
                 require(wrapped.lines.size()==2 && wrapped.lines[0].end==4 && wrapped.lines[0].advance==25,"Word wrapping/trailing-space hanging failed");
                 paragraph.alignment=ParagraphAlign::JustifyLastRight;
                 const auto justified=layoutParagraphs(letters,{paragraph},26,20);

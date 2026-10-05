@@ -49,7 +49,7 @@ class TextF2AcceptanceTest {
             check(!it.exists()) { "Archive the earlier reports and use a new textRunLabel" };check(it.mkdirs())
         }
     }
-    private fun fixture(maximum: Boolean,rich: Boolean=false,font: TextFontRef?=null): ProjectDocument {
+    private fun fixture(maximum: Boolean,rich: Boolean=false,font: TextFontRef?=null,wrapped: Boolean=false): ProjectDocument {
         val count=if(maximum) 16 else 8;val selectors=if(maximum) 8 else 4
         val source=if(maximum) "A".repeat(4096) else "AV office gy 0123456789 \n".repeat(30)
         val animators=List(count) { a -> TextAnimator(a+1L,anchorGrouping=scalar((a%4).toFloat()),
@@ -87,7 +87,13 @@ class TextF2AcceptanceTest {
             }
         }
         if(font!=null) document=document.format(0,0) { it.copy(font=font) }
-        val text=TextProperties(fontId="fluxx.serif",source=AnimatableString(staticValue=source,document=document.takeIf { rich || font!=null }),size=track(8f,72f),
+        if(wrapped) {
+            document=document.copy(boxWidth=if(maximum) 2500f else 360f,
+                paragraphs=FrozenList.of(List(source.count { it=='\n' }+1) { p -> TextParagraphStyle(
+                    alignment=ParagraphAlignment.entries[p%7],indentLeft=(p%3)*4f,indentRight=3f,
+                    indentFirst=5f,spaceBefore=2f,spaceAfter=3f) }))
+        }
+        val text=TextProperties(fontId="fluxx.serif",source=AnimatableString(staticValue=source,document=document.takeIf { rich || font!=null || wrapped }),size=track(8f,72f),
             tracking=track(-100f,100f),strokeWidth=track(20f,0f),strokeOverFill=track(0f,1f),
             ligatures=track(1f,0f),animators=FrozenList.of(animators))
         return ProjectDocument(Composition(width=1080,height=1920,durationUs=12_000_000,
@@ -97,6 +103,9 @@ class TextF2AcceptanceTest {
     @Test fun maximumLimitsColdAndThermal()=performance(true)
     @Test fun richRepresentativeColdAndThermal()=performance(false,true)
     @Test fun richMaximumColdAndThermal()=performance(true,true)
+    @Test fun wrappedRepresentativeColdAndThermal()=performance(false,true,wrapped=true)
+    @Test fun wrappedMaximumColdAndThermal()=performance(true,true,wrapped=true)
+    @Test fun wrappedRandomAndReversePreEncodePixelsMatch()=parity(true,wrapped=true)
     @Test fun importedVariableRepresentativeColdAndThermal()=withVariableFont { performance(false,true,it) }
     @Test fun importedVariableMaximumColdAndThermal()=withVariableFont { performance(true,true,it) }
     @Test fun importedVariableRandomAndReversePreEncodePixelsMatch()=withVariableFont { parity(true,it) }
@@ -120,19 +129,20 @@ class TextF2AcceptanceTest {
         }
     }
 
-    @Suppress("DEPRECATION") private fun performance(maximum: Boolean,rich: Boolean=false,font: TextFontRef?=null) {
-        val directory=directory((if(font!=null) "t2-variable-" else if(rich) "t1-rich-" else "f2-")+(if(maximum) "maximum" else "representative"))
+    @Suppress("DEPRECATION") private fun performance(maximum: Boolean,rich: Boolean=false,font: TextFontRef?=null,wrapped: Boolean=false) {
+        val directory=directory((if(wrapped) "t3-wrapped-" else if(font!=null) "t2-variable-" else if(rich) "t1-rich-" else "f2-")+(if(maximum) "maximum" else "representative"))
         val host=instrumentation.startActivitySync(Intent(context,TextProofActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as TextProofActivity
         val worker=Executors.newSingleThreadExecutor()
         try {
             val surface=host.awaitSurface()
             worker.submit {
                 CompositionRenderer(context,MediaRepository(context),surface,1080,1920).use { renderer ->
-                    val project=fixture(maximum,rich,font)
+                    val project=fixture(maximum,rich,font,wrapped)
                     check(com.fluxx.android.fonts.FontWorkerClient.requestCount>=0L) // Initialize the counter outside the measured window.
                     repeat(120) { renderer.renderPreview(project,it*16_667L,PreviewResolution.FULL) }
                     val handle=renderer.preparedTextHandle(1)
                     val before=LongArray(6);val after=LongArray(6);val evaluation=LongArray(3)
+                    val linePermutationsBefore=LongArray(2);val linePermutationsAfter=LongArray(2)
                     TextDebugBridge.frameCounters(renderer.session,handle,before)
                     if(maximum) assertEquals(4096L,before[4]) else assertTrue(before[4]>=500)
                     assertEquals(1L,TextDebugBridge.allocationCanary())
@@ -153,6 +163,7 @@ class TextF2AcceptanceTest {
                             TextDebugBridge.frameCounters(renderer.session,handle,before)
                             val nativeBefore=TextDebugBridge.allocationCount();val kotlinBefore=Debug.getThreadAllocCount()
                             val fontRequestsBefore=com.fluxx.android.fonts.FontWorkerClient.requestCount
+                            renderer.textLinePermutationCounters(1,linePermutationsBefore)
                             var frame=0;var missed=0
                             while(frame<600) {
                                 val began=System.nanoTime()
@@ -165,6 +176,7 @@ class TextF2AcceptanceTest {
                             }
                             val kotlinDelta=Debug.getThreadAllocCount()-kotlinBefore;val nativeDelta=TextDebugBridge.allocationCount()-nativeBefore
                             val fontRequestsDelta=com.fluxx.android.fonts.FontWorkerClient.requestCount-fontRequestsBefore
+                            renderer.textLinePermutationCounters(1,linePermutationsAfter)
                             val report=JSONObject().put("pass",pass).put("glyphs",before[4]).put("animators",if(maximum) 16 else 8)
                                 .put("selectorsPerAnimator",if(maximum) 8 else 4).put("frames",600).put("warmFrames",120)
                                 .put("thermalLoadSeconds",if(pass==1) 180 else 0).put("nativeNewDelta",nativeDelta).put("workerThreadAllocDelta",kotlinDelta)
@@ -173,6 +185,8 @@ class TextF2AcceptanceTest {
                                 .put("framesAbove60fpsBudget",missed).put("holds60fps",frameNs[593]<=16_666_667)
                                 .put("coverageBuildsDelta",evaluation[2]-coverageBefore)
                                 .put("fontWorkerRequestsDelta",fontRequestsDelta)
+                                .put("linePermutationBuildsDelta",linePermutationsAfter[0]-linePermutationsBefore[0])
+                                .put("preparedLinePermutationBytes",linePermutationsAfter[1])
                                 .put("rasterizationsDelta",after[1]-before[1]).put("atlasUploadsDelta",after[2]-before[2])
                                 .put("shapesDelta",after[3]-before[3]).put("atlasGenerationDelta",after[5]-before[5])
                             val stats=JSONObject(RenderBridge.textStats(renderer.session))
@@ -180,6 +194,7 @@ class TextF2AcceptanceTest {
                             File(directory,"pass-$pass.json").writeText(report.toString(2))
                             if(kotlinDelta!=0 || nativeDelta!=0L) failures.add("pass $pass allocation: Kotlin=$kotlinDelta native=$nativeDelta")
                             if(fontRequestsDelta!=0L) failures.add("pass $pass imported-font IPC occurred during prepared evaluation")
+                            if(linePermutationsAfter[0]!=linePermutationsBefore[0]) failures.add("pass $pass wrapping generated a permutation during evaluation")
                             for(i in intArrayOf(1,2,3,5)) if(before[i]!=after[i]) failures.add("pass $pass prepared counter $i changed")
                             if(frameNs[593]>16_666_667) failures.add("pass $pass p99 exceeds 60fps; report limits before lowering them")
                             if(!stats.getBoolean("validationEnabled") || stats.getLong("validationErrors")!=0L) failures.add("pass $pass Vulkan validation failure")
@@ -195,18 +210,21 @@ class TextF2AcceptanceTest {
     }
     @Test fun randomAndReversePreEncodePixelsMatch()=parity(false)
     @Test fun richRandomAndReversePreEncodePixelsMatch()=parity(true)
-    private fun parity(rich: Boolean,font: TextFontRef?=null) {
-        val directory=directory(if(font!=null) "t2-variable-parity" else if(rich) "t1-rich-parity" else "f2-parity")
+    private fun parity(rich: Boolean,font: TextFontRef?=null,wrapped: Boolean=false) {
+        val directory=directory(if(wrapped) "t3-wrapped-parity" else if(font!=null) "t2-variable-parity" else if(rich) "t1-rich-parity" else "f2-parity")
         val host=instrumentation.startActivitySync(Intent(context,TextProofActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as TextProofActivity
         try {
             CompositionRenderer(context,MediaRepository(context),host.awaitSurface(),1080,1920).use { preview ->
                 CompositionRenderer(context,MediaRepository(context)).use { export ->
                     CompositionRenderer(context,MediaRepository(context)).use { thumbnail ->
-                        val base=fixture(false,rich,font);val layer=base.composition.layers[0]
+                        val base=fixture(false,rich,font,wrapped);val layer=base.composition.layers[0]
                         val source=layer.text.source.copy(isAnimated=true,keyframes=FrozenList.of(listOf(
                             StringKeyframe(0,layer.text.source.staticValue,layer.text.source.document),
                             StringKeyframe(7_000_000,"office A\u0301 B\n\nAV",if(rich) TextSourceDocument("office A\u0301 B\n\nAV").format(0,0) { it.copy(font=TextFontRef("fluxx.serif",TextFaceStyle.BOLD_ITALIC),fauxItalic=true,baselineDelta=5f) } else null))))
-                        val project=base.copy(composition=base.composition.copy(layers=FrozenList.of(listOf(layer.copy(text=layer.text.copy(source=source))))))
+                        val heldSource=if(wrapped) source.copy(keyframes=FrozenList.of(source.keyframes.map { key ->
+                            key.copy(document=(key.document ?: TextSourceDocument(key.value)).copy(boxWidth=if(key.timeUs==0L) 360f else 280f))
+                        })) else source
+                        val project=base.copy(composition=base.composition.copy(layers=FrozenList.of(listOf(layer.copy(text=layer.text.copy(source=heldSource))))))
                         val renderers=arrayOf(preview,export,thumbnail);val buffers=Array(3) { ByteBuffer.allocateDirect(1080*1920*4) }
                         val times=longArrayOf(0,10_000_000,5_000_000,0,7_500_000,5_000_000,9_000_000,2_000_000)
                         for(time in times) {

@@ -29,7 +29,8 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
     onSizeCommit: () -> Unit, onOpenFill: (AnimPropertyType) -> Unit, error: String?,
     onScalarPreview: (AnimPropertyType, Float) -> Unit,
     onCharacter: (Int,Int,(TextRunStyle)->TextRunStyle)->Unit = { _,_,_-> },
-    onDraftSelection: (String,Int,Int)->Unit = { value,_,_->onDraft(value) }) {
+    onDraftSelection: (String,Int,Int)->Unit = { value,_,_->onDraft(value) },
+    onParagraph: (Int,Int,(TextParagraphStyle)->TextParagraphStyle)->Unit = { _,_,_-> },onBoxWidth: (Float)->Unit = {}) {
     val local = time - layer.resolvedKeyframeAnchorUs
     val evaluated = layer.text.source.evaluate(local)
     val fontLibrary=com.fluxx.android.fonts.FontLibraryRepository.getInstance(LocalContext.current)
@@ -48,7 +49,7 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
     var page by remember(layer.id) { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (!compact) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            listOf("Text", "Spacing", "Stroke", "Character").forEachIndexed { index, label ->
+            listOf("Text", "Spacing", "Stroke", "Character", "Paragraph").forEachIndexed { index, label ->
                 TextButton(modifier=Modifier.weight(1f),contentPadding=PaddingValues(0.dp),onClick = { done(); page = index; onFocus(null) }) { Text(label,style=MaterialTheme.typography.labelSmall,maxLines=1,
                     color = if (page == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }
             }
@@ -124,6 +125,10 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
             TextScalarControl(layer, time, AnimPropertyType.LEADING, "Additional leading · px", -500f..500f, onAction, onFocus, onSizeBegin, onScalarPreview, onSizeCommit)
             TextScalarControl(layer, time, AnimPropertyType.BASELINE_SHIFT, "Baseline shift · px", -500f..500f, onAction, onFocus, onSizeBegin, onScalarPreview, onSizeCommit)
             Text("Layer tracking splits ligatures away from zero; combining marks stay together.", style = MaterialTheme.typography.labelSmall)
+        }
+        if (!compact && page == 4) {
+            val document=layer.text.source.evaluateDocument(local).replace(draft.text)
+            ParagraphControls(document,draft.selection.min,draft.selection.max,layer.text.alignment,onParagraph,onBoxWidth)
         }
         if (!compact && page == 3) {
             val document=layer.text.source.evaluateDocument(local).replace(draft.text)

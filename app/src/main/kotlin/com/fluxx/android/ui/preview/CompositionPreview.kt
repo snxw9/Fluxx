@@ -56,7 +56,9 @@ fun CompositionPreview(
     isExpanded: Boolean = true,
     viewSettings: ViewSettings = ViewSettings(),
     mediaRepository: MediaRepository? = null,
-    onFitScaleChanged: (Float) -> Unit = {}
+    onFitScaleChanged: (Float) -> Unit = {},
+    boxWidthEditing: Boolean = false,onBoxBegin: ()->Unit = {},onBoxPreview: (Float)->Unit = {},
+    onBoxCommit: ()->Unit = {},onBoxCancel: ()->Unit = {}
 ) {
     val density = LocalDensity.current
     val comp = project.composition
@@ -224,6 +226,10 @@ fun CompositionPreview(
                     if (!eyedropperActive) PreviewLayerOverlay(project,
                         comp.layers.firstOrNull { it.id == selectedLayerId }, playheadUs,
                         mediaRepository, viewSettings, anchorMode)
+                    val selectedText=comp.layers.firstOrNull { it.id==selectedLayerId && it.type==LayerType.TEXT }
+                    val selectedMetrics=selectedText?.let { textHitMetrics[it.id] }
+                    if(boxWidthEditing && !eyedropperActive && selectedText!=null && selectedMetrics!=null)
+                        TextBoxWidthHandle(project,selectedText,playheadUs,selectedMetrics,onBoxBegin,onBoxPreview,onBoxCommit,onBoxCancel)
                     // Empty state overlay if composition has no layers
                     if (comp.layers.isEmpty()) {
                         Box(

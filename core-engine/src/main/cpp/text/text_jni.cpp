@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <unistd.h>
 #include <cmath>
+#include "paragraph_layout.h"
 #include <algorithm>
 
 namespace {
@@ -272,6 +273,21 @@ extern "C" JNIEXPORT jdoubleArray JNICALL Java_com_fluxx_android_engine_TextNati
         auto result=env->NewDoubleArray(static_cast<jsize>(values.size()));
         if(result) env->SetDoubleArrayRegion(result,0,static_cast<jsize>(values.size()),values.data());return result;
     } catch(const std::exception& error) { fail(env,error);return nullptr; }
+}
+extern "C" JNIEXPORT jint JNICALL Java_com_fluxx_android_engine_ParagraphNative_wrap(JNIEnv* env,jobject,
+    jobject clusters,jobject paragraphs,jobject positions,jobject lines,jint count,jint paragraphCount,jdouble width,jdouble step,jint capacity) {
+    try {
+        if(count<0||count>4096||paragraphCount<0||paragraphCount>256||capacity<1||capacity>256) throw std::invalid_argument("Invalid wrapping buffer counts");
+        auto checked=[&](jobject buffer,jlong bytes)->void* {
+            if(!buffer||env->GetDirectBufferCapacity(buffer)<bytes) throw std::invalid_argument("Invalid prepared wrapping buffer");
+            auto* address=env->GetDirectBufferAddress(buffer);
+            if(!address || reinterpret_cast<uintptr_t>(address)%8) throw std::invalid_argument("Unaligned wrapping buffer");
+            return address;
+        };
+        return static_cast<jint>(fluxx::text::wrapParagraphs(static_cast<const fluxx::text::WrapCluster*>(checked(clusters,jlong(count)*24)),static_cast<uint32_t>(count),
+            static_cast<const fluxx::text::WrapParagraph*>(checked(paragraphs,jlong(paragraphCount)*56)),static_cast<uint32_t>(paragraphCount),width,step,
+            static_cast<double*>(checked(positions,jlong(count)*8)),static_cast<fluxx::text::WrapLine*>(checked(lines,jlong(capacity)*48)),static_cast<uint32_t>(capacity)));
+    } catch(const std::exception& error) { fail(env,error);return 0; }
 }
 #ifdef FLUXX_TEXT_DIAGNOSTICS
 extern "C" JNIEXPORT void JNICALL Java_com_fluxx_android_engine_TextDebugBridge_dump(JNIEnv* env, jobject, jlong id, jstring directory) {
