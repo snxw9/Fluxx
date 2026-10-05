@@ -656,10 +656,10 @@ private fun OverhauledTransformSectionContent(
     val context = LocalContext.current
     val heldSource = layer.text.source.evaluateDocument(playheadUs - layer.resolvedKeyframeAnchorUs)
     val ligatures=layer.text.effectiveLigatures(playheadUs-layer.resolvedKeyframeAnchorUs)
-    val source by produceState<AnchorSource?>(null, layer.type, layer.asset, mediaRepository, refW, refH, layer.text.fontId, heldSource,ligatures) {
+    val source by produceState<AnchorSource?>(null, layer.type, layer.asset, mediaRepository, refW, refH, layer.text.fontId, heldSource,ligatures,layer.text) {
         value = null
         value = if (layer.type == LayerType.TEXT) {
-            try { AnchorSource(1, 1, text = com.fluxx.android.render.TextMetricsRepository.get(context).measure(layer.text.fontId, heldSource,ligatures)) }
+            try { AnchorSource(1, 1, text = com.fluxx.android.render.TextMetricsRepository.get(context).measure(layer.text.fontId, heldSource,ligatures,layer.text)) }
             catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
             catch (_: Exception) { null }
         } else if (layer.type == LayerType.SOLID) AnchorSource(refW, refH) else {

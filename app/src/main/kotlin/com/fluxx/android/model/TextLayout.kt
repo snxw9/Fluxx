@@ -12,7 +12,8 @@ data class TextBounds(val left: Float, val top: Float, val width: Float, val hei
 }
 
 /** Immutable design-unit metrics from the same HarfBuzz layout used by the GPU mesh. */
-class TextLayoutMetrics private constructor(private val data: DoubleArray, val sourceEmpty: Boolean,private val sourceDocument: TextSourceDocument?=null) {
+class TextLayoutMetrics private constructor(private val data: DoubleArray, val sourceEmpty: Boolean,private val sourceDocument: TextSourceDocument?=null,
+    private val characterCatalogue: TextCharacterCatalogue?=null) {
     private var boundsText: TextProperties? = null
     private var boundsAnimation: PreparedTextAnimation? = null
     private val lines = data[4].toInt()
@@ -64,8 +65,9 @@ class TextLayoutMetrics private constructor(private val data: DoubleArray, val s
     }
     fun bounds(size: Float, alignment: TextAlignment) = logical(size).union(ink(size, alignment))
     internal fun prepareAnimation(text: TextProperties,ease: SelectorEaseTable,document: TextSourceDocument?=sourceDocument,
-        linePool: LinePermutationPool=LinePermutationPool()): PreparedTextAnimation? =
-        if(data.size>6+lines*2+glyphs*8) PreparedTextAnimation(text,data,ease,document,linePool) else null
+        linePool: LinePermutationPool=LinePermutationPool(),catalogue: TextCharacterCatalogue?=characterCatalogue): PreparedTextAnimation? =
+        if(data.size>6+lines*2+glyphs*8) PreparedTextAnimation(text,data,ease,document,linePool,characterCatalogue=catalogue) else null
+    internal fun withCharacterCatalogue(catalogue: TextCharacterCatalogue)=TextLayoutMetrics(data,sourceEmpty,sourceDocument,catalogue)
     @Synchronized private fun animation(text: TextProperties): PreparedTextAnimation? {
         if(boundsText!==text) { boundsAnimation=prepareAnimation(text,SelectorEaseTable.shared);boundsText=text };return boundsAnimation
     }

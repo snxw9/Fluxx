@@ -42,6 +42,10 @@ public:
     // Called before recording draws. Throws a typed capacity error without a partial frame.
     void pack(bool proofOnly);
     void prepareMesh(const std::shared_ptr<const Layout>& layout);
+    void clearCharacterBindings();
+    void bindCharacters(const std::shared_ptr<const Layout>& layout,const std::vector<std::shared_ptr<const Layout>>& catalogues,
+        const std::vector<uint32_t>& codepoints,const std::vector<uint32_t>& fonts,const std::string& source,
+        const GlyphModifier* modifiers,const int32_t* codes,std::shared_ptr<void> pin);
     TextMesh mesh(const Layout& layout, float size, int alignment,
                   const GlyphModifier* modifiers=nullptr,
                   float tracking=0, float leading=0, float baselineShift=0,
@@ -74,7 +78,15 @@ private:
     unsigned maxPages_, allocatedPages_=0;
     std::vector<TextVertex> vertices_; std::vector<uint32_t> indices_;
     struct PreparedGlyph { const SdfGlyph* sdf=nullptr; float u=0,v=0; unsigned page=0; };
-    struct PreparedLayout { std::shared_ptr<const Layout> owner; uint64_t generation=UINT64_MAX; std::vector<PreparedGlyph> glyphs; };
+    struct CharacterBinding {
+        struct Character { uint32_t original=0,font=0;std::vector<uint32_t> marks; };
+        std::vector<std::shared_ptr<const Layout>> catalogues;
+        std::vector<uint32_t> codepoints;
+        std::vector<Character> characters;
+        const int32_t* codes=nullptr;std::shared_ptr<void> pin;size_t maximumGlyphs=0;
+    };
+    struct PreparedLayout { std::shared_ptr<const Layout> owner; uint64_t generation=UINT64_MAX; std::vector<PreparedGlyph> glyphs;
+        std::map<const GlyphModifier*,CharacterBinding> characters; };
     std::map<const Layout*,PreparedLayout> preparedLayouts_;
     Buffer staging_, vertex_, index_;
     VkImage image_=VK_NULL_HANDLE; VkDeviceMemory memory_=VK_NULL_HANDLE;

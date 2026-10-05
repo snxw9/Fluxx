@@ -44,17 +44,26 @@ class TextMetricsRepository private constructor(context: Context) {
     private var provider: NativeTextMetricsProvider? = null
     private val fontLibrary=com.fluxx.android.fonts.FontLibraryRepository.getInstance(app)
     private var fontRevision= -1L
+    private val characterCache=object: LinkedHashMap<Pair<String,com.fluxx.android.model.TextProperties>,com.fluxx.android.model.TextCharacterCatalogue>(8,.75f,true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Pair<String,com.fluxx.android.model.TextProperties>,com.fluxx.android.model.TextCharacterCatalogue>?)=size>8
+    }
     private val richCache=object: LinkedHashMap<Triple<String,TextSourceDocument,Boolean>,TextLayoutMetrics>(64,.75f,true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Triple<String,TextSourceDocument,Boolean>,TextLayoutMetrics>?)=size>64
     }
-    suspend fun measure(font: String,source: TextSourceDocument,ligatures: Boolean=true): TextLayoutMetrics = withContext(dispatcher) {
+    suspend fun measure(font: String,source: TextSourceDocument,ligatures: Boolean=true, text: com.fluxx.android.model.TextProperties?=null): TextLayoutMetrics = withContext(dispatcher) {
         fontLibrary.load()
-        if(fontRevision!=fontLibrary.revision) { richCache.clear();fontRevision=fontLibrary.revision }
+        if(fontRevision!=fontLibrary.revision) { richCache.clear();characterCache.clear();fontRevision=fontLibrary.revision }
         require(source.paragraphs.all { it.direction==com.fluxx.android.model.ParagraphDirection.LTR }) { "RTL layout requires T5; requested direction is preserved" }
         val native=provider ?: NativeTextMetricsProvider(app).also { provider=it }
         val partner=Triple(font,source,!ligatures)
         if(!richCache.containsKey(partner)) richCache[partner]=native.measure(font,source,!ligatures)
-        richCache.getOrPut(Triple(font,source,ligatures)) { native.measure(font,source,ligatures) }
+        val layout=richCache.getOrPut(Triple(font,source,ligatures)) { native.measure(font,source,ligatures) }
+        if(text!=null && com.fluxx.android.model.TextCharacterPreparation.needed(text)) {
+            val documents=StyledTextPreparation.alternatives(text.source)
+            val key=font to text
+            val catalogue=characterCache[key] ?: TextCharacterCataloguePreparation.prepare(app,font,text,documents)?.catalogue?.also { characterCache[key]=it }
+            if(catalogue!=null) layout.withCharacterCatalogue(catalogue) else layout
+        } else layout
     }
     suspend fun measure(font: String, source: String,ligatures: Boolean=true): TextLayoutMetrics = withContext(dispatcher) {
         check(Looper.myLooper() != Looper.getMainLooper())

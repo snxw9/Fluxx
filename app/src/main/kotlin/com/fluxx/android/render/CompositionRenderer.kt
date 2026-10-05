@@ -52,11 +52,16 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private val selectorEase by lazy { SelectorEaseTable() }
     private var preparedText = emptyArray<PreparedText>()
     private var preparedHandles = LongArray(0)
+    private val characterHandles=mutableListOf<Long>()
     private var nativePreparedTextProject: ProjectDocument? = null
     private var onlyText = false
     private val logicalBounds = FloatArray(4)
     private fun prepareTextProject(project: ProjectDocument) {
         nativePreparedTextProject = null
+        RenderBridge.clearTextCharacterBindings(session)
+        for(handle in characterHandles) RenderBridge.releaseText(session,handle)
+        characterHandles.clear()
+        var characterBytes=0L
         val layers = project.composition.layers
         val wanted=layers.filter { it.type==LayerType.TEXT }.flatMap { layer ->
             StyledTextPreparation.alternatives(layer.text.source).flatMap { source -> listOf(Triple(layer.text.fontId,source,true),Triple(layer.text.fontId,source,false)) }
@@ -70,9 +75,23 @@ class CompositionRenderer(private val context: Context, private val repository: 
             val sources = StyledTextPreparation.alternatives(layer.text.source)
             val linePool=LinePermutationPool()
             val layouts=sources.flatMap { source -> listOf(textLayout(layer.text.fontId,source,true),textLayout(layer.text.fontId,source,false)) }.toTypedArray()
-            PreparedText(layer,sources,layouts,Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(layer.text,selectorEase,sources[it/2],linePool)) })
+            val catalogue=TextCharacterCataloguePreparation.prepare(context,layer.text.fontId,layer.text,sources)
+            val handles=catalogue?.packets?.map { packet->
+                characterBytes+=packet.size
+                require(characterBytes+textLayouts.values.sumOf { it.packetBytes.toLong() }<=64L*1024*1024) {
+                    "Prepared text/character packets exceed 64 MiB; reduce fonts or source/character alternatives"
+                }
+                RenderBridge.upsertPreparedText(session,packet).also { characterHandles.add(it) }
+            }?.toLongArray()
+            val animations=Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(layer.text,selectorEase,sources[it/2],linePool,catalogue?.catalogue)) }
+            if(handles!=null) for(i in animations.indices) animations[i].characters?.let { characters->
+                RenderBridge.bindTextCharacters(session,layouts[i].handle,handles,characters.catalogue.codepoints,characters.fontIndices,
+                    sources[i/2].text,animations[i].modifiers,characters.codes)
+            }
+            PreparedText(layer,sources,layouts,animations)
         }.toTypedArray()
-        preparedHandles = preparedText.flatMap { it.layouts.map { layout -> layout.handle } }.toLongArray()
+        require(characterBytes+textLayouts.values.sumOf { it.packetBytes.toLong() }<=64L*1024*1024) { "Prepared text/character packets exceed 64 MiB; reduce fonts or alternatives" }
+        preparedHandles = (preparedText.flatMap { it.layouts.map { layout -> layout.handle } }+characterHandles).toLongArray()
         // Release obsolete layouts; active source-key layouts remain pinned until the next project preparation.
         val iterator = textLayouts.entries.iterator()
         while (iterator.hasNext()) { val entry = iterator.next()

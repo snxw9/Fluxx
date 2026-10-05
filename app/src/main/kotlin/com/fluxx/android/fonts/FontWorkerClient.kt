@@ -22,14 +22,14 @@ class FontWorkerClient(context: Context) {
         } finally { output.delete() }
     }
     data class FontInput(val id: String,val file: File,val reference: TextFontRef)
-    suspend fun prepare(input: ByteArray,fonts: List<FontInput>,ligatures: Boolean): ByteArray=withContext(Dispatchers.IO) {
+    suspend fun prepare(input: ByteArray,fonts: List<FontInput>,ligatures: Boolean,nominal: Boolean=false): ByteArray=withContext(Dispatchers.IO) {
         require(input.size<=1024*1024 && fonts.size<=64)
         require(fonts.sumOf { it.file.length() }<=32L*1024*1024) { "Imported font preparation exceeds 32 MiB; reduce distinct font faces" }
         val source=File.createTempFile("font-layout-input-",".bin",context.cacheDir)
         val output=File.createTempFile("font-layout-output-",".bin",context.cacheDir)
         try {
             source.writeBytes(input)
-            withTimeout(60_000) { request(source,output,FontWorkerService.PREPARE,fonts,ligatures) }
+            withTimeout(60_000) { request(source,output,FontWorkerService.PREPARE,fonts,ligatures,nominal) }
             require(output.length() in 1..32L*1024*1024) { "Prepared text packet exceeds 32 MiB" }
             output.readBytes()
         } finally { source.delete();output.delete() }
@@ -41,7 +41,7 @@ class FontWorkerClient(context: Context) {
         finally { output.delete() }
     }
     private suspend fun request(input: File,output: File,operation: Int=FontWorkerService.INSPECT,
-        fonts: List<FontInput> = emptyList(),ligatures: Boolean=true)=withContext(Dispatchers.Main.immediate) {
+        fonts: List<FontInput> = emptyList(),ligatures: Boolean=true,nominal: Boolean=false)=withContext(Dispatchers.Main.immediate) {
         suspendCancellableCoroutine<Unit> { pending ->
             requests.incrementAndGet()
             var bound=false
@@ -67,6 +67,7 @@ class FontWorkerClient(context: Context) {
                                     data=Bundle().apply {
                                         putParcelable(FontWorkerService.INPUT,source);putParcelable(FontWorkerService.OUTPUT,destination)
                                         putBoolean("ligatures",ligatures)
+                                        putBoolean("nominal",nominal)
                                         val rows=ArrayList<Bundle>()
                                         for(font in fonts) {
                                             val descriptor=ParcelFileDescriptor.open(font.file,ParcelFileDescriptor.MODE_READ_ONLY).also { descriptors.add(it) }

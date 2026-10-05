@@ -5,6 +5,22 @@ import java.io.DataOutputStream
 
 /** Preparation-only wire value; Java's simple uppercase mapping never changes source membership. */
 object StyledTextPreparation {
+    /** Catalogue resources are not user Source Text; allow 4096 scalar entries, including astral ones. */
+    fun nominal(codepoints: IntArray,font: String): ByteArray {
+        require(codepoints.size in 1..TextCharacterPreparation.MAX_CODEPOINTS)
+        val source=buildString { for(cp in codepoints) appendCodePoint(cp) }.toByteArray(Charsets.UTF_8)
+        require(source.size<=16384)
+        val output=ByteArrayOutputStream()
+        DataOutputStream(output).use { out->
+            out.writeInt(1);out.writeInt(source.size);out.write(source)
+            out.writeInt(codepoints.size);for(cp in codepoints) out.writeInt(cp)
+            out.writeInt(1);out.writeInt(0);out.writeInt(source.size)
+            val id=font.toByteArray(Charsets.UTF_8);out.writeInt(id.size);out.write(id)
+            out.writeFloat(1f);out.writeFloat(1f);out.writeFloat(1f)
+            out.writeInt(0);out.writeInt(0);out.writeInt(0)
+        }
+        return output.toByteArray()
+    }
     fun encode(document: TextSourceDocument,layerFont: String,resolveFont: ((TextFontRef)->String)?=null): ByteArray {
         val source=document.text
         val offsets=IntArray(source.length+1)

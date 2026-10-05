@@ -30,9 +30,9 @@ class FontSession(assets: AssetManager) : AutoCloseable {
         TextNative.styledMetrics(it,fontId,input,ligatures)
     }
     @Synchronized
-    fun preparedPacket(fontId: String,input: ByteArray,ligatures: Boolean): ByteArray = withHandle {
+    fun preparedPacket(fontId: String,input: ByteArray,ligatures: Boolean,nominal: Boolean=false): ByteArray = withHandle {
         require(input.size<=1024*1024)
-        TextNative.preparedPacket(it,fontId,input,ligatures)
+        TextNative.preparedPacket(it,fontId,input,ligatures,nominal)
     }
 
     @Synchronized
@@ -49,7 +49,7 @@ internal object TextNative {
     external fun shape(handle: Long, font: String, utf8: ByteArray): String
     external fun metrics(handle: Long, font: String, utf8: ByteArray,ligatures: Boolean): DoubleArray
     external fun styledMetrics(handle: Long,font: String,input: ByteArray,ligatures: Boolean): DoubleArray
-    external fun preparedPacket(handle: Long,font: String,input: ByteArray,ligatures: Boolean): ByteArray
+    external fun preparedPacket(handle: Long,font: String,input: ByteArray,ligatures: Boolean,nominal: Boolean): ByteArray
     external fun preparedMetrics(input: ByteArray): DoubleArray
     external fun preparedPreview(input: ByteArray,width: Int,height: Int,colour: Int): IntArray
 }

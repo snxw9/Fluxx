@@ -57,7 +57,7 @@ std::vector<uint8_t> asset(AAssetManager* manager, const char* name) {
 
 extern "C" JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_IsolatedFontNative_prepare(JNIEnv* env,jobject,
     jobject assets,jobjectArray ids,jobjectArray bytes,jintArray faceIndices,jintArray instanceIndices,
-    jobjectArray axisTags,jobjectArray axisValues,jbyteArray input,jboolean ligatures) {
+    jobjectArray axisTags,jobjectArray axisValues,jbyteArray input,jboolean ligatures,jboolean nominal) {
     try {
         const auto uid=getuid()%100000;
         if(uid<90000 || uid>99999) throw std::invalid_argument("Imported font preparation requires an isolated process");
@@ -108,7 +108,9 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_IsolatedFo
         env->GetByteArrayRegion(input,0,static_cast<jsize>(wire.size()),reinterpret_cast<jbyte*>(wire.data()));
         if(env->ExceptionCheck()) return nullptr;
         const auto styled=fluxx::text::decodeStyledInput(wire.data(),wire.size());
-        const auto layout=manager.shapeStyled("fluxx.sans",styled.text,styled.runs,styled.uppercase,ligatures);
+        if(nominal && styled.runs.size()!=1) throw std::invalid_argument("Nominal catalogue requires one font run");
+        const auto layout=nominal?manager.nominal(styled.runs[0].fontId,styled.text):
+            manager.shapeStyled("fluxx.sans",styled.text,styled.runs,styled.uppercase,ligatures);
         const auto packet=fluxx::text::encodePreparedText(*layout,manager);
         const auto result=env->NewByteArray(static_cast<jsize>(packet.size()));
         if(result) env->SetByteArrayRegion(result,0,static_cast<jsize>(packet.size()),reinterpret_cast<const jbyte*>(packet.data()));
@@ -197,14 +199,16 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_fluxx_android_engine_TextNative_sh
         return env->NewStringUTF(json.c_str());
     } catch (const std::exception& error) { fail(env, error); return nullptr; }
 }
-extern "C" JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_TextNative_preparedPacket(JNIEnv* env,jobject,jlong id,jstring font,jbyteArray bytes,jboolean ligatures) {
+extern "C" JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_TextNative_preparedPacket(JNIEnv* env,jobject,jlong id,jstring font,jbyteArray bytes,jboolean ligatures,jboolean nominal) {
     try {
         if(!bytes || env->GetArrayLength(bytes)>1024*1024) throw std::invalid_argument("Invalid styled text bytes");
         std::vector<uint8_t> buffer(static_cast<size_t>(env->GetArrayLength(bytes)));
         env->GetByteArrayRegion(bytes,0,static_cast<jsize>(buffer.size()),reinterpret_cast<jbyte*>(buffer.data()));
         if(env->ExceptionCheck()) return nullptr;
         const auto input=fluxx::text::decodeStyledInput(buffer.data(),buffer.size());const auto manager=get(id);
-        const auto layout=manager->shapeStyled(string(env,font),input.text,input.runs,input.uppercase,ligatures);
+        if(nominal && input.runs.size()!=1) throw std::invalid_argument("Nominal catalogue requires one font run");
+        const auto layout=nominal?manager->nominal(input.runs[0].fontId,input.text):
+            manager->shapeStyled(string(env,font),input.text,input.runs,input.uppercase,ligatures);
         const auto packet=fluxx::text::encodePreparedText(*layout,*manager);
         auto result=env->NewByteArray(static_cast<jsize>(packet.size()));
         if(result) env->SetByteArrayRegion(result,0,static_cast<jsize>(packet.size()),reinterpret_cast<const jbyte*>(packet.data()));return result;

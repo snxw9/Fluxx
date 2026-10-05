@@ -133,8 +133,8 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
         if (!compact && page == 3) {
             val document=layer.text.source.evaluateDocument(local).replace(draft.text)
             val context=LocalContext.current;val ligatures=layer.text.effectiveLigatures(local)
-            val metrics by produceState<TextLayoutMetrics?>(null,document,layer.text.fontId,ligatures,libraryEntries) {
-                value=try { com.fluxx.android.render.TextMetricsRepository.get(context).measure(layer.text.fontId,document,ligatures) } catch(_:Exception) { null }
+            val metrics by produceState<TextLayoutMetrics?>(null,document,layer.text.fontId,ligatures,libraryEntries,layer.text) {
+                value=try { com.fluxx.android.render.TextMetricsRepository.get(context).measure(layer.text.fontId,document,ligatures,layer.text) } catch(_:Exception) { null }
             }
             CharacterControls(document,draft.selection.min,draft.selection.max,layer.text.fontId,onCharacter,
                 metrics?.strokeClampLabel(layer.text,local,draft.selection.min,draft.selection.max))

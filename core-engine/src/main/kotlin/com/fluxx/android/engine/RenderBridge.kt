@@ -6,6 +6,10 @@ object RenderBridge {
     external fun upsertStyledText(session: Long,font: String,input: ByteArray,ligatures: Boolean): Long
     /** Preparation only: validated geometry/SDF pixels, never imported font bytes. */
     external fun upsertPreparedText(session: Long,input: ByteArray): Long
+    /** Preparation only; pins borrowed glyph-code/modifier storage without changing drawing arguments. */
+    external fun clearTextCharacterBindings(session: Long)
+    external fun bindTextCharacters(session: Long,handle: Long,catalogues: LongArray,codepoints: IntArray,fonts: IntArray,
+        source: String,modifiers: java.nio.ByteBuffer,codes: java.nio.ByteBuffer)
     external fun releaseText(session: Long, handle: Long)
     external fun textMetrics(session: Long, handle: Long): DoubleArray
     external fun prepareText(session: Long, handles: LongArray, proofOnly: Boolean = false): Boolean

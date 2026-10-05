@@ -12,7 +12,8 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
     private val measure: suspend (String, String) -> TextLayoutMetrics,
     private val changed: () -> Unit = {}, private val typingChanged: (Boolean) -> Unit = {},
     private val measureWithLigatures: (suspend (String,String,Boolean) -> TextLayoutMetrics)? = null,
-    private val measureDocument: (suspend (String,TextSourceDocument,Boolean)->TextLayoutMetrics)?=null) {
+    private val measureDocument: (suspend (String,TextSourceDocument,Boolean)->TextLayoutMetrics)?=null,
+    private val measureComplete: (suspend (String,TextSourceDocument,Boolean,TextProperties)->TextLayoutMetrics)?=null) {
     private class Session(val state: EditorState, val layer: CompositionLayer, val time: Long, val token: Long,
         val typing: Boolean) {
         var revision = 0L; var job: Job? = null; var finishing = false
@@ -57,8 +58,8 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
                 val local = s.time - s.layer.resolvedKeyframeAnchorUs
                 val old = s.layer.text
                 val oldSource = old.source.evaluate(local); val newSource = text.source.evaluate(local)
-                val oldMetrics = measureDocument?.invoke(old.fontId,old.source.evaluateDocument(local),old.effectiveLigatures(local)) ?: measureWithLigatures?.invoke(old.fontId,oldSource,old.effectiveLigatures(local)) ?: measure(old.fontId, oldSource)
-                val newMetrics = measureDocument?.invoke(text.fontId,text.source.evaluateDocument(local),text.effectiveLigatures(local)) ?: measureWithLigatures?.invoke(text.fontId,newSource,text.effectiveLigatures(local)) ?: measure(text.fontId, newSource)
+                val oldMetrics = measureComplete?.invoke(old.fontId,old.source.evaluateDocument(local),old.effectiveLigatures(local),old) ?: measureDocument?.invoke(old.fontId,old.source.evaluateDocument(local),old.effectiveLigatures(local)) ?: measureWithLigatures?.invoke(old.fontId,oldSource,old.effectiveLigatures(local)) ?: measure(old.fontId, oldSource)
+                val newMetrics = measureComplete?.invoke(text.fontId,text.source.evaluateDocument(local),text.effectiveLigatures(local),text) ?: measureDocument?.invoke(text.fontId,text.source.evaluateDocument(local),text.effectiveLigatures(local)) ?: measureWithLigatures?.invoke(text.fontId,newSource,text.effectiveLigatures(local)) ?: measure(text.fontId, newSource)
                 ensureActive()
                 if (session !== s || revision != s.revision || editor.activeGestureId != s.token || editor.state.project !== s.state.project) return@launch
                 val position = if (!old.layoutAnimated && !text.layoutAnimated && !s.layer.animTransform.position.isAnimated)

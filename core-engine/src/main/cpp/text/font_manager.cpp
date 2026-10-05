@@ -489,6 +489,42 @@ uint32_t FontManager::glyphForCodepoint(const std::string& id, uint32_t codepoin
     auto guard = impl_->lock();
     return FT_Get_Char_Index(impl_->resolve(id).ft, codepoint);
 }
+std::shared_ptr<const Layout> FontManager::nominal(const std::string& id,const std::string& text) {
+    validateUtf8(text);
+    auto guard=impl_->lock();auto& base=impl_->resolve(id);
+    auto out=std::make_shared<Layout>();out->fontId=base.input.id;out->upem=1000;out->styled=true;
+    out->styledAscent=base.ft->ascender*1000.0/base.ft->units_per_EM;
+    out->styledDescent=base.ft->descender*1000.0/base.ft->units_per_EM;
+    out->styledLineGap=(base.ft->height-base.ft->ascender+base.ft->descender)*1000.0/base.ft->units_per_EM;
+    out->ascent=static_cast<int32_t>(out->styledAscent);out->descent=static_cast<int32_t>(out->styledDescent);
+    out->lineGap=static_cast<int32_t>(out->styledLineGap);out->lineAdvances.resize(1);out->styledLineAdvances.resize(1);out->lineClusterCounts.resize(1);
+    uint32_t nonSpace=0;
+    for(size_t at=0;at<text.size();) {
+        if(out->glyphs.size()>=4096) throw std::invalid_argument("Character catalogue exceeds 4096 codepoints; narrow the animated character range");
+        const auto start=static_cast<uint32_t>(at);uint32_t cp=static_cast<uint8_t>(text[at++]);unsigned extra=0;
+        if(cp>=0xf0) { cp&=7;extra=3; } else if(cp>=0xe0) { cp&=15;extra=2; } else if(cp>=0xc0) { cp&=31;extra=1; }
+        while(extra--) cp=(cp<<6)|(static_cast<uint8_t>(text[at++])&63);
+        auto* face=&base;auto gid=FT_Get_Char_Index(face->ft,cp);
+        if(!gid) for(const char* fallback:{"fluxx.sans","fluxx.serif","fluxx.mono"}) {
+            auto& candidate=impl_->resolve(fallback);const auto found=FT_Get_Char_Index(candidate.ft,cp);
+            if(found) { face=&candidate;gid=found;break; }
+        }
+        hb_glyph_extents_t ink{};hb_font_get_glyph_extents(face->font,gid,&ink);
+        const auto advance=hb_font_get_glyph_h_advance(face->font,gid);const double factor=1000.0/face->ft->units_per_EM;
+        auto found=std::find(out->fontIds.begin(),out->fontIds.end(),face->input.id);
+        if(found==out->fontIds.end()) { out->fontIds.push_back(face->input.id);found=out->fontIds.end()-1; }
+        const auto index=static_cast<uint32_t>(out->glyphs.size());const bool space=cp==' ' || cp=='\t' || cp==0xa0;
+        const auto member=space?UINT32_MAX:nonSpace++;
+        out->characters.push_back({start,static_cast<uint32_t>(at),0,space?UINT32_MAX:0,member,space});
+        out->clusters.push_back({start,static_cast<uint32_t>(at),0,space?UINT32_MAX:0,index,member,space,index+1,space?UINT32_MAX:member+1});
+        out->glyphClusters.push_back(index);out->lineClusterCounts[0]++;
+        out->glyphs.push_back({gid,start,0,advance,0,0,0,ink.x_bearing,ink.y_bearing,ink.width,ink.height});
+        Layout::Geometry g;g.fontIndex=static_cast<uint32_t>(found-out->fontIds.begin());g.advance=advance*factor;
+        g.xBearing=ink.x_bearing*factor;g.yBearing=ink.y_bearing*factor;g.inkWidth=ink.width*factor;g.inkHeight=ink.height*factor;
+        out->geometry.push_back(g);out->styledLineAdvances[0]+=g.advance;
+    }
+    out->lineAdvances[0]=static_cast<int64_t>(out->styledLineAdvances[0]);return out;
+}
 std::vector<uint32_t> FontManager::latinGlyphs(const std::string& id) {
     auto guard = impl_->lock();
     auto& face = impl_->resolve(id);

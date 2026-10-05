@@ -62,7 +62,7 @@ class FontWorkerService : Service() {
                         IsolatedFontParser.prepare(assets,rows.map { requireNotNull(it.getString("id")) }.toTypedArray(),fonts,
                             rows.map { it.getInt("face") }.toIntArray(),rows.map { it.getInt("instance",-1) }.toIntArray(),
                             rows.map { it.getString("tags").orEmpty() }.toTypedArray(),rows.map { it.getFloatArray("values") ?: FloatArray(0) }.toTypedArray(),
-                            bytes,message.data.getBoolean("ligatures"))
+                            bytes,message.data.getBoolean("ligatures"),message.data.getBoolean("nominal"))
                     }
                     ParcelFileDescriptor.AutoCloseOutputStream(output).use { it.write(result) }
                     reply.data=Bundle().apply { putBoolean(OK,true) }

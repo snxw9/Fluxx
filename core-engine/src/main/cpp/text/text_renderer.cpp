@@ -239,6 +239,12 @@ void TextRenderer::repackRetained() {
 void TextRenderer::prepareMesh(const std::shared_ptr<const Layout>& layout) {
     auto& prepared=preparedLayouts_[layout.get()];
     prepared.owner=layout;
+    size_t maximumGlyphs=layout->glyphs.size();
+    for(const auto& entry:prepared.characters) maximumGlyphs=std::max(maximumGlyphs,entry.second.maximumGlyphs);
+    vertices_.reserve(std::max(vertices_.capacity(),maximumGlyphs*16));
+    indices_.reserve(std::max(indices_.capacity(),maximumGlyphs*24));
+    buffer(vertex_,vertices_.capacity()*sizeof(TextVertex),VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    buffer(index_,indices_.capacity()*sizeof(uint32_t),VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
     if (prepared.generation==stats_.generation) return;
     prepared.glyphs.resize(layout->glyphs.size());
     for(size_t i=0;i<layout->glyphs.size();++i) {
@@ -257,6 +263,38 @@ void TextRenderer::prepareMesh(const std::shared_ptr<const Layout>& layout) {
     buffer(vertex_,vertices_.capacity()*sizeof(TextVertex),VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     buffer(index_,indices_.capacity()*sizeof(uint32_t),VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 }
+void TextRenderer::clearCharacterBindings() {
+    for(auto& entry:preparedLayouts_) entry.second.characters.clear();
+}
+void TextRenderer::bindCharacters(const std::shared_ptr<const Layout>& layout,
+    const std::vector<std::shared_ptr<const Layout>>& catalogues,const std::vector<uint32_t>& codepoints,
+    const std::vector<uint32_t>& fonts,const std::string& source,const GlyphModifier* modifiers,const int32_t* codes,std::shared_ptr<void> pin) {
+    if(!modifiers || !codes || fonts.size()!=layout->characters.size() || catalogues.empty() || codepoints.empty() || codepoints.size()>4096 ||
+       catalogues.size()*codepoints.size()>16384 || !std::is_sorted(codepoints.begin(),codepoints.end()) ||
+       std::adjacent_find(codepoints.begin(),codepoints.end())!=codepoints.end()) throw std::invalid_argument("Invalid character catalogue binding");
+    for(const auto& catalogue:catalogues) if(!catalogue->styled || catalogue->glyphs.size()!=codepoints.size() || catalogue->upem!=1000)
+        throw std::invalid_argument("Character catalogue must contain one nominal glyph per codepoint");
+    CharacterBinding binding;binding.catalogues=catalogues;binding.codepoints=codepoints;binding.codes=codes;binding.pin=std::move(pin);
+    for(size_t i=0;i<layout->characters.size();++i) {
+        const auto& member=layout->characters[i];
+        if(fonts[i]>=catalogues.size() || member.byteEnd>source.size()) throw std::invalid_argument("Invalid source character binding");
+        CharacterBinding::Character c;c.font=fonts[i];size_t at=member.byteStart;
+        while(at<member.byteEnd) {
+            uint32_t cp=static_cast<uint8_t>(source[at++]);unsigned extra=0;
+            if(cp>=0xf0) { cp&=7;extra=3; } else if(cp>=0xe0) { cp&=15;extra=2; } else if(cp>=0xc0) { cp&=31;extra=1; }
+            if(extra>member.byteEnd-at) throw std::invalid_argument("Truncated source character binding");
+            while(extra--) cp=(cp<<6)|(static_cast<uint8_t>(source[at++])&63);
+            if(!std::binary_search(codepoints.begin(),codepoints.end(),cp)) throw std::invalid_argument("Original character was not prepared");
+            if(at==member.byteEnd && c.original==0 && c.marks.empty()) c.original=cp;
+            else if(c.original==0) c.original=cp;
+            else c.marks.push_back(cp);
+            binding.maximumGlyphs++;
+        }
+        binding.characters.push_back(std::move(c));
+    }
+    auto& prepared=preparedLayouts_[layout.get()];prepared.owner=layout;
+    prepared.characters.insert_or_assign(modifiers,std::move(binding));
+}
 TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, const GlyphModifier* modifiers,
                             float tracking, float leading, float baselineShift,uint32_t fill,uint32_t stroke,float strokeWidth,float softness) {
     const auto started=std::chrono::steady_clock::now();
@@ -264,7 +302,10 @@ TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, con
         !std::isfinite(leading) || !std::isfinite(baselineShift)) throw std::invalid_argument("Invalid text mesh inputs");
     const auto& prepared=preparedLayouts_.at(&layout);
     if(prepared.generation!=stats_.generation) throw std::logic_error("Stale text preparation");
-    if(vertices_.size()+layout.glyphs.size()*4>vertices_.capacity() || indices_.size()+layout.glyphs.size()*6>indices_.capacity())
+    const auto bindingFound=prepared.characters.find(modifiers);
+    const auto* binding=bindingFound==prepared.characters.end()?nullptr:&bindingFound->second;
+    const auto maximumGlyphs=binding?std::max(layout.glyphs.size(),binding->maximumGlyphs):layout.glyphs.size();
+    if(vertices_.size()+maximumGlyphs*4>vertices_.capacity() || indices_.size()+maximumGlyphs*6>indices_.capacity())
         throw TextCapacityError("Text batch exceeds prepared mesh capacity");
     TextMesh result{static_cast<uint32_t>(indices_.size()),0};
     const double factor=static_cast<double>(size)/layout.upem;
@@ -279,10 +320,50 @@ TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, con
         const auto& glyph=layout.glyphs[ordinal];
         const auto* geometry=layout.styled?&layout.geometry[ordinal]:nullptr;
         if(glyph.line!=line) { line=glyph.line; pen=0; previousCluster=UINT32_MAX; clusterOrdinal=0; }
-        if(previousCluster!=UINT32_MAX && previousCluster!=layout.glyphClusters[ordinal]) ++clusterOrdinal;
+        const bool firstInCluster=previousCluster!=layout.glyphClusters[ordinal];
+        if(previousCluster!=UINT32_MAX && firstInCluster) ++clusterOrdinal;
         previousCluster=layout.glyphClusters[ordinal];
         const auto& p=prepared.glyphs[ordinal];
-        if(p.sdf) {
+        const auto cluster=layout.glyphClusters[ordinal];
+        if(modifiers && modifiers[cluster].reserved[0]!=0) {
+            if(!binding) throw std::logic_error("Character animation was not prepared");
+            if(firstInCluster) {
+                const auto& member=layout.clusters[cluster];const auto& modifier=modifiers[cluster];double characterPen=0;
+                const double advance=layout.lineAdvance(line)*factor+std::max(0,static_cast<int>(layout.lineClusterCounts[line])-1)*spacing;
+                const double align=(maximum-advance)*(alignment==0?0:alignment==1?.5:1);
+                const double scaleX=geometry?geometry->scaleX:1,scaleY=geometry?geometry->scaleY:1;
+                for(uint32_t character=member.character;character<member.characterEnd;++character) {
+                    const auto& original=binding->characters[character];const auto& catalogue=*binding->catalogues[original.font];
+                    const auto& catalogueMesh=preparedLayouts_.at(&catalogue);
+                    if(catalogueMesh.generation!=stats_.generation) throw std::logic_error("Stale character catalogue");
+                    for(size_t part=0;part<=original.marks.size();++part) {
+                        const auto cp=part?original.marks[part-1]:static_cast<uint32_t>(binding->codes[character]);
+                        const auto entry=std::lower_bound(binding->codepoints.begin(),binding->codepoints.end(),cp);
+                        if(entry==binding->codepoints.end() || *entry!=cp) throw std::logic_error("Character codepoint was not prepared; narrow the animated range");
+                        const auto index=static_cast<size_t>(entry-binding->codepoints.begin());const auto& sprite=catalogueMesh.glyphs[index];
+                        if(sprite.sdf) {
+                            const auto& sdf=*sprite.sdf;const double px=size*scaleX/FontManager::Ppem,py=size*scaleY/FontManager::Ppem;
+                            const float x=static_cast<float>(pen+clusterOrdinal*spacing+align+characterPen+sdf.left*px);
+                            const double baseline=line*lineHeight-baselineShift-(geometry?geometry->yOffset*factor:glyph.yOffset*factor);
+                            const float y=static_cast<float>(baseline-sdf.top*py);const float w=static_cast<float>(sdf.width*px),h=static_cast<float>(sdf.height*py);
+                            const float du=sdf.width/2048.0f,dv=sdf.height/2048.0f;const auto base=static_cast<uint32_t>(vertices_.size());
+                            TextVertex quad[]={{x,y,sprite.u,sprite.v},{x+w,y,sprite.u+du,sprite.v},{x,y+h,sprite.u,sprite.v+dv},{x+w,y+h,sprite.u+du,sprite.v+dv}};
+                            for(auto& vertex:quad) {
+                                if(geometry) { vertex.x-=static_cast<float>(geometry->shear*(vertex.y-baseline));vertex.sdf[3]=static_cast<float>(geometry->bold); }
+                                const float xx=vertex.x+modifier.offsetX,yy=vertex.y+modifier.offsetY;
+                                vertex.x=modifier.a*xx+modifier.c*yy+modifier.tx;vertex.y=modifier.b*xx+modifier.d*yy+modifier.ty;
+                                std::copy(modifier.fill,modifier.fill+4,vertex.colour);std::copy(modifier.stroke,modifier.stroke+4,vertex.stroke);
+                                vertex.page=static_cast<float>(sprite.page);vertex.sdf[0]=modifier.halfStroke;vertex.sdf[1]=modifier.softness;vertex.sdf[2]=modifier.opacity;
+                                if(!std::isfinite(vertex.x) || !std::isfinite(vertex.y)) throw std::overflow_error("Character animation exceeds finite mesh geometry");
+                                vertices_.push_back(vertex);
+                            }
+                            for(uint32_t i:{0u,1u,2u,1u,3u,2u}) indices_.push_back(base+i);
+                        }
+                        characterPen+=catalogue.geometry[index].advance*scaleX*size/catalogue.upem;
+                    }
+                }
+            }
+        } else if(p.sdf) {
             const auto& sdf=*p.sdf;
             const double advance=layout.lineAdvance(line)*factor+std::max(0,static_cast<int>(layout.lineClusterCounts[line])-1)*spacing;
             const double align=(maximum-advance)*(alignment==0?0:alignment==1?0.5:1);

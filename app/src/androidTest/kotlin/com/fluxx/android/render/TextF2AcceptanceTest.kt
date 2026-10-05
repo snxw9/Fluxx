@@ -49,7 +49,7 @@ class TextF2AcceptanceTest {
             check(!it.exists()) { "Archive the earlier reports and use a new textRunLabel" };check(it.mkdirs())
         }
     }
-    private fun fixture(maximum: Boolean,rich: Boolean=false,font: TextFontRef?=null,wrapped: Boolean=false,advanced: Boolean=false): ProjectDocument {
+    private fun fixture(maximum: Boolean,rich: Boolean=false,font: TextFontRef?=null,wrapped: Boolean=false,advanced: Boolean=false,characters: Boolean=false): ProjectDocument {
         val count=if(maximum) 16 else 8;val selectors=if(maximum) 8 else 4
         val source=if(maximum) "A".repeat(4096) else "AV office gy 0123456789 \n".repeat(30)
         val animators=List(count) { a -> TextAnimator(a+1L,anchorGrouping=scalar((a%4).toFloat()),
@@ -61,7 +61,7 @@ class TextF2AcceptanceTest {
                 correlation=track(0f,100f),temporalPhase=track(0f,180f),spatialPhase=track(0f,90f),
                 seedKeyframes=if(advanced) FrozenList.of(listOf(TextSeedKeyframe(0,0x12345678L+a*8+s),
                     TextSeedKeyframe(6_000_000,0x76543210L+a*8+s))) else FrozenList.empty()) }),
-            properties=FrozenList.of(AnimatorProperty.entries.take(if(advanced) 23 else 13).map { p ->
+            properties=FrozenList.of(AnimatorProperty.entries.take(if(characters) 25 else if(advanced) 23 else 13).map { p ->
                 when(p.kind) {
                     2 -> TextPropertyOverride(p,vector=if(p==AnimatorProperty.SCALE) AnimatableProperty2D(staticX=101f,staticY=99f)
                         else AnimatableProperty2D(staticX=1f,staticY=-1f))
@@ -73,6 +73,8 @@ class TextF2AcceptanceTest {
                         AnimatorProperty.TRACKING -> track(-5f,5f)
                         AnimatorProperty.STROKE_WIDTH -> track(0f,.1f)
                         AnimatorProperty.BLUR -> track(0f,.1f)
+                        AnimatorProperty.CHARACTER_OFFSET -> track(-1f,1f)
+                        AnimatorProperty.CHARACTER_VALUE -> track(65f,90f)
                         else -> track(-1f,1f)
                     })
                 }
@@ -110,6 +112,9 @@ class TextF2AcceptanceTest {
     @Test fun advancedModifierRepresentativeColdAndThermal()=performance(false,true,wrapped=true,advanced=true)
     @Test fun advancedModifierMaximumColdAndThermal()=performance(true,true,wrapped=true,advanced=true)
     @Test fun advancedModifierRandomAndReversePreEncodePixelsMatch()=parity(true,wrapped=true,advanced=true)
+    @Test fun characterRepresentativeColdAndThermal()=performance(false,true,wrapped=true,advanced=true,characters=true)
+    @Test fun characterMaximumColdAndThermal()=performance(true,true,wrapped=true,advanced=true,characters=true)
+    @Test fun characterRandomAndReversePreEncodePixelsMatch()=parity(true,wrapped=true,advanced=true,characters=true)
     @Test fun wrappedRepresentativeColdAndThermal()=performance(false,true,wrapped=true)
     @Test fun wrappedMaximumColdAndThermal()=performance(true,true,wrapped=true)
     @Test fun wrappedRandomAndReversePreEncodePixelsMatch()=parity(true,wrapped=true)
@@ -136,15 +141,15 @@ class TextF2AcceptanceTest {
         }
     }
 
-    @Suppress("DEPRECATION") private fun performance(maximum: Boolean,rich: Boolean=false,font: TextFontRef?=null,wrapped: Boolean=false,advanced: Boolean=false) {
-        val directory=directory((if(advanced) "t4-modifiers-" else if(wrapped) "t3-wrapped-" else if(font!=null) "t2-variable-" else if(rich) "t1-rich-" else "f2-")+(if(maximum) "maximum" else "representative"))
+    @Suppress("DEPRECATION") private fun performance(maximum: Boolean,rich: Boolean=false,font: TextFontRef?=null,wrapped: Boolean=false,advanced: Boolean=false,characters: Boolean=false) {
+        val directory=directory((if(characters) "t4-characters-" else if(advanced) "t4-modifiers-" else if(wrapped) "t3-wrapped-" else if(font!=null) "t2-variable-" else if(rich) "t1-rich-" else "f2-")+(if(maximum) "maximum" else "representative"))
         val host=instrumentation.startActivitySync(Intent(context,TextProofActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as TextProofActivity
         val worker=Executors.newSingleThreadExecutor()
         try {
             val surface=host.awaitSurface()
             worker.submit {
                 CompositionRenderer(context,MediaRepository(context),surface,1080,1920).use { renderer ->
-                    val project=fixture(maximum,rich,font,wrapped,advanced)
+                    val project=fixture(maximum,rich,font,wrapped,advanced,characters)
                     check(com.fluxx.android.fonts.FontWorkerClient.requestCount>=0L) // Initialize the counter outside the measured window.
                     repeat(120) { renderer.renderPreview(project,it*16_667L,PreviewResolution.FULL) }
                     val handle=renderer.preparedTextHandle(1)
@@ -217,14 +222,14 @@ class TextF2AcceptanceTest {
     }
     @Test fun randomAndReversePreEncodePixelsMatch()=parity(false)
     @Test fun richRandomAndReversePreEncodePixelsMatch()=parity(true)
-    private fun parity(rich: Boolean,font: TextFontRef?=null,wrapped: Boolean=false,advanced: Boolean=false) {
-        val directory=directory(if(advanced) "t4-modifiers-parity" else if(wrapped) "t3-wrapped-parity" else if(font!=null) "t2-variable-parity" else if(rich) "t1-rich-parity" else "f2-parity")
+    private fun parity(rich: Boolean,font: TextFontRef?=null,wrapped: Boolean=false,advanced: Boolean=false,characters: Boolean=false) {
+        val directory=directory(if(characters) "t4-characters-parity" else if(advanced) "t4-modifiers-parity" else if(wrapped) "t3-wrapped-parity" else if(font!=null) "t2-variable-parity" else if(rich) "t1-rich-parity" else "f2-parity")
         val host=instrumentation.startActivitySync(Intent(context,TextProofActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as TextProofActivity
         try {
             CompositionRenderer(context,MediaRepository(context),host.awaitSurface(),1080,1920).use { preview ->
                 CompositionRenderer(context,MediaRepository(context)).use { export ->
                     CompositionRenderer(context,MediaRepository(context)).use { thumbnail ->
-                        val base=fixture(false,rich,font,wrapped,advanced);val layer=base.composition.layers[0]
+                        val base=fixture(false,rich,font,wrapped,advanced,characters);val layer=base.composition.layers[0]
                         val source=layer.text.source.copy(isAnimated=true,keyframes=FrozenList.of(listOf(
                             StringKeyframe(0,layer.text.source.staticValue,layer.text.source.document),
                             StringKeyframe(7_000_000,"office A\u0301 B\n\nAV",if(rich) TextSourceDocument("office A\u0301 B\n\nAV").format(0,0) { it.copy(font=TextFontRef("fluxx.serif",TextFaceStyle.BOLD_ITALIC),fauxItalic=true,baselineDelta=5f) } else null))))

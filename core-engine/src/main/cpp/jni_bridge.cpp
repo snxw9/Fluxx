@@ -13,6 +13,25 @@
 #include "gpu_ledger.h"
 #include "text/prepared_text_packet.h"
 
+namespace {
+struct CharacterBufferPin {
+    JavaVM* vm=nullptr;jobject modifiers=nullptr,codes=nullptr;
+    CharacterBufferPin(JNIEnv* env,jobject m,jobject c) {
+        if(env->GetJavaVM(&vm)!=JNI_OK || !vm) throw std::runtime_error("Cannot pin character buffers");
+        modifiers=env->NewGlobalRef(m);codes=env->NewGlobalRef(c);
+    }
+    ~CharacterBufferPin() {
+        JNIEnv* env=nullptr;bool attached=false;
+        if(vm->GetEnv(reinterpret_cast<void**>(&env),JNI_VERSION_1_6)==JNI_EDETACHED) {
+            if(vm->AttachCurrentThread(&env,nullptr)!=JNI_OK) return;
+            attached=true;
+        }
+        if(env) { if(modifiers) env->DeleteGlobalRef(modifiers);if(codes) env->DeleteGlobalRef(codes); }
+        if(attached) vm->DetachCurrentThread();
+    }
+};
+}
+
 extern "C" {
 JNIEXPORT jint JNICALL Java_com_fluxx_android_engine_FluxxEngine_nativePing(JNIEnv*, jobject, jint value) { return value + 1; }
 JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_FluxxEngine_nativeInit(JNIEnv* env, jobject, jobject surface, jint w, jint h, jobject assets) {
@@ -142,6 +161,29 @@ JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_RenderBridge_upsertPrepare
         if(env->ExceptionCheck()) return 0;
         return reinterpret_cast<VulkanRenderer*>(session)->upsertPreparedText(buffer.data(),buffer.size());
     } catch(const std::exception& error) { textFailure(env,error);return 0; }
+}
+JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_clearTextCharacterBindings(JNIEnv*,jobject,jlong session) {
+    reinterpret_cast<VulkanRenderer*>(session)->clearTextCharacterBindings();
+}
+JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_bindTextCharacters(JNIEnv* env,jobject,jlong session,jlong handle,
+    jlongArray catalogues,jintArray codepoints,jintArray fonts,jstring source,jobject modifiers,jobject codes) {
+    try {
+        if(!catalogues || !codepoints || !fonts || !source || !modifiers || !codes) throw std::invalid_argument("Missing character binding inputs");
+        const auto count=env->GetArrayLength(catalogues),points=env->GetArrayLength(codepoints),characters=env->GetArrayLength(fonts);
+        if(count<1 || count>64 || points<1 || points>4096 || characters>4096 || count*points>16384 ||
+            env->GetDirectBufferCapacity(modifiers)<0 || env->GetDirectBufferCapacity(codes)<characters*4L) throw std::invalid_argument("Invalid character binding capacity");
+        auto* m=static_cast<const fluxx::text::GlyphModifier*>(env->GetDirectBufferAddress(modifiers));
+        auto* c=static_cast<const int32_t*>(env->GetDirectBufferAddress(codes));
+        if(!m || !c || reinterpret_cast<uintptr_t>(m)%alignof(fluxx::text::GlyphModifier) || reinterpret_cast<uintptr_t>(c)%alignof(int32_t))
+            throw std::invalid_argument("Character buffers must be direct and aligned");
+        std::vector<jlong> h(count);std::vector<jint> cp(points),f(characters);
+        env->GetLongArrayRegion(catalogues,0,count,h.data());env->GetIntArrayRegion(codepoints,0,points,cp.data());env->GetIntArrayRegion(fonts,0,characters,f.data());
+        if(env->ExceptionCheck()) return;
+        auto pin=std::make_shared<CharacterBufferPin>(env,modifiers,codes);if(env->ExceptionCheck()) return;
+        reinterpret_cast<VulkanRenderer*>(session)->bindTextCharacters(handle,std::vector<int64_t>(h.begin(),h.end()),
+            std::vector<uint32_t>(cp.begin(),cp.end()),std::vector<uint32_t>(f.begin(),f.end()),textUtf8(env,source),m,c,std::move(pin),
+            static_cast<size_t>(env->GetDirectBufferCapacity(modifiers)));
+    } catch(const std::exception& error) { textFailure(env,error); }
 }
 JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_reusePreparedText(JNIEnv* env,jobject,jlong session) {
     try { return reinterpret_cast<VulkanRenderer*>(session)->reusePreparedText(); }

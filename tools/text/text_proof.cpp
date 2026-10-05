@@ -13,6 +13,8 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_MULTIPLE_MASTERS_H
+#include <hb.h>
+#include <hb-ot.h>
 
 using namespace fluxx::text;
 std::vector<uint8_t> read(const std::filesystem::path& path) {
@@ -36,7 +38,28 @@ int main(int argc, char** argv) {
                 read(root/(std::string(files[family])+"-"+styles[style]+".ttf"))});
         FontManager manager(inputs);
         const std::string command(argv[2]);
-        if(command=="importproof" && (argc==4 || argc==5)) {
+        if(command=="rtlboundaryproof" && argc==4) {
+            const auto bytes=read(argv[3]);
+            auto* blob=hb_blob_create(reinterpret_cast<const char*>(bytes.data()),static_cast<unsigned>(bytes.size()),HB_MEMORY_MODE_READONLY,nullptr,nullptr);
+            auto* face=hb_face_create(blob,0);auto* font=hb_font_create(face);hb_ot_font_set_funcs(font);
+            auto shape=[&](const char* source) {
+                auto* buffer=hb_buffer_create();hb_buffer_set_direction(buffer,HB_DIRECTION_RTL);
+                hb_buffer_set_script(buffer,HB_SCRIPT_ARABIC);hb_buffer_set_language(buffer,hb_language_from_string("ar",-1));
+                hb_buffer_add_utf8(buffer,source,-1,0,-1);hb_shape(font,buffer,nullptr,0);
+                unsigned count=0;const auto* info=hb_buffer_get_glyph_infos(buffer,&count);
+                const auto* positions=hb_buffer_get_glyph_positions(buffer,nullptr);
+                std::vector<std::pair<uint32_t,int32_t>> result;
+                for(unsigned i=0;i<count;++i) result.push_back({info[i].codepoint,positions[i].x_advance});
+                hb_buffer_destroy(buffer);return result;
+            };
+            const auto joined=shape("\xd8\xa8\xd8\xa8\xd8\xa8"),isolated=shape("\xd8\xa8");
+            require(joined.size()==3 && isolated.size()==1 && isolated[0].first!=0,"Arabic boundary fixture requires a covering outline font");
+            require(joined[0]!=isolated[0] || joined[1]!=isolated[0] || joined[2]!=isolated[0],
+                "Arabic emergency line boundaries unexpectedly preserved joined forms");
+            std::cout<<"PASS: joined Arabic glyphs ";for(const auto& item:joined) std::cout<<item.first<<':'<<item.second<<' ';
+            std::cout<<"differ from isolated line glyph "<<isolated[0].first<<':'<<isolated[0].second<<"; fixed paragraph glyphs/advances cannot be reused at emergency boundaries\n";
+            hb_font_destroy(font);hb_face_destroy(face);hb_blob_destroy(blob);
+        } else if(command=="importproof" && (argc==4 || argc==5)) {
             const auto bytes=read(argv[3]);
             const auto faceIndex=argc==5?static_cast<unsigned>(std::stoul(argv[4])):0u;
             require(inspectFont(bytes.data(),bytes.size()).find("\"tag\":\"wght\"")!=std::string::npos,"Variable CFF fixture has no weight axis");
@@ -78,6 +101,14 @@ int main(int argc, char** argv) {
         } else if (command == "dump" && argc == 4) {
             dumpDiagnostics(manager, argv[3]); std::cout << "CPU dump complete: " << argv[3] << '\n';
         } else if (command == "selftest") {
+            {
+                const auto before=manager.stats().shapes;
+                const auto nominal=manager.nominal("fluxx.serif","office");
+                require(nominal->glyphs.size()==6,"Standalone cmap lookup formed a ligature");
+                require(manager.stats().shapes==before,"Standalone catalogue invoked shaping");
+                const auto packet=encodePreparedText(*nominal,manager);
+                require(layoutMetrics(*decodePreparedText(packet.data(),packet.size()))==layoutMetrics(*nominal),"Standalone catalogue transport changed metrics");
+            }
             {
                 const std::vector<BreakCluster> letters{{10,false,false},{5,true,true},{10,false,false},{5,true,true},{10,false,false}};
                 ParagraphFormat paragraph;paragraph.end=5;

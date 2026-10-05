@@ -1334,6 +1334,15 @@ bool VulkanRenderer::prepareText(const int64_t* handles, size_t count, bool proo
     // No command submission yet: pack/capacity validation finishes before any draw.
     return true;
 }
+void VulkanRenderer::bindTextCharacters(int64_t handle,const std::vector<int64_t>& handles,const std::vector<uint32_t>& codepoints,
+    const std::vector<uint32_t>& fonts,const std::string& source,const fluxx::text::GlyphModifier* modifiers,const int32_t* codes,std::shared_ptr<void> pin,size_t modifierBytes) {
+    if(!mText) throw std::logic_error("Character binding requires prepared text layouts");
+    if(modifierBytes<mTextLayouts.at(handle)->clusters.size()*sizeof(fluxx::text::GlyphModifier))
+        throw std::invalid_argument("Character modifier storage is too short");
+    std::vector<std::shared_ptr<const fluxx::text::Layout>> catalogues;
+    for(auto id:handles) catalogues.push_back(mTextLayouts.at(id));
+    mText->bindCharacters(mTextLayouts.at(handle),catalogues,codepoints,fonts,source,modifiers,codes,std::move(pin));
+}
 bool VulkanRenderer::setTextLayer(int64_t handle, const float* matrix, float size, int alignment, uint32_t argb, float opacity, float tracking, float leading, float baselineShift, uint32_t stroke, float strokeWidth, int paintOrder, float softness,const fluxx::text::GlyphModifier* modifiers,size_t modifierBytes) {
     if(!std::isfinite(strokeWidth) || strokeWidth<0 || !std::isfinite(softness) || softness<0 || paintOrder<0 || paintOrder>1) return false;
     if(!mInitialized || !mTextPrepared || mDrawOrder.size()>=4) return false;

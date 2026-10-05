@@ -89,6 +89,8 @@ public:
                                       bool kerning=true,unsigned features=0);
     std::shared_ptr<const Layout> shapeStyled(const std::string& fontId,const std::string& utf8,
         const std::vector<StyledRun>& runs,const std::vector<uint32_t>& uppercase,bool ligatures=true);
+    // Preparation-only standalone cmap/metrics lookup: deliberately no HarfBuzz shaping.
+    std::shared_ptr<const Layout> nominal(const std::string& fontId,const std::string& utf8);
     bool hasFeature(const std::string& fontId,uint32_t tag);
     std::shared_ptr<const SdfGlyph> sdf(const std::string& fontId, uint32_t glyphId, bool overlaps = true);
     std::vector<uint32_t> latinGlyphs(const std::string& fontId);

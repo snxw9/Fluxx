@@ -8,9 +8,9 @@ object IsolatedFontParser {
         return IsolatedFontNative.inspect(bytes)
     }
     fun prepare(assets: android.content.res.AssetManager,ids: Array<String>,fonts: Array<ByteArray>,faces: IntArray,
-        instances: IntArray,tags: Array<String>,values: Array<FloatArray>,input: ByteArray,ligatures: Boolean): ByteArray {
+        instances: IntArray,tags: Array<String>,values: Array<FloatArray>,input: ByteArray,ligatures: Boolean,nominal: Boolean=false): ByteArray {
         check(android.os.Process.isIsolated()) { "Imported fonts require the isolated font worker" }
-        return IsolatedFontNative.prepare(assets,ids,fonts,faces,instances,tags,values,input,ligatures)
+        return IsolatedFontNative.prepare(assets,ids,fonts,faces,instances,tags,values,input,ligatures,nominal)
     }
 }
 
@@ -18,5 +18,5 @@ internal object IsolatedFontNative {
     init { System.loadLibrary("fluxxengine") }
     external fun inspect(bytes: ByteArray): String
     external fun prepare(assets: android.content.res.AssetManager,ids: Array<String>,fonts: Array<ByteArray>,faces: IntArray,
-        instances: IntArray,tags: Array<String>,values: Array<FloatArray>,input: ByteArray,ligatures: Boolean): ByteArray
+        instances: IntArray,tags: Array<String>,values: Array<FloatArray>,input: ByteArray,ligatures: Boolean,nominal: Boolean): ByteArray
 }
