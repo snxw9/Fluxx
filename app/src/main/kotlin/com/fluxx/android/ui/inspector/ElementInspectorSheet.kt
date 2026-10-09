@@ -127,6 +127,8 @@ fun ElementInspectorSheet(
     onTextBoxWidth: (Float)->Unit = {},
     onTextSizeBegin: () -> Unit = {}, onTextSizePreview: (Float) -> Unit = {}, onTextSizeCommit: () -> Unit = {},
     onTextScalarPreview: (AnimPropertyType, Float) -> Unit = { _, _ -> },
+    onTextPayloadPreview: (TextProperties)->Unit = {},
+    textFrameRate: FrameRate=FrameRate(),
     onTextColourChange: (AnimPropertyType, Int) -> Unit = { _, _ -> },
     onTextColourPreview: (AnimPropertyType, Int) -> Unit = { _, _ -> },
     textSelection: TextSelectionRange?=null,onTextSelection: (TextSelectionRange?)->Unit = {},
@@ -152,8 +154,8 @@ fun ElementInspectorSheet(
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val compactHeight = maxHeight < 320.dp
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides if (compactHeight) 40.dp else 48.dp) {
-                    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
-                        val textSection = layer.type == LayerType.TEXT && section == InspectorSection.CONTEXTUAL_EDIT
+                    val textSection = layer.type == LayerType.TEXT && section == InspectorSection.CONTEXTUAL_EDIT
+                    Column(Modifier.fillMaxSize().then(if(textSection) Modifier else Modifier.padding(horizontal = 12.dp, vertical = 8.dp))) {
                         if (!textTyping && !textSection) {
                         Box(Modifier.fillMaxWidth().height(20.dp).pointerInput(Unit) {
                             detectVerticalDragGestures(
@@ -239,12 +241,12 @@ fun ElementInspectorSheet(
                             }
                         }
                         }
-                        if (!textTyping && textSection) Row(Modifier.fillMaxWidth().height(36.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (!textTyping && textSection && textFill) Row(Modifier.fillMaxWidth().height(36.dp), verticalAlignment = Alignment.CenterVertically) {
                             TextButton(onClick = { focusManager.clearFocus(); if (textFill) textFill = false else section = null }) { Text("Back") }
                             Text(if (textFill) "Fill Colour" else "Edit Text", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                             TextButton(onClick = onDismiss) { Text("Done") }
                         }
-                        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp)) {
+                        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = if(textSection) 0.dp else 4.dp)) {
                             when (section) {
                                 null -> InspectorLandingGrid(layer.type) { section=it }
                                 InspectorSection.TRANSFORM -> OverhauledTransformSectionContent(
@@ -259,10 +261,10 @@ fun ElementInspectorSheet(
                                     { onTransformEdit(layer.evaluatedTransform(playheadUs).copy(opacity = it)) })
                                 InspectorSection.TIMING -> CompactTimingSectionContent(layer.timing, layer.type == LayerType.VIDEO, onTimingChange)
                                 InspectorSection.AUDIO -> CompactAudioSectionContent(layer.muted, layer.audioGain, onAudioChange)
-                                InspectorSection.CONTEXTUAL_EDIT -> if (layer.type == LayerType.TEXT && !textFill) TextEditorControls(
-                                    layer, playheadUs, textTyping, onAction, onPropertyFocus,
-                                    onTextBegin, onTextDraft, onTextFinish, onTextCancel, onTextStyle,
-                                    onTextSizeBegin, onTextSizePreview, onTextSizeCommit, { textColourProperty = it; textFill = true }, textError, onTextScalarPreview,onTextCharacter,onTextDraftSelection,onTextParagraph,onTextBoxWidth,compositionWidth,textSelection,onTextSelection,onExplodePrepare,onExplodeCommit)
+                                InspectorSection.CONTEXTUAL_EDIT -> if (layer.type == LayerType.TEXT && !textFill) TextInspectorPanel(
+                                    layer,playheadUs,textFrameRate,onAction,onPropertyFocus,onTextBegin,onTextDraftSelection,onTextFinish,onTextCancel,
+                                    onTextSizeBegin,onTextPayloadPreview,onTextCharacter,onTextParagraph,onTextBoxWidth,compositionWidth,textSelection,onTextSelection,textError,
+                                    onDismiss,{section=null},onExplodePrepare,onExplodeCommit,paletteRepository,onEyedropperRequest)
                                 else FluxxColorPicker(FluxxColor.fromArgb(if (layer.type == LayerType.TEXT)
                                     layer.text.colour(textColourProperty).evaluate(playheadUs - layer.resolvedKeyframeAnchorUs) else layer.solidColorArgb),
                                     { if (layer.type == LayerType.TEXT) onTextColourChange(textColourProperty, it.toArgb()) else onColorChange(it.toArgb()) }, ColorPickerConfig(),

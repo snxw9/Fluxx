@@ -582,6 +582,8 @@ fun EditorScreen(
                             val base = editor.state.project.composition.layers.first { it.id == layer.id }
                             textEditor.preview(TextEdits.scalar(base, composition.frameRate.snap(playheadUs), property, value))
                         },
+                        onTextPayloadPreview = textEditor::preview,
+                        textFrameRate = composition.frameRate,
                         onTextColourChange = { property, argb -> textEditor.finish {
                             val base = editor.state.project.composition.layers.first { it.id == layer.id }
                             editor.dispatch(TextEdits.colour(base, composition.frameRate.snap(playheadUs), property, argb))
