@@ -16,6 +16,7 @@ internal object TextInspectorIcons {
     fun icon(name: String): ImageVector=cache.getOrPut(name) {
         val data=when(name) {
             "FONT"->"M7,21 L7,3 L19,3 M7,11 L16,11"
+            "AXIS"->"M3,6 L21,6 M3,18 L21,18 M8,3 L8,9 M16,15 L16,21"
             "SIZE","RELATIVE_SIZE"->A+" M21,4 L21,20 M19,6 L21,4 L23,6 M19,18 L21,20 L23,18"
             "FILL","PAINT"->"M4,20 L10,4 L16,20 L13,20 L11,15 L8,15 L6,20 Z M8,12 L11,12 L10,8 Z"
             "STROKE","STROKE_WIDTH"->A+" M19,8 L23,8 M19,16 L23,16 M21,8 L21,16"

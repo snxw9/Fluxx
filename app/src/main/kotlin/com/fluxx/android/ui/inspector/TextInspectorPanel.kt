@@ -55,6 +55,12 @@ import kotlin.math.*
     var resetAnimation by remember {mutableStateOf(false)}
     var explode by remember {mutableStateOf(false)}
     var message by remember {mutableStateOf<String?>(null)}
+    var axisSnapshot by remember {mutableStateOf<Triple<CompositionLayer,Long,TextEditScope>?>(null)}
+    val library=com.fluxx.android.fonts.FontLibraryRepository.getInstance(LocalContext.current)
+    val fontEntries by library.state.collectAsState()
+    var libraryReady by remember {mutableStateOf(false)}
+    LaunchedEffect(library) {runCatching {library.load()};libraryReady=true}
+    val missingFonts=libraryReady && document.runs.any {run->run.style.font?.let {ref->if(ref.sha256==null) ref.bundledId !in TextFontRef.BUNDLED_IDS else fontEntries.none {entry->entry.sha256==ref.sha256 && entry.faces.any {it.index==ref.faceIndex}}} ?: false}
     val manager=LocalFocusManager.current
     val density=LocalDensity.current
     val owner=if(tab==TextTab.ANIMATE) null else editScope.owner(control)
@@ -140,7 +146,7 @@ import kotlin.math.*
                     else if(fallback) TextButton(onClick={pop(if(tab==TextTab.CHARACTER) TextControl.FORMAT else TextControl.ALIGNMENT)}) {Text("Open ${tab.name.lowercase()} controls")}
                     else if(tab==TextTab.CHARACTER) {
                         Row(Modifier.height(48.dp).fillMaxWidth()) {
-                            TextCell(TextControl.FONT,style.font?.let {"${it.family} ${it.styleName}"} ?: layer.text.fontId,Modifier.weight(if(large) 2f else 2f),control==TextControl.FONT) {focus(TextControl.FONT);mode=TextInspectorMode.Fonts}
+                            TextCell(TextControl.FONT,(if(missingFonts) "Missing · " else "")+(style.font?.let {"${it.family} ${it.styleName}"} ?: layer.text.fontId),Modifier.weight(2f),control==TextControl.FONT) {focus(TextControl.FONT);mode=TextInspectorMode.Fonts}
                             NumericCell(layer,time,frameRate,editScope,TextControl.SIZE,Modifier.weight(1f),control==TextControl.SIZE,::numeric)
                             if(!large) TextCell(TextControl.PAINT,"",Modifier.weight(1f),control==TextControl.PAINT) {pop(TextControl.PAINT)}
                         }
@@ -213,7 +219,14 @@ import kotlin.math.*
     when(val current=mode) {
         is TextInspectorMode.Numeric->TextNumericOverlay(current.draft,onPayloadPreview,{onFinish();mode=TextInspectorMode.Browse},::cancelMode)
         is TextInspectorMode.Colour->TextColourOverlay(layer,time,editScope,current.control,onPayloadPreview,onValueBegin,{onFinish();mode=TextInspectorMode.Browse},::cancelMode,palette,onEyedropper)
-        TextInspectorMode.Fonts->TextPropertyOverlay("Fonts",{mode=TextInspectorMode.Browse}) {FontLibraryControls {ref->format {it.copy(font=ref)}};FontAxisControls(style.font) {ref->format {it.copy(font=ref)}}}
+        TextInspectorMode.Fonts->TextFontsPopup(style.font,layer.text.fontId,scopeLabel,
+            {ref->if(axisSnapshot!=null) {onCancel();axisSnapshot=null};format {it.copy(font=ref)}},
+            {if(axisSnapshot!=null) {onCancel();axisSnapshot=null};mode=TextInspectorMode.Browse},
+            axisBegin={axisSnapshot=Triple(layer,frameRate.snap(time),editScope);onValueBegin()},
+            axisPreview={ref->axisSnapshot?.let {(base,capturedTime,capturedScope)->
+                val range=capturedScope.range;val doc=base.text.source.evaluateDocument(capturedTime-base.resolvedKeyframeAnchorUs)
+                onPayloadPreview(TextEdits.document(base,capturedTime,doc.format(range?.start ?: 0,range?.end ?: 0) {it.copy(font=ref)}))
+            }},axisFinish={onFinish();axisSnapshot=null},axisCancel={onCancel();axisSnapshot=null})
         is TextInspectorMode.Popover->TextPropertyOverlay(current.group.label,{mode=TextInspectorMode.Browse}) {
             val numericControls=when(current.group) {
                 TextControl.INDENTS->listOf(TextControl.INDENT_LEFT,TextControl.INDENT_RIGHT,TextControl.INDENT_FIRST)
