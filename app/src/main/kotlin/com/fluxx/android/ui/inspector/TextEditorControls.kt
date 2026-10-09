@@ -32,7 +32,9 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
     onCharacter: (Int,Int,(TextRunStyle)->TextRunStyle)->Unit = { _,_,_-> },
     onDraftSelection: (String,Int,Int)->Unit = { value,_,_->onDraft(value) },
     onParagraph: (Int,Int,(TextParagraphStyle)->TextParagraphStyle)->Unit = { _,_,_-> },onBoxWidth: (Float)->Unit = {},compositionWidth: Int=0,
-    selection: TextSelectionRange?=null,onSelection: (TextSelectionRange?)->Unit = {}) {
+    selection: TextSelectionRange?=null,onSelection: (TextSelectionRange?)->Unit = {},
+    onExplodePrepare: (TextExplodeOptions,(Result<TextExplodePlan>)->Unit)->Unit = {_,reply->reply(Result.failure(IllegalStateException("Explode preparation unavailable")))},
+    onExplodeCommit: (TextExplodePlan,(String?)->Unit)->Unit = {_,reply->reply("Explode unavailable")}) {
     val local = time - layer.resolvedKeyframeAnchorUs
     val evaluated = layer.text.source.evaluate(local)
     val fontLibrary=com.fluxx.android.fonts.FontLibraryRepository.getInstance(LocalContext.current)
@@ -53,6 +55,8 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
     }
     fun done() { focusManager.clearFocus(); onFinish() }
     var page by remember(layer.id) { mutableIntStateOf(0) }
+    var explodeOpen by remember(layer.id) {mutableStateOf(false)}
+    if(explodeOpen) ExplodeTextDialog(layer,time,{explodeOpen=false},onExplodePrepare,onExplodeCommit)
     Column(Modifier.fillMaxSize().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (!compact) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             listOf("Text", "Spacing", "Stroke", "Character", "Paragraph").forEachIndexed { index, label ->
@@ -89,6 +93,7 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
                 Button(onClick = { done();onSelection(null) }) { Text("Done") }
             }
         } else {
+            TextButton(onClick={done();explodeOpen=true}) {Text("Explode Text")}
             if(selection!=null && !selection.collapsed) TextButton(onClick={onSelection(null);done()}) { Text("Done selection") }
             var fontsOpen by remember { mutableStateOf(false) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -43,6 +43,11 @@ class TextMetricsRepository private constructor(context: Context) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Triple<String, String,Boolean>, TextLayoutMetrics>?) = size > 64
     }
     private var provider: NativeTextMetricsProvider? = null
+    /** Editor snapshot, including evaluation, remains off the UI thread. */
+    suspend fun geometry(text: com.fluxx.android.model.TextProperties,time: Long): com.fluxx.android.model.TextPreparedGeometry = withContext(dispatcher) {
+        val document=text.source.evaluateDocument(time)
+        requireNotNull(measure(text.fontId,document,text.effectiveLigatures(time),text).geometry(text,time)) { "Text geometry is unavailable" }
+    }
     private val fontLibrary=com.fluxx.android.fonts.FontLibraryRepository.getInstance(app)
     private var fontRevision= -1L
     private val characterCache=object: LinkedHashMap<Pair<String,com.fluxx.android.model.TextProperties>,com.fluxx.android.model.TextCharacterCatalogue>(8,.75f,true) {

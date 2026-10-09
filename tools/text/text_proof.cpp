@@ -38,7 +38,26 @@ int main(int argc, char** argv) {
                 read(root/(std::string(files[family])+"-"+styles[style]+".ttf"))});
         FontManager manager(inputs);
         const std::string command(argv[2]);
-        if(command=="rtlboundaryproof" && argc==4) {
+        if(command=="explodeboundaryproof") {
+            const auto shaped=manager.shape("fluxx.sans","A A A",false);
+            require(shaped->glyphs.size()==5,"Explode boundary fixture unexpectedly ligated");
+            std::vector<BreakCluster> clusters;
+            for(unsigned i=0;i<5;++i) clusters.push_back({shaped->glyphs[i].xAdvance*20.0/shaped->upem,i%2==1,i%2==1});
+            ParagraphFormat paragraph;paragraph.end=5;
+            const double box=clusters[0].advance+clusters[1].advance+clusters[2].advance+1;
+            const auto wrapped=layoutParagraphs(clusters,{paragraph},box,24);
+            const auto point=layoutParagraphs(clusters,{paragraph},0,24);
+            require(wrapped.lines.size()==2 && point.lines.size()==1,"Fixture did not expose lost soft wrapping");
+            paragraph.alignment=ParagraphAlign::JustifyAll;
+            const auto justified=layoutParagraphs(clusters,{paragraph},box*3,24);
+            require(justified.lines.size()==1 && justified.lines[0].wordExpansion>0,"Fixture did not expand word spacing");
+            require(justified.positions[4]-justified.positions[0]!=point.positions[4]-point.positions[0],
+                "An anchor translation unexpectedly preserved justification");
+            std::cout<<"PASS: unchanged A A A has "<<wrapped.lines.size()<<" wrapped lines versus "<<point.lines.size()
+                <<" point-text line; justified first-to-last origin distance "<<justified.positions[4]-justified.positions[0]
+                <<" differs from point-text "<<point.positions[4]-point.positions[0]
+                <<". A shared anchor cannot restore either relative layout.\n";
+        } else if(command=="rtlboundaryproof" && argc==4) {
             const auto bytes=read(argv[3]);
             auto* blob=hb_blob_create(reinterpret_cast<const char*>(bytes.data()),static_cast<unsigned>(bytes.size()),HB_MEMORY_MODE_READONLY,nullptr,nullptr);
             auto* face=hb_face_create(blob,0);auto* font=hb_font_create(face);hb_ot_font_set_funcs(font);

@@ -298,7 +298,7 @@ data class CompositionLayer(
 ) {
     init {
         Markers.validate(markers, anchor = resolvedKeyframeAnchorUs)
-        require(anchorX.isFinite() && anchorY.isFinite() && anchorX in 0f..1f && anchorY in 0f..1f)
+        require(anchorX.isFinite() && anchorY.isFinite() && anchorX in -MAX_ANCHOR..MAX_ANCHOR && anchorY in -MAX_ANCHOR..MAX_ANCHOR)
         require((referenceWidth == 0 && referenceHeight == 0) || (referenceWidth > 0 && referenceHeight > 0))
         require(id > 0) { "Layer IDs must be positive" }
         require(audioGain.isFinite() && audioGain in 0f..1f)
@@ -312,6 +312,10 @@ data class CompositionLayer(
     }
 
     val resolvedKeyframeAnchorUs: Long get() = keyframeAnchorUs ?: timing.startUs
+    companion object {
+        /** Additive v12 range: Group-pivot exploded text can have its pivot outside its own bounds. */
+        const val MAX_ANCHOR=1_000_000f
+    }
 
     /** Translate clip and animation together; trims deliberately do not call this. */
     fun movedTo(startUs: Long): CompositionLayer = copy(

@@ -532,6 +532,32 @@ fun EditorScreen(
             ) {
                 selectedLayer?.let { layer ->
                     ElementInspectorSheet(
+                        onExplodePrepare={options,reply->
+                            focusManager.clearFocus();previewController?.pause()
+                            textEditor.finish {
+                                val captured=editor.state
+                                scope.launch {
+                                    try {
+                                        val source=requireNotNull(captured.selectedLayer)
+                                        val local=Math.subtractExact(TextExplode.sampleTime(source,captured.playheadUs),source.resolvedKeyframeAnchorUs)
+                                        val plan=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                                            TextExplode.prepare(source,captured.project.composition,captured.playheadUs,
+                                                EditorReducer.nextLayerId(captured.project),options,
+                                                com.fluxx.android.render.TextJoiningPreparation.words(source.text.source.evaluateDocument(local))) {text->metricsService.geometry(text,local)}
+                                        }
+                                        require(editor.state.project===captured.project && editor.state.selectedLayerId==source.id) {"The project changed. Prepare Explode Text again."}
+                                        reply(Result.success(plan))
+                                    } catch(cancelled: kotlinx.coroutines.CancellationException) {throw cancelled}
+                                    catch(failure: Exception) {reply(Result.failure(failure))}
+                                }
+                            }
+                        },
+                        onExplodeCommit={plan,reply->textEditor.finish {
+                            try {
+                                editor.dispatch(EditorAction.ExplodeText(plan));textSelection=null
+                                previewController?.update(editor.state.project,editor.state.playheadUs,false);reply(null)
+                            } catch(failure: IllegalArgumentException) {reply(failure.message ?: "Explode failed")}
+                        }},
                         textSelection=textSelection,onTextSelection={ range ->
                             textSelection=if(range!=null && !range.collapsed) selectedTextMetrics?.geometry(layer.text,playheadUs-layer.resolvedKeyframeAnchorUs)
                                 ?.safeRange(range.start,range.end) ?: range else range

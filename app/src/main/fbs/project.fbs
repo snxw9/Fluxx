@@ -159,6 +159,7 @@ table Layer {
   keyframe_anchor_us: long = -1;
   has_keyframe_anchor: bool = false;
   // v6: spatial pivot in source-local bounds, independent of temporal keyframe origin.
+  // v12 additive validation: finite normalized anchors within +/-1,000,000; Group text pivots may lie outside the piece.
   anchor_x: float = 0.5;
   anchor_y: float = 0.5;
   markers: [Marker];

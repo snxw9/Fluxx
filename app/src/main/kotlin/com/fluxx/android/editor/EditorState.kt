@@ -41,6 +41,7 @@ sealed interface EditorAction {
     data class Select(val id: Long?) : EditorAction
     data class Seek(val timeUs: Long, val snap: Boolean = false) : EditorAction
     data class Add(val layer: CompositionLayer) : EditorAction
+    data class ExplodeText(val plan: TextExplodePlan) : EditorAction
     data class Remove(val id: Long) : EditorAction
     data class SetTransform(val id: Long, val transform: Transform) : EditorAction
     data class SetTextPayload(val id: Long, val text: TextProperties, val newPosition: Transform? = null) : EditorAction
@@ -202,6 +203,20 @@ object EditorReducer {
             }
             is EditorAction.Add -> replaceLayers(comp.layers + action.layer.withReferenceCanvas(comp.width, comp.height))
                 .copy(selectedLayerId = action.layer.id, selectedMarkerId = null)
+            is EditorAction.ExplodeText -> {
+                val plan=action.plan
+                require(comp.layers.firstOrNull { it.id==plan.original.id }==plan.original) { "The text layer changed. Reopen Explode Text to prepare the current layout." }
+                require(plan.pieces.isNotEmpty())
+                val occupied=comp.layers.map {it.id}.toSet()
+                require(plan.pieces.map {it.id}.distinct().size==plan.pieces.size && plan.pieces.none {it.id in occupied})
+                val ordered=comp.layers.sortedWith(compareBy<CompositionLayer> {it.zOrder}.thenBy {it.id}).toMutableList()
+                val at=ordered.indexOfFirst {it.id==plan.original.id}
+                ordered.removeAt(at)
+                ordered.addAll(at,plan.pieces)
+                if(plan.options.keepOriginal) ordered.add(at,plan.original.copy(visible=false))
+                replaceLayers(ordered.mapIndexed {index,layer->layer.copy(zOrder=index)})
+                    .copy(selectedLayerId=plan.pieces.first().id,selectedMarkerId=null)
+            }
             is EditorAction.Remove -> replaceLayers(comp.layers.filterNot { it.id == action.id }).let {
                 if (state.selectedLayerId == action.id) it.copy(selectedLayerId = null, selectedMarkerId = null) else it
             }
@@ -217,7 +232,7 @@ object EditorReducer {
                 require(action.anchorX.isFinite() && action.anchorY.isFinite())
                 // Compensation changes only static Position, never another channel or keyframe curve.
                 val position = action.newPosition.takeUnless { _ -> it.animTransform.position.isAnimated }
-                it.copy(anchorX = action.anchorX.coerceIn(0f, 1f), anchorY = action.anchorY.coerceIn(0f, 1f),
+                it.copy(anchorX = action.anchorX, anchorY = action.anchorY,
                     transform = if (position == null) it.transform else it.transform.copy(
                         positionX = position.positionX, positionY = position.positionY))
             }

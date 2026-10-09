@@ -129,7 +129,9 @@ fun ElementInspectorSheet(
     onTextScalarPreview: (AnimPropertyType, Float) -> Unit = { _, _ -> },
     onTextColourChange: (AnimPropertyType, Int) -> Unit = { _, _ -> },
     onTextColourPreview: (AnimPropertyType, Int) -> Unit = { _, _ -> },
-    textSelection: TextSelectionRange?=null,onTextSelection: (TextSelectionRange?)->Unit = {}
+    textSelection: TextSelectionRange?=null,onTextSelection: (TextSelectionRange?)->Unit = {},
+    onExplodePrepare: (TextExplodeOptions,(Result<TextExplodePlan>)->Unit)->Unit = {_,reply->reply(Result.failure(IllegalStateException("Explode preparation unavailable")))},
+    onExplodeCommit: (TextExplodePlan,(String?)->Unit)->Unit = {_,reply->reply("Explode unavailable")}
 ) {
     key(layer.id) {
         var section by remember { mutableStateOf<InspectorSection?>(null) }
@@ -260,7 +262,7 @@ fun ElementInspectorSheet(
                                 InspectorSection.CONTEXTUAL_EDIT -> if (layer.type == LayerType.TEXT && !textFill) TextEditorControls(
                                     layer, playheadUs, textTyping, onAction, onPropertyFocus,
                                     onTextBegin, onTextDraft, onTextFinish, onTextCancel, onTextStyle,
-                                    onTextSizeBegin, onTextSizePreview, onTextSizeCommit, { textColourProperty = it; textFill = true }, textError, onTextScalarPreview,onTextCharacter,onTextDraftSelection,onTextParagraph,onTextBoxWidth,compositionWidth,textSelection,onTextSelection)
+                                    onTextSizeBegin, onTextSizePreview, onTextSizeCommit, { textColourProperty = it; textFill = true }, textError, onTextScalarPreview,onTextCharacter,onTextDraftSelection,onTextParagraph,onTextBoxWidth,compositionWidth,textSelection,onTextSelection,onExplodePrepare,onExplodeCommit)
                                 else FluxxColorPicker(FluxxColor.fromArgb(if (layer.type == LayerType.TEXT)
                                     layer.text.colour(textColourProperty).evaluate(playheadUs - layer.resolvedKeyframeAnchorUs) else layer.solidColorArgb),
                                     { if (layer.type == LayerType.TEXT) onTextColourChange(textColourProperty, it.toArgb()) else onColorChange(it.toArgb()) }, ColorPickerConfig(),
