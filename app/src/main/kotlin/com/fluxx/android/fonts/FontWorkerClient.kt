@@ -22,17 +22,24 @@ class FontWorkerClient(context: Context) {
         } finally { output.delete() }
     }
     data class FontInput(val id: String,val file: File,val reference: TextFontRef)
-    suspend fun prepare(input: ByteArray,fonts: List<FontInput>,ligatures: Boolean,nominal: Boolean=false): ByteArray=withContext(Dispatchers.IO) {
+    suspend fun prepare(input: ByteArray,fonts: List<FontInput>,ligatures: Boolean,nominal: Boolean=false,seeds: ByteArray=ByteArray(0)): ByteArray=withContext(Dispatchers.IO) {
         require(input.size<=1024*1024 && fonts.size<=64)
         require(fonts.sumOf { it.file.length() }<=32L*1024*1024) { "Imported font preparation exceeds 32 MiB; reduce distinct font faces" }
         val source=File.createTempFile("font-layout-input-",".bin",context.cacheDir)
         val output=File.createTempFile("font-layout-output-",".bin",context.cacheDir)
+        val cached=File.createTempFile("font-sdf-seeds-",".bin",context.cacheDir)
         try {
+            val transferStart=System.nanoTime()
             source.writeBytes(input)
-            withTimeout(60_000) { request(source,output,FontWorkerService.PREPARE,fonts,ligatures,nominal) }
+            require(seeds.size<=8*1024*1024);cached.writeBytes(seeds)
+            val preparationFileNs=System.nanoTime()-transferStart
+            val ipcStart=System.nanoTime()
+            withTimeout(60_000) { request(source,output,FontWorkerService.PREPARE,fonts,ligatures,nominal,cached) }
+            com.fluxx.android.render.TextEditTimings.record("ipc_round_trip",System.nanoTime()-ipcStart)
             require(output.length() in 1..32L*1024*1024) { "Prepared text packet exceeds 32 MiB" }
-            output.readBytes()
-        } finally { source.delete();output.delete() }
+            val readStart=System.nanoTime()
+            output.readBytes().also {com.fluxx.android.render.TextEditTimings.record("packet_file_transfer",preparationFileNs+System.nanoTime()-readStart,"bytes=${it.size}")}
+        } finally { source.delete();output.delete();cached.delete() }
     }
     internal suspend fun crashForTest(input: File) {
         check(com.fluxx.android.BuildConfig.DEBUG)
@@ -41,23 +48,32 @@ class FontWorkerClient(context: Context) {
         finally { output.delete() }
     }
     private suspend fun request(input: File,output: File,operation: Int=FontWorkerService.INSPECT,
-        fonts: List<FontInput> = emptyList(),ligatures: Boolean=true,nominal: Boolean=false)=withContext(Dispatchers.Main.immediate) {
+        fonts: List<FontInput> = emptyList(),ligatures: Boolean=true,nominal: Boolean=false,cached: File?=null)=withContext(Dispatchers.Main.immediate) {
         suspendCancellableCoroutine<Unit> { pending ->
+            keepWarm(context)
             requests.incrementAndGet()
             var bound=false
             lateinit var connection: ServiceConnection
-            fun release() { if(bound) { bound=false;runCatching { context.unbindService(connection) } } }
+            fun release() { if(bound) { bound=false;runCatching { context.unbindService(connection) };keepWarm(context) } }
             fun failed(reason: String) { release();if(pending.isActive) pending.resumeWithException(IOException(reason)) }
             val response=Messenger(object: Handler(Looper.getMainLooper()) {
                 override fun handleMessage(message: Message) {
                     if(message.what!=operation || !pending.isActive) return
-                    if(message.data.getBoolean(FontWorkerService.OK)) { release();pending.resume(Unit) }
+                    if(message.data.getBoolean(FontWorkerService.OK)) {
+                        message.data.getLongArray("timings")?.let {times -> if(times.size==3) {
+                            com.fluxx.android.render.TextEditTimings.record("shaping",times[0],"isolated")
+                            com.fluxx.android.render.TextEditTimings.record("rasterization",times[1],"isolated cache misses")
+                            com.fluxx.android.render.TextEditTimings.record("packet_encode",times[2],"isolated excluding raster")
+                        } }
+                        release();pending.resume(Unit)
+                    }
                     else failed(message.data.getString(FontWorkerService.ERROR) ?: "Font validation failed")
                 }
             })
             connection=object: ServiceConnection {
                 override fun onServiceConnected(name: ComponentName,binder: IBinder) {
                     if(!pending.isActive) { release();return }
+                    launch(Dispatchers.IO) {
                     val descriptors=mutableListOf<ParcelFileDescriptor>()
                     try {
                         ParcelFileDescriptor.open(input,ParcelFileDescriptor.MODE_READ_ONLY).use { source ->
@@ -68,6 +84,7 @@ class FontWorkerClient(context: Context) {
                                         putParcelable(FontWorkerService.INPUT,source);putParcelable(FontWorkerService.OUTPUT,destination)
                                         putBoolean("ligatures",ligatures)
                                         putBoolean("nominal",nominal)
+                                        if(cached!=null) putParcelable(FontWorkerService.CACHE,ParcelFileDescriptor.open(cached,ParcelFileDescriptor.MODE_READ_ONLY).also {descriptors.add(it)})
                                         val rows=ArrayList<Bundle>()
                                         for(font in fonts) {
                                             val descriptor=ParcelFileDescriptor.open(font.file,ParcelFileDescriptor.MODE_READ_ONLY).also { descriptors.add(it) }
@@ -84,8 +101,9 @@ class FontWorkerClient(context: Context) {
                                 Messenger(binder).send(message)
                             }
                         }
-                    } catch(e: Exception) { failed(e.message ?: "Cannot reach the isolated font worker") }
+                    } catch(e: Exception) { Handler(Looper.getMainLooper()).post { failed(e.message ?: "Cannot reach the isolated font worker") } }
                     finally { descriptors.forEach { runCatching { it.close() } } }
+                    }
                 }
                 override fun onServiceDisconnected(name: ComponentName)=failed("The isolated font parser stopped. The font was not imported; try another font file.")
                 override fun onBindingDied(name: ComponentName)=failed("The isolated font parser died; the font was not imported.")
@@ -99,6 +117,30 @@ class FontWorkerClient(context: Context) {
         }
     }
     companion object {
+        // One process-retaining binding; normal per-request bindings still report parser death
+        // to their own continuation. Idle expiry releases native caches with the process.
+        private val main=Handler(Looper.getMainLooper())
+        private var warmContext: Context?=null
+        private var warmConnection: ServiceConnection?=null
+        private val expire=Runnable {
+            warmConnection?.let {connection -> runCatching {warmContext?.unbindService(connection)}}
+            warmConnection=null;warmContext=null
+        }
+        private fun keepWarm(context: Context) {
+            check(Looper.myLooper()==Looper.getMainLooper())
+            main.removeCallbacks(expire)
+            if(warmConnection==null) {
+                val connection=object: ServiceConnection {
+                    override fun onServiceConnected(name: ComponentName,binder: IBinder) {}
+                    override fun onServiceDisconnected(name: ComponentName) {main.removeCallbacks(expire);expire.run()}
+                    override fun onBindingDied(name: ComponentName) {main.removeCallbacks(expire);expire.run()}
+                }
+                if(runCatching {context.bindService(Intent(context,FontWorkerService::class.java),connection,Context.BIND_AUTO_CREATE)}.getOrDefault(false)) {
+                    warmContext=context;warmConnection=connection
+                }
+            }
+            main.postDelayed(expire,30_000)
+        }
         private val requests=java.util.concurrent.atomic.AtomicLong()
         val requestCount get()=requests.get()
     }

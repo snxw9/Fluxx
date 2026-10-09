@@ -10,11 +10,13 @@ import com.fluxx.android.model.*
 /** Fixed pages; each Apply is one held Source Text edit using the existing undo protocol. */
 @Composable
 internal fun ParagraphControls(document: TextSourceDocument,start: Int,end: Int,layerAlignment: TextAlignment,
-    edit: (Int,Int,(TextParagraphStyle)->TextParagraphStyle)->Unit,box: (Float)->Unit) {
+    edit: (Int,Int,(TextParagraphStyle)->TextParagraphStyle)->Unit,box: (Float)->Unit,fillWidth: Float?=null) {
     var page by remember { mutableIntStateOf(0) }
     val labels=listOf("Alignment","Left / right indent","First / before","After / box","Direction")
     val index=if(start==end) 0 else document.text.take(start.coerceAtMost(document.text.length)).count { it=='\n' }
     val style=document.paragraphs.getOrNull(index) ?: TextParagraphStyle()
+    var width by remember(document.boxWidth) {mutableStateOf(document.boxWidth.toString())}
+    val numericWidth=width.toFloatOrNull()?.takeIf {it.isFinite() && it>=0}
     fun apply(change: (TextParagraphStyle)->TextParagraphStyle)=edit(start,end,change)
     Row(Modifier.fillMaxWidth()) {
         TextButton(onClick={page=(page+labels.lastIndex)%labels.size}) { Text("‹") }
@@ -33,16 +35,16 @@ internal fun ParagraphControls(document: TextSourceDocument,start: Int,end: Int,
         2 -> CharacterNumbers("First indent px",style.indentFirst,"Space before px",style.spaceBefore) { a,b -> apply { it.copy(indentFirst=a,spaceBefore=b) } }
         3 -> {
             var after by remember(style.spaceAfter) { mutableStateOf(style.spaceAfter.toString()) }
-            var width by remember(document.boxWidth) { mutableStateOf(document.boxWidth.toString()) }
             Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
                 OutlinedTextField(after,{after=it},singleLine=true,label={Text("After px")},modifier=Modifier.weight(1f))
-                OutlinedTextField(width,{width=it},singleLine=true,label={Text("Box px; 0=point")},modifier=Modifier.weight(1f))
+                OutlinedTextField(width,{width=it},singleLine=true,label={Text("Box width")},modifier=Modifier.weight(1f))
             }
             Row {
                 val a=after.toFloatOrNull()?.takeIf { it.isFinite() }
-                val w=width.toFloatOrNull()?.takeIf { it.isFinite() && it>=0 }
                 TextButton(enabled=a!=null,onClick={apply { it.copy(spaceAfter=requireNotNull(a)) }}) { Text("Apply after") }
-                TextButton(enabled=w!=null,onClick={box(requireNotNull(w))}) { Text("Apply box") }
+                TextButton(onClick={box(0f)}) { Text("Auto (0)",style=MaterialTheme.typography.labelSmall) }
+                TextButton(enabled=fillWidth!=null,onClick={box(requireNotNull(fillWidth))}) { Text("Fill composition",style=MaterialTheme.typography.labelSmall) }
+                TextButton(enabled=numericWidth!=null,onClick={box(requireNotNull(numericWidth))}) { Text("Apply",style=MaterialTheme.typography.labelSmall) }
             }
         }
         4 -> {

@@ -27,6 +27,7 @@ struct TextGpuStats {
     uint64_t images=0, views=0, samplers=0, buffers=0, memories=0, bytes=0;
     uint64_t pools=0, sets=0, layouts=0, pipelines=0, pipelineLayouts=0;
     uint64_t meshBuildNs=0;
+    uint64_t atlasUploadCpuNs=0;
 };
 
 // Device-owned state. Preparation finishes before any composition render pass.

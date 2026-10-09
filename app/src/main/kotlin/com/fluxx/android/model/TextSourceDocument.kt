@@ -1,7 +1,8 @@
 package com.fluxx.android.model
 
 enum class TextFaceStyle { REGULAR, BOLD, ITALIC, BOLD_ITALIC }
-enum class TextCaps { NONE, ALL, SMALL }
+/** Persisted ordinals 0–2 are permanent; lowercase is additive to v12. */
+enum class TextCaps { NONE, ALL, SMALL, LOWER }
 enum class TextScriptPosition { NORMAL, SUPER, SUB }
 enum class TextKerning { METRICS, OFF }
 enum class ParagraphAlignment { LEFT, CENTRE, RIGHT, JUSTIFY_LAST_LEFT, JUSTIFY_LAST_CENTRE, JUSTIFY_LAST_RIGHT, JUSTIFY_ALL }

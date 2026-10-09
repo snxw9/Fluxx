@@ -1,5 +1,9 @@
 # Text layer checkpoint
 
+## FIX / EXPLODE / T5 continuation — 2026-10-09
+
+The user has manually tested T1–T4 on a phone; the case/script and responsiveness findings in this continuation are user-reported results. FIX adds lowercase and corrected per-glyph Small Caps, uniform synthetic script positioning, shared transient preview/source selection, composition-fill justification and preparation/cache/idle-warming/timing changes. These changes are implemented in source and device-unverified. Native Debug/Release (both ABIs), Kotlin Debug/Release, both instrumentation source sets and 237 JVM tests passed; host selftest, six shaping references and 1,445 checksums passed. No new Character/Paragraph sub-screen, PreviewController API, gesture transaction protocol or batch/draw contract is introduced. EXPLODE and T5 have not shipped. The user's Unicode Joining_Type indivisible-word decision supersedes the old T5 emergency-break decision below. See [the current implementation/evidence, deviations, limits and exact user-run list](TEXT_FIX_EXPLODE_T5.md). Historical entries retain their original evidence; F1 performance/parity/lifecycle remain unrun.
+
 ## T4c character substitution continuation — 2026-10-05
 
 Character Offset/Value integration is implemented in source, with its commit gated on compile/JVM/host checks. Worker preparation builds standalone cmap/SDF catalogues for every reachable source alternative and requested font identity, including static variation coordinates and the existing fallback chain. Imported fonts stay in the isolated worker. Character replacement preserves logical selector membership, uses its own nominal advance, and retains original combining characters. It performs no GSUB/GPOS shaping; active replacement therefore does not form ligatures or reapply OpenType caps/script substitutions. The original prepared run scale, baseline and faux styling still apply. This feature interaction is an explicit assumption/deviation.

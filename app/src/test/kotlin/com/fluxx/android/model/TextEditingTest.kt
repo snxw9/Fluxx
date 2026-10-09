@@ -108,6 +108,31 @@ class TextEditingTest {
         editor.dispatch(EditorAction.Load(ProjectDocument())); editor.addText()
         assertEquals(5_000_000L, editor.state.project.composition.resolvedDurationUs)
     }
+    @Test fun queuedRunChangesAreLastWinsWhilePreparationIsBusy() = runBlocking {
+        val editor=editor();val ready=CompletableDeferred<Unit>()
+        val controller=TextEditController(editor,this,{_,source ->ready.await();metrics(source)})
+        controller.format(1,0,0) {it.copy(trackingDelta=10f)}
+        yield()
+        controller.format(1,0,0) {it.copy(trackingDelta=20f)}
+        controller.format(1,0,0) {it.copy(trackingDelta=30f)}
+        ready.complete(Unit);repeat(16) {yield()}
+        assertEquals(30f,editor.state.selectedLayer!!.text.source.sourceDocument.runAt(0)!!.style.trackingDelta,0f)
+        editor.undo();assertEquals(10f,editor.state.selectedLayer!!.text.source.sourceDocument.runAt(0)!!.style.trackingDelta,0f)
+        editor.undo();assertEquals(0f,editor.state.selectedLayer!!.text.source.sourceDocument.runAt(0)!!.style.trackingDelta,0f)
+    }
+    @Test fun justificationFillsTheCompositionInTheSameUndoTransaction() = runBlocking {
+        val editor=editor();val layer=editor.state.selectedLayer!!
+        editor.dispatch(EditorAction.SetTransform(layer.id,layer.transform.copy(scaleX=-2f)))
+        val before=editor.state.project
+        val controller=TextEditController(editor,this,{_,source ->metrics(source)})
+        controller.paragraph(layer.id,0,0) {it.copy(alignment=ParagraphAlignment.JUSTIFY_ALL)}
+        repeat(12) {yield()}
+        val document=editor.state.selectedLayer!!.text.source.sourceDocument
+        assertEquals(editor.state.project.composition.width/2f,document.boxWidth,0f)
+        assertEquals(ParagraphAlignment.JUSTIFY_ALL,document.paragraphs.single().alignment)
+        editor.undo();assertEquals(before,editor.state.project)
+        editor.redo();assertEquals(document,editor.state.selectedLayer!!.text.source.sourceDocument)
+    }
     @Test fun copiedTypedPayloadRemainsIndependentAndPersistsWithHistory() {
         val editor = editor(true)
         val original = editor.state.selectedLayer!!

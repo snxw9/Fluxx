@@ -1364,8 +1364,10 @@ std::string VulkanRenderer::textStatsJson() const {
     json << ",\"pipelines\":" << stats.pipelines << ",\"pipelineLayouts\":" << stats.pipelineLayouts;
     json << ",\"generation\":" << stats.generation << ",\"uploads\":" << stats.uploads << ",\"uploadBytes\":" << stats.uploadBytes << ",\"draws\":" << stats.draws;
     json << ",\"atlasPages\":" << stats.atlasPages << ",\"arrayRecreations\":" << stats.arrayRecreations;
-    if(mText) { auto font=mText->fontStats(); json << ",\"rasterizations\":" << font.rasterizations << ",\"lockWaitNs\":" << font.lockWaitNs; }
+    if(mText) { auto font=mText->fontStats(); json << ",\"rasterizations\":" << font.rasterizations << ",\"lockWaitNs\":" << font.lockWaitNs
+        << ",\"shapingCpuNs\":" << font.shapingNs << ",\"rasterCpuNs\":" << font.rasterNs; }
     json << ",\"meshBuildNs\":" << stats.meshBuildNs;
+    json << ",\"atlasUploadCpuNs\":" << stats.atlasUploadCpuNs;
     json << "}"; return json.str();
 }
 bool VulkanRenderer::setFrameLayer(int64_t id, AHardwareBuffer* buffer, const float* matrix, float opacity) {

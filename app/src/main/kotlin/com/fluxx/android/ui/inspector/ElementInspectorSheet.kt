@@ -128,7 +128,8 @@ fun ElementInspectorSheet(
     onTextSizeBegin: () -> Unit = {}, onTextSizePreview: (Float) -> Unit = {}, onTextSizeCommit: () -> Unit = {},
     onTextScalarPreview: (AnimPropertyType, Float) -> Unit = { _, _ -> },
     onTextColourChange: (AnimPropertyType, Int) -> Unit = { _, _ -> },
-    onTextColourPreview: (AnimPropertyType, Int) -> Unit = { _, _ -> }
+    onTextColourPreview: (AnimPropertyType, Int) -> Unit = { _, _ -> },
+    textSelection: TextSelectionRange?=null,onTextSelection: (TextSelectionRange?)->Unit = {}
 ) {
     key(layer.id) {
         var section by remember { mutableStateOf<InspectorSection?>(null) }
@@ -259,7 +260,7 @@ fun ElementInspectorSheet(
                                 InspectorSection.CONTEXTUAL_EDIT -> if (layer.type == LayerType.TEXT && !textFill) TextEditorControls(
                                     layer, playheadUs, textTyping, onAction, onPropertyFocus,
                                     onTextBegin, onTextDraft, onTextFinish, onTextCancel, onTextStyle,
-                                    onTextSizeBegin, onTextSizePreview, onTextSizeCommit, { textColourProperty = it; textFill = true }, textError, onTextScalarPreview,onTextCharacter,onTextDraftSelection,onTextParagraph,onTextBoxWidth)
+                                    onTextSizeBegin, onTextSizePreview, onTextSizeCommit, { textColourProperty = it; textFill = true }, textError, onTextScalarPreview,onTextCharacter,onTextDraftSelection,onTextParagraph,onTextBoxWidth,compositionWidth,textSelection,onTextSelection)
                                 else FluxxColorPicker(FluxxColor.fromArgb(if (layer.type == LayerType.TEXT)
                                     layer.text.colour(textColourProperty).evaluate(playheadUs - layer.resolvedKeyframeAnchorUs) else layer.solidColorArgb),
                                     { if (layer.type == LayerType.TEXT) onTextColourChange(textColourProperty, it.toArgb()) else onColorChange(it.toArgb()) }, ColorPickerConfig(),

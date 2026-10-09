@@ -24,6 +24,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.viewinterop.AndroidView
 import com.fluxx.android.model.CompositionLayer
@@ -58,7 +59,11 @@ fun CompositionPreview(
     mediaRepository: MediaRepository? = null,
     onFitScaleChanged: (Float) -> Unit = {},
     boxWidthEditing: Boolean = false,onBoxBegin: ()->Unit = {},onBoxPreview: (Float)->Unit = {},
-    onBoxCommit: ()->Unit = {},onBoxCancel: ()->Unit = {}
+    onBoxCommit: ()->Unit = {},onBoxCancel: ()->Unit = {},
+    textSelection: com.fluxx.android.model.TextSelectionRange?=null,
+    onTextSelection: (com.fluxx.android.model.TextSelectionRange?)->Unit = {},
+    moveEnabled: Boolean=false,onMoveBegin: ()->Unit = {},onMovePreview: (com.fluxx.android.model.Transform)->Unit = {},
+    onMoveCommit: ()->Unit = {},onMoveCancel: ()->Unit = {}
 ) {
     val density = LocalDensity.current
     val comp = project.composition
@@ -81,6 +86,11 @@ fun CompositionPreview(
     val currentOnSurfaceDestroyed by rememberUpdatedState(onSurfaceDestroyed)
     val sample by rememberUpdatedState(onSampleColor)
     val cancelSample by rememberUpdatedState(onSampleCancel)
+    val movingLayer by rememberUpdatedState(comp.layers.firstOrNull {it.id==selectedLayerId})
+    val movingTime by rememberUpdatedState(playheadUs)
+    val moveBegin by rememberUpdatedState(onMoveBegin);val movePreview by rememberUpdatedState(onMovePreview)
+    val moveCommit by rememberUpdatedState(onMoveCommit);val moveCancel by rememberUpdatedState(onMoveCancel)
+    val currentSelection by rememberUpdatedState(textSelection)
     var samplePoint by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
 
     Column(
@@ -183,8 +193,39 @@ fun CompositionPreview(
                     modifier = Modifier
                         .size(boxWidth, boxHeight)
                         .clip(RoundedCornerShape(2.dp))
+                        .pointerInput(selectedLayerId,moveEnabled,eyedropperActive) {
+                            if(moveEnabled && !eyedropperActive) {
+                                var initial: com.fluxx.android.model.Transform?=null;var dx=0f;var dy=0f
+                                detectDragGestures(onDragStart={
+                                    initial=movingLayer?.evaluatedTransform(movingTime);dx=0f;dy=0f
+                                    if(initial!=null) moveBegin()
+                                },onDragEnd={if(initial!=null) moveCommit();initial=null},
+                                    onDragCancel={if(initial!=null) moveCancel();initial=null}) {pointer,amount ->
+                                    val layer=movingLayer;val base=initial
+                                    if(layer!=null && base!=null) {
+                                        pointer.consume();dx+=amount.x;dy+=amount.y
+                                        movePreview(base.copy(positionX=base.positionX+dx*2/size.width*comp.width/(layer.referenceWidth.takeIf {it>0} ?: comp.width),
+                                            positionY=base.positionY+dy*2/size.height*comp.height/(layer.referenceHeight.takeIf {it>0} ?: comp.height)))
+                                    }
+                                }
+                            }
+                        }
                         .pointerInput(comp.layers, playheadUs, selectedLayerId, textHitMetrics) {
-                            detectTapGestures { tap ->
+                            fun selectText(point: androidx.compose.ui.geometry.Offset,word: Boolean) {
+                                val layer=comp.layers.firstOrNull { it.id==selectedLayerId && it.type==LayerType.TEXT } ?: return
+                                val metrics=textHitMetrics[layer.id] ?: return
+                                val local=playheadUs-layer.resolvedKeyframeAnchorUs
+                                val geometry=metrics.geometry(layer.text,local) ?: return
+                                val m=FloatArray(16)
+                                LayerGeometry.textMatrix(m,layer.evaluatedTransform(playheadUs),metrics.logical(layer.text,local),comp.width,comp.height,
+                                    layer.referenceWidth.takeIf {it>0} ?: comp.width,layer.referenceHeight.takeIf {it>0} ?: comp.height,layer.anchorX,layer.anchorY)
+                                val determinant=m[0]*m[5]-m[1]*m[4];if(kotlin.math.abs(determinant)<1e-12f) return
+                                val x=point.x*2/size.width-1-m[12];val y=point.y*2/size.height-1-m[13]
+                                val hit=geometry.hit((x*m[5]-y*m[4])/determinant,(y*m[0]-x*m[1])/determinant)
+                                if(hit>=0) onTextSelection(geometry.range(hit,word))
+                            }
+                            detectTapGestures(onLongPress={selectText(it,false)},onDoubleTap={selectText(it,true)},onTap={ tap ->
+                                if(currentSelection!=null) { onTextSelection(null);return@detectTapGestures }
                                 if (onSelectLayer != null) {
                                     // Find active visible layers at current playhead position
                                     val activeLayers = comp.layers.filter { layer ->
@@ -220,7 +261,7 @@ fun CompositionPreview(
                                         onSelectLayer(null)
                                     }
                                 }
-                            }
+                            })
                         }
                 ) {
                     if (!eyedropperActive) PreviewLayerOverlay(project,
@@ -228,7 +269,9 @@ fun CompositionPreview(
                         mediaRepository, viewSettings, anchorMode)
                     val selectedText=comp.layers.firstOrNull { it.id==selectedLayerId && it.type==LayerType.TEXT }
                     val selectedMetrics=selectedText?.let { textHitMetrics[it.id] }
-                    if(boxWidthEditing && !eyedropperActive && selectedText!=null && selectedMetrics!=null)
+                    if(!eyedropperActive && selectedText!=null && selectedMetrics!=null && textSelection!=null && !textSelection.collapsed)
+                        TextSelectionOverlay(project,selectedText,playheadUs,selectedMetrics,textSelection,onTextSelection)
+                    if(boxWidthEditing && (textSelection==null || textSelection.collapsed) && !eyedropperActive && selectedText!=null && selectedMetrics!=null)
                         TextBoxWidthHandle(project,selectedText,playheadUs,selectedMetrics,onBoxBegin,onBoxPreview,onBoxCommit,onBoxCancel)
                     // Empty state overlay if composition has no layers
                     if (comp.layers.isEmpty()) {

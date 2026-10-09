@@ -14,12 +14,15 @@
 #include <cmath>
 #include "paragraph_layout.h"
 #include <algorithm>
+#include <list>
+#include <chrono>
 
 namespace {
 using fluxx::text::FontManager;
 std::mutex registryMutex;
 std::map<jlong, std::shared_ptr<FontManager>> sessions;
 std::weak_ptr<FontManager> catalog;
+thread_local jlong isolatedTimings[3]={};
 jlong nextSession = 1;
 void fail(JNIEnv* env, const std::exception& error) {
     if (!env->ExceptionCheck()) env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), error.what());
@@ -57,7 +60,7 @@ std::vector<uint8_t> asset(AAssetManager* manager, const char* name) {
 
 extern "C" JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_IsolatedFontNative_prepare(JNIEnv* env,jobject,
     jobject assets,jobjectArray ids,jobjectArray bytes,jintArray faceIndices,jintArray instanceIndices,
-    jobjectArray axisTags,jobjectArray axisValues,jbyteArray input,jboolean ligatures,jboolean nominal) {
+    jobjectArray axisTags,jobjectArray axisValues,jbyteArray input,jboolean ligatures,jboolean nominal,jbyteArray seeds) {
     try {
         const auto uid=getuid()%100000;
         if(uid<90000 || uid>99999) throw std::invalid_argument("Imported font preparation requires an isolated process");
@@ -103,19 +106,47 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_IsolatedFo
         }
         if(env->ExceptionCheck()) return nullptr;
         // Preparation only. No imported parser handles or bytes enter the application renderer.
-        FontManager manager(std::move(fonts));
+        // Calls are serialized by the isolated worker. Retain exact face/variation identities
+        // while its binding is warm, so repeated typing only rasterizes missing glyphs.
+        struct WarmManager { std::string identity;size_t bytes;std::shared_ptr<FontManager> manager; };
+        static std::list<WarmManager> warm;
+        std::string identity;size_t owned=0;
+        for(const auto& font:fonts) { identity+=font.id;identity.push_back('\0');owned+=font.bytes.size(); }
+        auto cached=std::find_if(warm.begin(),warm.end(),[&](const WarmManager& item) {return item.identity==identity;});
+        std::shared_ptr<FontManager> manager;
+        if(cached!=warm.end()) { manager=cached->manager;warm.splice(warm.end(),warm,cached); }
+        else {
+            manager=std::make_shared<FontManager>(std::move(fonts));
+            warm.push_back({identity,owned,manager});
+            size_t totalBytes=0;for(const auto& item:warm) totalBytes+=item.bytes;
+            while(warm.size()>1 && (warm.size()>4 || totalBytes>64*1024*1024)) {totalBytes-=warm.front().bytes;warm.pop_front();}
+        }
+        if(seeds) {
+            const auto length=env->GetArrayLength(seeds);if(length>8*1024*1024) throw std::invalid_argument("SDF seeds exceed 8 MiB");
+            std::vector<uint8_t> cachedSdfs(length);if(length) env->GetByteArrayRegion(seeds,0,length,reinterpret_cast<jbyte*>(cachedSdfs.data()));
+            if(env->ExceptionCheck()) return nullptr;
+            manager->seedSdfs(fluxx::text::decodeSdfSeeds(cachedSdfs.data(),cachedSdfs.size()));
+        }
         std::vector<uint8_t> wire(static_cast<size_t>(env->GetArrayLength(input)));
         env->GetByteArrayRegion(input,0,static_cast<jsize>(wire.size()),reinterpret_cast<jbyte*>(wire.data()));
         if(env->ExceptionCheck()) return nullptr;
         const auto styled=fluxx::text::decodeStyledInput(wire.data(),wire.size());
         if(nominal && styled.runs.size()!=1) throw std::invalid_argument("Nominal catalogue requires one font run");
-        const auto layout=nominal?manager.nominal(styled.runs[0].fontId,styled.text):
-            manager.shapeStyled("fluxx.sans",styled.text,styled.runs,styled.uppercase,ligatures);
-        const auto packet=fluxx::text::encodePreparedText(*layout,manager);
+        const auto before=manager->stats();const auto shapingStart=std::chrono::steady_clock::now();
+        const auto layout=nominal?manager->nominal(styled.runs[0].fontId,styled.text):
+            manager->shapeStyled("fluxx.sans",styled.text,styled.runs,styled.uppercase,ligatures);
+        isolatedTimings[0]=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-shapingStart).count();
+        const auto packetStart=std::chrono::steady_clock::now();
+        const auto packet=fluxx::text::encodePreparedText(*layout,*manager);
+        isolatedTimings[1]=static_cast<jlong>(manager->stats().rasterNs-before.rasterNs);
+        isolatedTimings[2]=std::max<jlong>(0,std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-packetStart).count()-isolatedTimings[1]);
         const auto result=env->NewByteArray(static_cast<jsize>(packet.size()));
         if(result) env->SetByteArrayRegion(result,0,static_cast<jsize>(packet.size()),reinterpret_cast<const jbyte*>(packet.data()));
         return result;
     } catch(const std::exception& error) { fail(env,error);return nullptr; }
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_com_fluxx_android_engine_IsolatedFontNative_timings(JNIEnv* env,jobject) {
+    const auto result=env->NewLongArray(3);if(result) env->SetLongArrayRegion(result,0,3,isolatedTimings);return result;
 }
 std::shared_ptr<FontManager> fluxx::text::acquireFontCatalog(AAssetManager* source) {
     std::lock_guard<std::mutex> lock(registryMutex);
@@ -146,6 +177,13 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_TextNative_crea
         if (nextSession == INT64_MAX) throw std::runtime_error("Font session IDs exhausted");
         const jlong id = nextSession++; sessions.emplace(id, manager); return id;
     } catch (const std::exception& error) { fail(env, error); return 0; }
+}
+extern "C" JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_TextNative_warmGlyph(JNIEnv* env,jobject,jlong session,jstring font,jint cp) {
+    try {
+        if(cp<32 || cp>255 || (cp>126 && cp<160)) throw std::invalid_argument("Unsupported warm scalar");
+        auto manager=get(session);const auto id=string(env,font);const auto glyph=manager->glyphForCodepoint(id,cp);
+        return glyph?static_cast<jlong>(manager->sdf(id,glyph)->pixels.size()):0;
+    } catch(const std::exception& error) {fail(env,error);return 0;}
 }
 extern "C" JNIEXPORT jstring JNICALL Java_com_fluxx_android_engine_IsolatedFontNative_inspect(JNIEnv* env,jobject,jbyteArray input) {
     try {

@@ -110,5 +110,11 @@ internal fun FontAxisControls(reference: TextFontRef?,apply: (TextFontRef)->Unit
         val values=reference.axes.associate { it.tag to it.value.staticValue }.toMutableMap();values[axis.tag]=value
         apply(face.reference(requireNotNull(reference.sha256),reference.namedInstance,values))
     }
-    if(axis.minimum<axis.maximum) Slider(value,onValueChange={value=it},onValueChangeFinished={commit()},valueRange=axis.minimum..axis.maximum)
+    // Keep the existing axis page/slider. Last value wins on each display frame.
+    var pending by remember(reference?.sha256,reference?.faceIndex,axis.tag) { mutableStateOf<Float?>(null) }
+    val currentCommit by rememberUpdatedState(::commit)
+    LaunchedEffect(pending) {
+        if(pending!=null) {withFrameNanos { };pending=null;currentCommit()}
+    }
+    if(axis.minimum<axis.maximum) Slider(value,onValueChange={value=it;pending=it},onValueChangeFinished={pending=null;commit()},valueRange=axis.minimum..axis.maximum)
 }

@@ -105,6 +105,8 @@ fun EditorScreen(
     val composition = project.composition
     val playheadUs = displayedState.playheadUs
     val selectedLayer = displayedState.selectedLayer
+    var textSelection by remember(selectedLayer?.id) { mutableStateOf<TextSelectionRange?>(null) }
+    var previewMoveGesture by remember {mutableStateOf<Long?>(null)}
     val selectedTextSource = selectedLayer?.text?.source?.evaluateDocument(playheadUs - selectedLayer.resolvedKeyframeAnchorUs) ?: TextSourceDocument("")
     val selectedLigatures=selectedLayer?.let { it.text.effectiveLigatures(playheadUs-it.resolvedKeyframeAnchorUs) } ?: true
     val selectedTextMetrics by produceState<TextLayoutMetrics?>(null, selectedLayer?.type, selectedLayer?.text?.fontId, selectedTextSource,selectedLigatures,libraryFonts,selectedLayer?.text) {
@@ -315,6 +317,15 @@ fun EditorScreen(
                 // 1. Upper Canvas Preview Area (~50% of vertical space)
                 // View-only expansion: never dispatch composition or layer edits here.
                 CompositionPreview(
+                    moveEnabled=selectedLayer?.type==LayerType.TEXT && !textEditor.active,
+                    onMoveBegin={previewController?.pause();editor.beginGesture();previewMoveGesture=editor.activeGestureId},
+                    onMovePreview={transform -> if(previewMoveGesture==editor.activeGestureId) selectedLayer?.let {
+                        editor.editTransform(it.id,transform,true);previewController?.update(editor.displayedState.project,playheadUs,false)
+                    }},
+                    onMoveCommit={previewMoveGesture?.let {editor.commitGesture(it)};previewMoveGesture=null},
+                    onMoveCancel={previewMoveGesture?.let {editor.cancelGesture(it)};previewMoveGesture=null},
+                    textSelection=textSelection,
+                    onTextSelection={ range -> focusManager.clearFocus();previewController?.pause();textSelection=range },
                     mediaRepository = mediaRepository,
                     viewSettings = viewSettings,
                     isExpanded = isExpandedPreview,
@@ -341,6 +352,7 @@ fun EditorScreen(
                     playheadUs = playheadUs,
                     selectedLayerId = displayedState.selectedLayerId,
                     onSelectLayer = { id ->
+                        textSelection=null
                         // Preview selection must never open the inspector. Keep this callback separate.
                         focusManager.clearFocus()
                         textEditor.finish { dismissInspector(); editor.dispatch(EditorAction.Select(id)) }
@@ -520,6 +532,10 @@ fun EditorScreen(
             ) {
                 selectedLayer?.let { layer ->
                     ElementInspectorSheet(
+                        textSelection=textSelection,onTextSelection={ range ->
+                            textSelection=if(range!=null && !range.collapsed) selectedTextMetrics?.geometry(layer.text,playheadUs-layer.resolvedKeyframeAnchorUs)
+                                ?.safeRange(range.start,range.end) ?: range else range
+                        },
                         textTyping = textTyping,
                         textError = textEditor.error ?: textErrors?.takeIf { it.project === project && layer.id in it.layerIds }?.message,
                         onTextBegin = { previewController?.pause(); textEditor.begin(layer.id) },

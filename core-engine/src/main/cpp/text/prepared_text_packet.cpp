@@ -66,6 +66,20 @@ std::vector<uint8_t> encodePreparedText(const Layout& layout,FontManager& fonts)
     }
     return out.bytes;
 }
+std::vector<std::shared_ptr<const SdfGlyph>> decodeSdfSeeds(const uint8_t* bytes,size_t length) {
+    if(!length) return {};
+    if(!bytes || length>8*1024*1024) throw std::invalid_argument("Invalid SDF seed packet");
+    Reader in{bytes,length};if(in.integer()!=0x46534331) throw std::invalid_argument("Unsupported SDF settings cache");
+    std::vector<std::shared_ptr<const SdfGlyph>> images;const auto count=in.count(8192);
+    for(uint32_t i=0;i<count;++i) {
+        auto image=std::make_shared<SdfGlyph>();image->fontId=in.string();image->glyphId=in.count(UINT32_MAX);
+        image->overlaps=in.count(1)!=0;image->width=in.count(2048);image->height=in.count(2048);
+        image->left=in.signedInteger();image->top=in.signedInteger();const auto pixels=in.count(2048*2048);
+        if(pixels!=static_cast<uint32_t>(image->width*image->height) || pixels>length-in.at) throw std::invalid_argument("Invalid cached SDF pixels");
+        image->pixels.assign(bytes+in.at,bytes+in.at+pixels);in.at+=pixels;images.push_back(image);
+    }
+    if(in.at!=length) throw std::invalid_argument("Trailing SDF cache data");return images;
+}
 
 std::shared_ptr<const Layout> decodePreparedText(const uint8_t* bytes,size_t length) {
     if(!bytes || length>MaxPreparedPacketBytes) throw std::invalid_argument("Invalid prepared text packet size");

@@ -42,7 +42,12 @@ internal fun CharacterControls(document: TextSourceDocument,start: Int,end: Int,
                 TextButton(onClick={apply { it.copy(fauxBold=!style.fauxBold) }}) { Text("Faux bold: ${style.fauxBold}") }
                 TextButton(onClick={apply { it.copy(fauxItalic=!style.fauxItalic) }}) { Text("Faux italic: ${style.fauxItalic}") }
             }
-            CharacterChoice("Caps: ${style.caps}",TextCaps.entries.map { it.name }) { index -> apply { it.copy(caps=TextCaps.entries[index]) } }
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(2.dp)) {
+                listOf(TextCaps.NONE to "Normal",TextCaps.ALL to "ALL CAPS",TextCaps.LOWER to "lowercase",TextCaps.SMALL to "Small Caps").forEach { (value,label) ->
+                    FilterChip(selected=style.caps==value,onClick={apply { it.copy(caps=value) }},
+                        label={Text(label,style=MaterialTheme.typography.labelSmall)},modifier=Modifier.weight(1f))
+                }
+            }
         }
         2 -> {
             CharacterChoice("Script: ${style.script}",TextScriptPosition.entries.map { it.name }) { index -> apply { it.copy(script=TextScriptPosition.entries[index]) } }

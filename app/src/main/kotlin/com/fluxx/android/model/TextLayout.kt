@@ -68,6 +68,7 @@ class TextLayoutMetrics private constructor(private val data: DoubleArray, val s
         linePool: LinePermutationPool=LinePermutationPool(),catalogue: TextCharacterCatalogue?=characterCatalogue): PreparedTextAnimation? =
         if(data.size>6+lines*2+glyphs*8) PreparedTextAnimation(text,data,ease,document,linePool,characterCatalogue=catalogue) else null
     internal fun withCharacterCatalogue(catalogue: TextCharacterCatalogue)=TextLayoutMetrics(data,sourceEmpty,sourceDocument,catalogue)
+    internal fun withDocument(document: TextSourceDocument)=TextLayoutMetrics(data,sourceEmpty,document,characterCatalogue)
     @Synchronized private fun animation(text: TextProperties): PreparedTextAnimation? {
         if(boundsText!==text) { boundsAnimation=prepareAnimation(text,SelectorEaseTable.shared);boundsText=text };return boundsAnimation
     }
@@ -79,6 +80,10 @@ class TextLayoutMetrics private constructor(private val data: DoubleArray, val s
     @Synchronized fun strokeClampLabel(text: TextProperties,time: Long,start: Int,end: Int): String? {
         val prepared=animation(text) ?: return null;prepared.evaluate(time)
         return prepared.strokeClampLabel(start,end)
+    }
+    @Synchronized fun geometry(text: TextProperties,time: Long): TextPreparedGeometry? {
+        val prepared=animation(text) ?: return null;prepared.evaluate(time)
+        return prepared.geometrySnapshot()
     }
     companion object {
         fun fromNative(values: DoubleArray, sourceEmpty: Boolean,document: TextSourceDocument?=null): TextLayoutMetrics {

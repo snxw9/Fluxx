@@ -203,6 +203,34 @@ int main(int argc, char** argv) {
                 const auto upper=manager.shapeStyled("fluxx.sans","ab",{caps},{'A','B'});
                 require(upper->glyphs[0].id==manager.glyphForCodepoint("fluxx.sans",'A'),"Simple uppercase was not shaped");
                 require(upper->characters.size()==2,"Uppercase changed logical membership");
+                {
+                    const std::string sample="Hello World 123!?";
+                    const std::vector<uint32_t> mapping={'H','E','L','L','O',' ','W','O','R','L','D',' ','1','2','3','!','?'};
+                    for(const auto& family:{"fluxx.sans","fluxx.serif","fluxx.mono"}) {
+                        StyledRun run;run.start=0;run.end=static_cast<uint32_t>(sample.size());run.caps=2;
+                        const auto small=manager.shapeStyled(family,sample,{run},mapping,false);
+                        for(size_t g=0;g<small->glyphs.size();++g) {
+                            const auto cp=sample[small->glyphs[g].cluster];
+                            if(!(cp>='a' && cp<='z')) {
+                                require(small->geometry[g].fontSize==1,"Small caps scaled a capital/digit/punctuation");
+                                require(small->glyphs[g].id==manager.glyphForCodepoint(family,cp),"Small caps substituted a capital/digit/punctuation");
+                            }
+                        }
+                        run.caps=0;run.fauxBold=true;run.fauxItalic=true;
+                        for(unsigned script:{1u,2u}) {
+                            run.script=script;
+                            const auto positioned=manager.shapeStyled(family,sample,{run},mapping,false);
+                            for(const auto& geometry:positioned->geometry) {
+                                require(geometry.fontSize==.583,"Script did not synthesize every glyph");
+                                require(geometry.baseline==(script==1?-.333:.333)*1000,"Script parent-em offset changed");
+                            }
+                        }
+                    }
+                    StyledRun run;run.start=0;run.end=4;run.caps=3;
+                    const auto lower=manager.shapeStyled("fluxx.sans","Text",{run},{'t','e','x','t'},false);
+                    require(lower->glyphs[0].id==manager.glyphForCodepoint("fluxx.sans",'t'),"Simple lowercase did not reach shaping");
+                    require(lower->characters.size()==4 && lower->geometry[0].fontSize==1,"Lowercase changed size/source membership");
+                }
                 if(!manager.hasFeature("fluxx.mono",0x736d6370u)) {
                     StyledRun small;small.start=0;small.end=2;small.caps=2;
                     const auto sharp=manager.shapeStyled("fluxx.mono","\xc3\x9f",{small},{0xdf});

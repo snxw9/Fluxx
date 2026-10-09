@@ -59,6 +59,7 @@ struct Face {
 struct FontManager::Impl {
     unsigned ppem = Ppem, spread = Spread;
     uint64_t shapes=0;
+    uint64_t shapingNs=0,rasterNs=0;
     FT_Library library = nullptr;
     std::mutex mutex;
     std::vector<std::unique_ptr<Face>> faces;
@@ -167,6 +168,7 @@ FontManager::FontManager(std::vector<FontInput> fonts, size_t budget, unsigned p
 FontManager::~FontManager() = default;
 
 std::shared_ptr<const Layout> FontManager::shape(const std::string& id, const std::string& text, bool ligatures,bool kerning,unsigned features) {
+    const auto began=std::chrono::steady_clock::now();
     validateUtf8(text);
     auto guard = impl_->lock();
     auto& face = impl_->resolve(id);
@@ -197,14 +199,14 @@ std::shared_ptr<const Layout> FontManager::shape(const std::string& id, const st
         hb_buffer_set_cluster_level(buffer.get(), HB_BUFFER_CLUSTER_LEVEL_MONOTONE_GRAPHEMES);
         // Feed each line independently, then restore global UTF-8 byte clusters.
         hb_buffer_add_utf8(buffer.get(), text.data() + start, static_cast<int>(length), 0, static_cast<int>(length));
-        hb_feature_t settings[7];unsigned settingsCount=0;
+        hb_feature_t settings[4];unsigned settingsCount=0;
         if(!ligatures) {
             settings[settingsCount++]={HB_TAG('l','i','g','a'),0,0,UINT32_MAX};
             settings[settingsCount++]={HB_TAG('c','l','i','g'),0,0,UINT32_MAX};
         }
         if(!kerning) settings[settingsCount++]={HB_TAG('k','e','r','n'),0,0,UINT32_MAX};
-        const hb_tag_t tags[]={HB_TAG('s','m','c','p'),HB_TAG('c','2','s','c'),HB_TAG('s','u','p','s'),HB_TAG('s','u','b','s')};
-        for(unsigned feature=0;feature<4;++feature) if(features&(1u<<feature)) settings[settingsCount++]={tags[feature],1,0,UINT32_MAX};
+        if(features>1) throw std::invalid_argument("Only lowercase smcp is supported; script positioning is synthetic");
+        if(features&1u) settings[settingsCount++]={HB_TAG('s','m','c','p'),1,0,UINT32_MAX};
         hb_shape(face.font, buffer.get(), settings, settingsCount);
         if (!hb_buffer_allocation_successful(buffer.get())) throw std::bad_alloc();
         unsigned count = 0;
@@ -272,6 +274,7 @@ std::shared_ptr<const Layout> FontManager::shape(const std::string& id, const st
     impl_->layouts.push_back({key, result});
     // 64 bounded layouts, each at most MaxTextBytes input. Leases survive eviction.
     if (impl_->layouts.size() > 64) impl_->layouts.pop_front();
+    impl_->shapingNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-began).count();
     return result;
 }
 
@@ -331,18 +334,16 @@ std::shared_ptr<const Layout> FontManager::shapeStyled(const std::string& id,con
     uint32_t end=0;size_t point=0;
     for(const auto& run:runs) {
         if(run.start!=end || run.end<=run.start || run.end>text.size() || !std::isfinite(run.size) || run.size<=0 ||
-           !std::isfinite(run.horizontal) || run.horizontal<0 || !std::isfinite(run.vertical) || run.vertical<0 || run.caps>2 || run.script>2)
+           !std::isfinite(run.horizontal) || run.horizontal<0 || !std::isfinite(run.vertical) || run.vertical<0 || run.caps>3 || run.script>2)
             throw std::invalid_argument("Invalid styled run");
         end=run.end;
         const auto requestedFont=run.fontId.empty()?id:run.fontId;
         auto font=requestedFont;bool small=false;unsigned features=0;double scriptScale=1,scriptOffset=0;
         auto configure=[&]() {
             small=run.caps==2 && hasFeature(font,HB_TAG('s','m','c','p'));features=small?1u:0u;
-            if(small && hasFeature(font,HB_TAG('c','2','s','c'))) features|=2u;
-            const bool scriptFeature=run.script!=0 && hasFeature(font,run.script==1?HB_TAG('s','u','p','s'):HB_TAG('s','u','b','s'));
-            if(scriptFeature) features|=run.script==1?4u:8u;
-            scriptScale=run.script && !scriptFeature?.583:1;
-            scriptOffset=run.script && !scriptFeature?(run.script==1?-.333:.333)*run.size*1000:0;
+            // Synthetic script positioning applies uniformly, including capitals and imported faces.
+            scriptScale=run.script?.583:1;
+            scriptOffset=run.script?(run.script==1?-.333:.333)*run.size*1000:0;
         };
         configure();
         std::string display;std::vector<uint32_t> mapping;double synthetic=1;uint32_t chunkLine=0;
@@ -399,7 +400,8 @@ std::shared_ptr<const Layout> FontManager::shapeStyled(const std::string& id,con
                     const bool nativeSmall=run.caps==2 && hasFeature(candidate,HB_TAG('s','m','c','p'));
                     for(size_t q=current;q<stop;++q) {
                         auto cp=points[q].cp;
-                        if(run.caps==1 || (run.caps==2 && !nativeSmall)) if(glyphForCodepoint(candidate,points[q].upper)) cp=points[q].upper;
+                        const bool lower=hb_unicode_general_category(hb_unicode_funcs_get_default(),cp)==HB_UNICODE_GENERAL_CATEGORY_LOWERCASE_LETTER;
+                        if(run.caps==1 || run.caps==3 || (run.caps==2 && !nativeSmall && lower)) if(glyphForCodepoint(candidate,points[q].upper)) cp=points[q].upper;
                         if(!glyphForCodepoint(candidate,cp)) return false;
                     }
                     return true;
@@ -410,11 +412,21 @@ std::shared_ptr<const Layout> FontManager::shapeStyled(const std::string& id,con
                 if(selected!=font) { flush();font=selected;configure(); }
             }
             const bool lowercase=category==HB_UNICODE_GENERAL_CATEGORY_LOWERCASE_LETTER;
-            const double scale=mark && !display.empty()?synthetic:(run.caps==2 && !small && lowercase?.7:1);
-            if(!display.empty() && (chunkLine!=p.line || synthetic!=scale)) flush();
+            // A feature's presence does not establish coverage of this glyph. Probe smcp
+            // in preparation, then choose the native or synthetic path for this base.
+            bool nativeSmall=small && lowercase;
+            if(nativeSmall) {
+                std::string probe;append(probe,p.cp);
+                const auto mapped=shape(font,probe,false,run.kerning,1);
+                nativeSmall=!mapped->glyphs.empty() && mapped->glyphs[0].id!=0 && mapped->glyphs[0].id!=glyphForCodepoint(font,p.cp);
+            }
+            const unsigned nextFeatures=mark && !display.empty()?features:(nativeSmall?1u:0u);
+            const double scale=mark && !display.empty()?synthetic:(run.caps==2 && !nativeSmall && lowercase?.7:1);
+            if(!display.empty() && (chunkLine!=p.line || synthetic!=scale || features!=nextFeatures)) flush();
+            features=nextFeatures;
             synthetic=scale;chunkLine=p.line;
             uint32_t cp=p.cp;
-            if(run.caps==1 || (run.caps==2 && !small)) if(glyphForCodepoint(font,p.upper)!=0) cp=p.upper;
+            if(run.caps==1 || run.caps==3 || (run.caps==2 && !nativeSmall && lowercase)) if(glyphForCodepoint(font,p.upper)!=0) cp=p.upper;
             const auto before=display.size();append(display,cp);mapping.resize(display.size(),p.start);
             if(display.size()<=before) throw std::logic_error("Empty display mapping");
         }
@@ -455,6 +467,7 @@ std::shared_ptr<const SdfGlyph> FontManager::sdf(const std::string& id, uint32_t
         impl_->rasters.splice(impl_->rasters.end(), impl_->rasters, found->second);
         return found->second->value;
     }
+    const auto rasterStart=std::chrono::steady_clock::now();
     FT_Bool enabled = overlaps ? 1 : 0;
     ftCheck(FT_Property_Set(impl_->library, "sdf", "overlaps", &enabled), "Set SDF overlaps");
     ftCheck(FT_Set_Pixel_Sizes(face.ft, 0, impl_->ppem), "FT_Set_Pixel_Sizes");
@@ -482,12 +495,24 @@ std::shared_ptr<const SdfGlyph> FontManager::sdf(const std::string& id, uint32_t
     impl_->rasters.push_back({key, result});
     impl_->index[key] = std::prev(impl_->rasters.end());
     impl_->evict();
+    impl_->rasterNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-rasterStart).count();
     return result;
 }
 
 uint32_t FontManager::glyphForCodepoint(const std::string& id, uint32_t codepoint) {
     auto guard = impl_->lock();
     return FT_Get_Char_Index(impl_->resolve(id).ft, codepoint);
+}
+void FontManager::seedSdfs(const std::vector<std::shared_ptr<const SdfGlyph>>& images) {
+    auto guard=impl_->lock();
+    for(const auto& image:images) {
+        const auto found=std::find_if(impl_->faces.begin(),impl_->faces.end(),[&](const auto& face){return face->input.id==image->fontId;});
+        if(found==impl_->faces.end() || image->glyphId>=static_cast<uint32_t>((*found)->ft->num_glyphs)) continue;
+        const auto key=image->fontId+':'+std::to_string(image->glyphId)+(image->overlaps?":1":":0");
+        if(impl_->index.count(key)) continue;
+        impl_->rasters.push_back({key,image});impl_->index[key]=std::prev(impl_->rasters.end());
+    }
+    impl_->evict();
 }
 std::shared_ptr<const Layout> FontManager::nominal(const std::string& id,const std::string& text) {
     validateUtf8(text);
@@ -539,7 +564,7 @@ std::vector<uint32_t> FontManager::latinGlyphs(const std::string& id) {
 }
 FontStats FontManager::stats() {
     auto guard = impl_->lock();
-    FontStats result{impl_->rasterizations, impl_->hits, impl_->waitNs, 0, 0, impl_->layouts.size(), impl_->shapes};
+    FontStats result{impl_->rasterizations, impl_->hits, impl_->waitNs, 0, 0, impl_->layouts.size(), impl_->shapes,impl_->shapingNs,impl_->rasterNs};
     for (const auto& entry : impl_->rasters) {
         result.cacheBytes += entry.value->pixels.size();
         if (entry.value.use_count() > 1) result.pinnedBytes += entry.value->pixels.size();

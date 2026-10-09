@@ -50,7 +50,7 @@ class FontLibraryRepository private constructor(private val context: Context) {
             val inspected=FontMetadataCodec.inspect(FontWorkerClient(context).inspect(staging))
             require(faces==null || faces.isNotEmpty() && faces.all { i -> inspected.any { it.index==i } }) { "Choose valid collection face indices" }
             val selected=inspected.filter { faces==null || it.index in faces }
-            lock.withLock {
+            val imported=lock.withLock {
                 loadLocked()
                 val existing=mutable.value.find { it.sha256==hash }
                 val entry=FontLibraryEntry(hash,staging.length(),(existing?.faces.orEmpty()+selected).distinctBy { it.index }.sortedBy { it.index })
@@ -61,6 +61,8 @@ class FontLibraryRepository private constructor(private val context: Context) {
                 catch(e: Exception) { file.failWrite(stream);throw e }
                 writeIndex(encoded);revision=Math.addExact(revision,1);mutable.value=next;entry
             }
+            for(face in imported.faces) com.fluxx.android.render.TextIdlePrewarm.imported(context,face.reference(imported.sha256))
+            imported
         } finally { staging.delete() }
     }.await()
     /** Caller supplies the existing confirmation dialog; requested project refs are untouched. */

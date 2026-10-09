@@ -413,6 +413,7 @@ TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, con
 void TextRenderer::upload(VkCommandBuffer command) {
     if(!image_) return;
     if(dirty_) {
+        const auto uploadStart=std::chrono::steady_clock::now();
         const VkDeviceSize pageBytes=2048u*2048u;
         const VkDeviceSize bytes=pageBytes*allocatedPages_;
         buffer(staging_,bytes,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
@@ -436,6 +437,7 @@ void TextRenderer::upload(VkCommandBuffer command) {
         barrier.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT; barrier.dstAccessMask=VK_ACCESS_SHADER_READ_BIT;
         vkCmdPipelineBarrier(command,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,0,0,nullptr,0,nullptr,1,&barrier);
         initialized_=true; dirty_=false; ++stats_.uploads; stats_.uploadBytes+=bytes;
+        stats_.atlasUploadCpuNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-uploadStart).count();
     }
     buffer(vertex_,vertices_.size()*sizeof(TextVertex),VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     buffer(index_,indices_.size()*sizeof(uint32_t),VK_BUFFER_USAGE_INDEX_BUFFER_BIT);

@@ -70,6 +70,7 @@ struct FontStats {
     uint64_t rasterizations, cacheHits, lockWaitNs;
     size_t cacheBytes, pinnedBytes, layouts;
     uint64_t shapes=0;
+    uint64_t shapingNs=0,rasterNs=0;
 };
 
 /** CPU only. All face mutation is serialized; immutable results outlive the manager safely.
@@ -93,6 +94,7 @@ public:
     std::shared_ptr<const Layout> nominal(const std::string& fontId,const std::string& utf8);
     bool hasFeature(const std::string& fontId,uint32_t tag);
     std::shared_ptr<const SdfGlyph> sdf(const std::string& fontId, uint32_t glyphId, bool overlaps = true);
+    void seedSdfs(const std::vector<std::shared_ptr<const SdfGlyph>>& images);
     std::vector<uint32_t> latinGlyphs(const std::string& fontId);
     uint32_t glyphForCodepoint(const std::string& fontId, uint32_t codepoint);
     FontStats stats();

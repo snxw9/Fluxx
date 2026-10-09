@@ -26,6 +26,8 @@ class FontWorkerService : Service() {
                 val output=message.data.getParcelable<ParcelFileDescriptor>(OUTPUT)
                 @Suppress("DEPRECATION")
                 val rows=message.data.getParcelableArrayList<Bundle>(FONTS).orEmpty()
+                @Suppress("DEPRECATION")
+                val cache=message.data.getParcelable<ParcelFileDescriptor>(CACHE)
                 val main=Handler(Looper.getMainLooper())
                 val watchdog=Runnable { android.os.Process.killProcess(android.os.Process.myPid()) }
                 main.postDelayed(watchdog,60_000)
@@ -59,15 +61,19 @@ class FontWorkerService : Service() {
                                 collected.toByteArray()
                             }
                         }.toTypedArray()
+                        val seeds=cache?.let { descriptor -> ParcelFileDescriptor.AutoCloseInputStream(descriptor).use {stream ->
+                            val bytes=stream.readBytesLimited(8*1024*1024);bytes
+                        } } ?: ByteArray(0)
                         IsolatedFontParser.prepare(assets,rows.map { requireNotNull(it.getString("id")) }.toTypedArray(),fonts,
                             rows.map { it.getInt("face") }.toIntArray(),rows.map { it.getInt("instance",-1) }.toIntArray(),
                             rows.map { it.getString("tags").orEmpty() }.toTypedArray(),rows.map { it.getFloatArray("values") ?: FloatArray(0) }.toTypedArray(),
-                            bytes,message.data.getBoolean("ligatures"),message.data.getBoolean("nominal"))
+                            bytes,message.data.getBoolean("ligatures"),message.data.getBoolean("nominal"),seeds)
                     }
                     ParcelFileDescriptor.AutoCloseOutputStream(output).use { it.write(result) }
-                    reply.data=Bundle().apply { putBoolean(OK,true) }
+                    reply.data=Bundle().apply { putBoolean(OK,true);if(message.what==PREPARE && com.fluxx.android.BuildConfig.DEBUG) putLongArray("timings",IsolatedFontParser.timings()) }
                 } catch(e: Exception) {
                     runCatching { input?.close() };runCatching { output?.close() }
+                    runCatching { cache?.close() }
                     reply.data=Bundle().apply { putString(ERROR,e.message?.take(1024) ?: "Font validation failed") }
                 } finally {
                     main.removeCallbacks(watchdog)
@@ -83,10 +89,15 @@ class FontWorkerService : Service() {
         })
     }
     override fun onBind(intent: Intent)=endpoint.binder
+    private fun java.io.InputStream.readBytesLimited(limit: Int): ByteArray {
+        val result=ByteArrayOutputStream();val buffer=ByteArray(8192)
+        while(true) {val n=read(buffer);if(n<0) break;require(n<=limit-result.size());result.write(buffer,0,n)}
+        return result.toByteArray()
+    }
     override fun onDestroy() { thread.quitSafely();super.onDestroy() }
     companion object {
         const val INSPECT=1
-        const val PREPARE=2;const val FONTS="fonts"
+        const val PREPARE=2;const val FONTS="fonts";const val CACHE="sdf-cache"
         internal const val CRASH_PROOF=99
         const val INPUT="input";const val OUTPUT="output";const val OK="ok";const val ERROR="error"
         const val MAX_FONT_BYTES=16*1024*1024;const val MAX_METADATA_BYTES=4*1024*1024

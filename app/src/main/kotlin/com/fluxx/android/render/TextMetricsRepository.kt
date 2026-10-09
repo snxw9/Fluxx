@@ -37,6 +37,7 @@ class NativeTextMetricsProvider(private val context: Context) : TextMetricsProvi
 /** Process-owned CPU service. Session creation, shaping and mutex waits all occur on this worker. */
 class TextMetricsRepository private constructor(context: Context) {
     private val app = context.applicationContext
+    init {TextEditTimings.initialize(app)}
     private val dispatcher = Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "Fluxx-text-metrics") }.asCoroutineDispatcher()
     private val cache = object : LinkedHashMap<Triple<String, String,Boolean>, TextLayoutMetrics>(64, .75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Triple<String, String,Boolean>, TextLayoutMetrics>?) = size > 64
@@ -55,9 +56,18 @@ class TextMetricsRepository private constructor(context: Context) {
         if(fontRevision!=fontLibrary.revision) { richCache.clear();characterCache.clear();fontRevision=fontLibrary.revision }
         require(source.paragraphs.all { it.direction==com.fluxx.android.model.ParagraphDirection.LTR }) { "RTL layout requires T5; requested direction is preserved" }
         val native=provider ?: NativeTextMetricsProvider(app).also { provider=it }
-        val partner=Triple(font,source,!ligatures)
-        if(!richCache.containsKey(partner)) richCache[partner]=native.measure(font,source,!ligatures)
-        val layout=richCache.getOrPut(Triple(font,source,ligatures)) { native.measure(font,source,ligatures) }
+        TextIdlePrewarm.foreground(app)
+        val keyStart=System.nanoTime()
+        val shaping=StyledTextPreparation.shapingDocument(source)
+        TextEditTimings.record("key_build",System.nanoTime()-keyStart)
+        val layout=richCache.getOrPut(Triple(font,shaping,ligatures)) {
+            val start=System.nanoTime();native.measure(font,shaping,ligatures).also {TextEditTimings.record("metrics_preparation",System.nanoTime()-start)}
+        }.withDocument(source)
+        if(text!=null && StyledTextPreparation.needsBothModes(text)) {
+            val partner=Triple(font,shaping,!ligatures)
+            if(!richCache.containsKey(partner)) richCache[partner]=native.measure(font,shaping,!ligatures)
+        }
+        else TextIdlePrewarm.partner(app,font,shaping,!ligatures)
         if(text!=null && com.fluxx.android.model.TextCharacterPreparation.needed(text)) {
             val documents=StyledTextPreparation.alternatives(text.source)
             val key=font to text
@@ -67,12 +77,6 @@ class TextMetricsRepository private constructor(context: Context) {
     }
     suspend fun measure(font: String, source: String,ligatures: Boolean=true): TextLayoutMetrics = withContext(dispatcher) {
         check(Looper.myLooper() != Looper.getMainLooper())
-        // Prepare the partner layout too: a tracking zero crossing can reuse geometry immediately.
-        val partner=Triple(font,source,!ligatures)
-        if(!cache.containsKey(partner)) {
-            val native=provider ?: NativeTextMetricsProvider(app).also { provider=it }
-            cache[partner]=native.measure(font,source,!ligatures)
-        }
         cache.getOrPut(Triple(font,source,ligatures)) {
             val native = provider ?: NativeTextMetricsProvider(app).also { provider = it }
             native.measure(font, source,ligatures)

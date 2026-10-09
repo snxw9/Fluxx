@@ -5,6 +5,13 @@ import java.io.DataOutputStream
 
 /** Preparation-only wire value; Java's simple uppercase mapping never changes source membership. */
 object StyledTextPreparation {
+    /** Only inputs consumed by shaping/raster geometry belong to this key. Layout and paint
+     * remain in the held document and are evaluated against the shared prepared advances. */
+    fun shapingDocument(document: TextSourceDocument): TextSourceDocument = TextSourceDocument(document.text,
+        FrozenList.of(document.runs.map { run -> run.copy(style=run.style.copy(fill=null,stroke=null,
+            strokeDelta=0f,trackingDelta=0f,baselineDelta=0f,manualKerning=FrozenList.empty())) }))
+
+    fun needsBothModes(text: TextProperties): Boolean = text.ligatures.isAnimated || text.tracking.isAnimated
     /** Catalogue resources are not user Source Text; allow 4096 scalar entries, including astral ones. */
     fun nominal(codepoints: IntArray,font: String): ByteArray {
         require(codepoints.size in 1..TextCharacterPreparation.MAX_CODEPOINTS)
@@ -28,7 +35,7 @@ object StyledTextPreparation {
         var i=0;var bytes=0
         while(i<source.length) {
             offsets[i]=bytes;val cp=source.codePointAt(i)
-            uppercase.add(Character.toUpperCase(cp))
+            uppercase.add(if(document.runAt(i)?.style?.caps==TextCaps.LOWER) Character.toLowerCase(cp) else Character.toUpperCase(cp))
             bytes+=when { cp<0x80->1;cp<0x800->2;cp<0x10000->3;else->4 }
             i+=Character.charCount(cp)
         }

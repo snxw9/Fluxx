@@ -47,6 +47,7 @@ table TextStyleRun {
   has_fill: bool; fill: int = -1; has_stroke: bool; stroke: int = -16777216;
   stroke_delta: float; tracking_delta: float; baseline_delta: float;
   faux_bold: bool; faux_italic: bool; caps: int; script_position: int;
+  // caps: 0 Normal, 1 ALL CAPS, 2 Small Caps, 3 lowercase (additive v12).
   horizontal_scale: float = 100; vertical_scale: float = 100; kerning: int;
   manual_kerning: [TextManualKerning];
 }

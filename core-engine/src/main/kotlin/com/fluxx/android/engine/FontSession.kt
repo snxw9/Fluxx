@@ -34,6 +34,7 @@ class FontSession(assets: AssetManager) : AutoCloseable {
         require(input.size<=1024*1024)
         TextNative.preparedPacket(it,fontId,input,ligatures,nominal)
     }
+    @Synchronized fun warmGlyph(fontId: String,codepoint: Int): Long = withHandle {TextNative.warmGlyph(it,fontId,codepoint)}
 
     @Synchronized
     override fun close() {
@@ -50,6 +51,7 @@ internal object TextNative {
     external fun metrics(handle: Long, font: String, utf8: ByteArray,ligatures: Boolean): DoubleArray
     external fun styledMetrics(handle: Long,font: String,input: ByteArray,ligatures: Boolean): DoubleArray
     external fun preparedPacket(handle: Long,font: String,input: ByteArray,ligatures: Boolean,nominal: Boolean): ByteArray
+    external fun warmGlyph(handle: Long,font: String,codepoint: Int): Long
     external fun preparedMetrics(input: ByteArray): DoubleArray
     external fun preparedPreview(input: ByteArray,width: Int,height: Int,colour: Int): IntArray
 }

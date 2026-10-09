@@ -16,6 +16,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import com.fluxx.android.editor.*
 import com.fluxx.android.model.*
@@ -30,7 +31,8 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
     onScalarPreview: (AnimPropertyType, Float) -> Unit,
     onCharacter: (Int,Int,(TextRunStyle)->TextRunStyle)->Unit = { _,_,_-> },
     onDraftSelection: (String,Int,Int)->Unit = { value,_,_->onDraft(value) },
-    onParagraph: (Int,Int,(TextParagraphStyle)->TextParagraphStyle)->Unit = { _,_,_-> },onBoxWidth: (Float)->Unit = {}) {
+    onParagraph: (Int,Int,(TextParagraphStyle)->TextParagraphStyle)->Unit = { _,_,_-> },onBoxWidth: (Float)->Unit = {},compositionWidth: Int=0,
+    selection: TextSelectionRange?=null,onSelection: (TextSelectionRange?)->Unit = {}) {
     val local = time - layer.resolvedKeyframeAnchorUs
     val evaluated = layer.text.source.evaluate(local)
     val fontLibrary=com.fluxx.android.fonts.FontLibraryRepository.getInstance(LocalContext.current)
@@ -45,6 +47,10 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
     var focused by remember(layer.id) { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     LaunchedEffect(evaluated, focused) { if (!focused && draft.text!=evaluated) draft = TextFieldValue(evaluated) }
+    LaunchedEffect(selection,draft.text) {
+        val range=selection ?: TextSelectionRange(0,0)
+        draft=draft.copy(selection=TextRange(range.start.coerceAtMost(draft.text.length),range.end.coerceAtMost(draft.text.length)))
+    }
     fun done() { focusManager.clearFocus(); onFinish() }
     var page by remember(layer.id) { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -62,6 +68,7 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
         }
         OutlinedTextField(value = draft, onValueChange = {
             val previous=draft;val changed=previous.text!=it.text;draft = it
+            onSelection(TextSelectionRange(it.selection.min,it.selection.max))
             if(changed) {
                 val delta=it.text.length-previous.text.length
                 val start=if(previous.selection.collapsed && delta<0) it.selection.min else previous.selection.min
@@ -79,9 +86,10 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
         if (compact) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = { onCancel(); focusManager.clearFocus() }) { Text("Cancel") }
-                Button(onClick = { done() }) { Text("Done") }
+                Button(onClick = { done();onSelection(null) }) { Text("Done") }
             }
         } else {
+            if(selection!=null && !selection.collapsed) TextButton(onClick={onSelection(null);done()}) { Text("Done selection") }
             var fontsOpen by remember { mutableStateOf(false) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Box(Modifier.weight(1f)) {
@@ -128,7 +136,8 @@ internal fun TextEditorControls(layer: CompositionLayer, time: Long, compact: Bo
         }
         if (!compact && page == 4) {
             val document=layer.text.source.evaluateDocument(local).replace(draft.text)
-            ParagraphControls(document,draft.selection.min,draft.selection.max,layer.text.alignment,onParagraph,onBoxWidth)
+            ParagraphControls(document,draft.selection.min,draft.selection.max,layer.text.alignment,onParagraph,onBoxWidth,
+                if(compositionWidth>0) runCatching { TextEdits.fillCompositionWidth(layer,time,compositionWidth) }.getOrNull() else null)
         }
         if (!compact && page == 3) {
             val document=layer.text.source.evaluateDocument(local).replace(draft.text)

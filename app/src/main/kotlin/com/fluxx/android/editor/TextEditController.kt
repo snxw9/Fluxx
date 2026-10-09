@@ -21,6 +21,8 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
         val after = mutableListOf<() -> Unit>()
     }
     private var session: Session? = null
+    private var pendingRunEdit: (() -> Unit)?=null
+    private var pendingLayerEdit: TextProperties?=null
     var error by mutableStateOf<String?>(null)
         private set
     val active get() = session != null
@@ -51,10 +53,15 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
         val s = session ?: return
         if (s.finishing) return
         s.draft=text
+        com.fluxx.android.render.TextEditTimings.begin()
         val revision = ++s.revision
         s.job?.cancel()
         s.job = scope.launch {
             try {
+                // Conflate interactive drafts to the next display frame; the final draft is
+                // awaited by finish(), preserving the existing gesture transaction.
+                if(coroutineContext[androidx.compose.runtime.MonotonicFrameClock]!=null) androidx.compose.runtime.withFrameNanos { }
+                // Host-only controllers have no display clock and retain synchronous scheduling.
                 val local = s.time - s.layer.resolvedKeyframeAnchorUs
                 val old = s.layer.text
                 val oldSource = old.source.evaluate(local); val newSource = text.source.evaluate(local)
@@ -69,6 +76,7 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
                         s.layer.referenceHeight.takeIf { it > 0 } ?: s.state.project.composition.height,
                         old.alignment, text.alignment) else null
                 editor.previewGesture(EditorAction.Batch(listOf(EditorAction.SetTextPayload(s.layer.id, text, position))), s.token)
+                com.fluxx.android.render.TextEditTimings.expect(editor.displayedState.project)
                 error = null; changed()
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) { if (session === s && revision == s.revision) error = failure.message ?: "Text layout unavailable" }
@@ -93,20 +101,28 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
     fun cancel() {
         val s = session ?: return
         session = null; s.job?.cancel(); editor.cancelGesture(s.token)
+        pendingRunEdit=null;pendingLayerEdit=null
         error = null; typingChanged(false); changed()
     }
-    fun edit(id: Long, text: TextProperties) { finish {
+    fun edit(id: Long, text: TextProperties) {
+        pendingLayerEdit=text
+        finish {
+        val latest=pendingLayerEdit ?: return@finish;pendingLayerEdit=null
         val current = editor.state.project.composition.layers.first { it.id == id }.text
-        begin(id, false); preview(current.copy(fontId = text.fontId, alignment = text.alignment)); finish()
+        begin(id, false); preview(current.copy(fontId = latest.fontId, alignment = latest.alignment)); finish()
     } }
-    fun format(id: Long,start: Int,end: Int,change: (TextRunStyle)->TextRunStyle) { finish {
+    fun format(id: Long,start: Int,end: Int,change: (TextRunStyle)->TextRunStyle) {
+        pendingRunEdit={applyFormat(id,start,end,change)}
+        finish {val latest=pendingRunEdit;pendingRunEdit=null;latest?.invoke()}
+    }
+    private fun applyFormat(id: Long,start: Int,end: Int,change: (TextRunStyle)->TextRunStyle) {
         val layer=editor.state.project.composition.layers.first { it.id==id }
         val time=editor.state.project.composition.frameRate.snap(editor.state.playheadUs)
         val document=layer.text.source.evaluateDocument(time-layer.resolvedKeyframeAnchorUs)
         val a=start.coerceIn(0,document.text.length);val b=end.coerceIn(a,document.text.length)
-        val formatted=try { document.format(a,b,change) } catch(failure: IllegalArgumentException) { error=failure.message;return@finish }
+        val formatted=try { document.format(a,b,change) } catch(failure: IllegalArgumentException) { error=failure.message;return }
         begin(id,false);preview(TextEdits.document(layer,time,formatted));finish()
-    } }
+    }
     fun boxWidth(value: Float) {
         val s=session ?: return
         try {
@@ -121,13 +137,24 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
         val time=editor.state.project.composition.frameRate.snap(editor.state.playheadUs)
         val document=layer.text.source.evaluateDocument(time-layer.resolvedKeyframeAnchorUs)
         val a=start.coerceIn(0,document.text.length);val b=end.coerceIn(a,document.text.length)
-        val formatted=try { document.formatParagraphs(a,b,change) } catch(failure: IllegalArgumentException) { error=failure.message;return@finish }
+        val formatted=try {
+            val updated=document.formatParagraphs(a,b,change)
+            if(updated.boxWidth==0f && updated.paragraphs.any { it.alignment!=null && it.alignment.ordinal>=ParagraphAlignment.JUSTIFY_LAST_LEFT.ordinal })
+                updated.copy(boxWidth=TextEdits.fillCompositionWidth(layer,time,editor.state.project.composition.width)) else updated
+        } catch(failure: IllegalArgumentException) { error=failure.message;return@finish }
         begin(id,false);preview(TextEdits.document(layer,time,formatted));finish()
     } }
     fun editBoxWidth(id: Long,value: Float) { finish { begin(id,false);boxWidth(value);finish() } }
 }
 
 object TextEdits {
+    /** Physical composition width expressed in unrotated layer units at evaluated X scale.
+     * Rotation/position do not affect this width. A collapsed X scale is not invertible. */
+    fun fillCompositionWidth(layer: CompositionLayer,time: Long,compositionWidth: Int): Float {
+        val scale=kotlin.math.abs(layer.evaluatedTransform(time).scaleX)
+        require(scale>0f && scale.isFinite()) { "Set a nonzero horizontal layer scale before filling the composition" }
+        return (compositionWidth/scale).also { require(it.isFinite()) { "Composition width exceeds the supported finite layer range" } }
+    }
     private fun local(layer: CompositionLayer, time: Long) = Math.subtractExact(time, layer.resolvedKeyframeAnchorUs)
     fun source(layer: CompositionLayer, time: Long, value: String,start: Int=-1,end: Int=-1): TextProperties {
         val p = layer.text.source; val t = local(layer, time)

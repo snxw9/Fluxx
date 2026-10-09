@@ -64,7 +64,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
         var characterBytes=0L
         val layers = project.composition.layers
         val wanted=layers.filter { it.type==LayerType.TEXT }.flatMap { layer ->
-            StyledTextPreparation.alternatives(layer.text.source).flatMap { source -> listOf(Triple(layer.text.fontId,source,true),Triple(layer.text.fontId,source,false)) }
+            StyledTextPreparation.alternatives(layer.text.source).flatMap { source ->
+                val shaping=StyledTextPreparation.shapingDocument(source)
+                listOf(Triple(layer.text.fontId,shaping,true),Triple(layer.text.fontId,shaping,false)) }
         }.toHashSet()
         val obsolete=textLayouts.entries.iterator()
         while(obsolete.hasNext()) { val entry=obsolete.next();if(entry.key !in wanted) {
@@ -74,7 +76,12 @@ class CompositionRenderer(private val context: Context, private val repository: 
         preparedText = layers.filter { it.type==LayerType.TEXT }.sortedWith(compareBy<CompositionLayer> { it.zOrder }.thenBy { it.id }).map { layer ->
             val sources = StyledTextPreparation.alternatives(layer.text.source)
             val linePool=LinePermutationPool()
-            val layouts=sources.flatMap { source -> listOf(textLayout(layer.text.fontId,source,true),textLayout(layer.text.fontId,source,false)) }.toTypedArray()
+            val effective=layer.text.effectiveLigatures(0)
+            val layouts=sources.flatMap { source ->
+                val first=textLayout(layer.text.fontId,source,effective)
+                val other=if(StyledTextPreparation.needsBothModes(layer.text)) textLayout(layer.text.fontId,source,!effective) else first
+                if(effective) listOf(first,other) else listOf(other,first)
+            }.toTypedArray()
             val catalogue=TextCharacterCataloguePreparation.prepare(context,layer.text.fontId,layer.text,sources)
             val handles=catalogue?.packets?.map { packet->
                 characterBytes+=packet.size
@@ -91,7 +98,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
             PreparedText(layer,sources,layouts,animations)
         }.toTypedArray()
         require(characterBytes+textLayouts.values.sumOf { it.packetBytes.toLong() }<=64L*1024*1024) { "Prepared text/character packets exceed 64 MiB; reduce fonts or alternatives" }
-        preparedHandles = (preparedText.flatMap { it.layouts.map { layout -> layout.handle } }+characterHandles).toLongArray()
+        preparedHandles = (preparedText.flatMap { it.layouts.map { layout -> layout.handle } }+characterHandles).distinct().toLongArray()
         // Release obsolete layouts; active source-key layouts remain pinned until the next project preparation.
         val iterator = textLayouts.entries.iterator()
         while (iterator.hasNext()) { val entry = iterator.next()
@@ -135,13 +142,16 @@ class CompositionRenderer(private val context: Context, private val repository: 
         }
         if (cancelled()) throw CancellationException("Superseded frame")
         check(RenderBridge.finish(session)); staged = 0
+        if(interactive && TextEditTimings.waitingFor(project)) TextEditTimings.frameReady(project,RenderBridge.textStats(session))
     }
     private var previewQuality: PreviewResolution? = null
     private var previewCompWidth = 0
     private var previewCompHeight = 0
     private var previewTargetWidth = 0
     private var previewTargetHeight = 0
-    private fun textLayout(font: String, source: TextSourceDocument,ligatures: Boolean=true): ProductLayout = textLayouts.getOrPut(Triple(font,source,ligatures)) {
+    private fun textLayout(font: String, source: TextSourceDocument,ligatures: Boolean=true): ProductLayout = textLayouts.getOrPut(Triple(font,StyledTextPreparation.shapingDocument(source),ligatures)) {
+        TextIdlePrewarm.foreground(context)
+        val preparationStart=System.nanoTime()
         require(source.paragraphs.all { it.direction==ParagraphDirection.LTR }) { "RTL layout requires T5; the requested document is preserved" }
         var packetBytes=0
         val handle = if(com.fluxx.android.fonts.ImportedTextPreparation.needed(source)) {
@@ -152,7 +162,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
             }
             RenderBridge.upsertPreparedText(session,result.packet)
         } else RenderBridge.upsertStyledText(session, font, StyledTextPreparation.encode(source,font),ligatures)
-        try { ProductLayout(handle, TextLayoutMetrics.fromNative(RenderBridge.textMetrics(session, handle), source.text.isEmpty(),source),packetBytes) }
+        try { ProductLayout(handle, TextLayoutMetrics.fromNative(RenderBridge.textMetrics(session, handle), source.text.isEmpty(),source),packetBytes)
+            .also {TextEditTimings.record("renderer_preparation",System.nanoTime()-preparationStart)
+                TextIdlePrewarm.partner(context,font,StyledTextPreparation.shapingDocument(source),!ligatures)} }
         catch (error: Exception) { RenderBridge.releaseText(session, handle); throw error }
     }
     init { KeyframeEvaluator.easeProgress(0f, EasingPreset.EASY_EASE); RenderBridge.configureText(session, if(lowRam) 2 else 4) }
@@ -357,6 +369,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         drawFixtures(rasterIndex)
         if(cancelled()) throw CancellationException("Superseded frame")
         check(RenderBridge.finish(session)) { "Could not finish composition frame" }
+        if(interactive && TextEditTimings.waitingFor(project)) TextEditTimings.frameReady(project,RenderBridge.textStats(session))
         staged=0
         val iterator = textLayouts.entries.iterator()
         var idle = textLayouts.values.count { it.handle !in preparedHandles }

@@ -91,6 +91,9 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
     val modifiers: ByteBuffer = ByteBuffer.allocateDirect(Math.multiplyExact(clusters,STRIDE)).order(ByteOrder.nativeOrder())
     val inkBounds=FloatArray(4)
     val logicalBounds=FloatArray(4)
+    // Shared visual cluster geometry. Storage is allocated only during preparation.
+    private val visualBounds=FloatArray(clusters*4)
+    private val visualOrigins=FloatArray(clusters*2)
     private val strokeClamped=BooleanArray(clusters)
     private var hasEvaluation=false
     private var evaluatedTime=0L
@@ -278,6 +281,14 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
             put(record+72,opacity[c]);put(record+76,width[c]);put(record+80,blur[c])
             put(record+84,if(characters!=null && characters.changed[c]) 1.0 else 0.0)
         }
+        for(c in 0 until clusters) {
+            val j=c*4;visualBounds[j]=Float.POSITIVE_INFINITY;visualBounds[j+1]=Float.POSITIVE_INFINITY
+            visualBounds[j+2]=Float.NEGATIVE_INFINITY;visualBounds[j+3]=Float.NEGATIVE_INFINITY
+            val g=firstGlyph[c];val l=if(g>=0) data[6+lines+g*7].toInt() else 0
+            val x=clusterX[c];val y=l*step-baseline+yOffsets[c];val m=c*6
+            visualOrigins[c*2]=(matrices[m]*x+matrices[m+2]*y+matrices[m+4]).toFloat()
+            visualOrigins[c*2+1]=(matrices[m+1]*x+matrices[m+3]*y+matrices[m+5]).toFloat()
+        }
         var left=Double.POSITIVE_INFINITY;var top=left;var right=Double.NEGATIVE_INFINITY;var bottom=right
         for(g in 0 until glyphs) {
             val i=6+lines+g*7;val c=glyphClusters[g];val l=data[i].toInt()
@@ -292,6 +303,7 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
                 val tx=matrices[m]*xx+matrices[m+2]*yy+matrices[m+4]
                 val ty=matrices[m+1]*xx+matrices[m+3]*yy+matrices[m+5]
                 left=min(left,tx);top=min(top,ty);right=max(right,tx);bottom=max(bottom,ty)
+                visualCorner(c,tx,ty)
             }
         }
         if(characters!=null) for(c in 0 until clusters) if(characters.changed[c]) {
@@ -317,11 +329,17 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
                             val xx=x+(if(corner and 1!=0) w else 0.0)-shear*(yy-baseY)
                             val tx=matrices[m]*xx+matrices[m+2]*yy+matrices[m+4];val ty=matrices[m+1]*xx+matrices[m+3]*yy+matrices[m+5]
                             left=min(left,tx);top=min(top,ty);right=max(right,tx);bottom=max(bottom,ty)
+                            visualCorner(c,tx,ty)
                         }
                     }
                     pen+=metrics.advance(index)*scaleX
                 }
             }
+        }
+        for(c in 0 until clusters) if(!visualBounds[c*4].isFinite()) {
+            val x=visualOrigins[c*2];val y=visualOrigins[c*2+1]
+            visualBounds[c*4]=x;visualBounds[c*4+1]=(y-data[1]*factor).toFloat()
+            visualBounds[c*4+2]=(x+max(1.0,clusterAdvances[c])).toFloat();visualBounds[c*4+3]=(y-data[2]*factor).toFloat()
         }
         if(left.isFinite()) { inkBounds[0]=left.toFloat();inkBounds[1]=top.toFloat();inkBounds[2]=(right-left).toFloat();inkBounds[3]=(bottom-top).toFloat() }
         else inkBounds.fill(0f)
@@ -330,6 +348,17 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         evaluatedTime=time;hasEvaluation=true
     }
     /** UI-only summary; renderer evaluation never calls this allocating formatter. */
+    fun geometrySnapshot(): TextPreparedGeometry {
+        val source=requireNotNull(document)
+        return TextPreparedGeometry(source,
+            IntArray(clusters) { sourceEdges.getOrNull(starts[it]) ?: 0 },
+            IntArray(clusters) { sourceEnds.getOrNull(ends[it]-1) ?: source.text.length },
+            clusterLines.copyOf(),clusterWords.copyOf(),visualBounds.copyOf(),visualOrigins.copyOf(),logicalBounds.copyOf())
+    }
+    private fun visualCorner(cluster: Int,x: Double,y: Double) {
+        val i=cluster*4;visualBounds[i]=min(visualBounds[i],x.toFloat());visualBounds[i+1]=min(visualBounds[i+1],y.toFloat())
+        visualBounds[i+2]=max(visualBounds[i+2],x.toFloat());visualBounds[i+3]=max(visualBounds[i+3],y.toFloat())
+    }
     fun strokeClampLabel(start: Int,end: Int): String? {
         var clamped=false;var low=Double.POSITIVE_INFINITY;var high=0.0
         for(c in 0 until clusters) {
