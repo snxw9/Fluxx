@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -129,6 +130,12 @@ fun ElementInspectorSheet(
     onTextScalarPreview: (AnimPropertyType, Float) -> Unit = { _, _ -> },
     onTextPayloadPreview: (TextProperties)->Unit = {},
     textFrameRate: FrameRate=FrameRate(),
+    onTextBeginDraft: (Boolean,(CompositionLayer)->Unit)->Unit={_,ready->ready(layer)},
+    textFinishing: Boolean=false,
+    textStrokeClamp: String?=null,
+    onTextSampleColour: (((Int?)->Unit)->Unit)?=null,
+    onTextCancelSample: ()->Unit={},
+    onTextSourceSelection: (String,TextSelectionRange)->Unit={_,_->},
     onTextColourChange: (AnimPropertyType, Int) -> Unit = { _, _ -> },
     onTextColourPreview: (AnimPropertyType, Int) -> Unit = { _, _ -> },
     textSelection: TextSelectionRange?=null,onTextSelection: (TextSelectionRange?)->Unit = {},
@@ -136,7 +143,7 @@ fun ElementInspectorSheet(
     onExplodeCommit: (TextExplodePlan,(String?)->Unit)->Unit = {_,reply->reply("Explode unavailable")}
 ) {
     key(layer.id) {
-        var section by remember { mutableStateOf<InspectorSection?>(null) }
+        var section by rememberSaveable { mutableStateOf<InspectorSection?>(null) }
         var textFill by remember { mutableStateOf(false) }
         var textColourProperty by remember { mutableStateOf(AnimPropertyType.FILL_COLOUR) }
         val focusManager = LocalFocusManager.current
@@ -264,7 +271,7 @@ fun ElementInspectorSheet(
                                 InspectorSection.CONTEXTUAL_EDIT -> if (layer.type == LayerType.TEXT && !textFill) TextInspectorPanel(
                                     layer,playheadUs,textFrameRate,onAction,onPropertyFocus,onTextBegin,onTextDraftSelection,onTextFinish,onTextCancel,
                                     onTextSizeBegin,onTextPayloadPreview,onTextCharacter,onTextParagraph,onTextBoxWidth,compositionWidth,textSelection,onTextSelection,textError,
-                                    onDismiss,{section=null},onExplodePrepare,onExplodeCommit,paletteRepository,onEyedropperRequest)
+                                    onDismiss,{section=null},onExplodePrepare,onExplodeCommit,paletteRepository,onEyedropperRequest,onTextBeginDraft,textFinishing,textStrokeClamp,onTextSampleColour,onTextCancelSample,onTextSourceSelection)
                                 else FluxxColorPicker(FluxxColor.fromArgb(if (layer.type == LayerType.TEXT)
                                     layer.text.colour(textColourProperty).evaluate(playheadUs - layer.resolvedKeyframeAnchorUs) else layer.solidColorArgb),
                                     { if (layer.type == LayerType.TEXT) onTextColourChange(textColourProperty, it.toArgb()) else onColorChange(it.toArgb()) }, ColorPickerConfig(),

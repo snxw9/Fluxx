@@ -7,6 +7,29 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TextEditingTest {
+    @Test fun numericModeWaitsForPriorPreparationAndCapturesCommittedFormatting()=runBlocking {
+        val editor=editor();val original=editor.state.project
+        val ready=CompletableDeferred<Unit>();var entered=false
+        val controller=TextEditController(editor,this,{_,s->metrics(s)},measureDocument={_,doc,_->
+            if(doc.runs.first().style.fauxBold) ready.await();metrics(doc.text)})
+        controller.format(1,0,0) {it.copy(fauxBold=true)}
+        assertTrue(controller.finishing)
+        controller.finish {
+            entered=true;val fresh=editor.state.selectedLayer!!
+            assertTrue(fresh.text.source.sourceDocument.runs.first().style.fauxBold)
+            controller.begin(1,false)
+            controller.preview(com.fluxx.android.ui.inspector.TextNumericDraft(fresh,editor.state.playheadUs,FrameRate(),
+                com.fluxx.android.ui.inspector.TextEditScope(null),com.fluxx.android.ui.inspector.TextControl.SIZE).payload(88f))
+            controller.finish()
+        }
+        yield();assertFalse(entered);ready.complete(Unit)
+        repeat(4) {drain()}
+        assertTrue(entered);assertFalse(controller.finishing)
+        assertEquals(88f,editor.state.selectedLayer!!.text.size.staticValue,0f)
+        assertTrue(editor.state.selectedLayer!!.text.source.sourceDocument.runs.first().style.fauxBold)
+        editor.undo();assertTrue(editor.state.selectedLayer!!.text.source.sourceDocument.runs.first().style.fauxBold)
+        editor.undo();assertEquals(original,editor.state.project);assertFalse(editor.canUndo)
+    }
     private fun metrics(source: String) = TextLayoutMetrics.fromNative(doubleArrayOf(
         1000.0, 800.0, -200.0, 0.0, 1.0, 0.0, source.length * 600.0), source.isEmpty())
     private fun editor(animated: Boolean = false): EditorViewModel = EditorViewModel().also {

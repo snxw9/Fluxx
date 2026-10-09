@@ -12,6 +12,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -105,7 +107,9 @@ fun EditorScreen(
     val composition = project.composition
     val playheadUs = displayedState.playheadUs
     val selectedLayer = displayedState.selectedLayer
-    var textSelection by remember(selectedLayer?.id) { mutableStateOf<TextSelectionRange?>(null) }
+    var textSelection by rememberSaveable(selectedLayer?.id,saver=Saver<MutableState<TextSelectionRange?>,IntArray>(
+        save={it.value?.let {r->intArrayOf(r.start,r.end)} ?: intArrayOf(-1,-1)},
+        restore={mutableStateOf(if(it[0]<0) null else TextSelectionRange(it[0],it[1]))})) { mutableStateOf<TextSelectionRange?>(null) }
     var previewMoveGesture by remember {mutableStateOf<Long?>(null)}
     val selectedTextSource = selectedLayer?.text?.source?.evaluateDocument(playheadUs - selectedLayer.resolvedKeyframeAnchorUs) ?: TextSourceDocument("")
     val selectedLigatures=selectedLayer?.let { it.text.effectiveLigatures(playheadUs-it.resolvedKeyframeAnchorUs) } ?: true
@@ -184,7 +188,7 @@ fun EditorScreen(
     mediaInfoEntry?.let { entry -> MediaInfoDialog(mediaRepository, entry) { mediaInfoEntry = null } }
 
     var projectName by remember { mutableStateOf("Project 1") }
-    var isExpandedPreview by remember { mutableStateOf(true) }
+    var isExpandedPreview by rememberSaveable { mutableStateOf(true) }
     var viewSettings by remember { mutableStateOf(ViewSettings()) }
     var previewResolution by remember { mutableStateOf(PreviewResolution.FULL) }
     var previewFitScale by remember { mutableFloatStateOf(1f) }
@@ -194,11 +198,12 @@ fun EditorScreen(
     var addContentSheetVisible by remember { mutableStateOf(false) }
     var addContentHeight by remember { mutableStateOf(0.dp) }
     var addContentError by remember { mutableStateOf<String?>(null) }
-    var inspectorSheetVisible by remember { mutableStateOf(false) }
+    var inspectorSheetVisible by rememberSaveable { mutableStateOf(false) }
     var focusedProperty by remember { mutableStateOf<AnimPropertyType?>(null) }
     var anchorMode by remember { mutableStateOf(false) }
     var eyedropperLayerId by remember { mutableStateOf<Long?>(null) }
     var sampledColor by remember { mutableStateOf<Int?>(null) }
+    var textSampleReply by remember {mutableStateOf<((Int?)->Unit)?>(null)}
     var sampleSerial by remember { mutableLongStateOf(0) }
     val sampleRequests=remember(eyedropperLayerId) { Channel<PreviewColorRequest>(Channel.CONFLATED) }
     DisposableEffect(sampleRequests) { onDispose { sampleRequests.close() } }
@@ -229,7 +234,7 @@ fun EditorScreen(
     }
     LaunchedEffect(eyedropperLayerId,previewController) {
         sampledColor=null
-        val id=eyedropperLayerId ?: return@LaunchedEffect
+        val id=eyedropperLayerId ?: run {val reply=textSampleReply;textSampleReply=null;reply?.invoke(null);return@LaunchedEffect}
         val pc=previewController ?: return@LaunchedEffect
         val original=editor.state.project
         for(request in sampleRequests) {
@@ -241,6 +246,8 @@ fun EditorScreen(
                 sampledColor=argb
                 if(request.released) {
                     if(argb!=null) {
+                        val reply=textSampleReply
+                        if(reply!=null) {textSampleReply=null;eyedropperLayerId=null;reply(argb);break}
                         // Keep the source frame unchanged throughout the drag. One release = one edit.
                         val sampledLayer = editor.state.project.composition.layers.first { it.id == id }
                         editor.dispatch(if (sampledLayer.type == LayerType.TEXT) TextEdits.colour(sampledLayer,
@@ -307,7 +314,10 @@ fun EditorScreen(
             // Reserve ruler + track gap + one row + inspector separation in BOTH preview modes.
             // Expansion trades inspector height for canvas height; opening the inspector never moves the preview.
             val available = (maxHeight - if (textTyping) 0.dp else EditorActionBarHeight + TimelineInspectorAnchorHeight).coerceAtLeast(0.dp)
-            val desiredInspectorHeight = (if (isExpandedPreview) 268.dp else 328.dp) * density.fontScale.coerceAtLeast(1f)
+            val targetInspectorHeight = (if (isExpandedPreview) 268.dp else 328.dp) * density.fontScale.coerceAtLeast(1f)
+            val minimumPreview=if(available>=264.dp) 96.dp else 48.dp
+            val desiredInspectorHeight=if(isInspectorOpen && selectedLayer?.type==LayerType.TEXT)
+                targetInspectorHeight.coerceAtMost((available-minimumPreview).coerceAtLeast(0.dp)) else targetInspectorHeight
             val previewHeight = (available - if (textTyping) 144.dp * density.fontScale.coerceAtLeast(1f) else desiredInspectorHeight).coerceAtLeast(0.dp)
             val inspectorHeight = available - previewHeight
             // Match the real space below the preview, including the bottom system inset.
@@ -559,7 +569,7 @@ fun EditorScreen(
                             } catch(failure: IllegalArgumentException) {reply(failure.message ?: "Explode failed")}
                         }},
                         textSelection=textSelection,onTextSelection={ range ->
-                            textSelection=if(range!=null && !range.collapsed) selectedTextMetrics?.geometry(layer.text,playheadUs-layer.resolvedKeyframeAnchorUs)
+                            textSelection=if(!textEditor.typing && range!=null && !range.collapsed) selectedTextMetrics?.geometry(layer.text,playheadUs-layer.resolvedKeyframeAnchorUs)
                                 ?.safeRange(range.start,range.end) ?: range else range
                         },
                         textTyping = textTyping,
@@ -584,6 +594,19 @@ fun EditorScreen(
                         },
                         onTextPayloadPreview = textEditor::preview,
                         textFrameRate = composition.frameRate,
+                        textFinishing = textEditor.finishing,
+                        onTextSampleColour = {reply->focusManager.clearFocus();previewController?.pause();textSampleReply=reply;eyedropperLayerId=layer.id},
+                        onTextCancelSample = {textSampleReply=null;eyedropperLayerId=null;sampledColor=null},
+                        onTextSourceSelection = {value,range->textSelection=if(value==selectedTextSource.text && !range.collapsed)
+                            selectedTextMetrics?.geometry(layer.text,playheadUs-layer.resolvedKeyframeAnchorUs)?.safeRange(range.start,range.end) ?: range else range},
+                        textStrokeClamp = runCatching {selectedTextMetrics?.strokeClampLabel(layer.text,playheadUs-layer.resolvedKeyframeAnchorUs,textSelection?.start ?: 0,textSelection?.end ?: 0)}.getOrNull(),
+                        onTextBeginDraft = {typing,ready->
+                            previewController?.pause()
+                            textEditor.finish {
+                                val fresh=editor.state.project.composition.layers.firstOrNull {it.id==layer.id}
+                                if(fresh!=null && editor.state.selectedLayerId==layer.id) {textEditor.begin(layer.id,typing);ready(fresh)}
+                            }
+                        },
                         onTextColourChange = { property, argb -> textEditor.finish {
                             val base = editor.state.project.composition.layers.first { it.id == layer.id }
                             editor.dispatch(TextEdits.colour(base, composition.frameRate.snap(playheadUs), property, argb))

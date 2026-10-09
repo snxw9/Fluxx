@@ -27,12 +27,14 @@ import kotlinx.coroutines.launch
 /** Independently virtualized family and axis viewports; never scrolls the inspector. */
 @Composable internal fun TextFontsPopup(reference: TextFontRef?,layerFont: String,scopeLabel: String,
     apply: (TextFontRef?)->Unit,dismiss: ()->Unit,
-    axisBegin: ()->Unit,axisPreview: (TextFontRef)->Unit,axisFinish: ()->Unit,axisCancel: ()->Unit) {
+    axisBegin: ()->Unit,axisPreview: (TextFontRef)->Unit,axisFinish: ()->Unit,axisCancel: ()->Unit,busy: Boolean=false,
+    baseFont: ((String)->Unit)?=null) {
     val context=LocalContext.current;val repository=remember(context) {FontLibraryRepository.getInstance(context)}
     val entries by repository.state.collectAsState();val scope=rememberCoroutineScope()
     var search by remember {mutableStateOf("")};var error by remember {mutableStateOf<String?>(null)}
     var importing by remember {mutableStateOf(false)};var deletion by remember {mutableStateOf<FontLibraryEntry?>(null)}
     var styles by remember {mutableStateOf(false)};var exactAxis by remember {mutableStateOf<FontAxisMetadata?>(null)}
+    var baseMenu by remember {mutableStateOf(false)}
     val selectedEntry=entries.find {it.sha256==reference?.sha256}
     val selectedFace=selectedEntry?.faces?.find {it.index==reference?.faceIndex}
     val rows=remember(entries,search) {entries.flatMap {entry->entry.faces.map {entry to it}}.filter {(_,face)->"${face.family} ${face.style}".contains(search,true)}}
@@ -41,12 +43,14 @@ import kotlinx.coroutines.launch
         importing=true;error=null
         try {repository.import(uri)} catch(failure: Exception) {error=failure.message ?: "Font import failed"} finally {importing=false}
     }}
-    val availableHeight=(LocalConfiguration.current.screenHeightDp-64).coerceAtLeast(240).dp
+    val configuration=LocalConfiguration.current
+    val large=LocalDensity.current.fontScale>1.2f || configuration.screenHeightDp<360
+    val availableHeight=(configuration.screenHeightDp-64).coerceAtLeast(120).dp
     Dialog(dismiss,properties=DialogProperties(usePlatformDefaultWidth=false)) {
         Surface(Modifier.widthIn(max=480.dp).fillMaxWidth().heightIn(max=availableHeight),shape=MaterialTheme.shapes.large) {
-            Column(Modifier.padding(8.dp)) {
+            Column(Modifier.padding(8.dp).then(if(large) Modifier.verticalScroll(rememberScrollState()) else Modifier)) {
                 Row(Modifier.fillMaxWidth().height(48.dp)) {Text("Fonts · $scopeLabel",Modifier.weight(1f),style=MaterialTheme.typography.titleSmall);TextToolIcon("DONE","Close Fonts",dismiss)}
-                Row(Modifier.fillMaxWidth().height(48.dp)) {
+                Row(Modifier.fillMaxWidth().heightIn(min=56.dp)) {
                     OutlinedTextField(search,{search=it},singleLine=true,label={Text("Find font")},modifier=Modifier.weight(1f))
                     TextToolIcon("IMPORT",if(importing) "Importing font" else "Import font",{importer.launch(arrayOf("*/*"))},!importing)
                     TextToolIcon("DELETE","Delete selected font file",{deletion=selectedEntry},selectedEntry!=null && !importing)
@@ -82,11 +86,16 @@ import kotlinx.coroutines.launch
                             val value=reference.axes.find {it.tag==axis.tag}?.value?.staticValue ?: axis.default
                             AxisScrubRow(axis,value,axisBegin,{v->val requested=reference.axes.associate {it.tag to it.value.staticValue}.toMutableMap();requested[axis.tag]=v
                                 axisPreview(selectedFace.reference(requireNotNull(reference.sha256),reference.namedInstance,requested))},axisFinish,axisCancel,
-                                {val requested=reference.axes.associate {it.tag to it.value.staticValue}.toMutableMap();requested[axis.tag]=axis.default;apply(selectedFace.reference(requireNotNull(reference.sha256),reference.namedInstance,requested))},{exactAxis=axis})
+                                {val requested=reference.axes.associate {it.tag to it.value.staticValue}.toMutableMap();requested[axis.tag]=axis.default;apply(selectedFace.reference(requireNotNull(reference.sha256),reference.namedInstance,requested))},{exactAxis=axis},!busy)
                         }
                     }
                 }
-                TextButton(onClick={apply(null)},modifier=Modifier.heightIn(min=48.dp)) {Text("Inherit layer font")}
+                Row {
+                    TextButton(onClick={apply(null)},modifier=Modifier.heightIn(min=48.dp)) {Text("Inherit layer font")}
+                    Box {TextButton(enabled=baseFont!=null,onClick={baseMenu=true}) {Text("Layer base font")}
+                        DropdownMenu(baseMenu,{baseMenu=false}) {listOf("fluxx.sans" to "Inter","fluxx.serif" to "Noto Serif","fluxx.mono" to "JetBrains Mono").forEach {(id,label)->DropdownMenuItem(text={Text(label)},onClick={baseMenu=false;baseFont?.invoke(id)})}}
+                    }
+                }
             }
         }
     }
@@ -103,7 +112,7 @@ import kotlinx.coroutines.launch
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-@Composable private fun AxisScrubRow(axis: FontAxisMetadata,value: Float,begin: ()->Unit,preview: (Float)->Unit,finish: ()->Unit,cancel: ()->Unit,reset: ()->Unit,exact: ()->Unit) {
+@Composable private fun AxisScrubRow(axis: FontAxisMetadata,value: Float,begin: ()->Unit,preview: (Float)->Unit,finish: ()->Unit,cancel: ()->Unit,reset: ()->Unit,exact: ()->Unit,enabled: Boolean) {
     // A drag publishes at most once per display frame; a preset/reference change cancels pending work.
     var draft by remember(axis.tag) {mutableFloatStateOf(value)}
     var pending by remember(axis.tag) {mutableStateOf<Float?>(null)}
@@ -117,18 +126,18 @@ import kotlinx.coroutines.launch
     var lastTime by remember {mutableLongStateOf(0L)};var lastHaptic by remember {mutableLongStateOf(0L)}
     DisposableEffect(axis.tag) {onDispose {if(dragging) currentCancel()}}
     Row(Modifier.fillMaxWidth().heightIn(min=48.dp)) {
-        Box(Modifier.width(48.dp).height(48.dp).combinedClickable(onClick=exact,onLongClick=exact)
+        Box(Modifier.width(48.dp).height(48.dp).combinedClickable(enabled=enabled,onClick=exact,onLongClick=exact)
             .semantics {contentDescription="Scrub ${axis.name} (${axis.tag}); tap for exact value"}
-            .pointerInput(axis.tag) {detectHorizontalDragGestures(onDragStart={draft=currentValue;dragging=true;lastTime=0;currentBegin()},
+            .pointerInput(axis.tag,enabled) {if(enabled) detectHorizontalDragGestures(onDragStart={draft=currentValue;dragging=true;lastTime=0;currentBegin()},
                 onHorizontalDrag={change,dx->change.consume();val now=change.uptimeMillis;val dt=if(lastTime==0L) 16L else (now-lastTime).coerceAtLeast(1);lastTime=now
                     val old=draft;val dp=dx/density.density
-                    draft=(draft+TextScrubTuning.delta(TextControl.BOX,dp,dp*1000/dt)*(axis.maximum-axis.minimum)/100).coerceIn(axis.minimum,axis.maximum);pending=draft
+                    draft=(draft+TextScrubTuning.delta(TextControl.BOX,dp,dp*1000/dt)*(axis.maximum-axis.minimum)/TextScrubTuning.AXIS_PERCENT).coerceIn(axis.minimum,axis.maximum);pending=draft
                     if((old-axis.default)*(draft-axis.default)<=0 && now-lastHaptic>=TextScrubTuning.HAPTIC_INTERVAL_MS) {view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);lastHaptic=now}
                 },onDragEnd={pending=null;latestPreview(draft);dragging=false;currentFinish()},onDragCancel={pending=null;dragging=false;draft=currentValue;currentCancel()})},contentAlignment=androidx.compose.ui.Alignment.Center) {
             Icon(TextInspectorIcons.icon("AXIS"),null,Modifier.size(22.dp))
         }
-        TextButton(onClick=exact,modifier=Modifier.weight(1f)) {Text("${axis.name} (${axis.tag})",maxLines=1)}
-        TextButton(onClick=exact) {Text("%.2f".format(java.util.Locale.ROOT,draft))}
-        TextToolIcon("RESET","Reset ${axis.name} to default",reset)
+        TextButton(enabled=enabled,onClick=exact,modifier=Modifier.weight(1f)) {Text("${axis.name} (${axis.tag})",maxLines=1)}
+        TextButton(enabled=enabled,onClick=exact) {Text("%.2f".format(java.util.Locale.ROOT,draft))}
+        TextToolIcon("RESET","Reset ${axis.name} to default",reset,enabled)
     }
 }

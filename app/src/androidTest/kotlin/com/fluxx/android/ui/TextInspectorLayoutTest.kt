@@ -34,7 +34,8 @@ class TextInspectorLayoutTest {
                 }}
             }
         }
-        for(s in listOf(1f,1.3f,2f)) for(h in listOf(268f,328f)) {
+        val cases=listOf(1f,1.3f,2f).flatMap {s->listOf(268f,328f).map {h->s to h}}+listOf(2f to 82f,1f to 132f)
+        for((s,h) in cases) {
             compose.runOnIdle {scale.floatValue=s;height.floatValue=h};compose.waitForIdle()
             val root=compose.onNodeWithTag("text-inspector").fetchSemanticsNode().boundsInRoot
             val body=compose.onNodeWithTag("text-inspector-body").fetchSemanticsNode().boundsInRoot

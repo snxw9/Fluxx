@@ -3,6 +3,8 @@ package com.fluxx.android.ui.inspector
 import com.fluxx.android.editor.*
 import com.fluxx.android.model.*
 import kotlin.math.abs
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.ui.text.input.TextFieldValue
 
 internal enum class TextTab { CHARACTER, PARAGRAPH, ANIMATE }
 internal enum class TextControl(val label: String,val unit: String="") {
@@ -14,12 +16,13 @@ internal enum class TextControl(val label: String,val unit: String="") {
     CASE("Case"),SUPER("Superscript"),SUB("Subscript"),LIGATURES("Optional ligatures"),ALIGNMENT("Alignment"),
     INDENT_LEFT("Left indent","px"),INDENT_RIGHT("Right indent","px"),INDENT_FIRST("First-line indent","px"),
     BEFORE("Space before paragraph","px"),AFTER("Space after paragraph","px"),BOX("Box width","px"),DIRECTION("Paragraph direction"),
-    FORMAT("Character formatting"),PAINT("Fill and stroke"),INDENTS("Paragraph indents"),SPACING("Paragraph spacing")
+    FORMAT("Character formatting"),PAINT("Fill and stroke"),INDENTS("Paragraph indents"),SPACING("Paragraph spacing"),
+    CHARACTER_CONTROLS("Character controls"),PARAGRAPH_CONTROLS("Paragraph controls"),BASE_FONT("Layer base font"),BASE_ALIGNMENT("Layer base alignment")
 }
 internal data class TextEditScope(val range: TextSelectionRange?) {
     val selected get()=range!=null && !range.collapsed
     fun owner(control: TextControl): AnimPropertyType? {
-        if(selected) return null
+        if(selected || control==TextControl.BASE_FONT || control==TextControl.BASE_ALIGNMENT) return null
         return when(control) {
             TextControl.SIZE->AnimPropertyType.FONT_SIZE;TextControl.FILL->AnimPropertyType.FILL_COLOUR
             TextControl.STROKE->AnimPropertyType.STROKE_COLOUR;TextControl.STROKE_WIDTH->AnimPropertyType.STROKE_WIDTH
@@ -49,11 +52,11 @@ internal sealed interface TextInspectorMode {
     data object Fonts: TextInspectorMode
     data class Popover(val group: TextControl): TextInspectorMode
     data class Numeric(val draft: TextNumericDraft): TextInspectorMode
-    data class Colour(val control: TextControl): TextInspectorMode
+    data class Colour(val control: TextControl,val layer: CompositionLayer,val time: Long,val scope: TextEditScope): TextInspectorMode
 }
 
 /** Captures signed origin, scope and snapped playhead once; later preview never retargets a key. */
-internal class TextNumericDraft(val layer: CompositionLayer,time: Long,frameRate: FrameRate,
+internal class TextNumericDraft(val layer: CompositionLayer,time: Long,val frameRate: FrameRate,
     val scope: TextEditScope,val control: TextControl) {
     val time=frameRate.snap(time)
     val local=Math.subtractExact(this.time,layer.resolvedKeyframeAnchorUs)
@@ -75,6 +78,31 @@ internal class TextNumericDraft(val layer: CompositionLayer,time: Long,frameRate
         TextControl.AFTER->paragraph.spaceAfter;TextControl.BOX->document.boxWidth
         else->error("Not numeric: $control")
     }
+    val mixed: Boolean get() {
+        fun runValue(s: TextRunStyle): Any=when(control) {
+            TextControl.SIZE,TextControl.RELATIVE_SIZE->s.sizeFactor;TextControl.TRACKING->s.trackingDelta
+            TextControl.BASELINE->s.baselineDelta;TextControl.STROKE_WIDTH->s.strokeDelta
+            TextControl.H_SCALE->s.horizontalScale;TextControl.V_SCALE->s.verticalScale
+            TextControl.MANUAL_KERNING->s.manualKerning.map {it.amount}.distinct();else->0f
+        }
+        if(control in setOf(TextControl.INDENT_LEFT,TextControl.INDENT_RIGHT,TextControl.INDENT_FIRST,TextControl.BEFORE,TextControl.AFTER)) {
+            val first=if(scope.selected) document.text.take(start).count {it=='\n'} else 0
+            val last=if(scope.selected) document.text.take((end-1).coerceAtLeast(start)).count {it=='\n'} else document.paragraphs.lastIndex
+            return document.paragraphs.filterIndexed {i,_->i in first..last}.map {p->when(control) {
+                TextControl.INDENT_LEFT->p.indentLeft;TextControl.INDENT_RIGHT->p.indentRight;TextControl.INDENT_FIRST->p.indentFirst;TextControl.BEFORE->p.spaceBefore;else->p.spaceAfter
+            }}.distinct().size>1
+        }
+        val runOnly=control in setOf(TextControl.RELATIVE_SIZE,TextControl.H_SCALE,TextControl.V_SCALE,TextControl.MANUAL_KERNING)
+        return (scope.selected || runOnly) && document.runs.filter { !scope.selected || it.start<end && it.end>start }.map {runValue(it.style)}.distinct().size>1
+    }
+    fun scrubValue(value: Float): Float=when {
+        control==TextControl.SIZE && !scope.selected->value.coerceIn(TextLimits.MIN_SIZE,TextLimits.MAX_SIZE)
+        control==TextControl.RELATIVE_SIZE || control==TextControl.SIZE->value.coerceIn(.01f,10000f)
+        control==TextControl.H_SCALE || control==TextControl.V_SCALE->value.coerceIn(0f,10000f)
+        control==TextControl.MANUAL_KERNING->value.coerceIn(-10000f,10000f)
+        control==TextControl.BOX || control==TextControl.STROKE_WIDTH && !scope.selected->value.coerceAtLeast(0f)
+        else->value
+    }.let {if(it.isFinite()) it else initial}
     fun payload(value: Float): TextProperties {
         require(scope.available(control)) {"Clear selection to edit ${control.label}"}
         require(value.isFinite()) {"Enter a finite number"}
@@ -117,18 +145,47 @@ internal object TextScrubTuning {
     const val HAPTIC_INTERVAL_MS=80L
     const val DETENT_PX=10f
     const val DETENT_TRACKING=100f
+    const val AXIS_PERCENT=100f
+    const val EXACT_STEP=1f
     fun delta(control: TextControl,dx: Float,velocity: Float,fine: Boolean=false): Float {
         val wide=control in setOf(TextControl.SIZE,TextControl.BOX,TextControl.INDENT_LEFT,TextControl.INDENT_RIGHT,
-            TextControl.INDENT_FIRST,TextControl.BEFORE,TextControl.AFTER,TextControl.LEADING,TextControl.BASELINE)
+            TextControl.INDENT_FIRST,TextControl.BEFORE,TextControl.AFTER,TextControl.LEADING,TextControl.BASELINE,TextControl.TRACKING,TextControl.MANUAL_KERNING)
         val factor=if(wide) 1f+(MAX_ACCELERATION-1f)*((abs(velocity)-VELOCITY_START)/(VELOCITY_FULL-VELOCITY_START)).coerceIn(0f,1f) else 1f
         return dx/(if(control==TextControl.TRACKING || control==TextControl.MANUAL_KERNING) TRACKING_PIXELS_PER_UNIT else PIXELS_PER_UNIT)*factor*(if(fine) FINE else 1f)
     }
 }
 
+/** Saved editor state only: never added to document schema or undo. */
+internal object TextInspectorModeCodec {
+    private var serial=0L
+    private var snapshot: Pair<Long,TextInspectorMode>?=null
+    private var sourceField: Pair<Long,TextFieldValue>?=null
+    @Synchronized private fun retain(mode: TextInspectorMode): Long {
+        snapshot?.let {if(it.second===mode) return it.first}
+        val id=++serial;snapshot=id to mode;return id
+    }
+    fun save(mode: TextInspectorMode): List<Any> = when(mode) {
+        is TextInspectorMode.Numeric,is TextInspectorMode.Colour,TextInspectorMode.Source->listOf("draft",retain(mode))
+        is TextInspectorMode.Popover->listOf("popover",mode.group.name)
+        TextInspectorMode.Fonts->listOf("fonts");else->listOf("browse")
+    }
+    fun restore(values: List<Any>): TextInspectorMode = when(values[0]) {
+        "draft"->snapshot?.takeIf {it.first==values[1]}?.second ?: TextInspectorMode.Browse
+        "fonts"->TextInspectorMode.Fonts
+        "popover"->TextInspectorMode.Popover(TextControl.valueOf(values[1] as String))
+        else->TextInspectorMode.Browse
+    }
+    val saver=Saver<TextInspectorMode,List<Any>>(save={save(it)},restore={runCatching {restore(it)}.getOrDefault(TextInspectorMode.Browse)})
+    // Bundle carries tokens only: a maximum-size Source Text must not exceed Binder's state budget.
+    val sourceSaver=Saver<TextFieldValue,Long>(save={val id=++serial;sourceField=id to it;id},restore={id->sourceField?.takeIf {it.first==id}?.second})
+}
+
 internal object TextInspectorBudget {
     // Text mode removes all old parent chrome; main inspector never scrolls.
     const val PARENT_CHROME=0f
-    fun bodyHeight(total: Float,fontScale: Float): Float=(total-PARENT_CHROME-48f-32f*fontScale-40f-48f-4f).coerceAtLeast(0f)
+    fun headerHeight(total: Float,fontScale: Float)=if(total-(48f+32f*fontScale+40f+48f+4f)<48f) 0f else 32f*fontScale
+    fun tabsHeight(total: Float)=if(total<140f) 0f else 40f
+    fun bodyHeight(total: Float,fontScale: Float): Float=(total-PARENT_CHROME-48f-headerHeight(total,fontScale)-tabsHeight(total)-48f-4f).coerceAtLeast(0f)
     fun columns(width: Float,fontScale: Float)=if(fontScale>1.2f) 3 else if(width>=600f) 6 else 4
     fun needsOverlay(total: Float,fontScale: Float)=bodyHeight(total,fontScale)<96f
 }

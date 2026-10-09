@@ -25,6 +25,8 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
     private var pendingLayerEdit: TextProperties?=null
     var error by mutableStateOf<String?>(null)
         private set
+    var finishing by mutableStateOf(false)
+        private set
     val active get() = session != null
     val typing get() = session?.typing == true
     fun begin(id: Long, typing: Boolean = true) {
@@ -88,19 +90,20 @@ class TextEditController(private val editor: EditorViewModel, private val scope:
         s.after += after
         if (s.finishing) return
         s.finishing = true
+        finishing = true
         scope.launch {
             s.job?.join()
             if (session === s) {
                 if (error == null && editor.state.project === s.state.project) editor.commitGesture(s.token)
                 else editor.cancelGesture(s.token)
-                session = null; typingChanged(false); changed()
+                session = null; finishing=false; typingChanged(false); changed()
                 s.after.forEach { it() }
             }
         }
     }
     fun cancel() {
         val s = session ?: return
-        session = null; s.job?.cancel(); editor.cancelGesture(s.token)
+        session = null; finishing=false; s.job?.cancel(); editor.cancelGesture(s.token)
         pendingRunEdit=null;pendingLayerEdit=null
         error = null; typingChanged(false); changed()
     }

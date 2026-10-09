@@ -45,7 +45,7 @@ class TextInspectorStateTest {
         val fast=TextScrubTuning.delta(TextControl.BOX,100f,5000f)
         assertTrue(fast>slow*10);assertEquals(-fast,TextScrubTuning.delta(TextControl.BOX,-100f,-5000f),0f)
         assertEquals(fast*.1f,TextScrubTuning.delta(TextControl.BOX,100f,5000f,true),0f)
-        assertEquals(50f,TextScrubTuning.delta(TextControl.TRACKING,100f,5000f),0f)
+        assertEquals(50f*TextScrubTuning.MAX_ACCELERATION,TextScrubTuning.delta(TextControl.TRACKING,100f,5000f),0f)
     }
     @Test fun sourceBudgetAt360AndAccessibilityScales() {
         for(scale in listOf(1f,1.3f,2f)) for(height in listOf(268f,328f)) {
@@ -54,5 +54,25 @@ class TextInspectorStateTest {
             assertEquals(if(scale>1.2f) 3 else 4,TextInspectorBudget.columns(360f,scale))
         }
         assertTrue(TextInspectorBudget.needsOverlay(200f,2f))
+        for(total in listOf(100f,132f,164f,200f)) for(scale in listOf(1f,1.3f,2f)) {
+            assertEquals(total,48+TextInspectorBudget.headerHeight(total,scale)+TextInspectorBudget.tabsHeight(total)+TextInspectorBudget.bodyHeight(total,scale)+48+4,.001f)
+        }
+    }
+    @Test fun savedDraftRestoresCapturedScopeTimeAndLayerWithoutDocumentMutation() {
+        val d=TextNumericDraft(layer(),700_001,FrameRate(24),TextEditScope(TextSelectionRange(2,3)),TextControl.TRACKING)
+        val restored=TextInspectorModeCodec.restore(TextInspectorModeCodec.save(TextInspectorMode.Numeric(d))) as TextInspectorMode.Numeric
+        assertEquals(d.time,restored.draft.time);assertEquals(d.scope,restored.draft.scope)
+        assertEquals(d.layer,restored.draft.layer);assertEquals(d.payload(-12.125f),restored.draft.payload(-12.125f))
+        val c=TextInspectorMode.Colour(TextControl.STROKE,layer(),500_000,TextEditScope(TextSelectionRange(0,2)))
+        assertEquals(c,TextInspectorModeCodec.restore(TextInspectorModeCodec.save(c)))
+    }
+    @Test fun mixedValuesRemainExplicitAndScrubStopsAtModelBounds() {
+        val l=layer();val doc=l.text.source.sourceDocument.format(2,3) {it.copy(horizontalScale=120f)}
+        val changed=l.copy(text=l.text.copy(source=AnimatableString(staticValue=doc.text,document=doc)))
+        val d=TextNumericDraft(changed,500_000,FrameRate(),TextEditScope(null),TextControl.H_SCALE)
+        assertTrue(d.mixed);assertEquals(10000f,d.scrubValue(20000f),0f)
+        assertEquals(0f,d.scrubValue(-1f),0f)
+        val size=TextNumericDraft(l,500_000,FrameRate(),TextEditScope(null),TextControl.SIZE)
+        assertEquals(500f,size.scrubValue(10000f),0f)
     }
 }
