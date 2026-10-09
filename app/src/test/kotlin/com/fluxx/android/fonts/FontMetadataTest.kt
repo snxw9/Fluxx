@@ -2,8 +2,38 @@ package com.fluxx.android.fonts
 
 import org.junit.Assert.*
 import org.junit.Test
+import com.fluxx.android.model.*
+import com.fluxx.android.editor.*
+import kotlinx.coroutines.*
 
 class FontMetadataTest {
+    @Test fun instanceChoiceReplacesCustomAxesPreparesImmediatelyAndIsOnePersistedUndo()=runBlocking {
+        val metadata=face().copy(axes=listOf(weight,FontAxisMetadata("wdth","Width",75f,100f,125f)),
+            instances=listOf(FontNamedInstance(7,"Bold condensed",listOf(700f,80f))))
+        val custom=metadata.reference(hash,requested=mapOf("wght" to 550f,"wdth" to 120f))
+        val originalDoc=TextSourceDocument("Text").format(0,0) { it.copy(font=custom) }
+        val layer=CompositionLayer(1,LayerType.TEXT,text=TextProperties(source=AnimatableString(staticValue="Text",document=originalDoc)))
+        val original=ProjectDocument(Composition(layers=FrozenList.of(listOf(layer))))
+        val editor=EditorViewModel();editor.dispatch(EditorAction.Load(original));editor.dispatch(EditorAction.Select(1))
+        val prepared=mutableListOf<TextFontRef>()
+        val metrics=TextLayoutMetrics.fromNative(doubleArrayOf(1000.0,800.0,-200.0,0.0,1.0,0.0,2400.0),false)
+        val controller=TextEditController(editor,this,{_,_->metrics},measureDocument={_,doc,_->
+            prepared+=requireNotNull(doc.runs[0].style.font);metrics })
+        val selected=metadata.selectInstance(custom,7)
+        controller.format(1,0,0) {it.copy(font=selected)}
+        coroutineContext[Job]!!.children.toList().joinAll()
+        assertEquals(7,selected.namedInstance)
+        assertEquals(listOf(700f,80f),selected.axes.map {it.value.staticValue})
+        assertEquals(listOf(custom,selected),prepared) // old/new geometry for anchor compensation
+        val committed=editor.state.project
+        val changedDoc=committed.composition.layers[0].text.source.sourceDocument
+        assertNotEquals(StyledTextPreparation.shapingDocument(originalDoc),StyledTextPreparation.shapingDocument(changedDoc))
+        assertEquals(selected,changedDoc.runs[0].style.font)
+        assertEquals(committed,ProjectCodec.decode(ProjectCodec.encode(committed)))
+        editor.undo();assertEquals(original,editor.state.project);assertFalse(editor.canUndo)
+        editor.redo();assertEquals(committed,editor.state.project)
+        assertEquals(listOf(400f,100f),metadata.selectInstance(selected,-1).axes.map {it.value.staticValue})
+    }
     private val hash="ab".repeat(32)
     private val weight=FontAxisMetadata("wght","Weight",100f,400f,900f)
     private fun face()=FontFaceMetadata(0,"Example","Regular","Example-Regular",400,5,0f,

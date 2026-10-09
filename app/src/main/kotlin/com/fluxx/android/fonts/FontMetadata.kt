@@ -28,6 +28,13 @@ data class FontFaceMetadata(val index: Int,val family: String,val style: String,
             instance.values.forEachIndexed { a,value -> require(value in axes[a].minimum..axes[a].maximum) }
         }
     }
+    /** A preset selection replaces custom coordinates atomically, including all axes. */
+    fun selectInstance(current: TextFontRef,instance: Int): TextFontRef {
+        require(current.faceIndex==index) { "Named instance belongs to a different face" }
+        // Choosing a preset replaces every custom coordinate in one Source Text edit.
+        return reference(requireNotNull(current.sha256),instance)
+    }
+
     /** Coordinates are immutable/hold evaluated, clamped before both HB and FT preparation. */
     fun reference(hash: String,instance: Int=-1,requested: Map<String,Float> = emptyMap()): TextFontRef {
         require(requested.keys.all { tag -> axes.any { it.tag==tag } }) { "Unknown variable-font axis" }

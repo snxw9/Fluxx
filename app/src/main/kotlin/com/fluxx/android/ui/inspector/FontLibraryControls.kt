@@ -88,15 +88,18 @@ internal fun FontAxisControls(reference: TextFontRef?,apply: (TextFontRef)->Unit
     val entry=entries.find { it.sha256==reference?.sha256 }
     val face=entry?.faces?.find { it.index==reference?.faceIndex }
     var axisIndex by remember(reference?.sha256,reference?.faceIndex) { mutableIntStateOf(0) }
-    var instanceIndex by remember(reference?.sha256,reference?.faceIndex) { mutableIntStateOf(-1) }
     if(face==null || reference==null || face.axes.isEmpty()) {
         Text(error ?: "Select an imported variable font to edit static axes",style=MaterialTheme.typography.labelSmall,maxLines=2);return
     }
+    val instanceIndex=face.instances.indexOfFirst { it.index==reference.namedInstance }
+    fun chooseInstance(index: Int) {
+        apply(face.selectInstance(reference,face.instances.getOrNull(index)?.index ?: -1))
+    }
     Row {
-        TextButton(enabled=instanceIndex>=0,onClick={instanceIndex--}) { Text("‹") }
+        TextButton(enabled=instanceIndex>=0,onClick={chooseInstance(instanceIndex-1)}) { Text("‹") }
         val named=face.instances.getOrNull(instanceIndex)
-        TextButton(onClick={apply(face.reference(requireNotNull(reference.sha256),named?.index ?: -1))}) { Text(named?.name ?: "Default instance",maxLines=1) }
-        TextButton(enabled=instanceIndex<face.instances.lastIndex,onClick={instanceIndex++}) { Text("›") }
+        TextButton(onClick={chooseInstance(instanceIndex)}) { Text(named?.name ?: "Default instance",maxLines=1) }
+        TextButton(enabled=instanceIndex<face.instances.lastIndex,onClick={chooseInstance(instanceIndex+1)}) { Text("›") }
     }
     val axis=face.axes[axisIndex.coerceIn(0,face.axes.lastIndex)]
     val requested=reference.axes.find { it.tag==axis.tag }?.value?.staticValue ?: axis.default
@@ -111,9 +114,9 @@ internal fun FontAxisControls(reference: TextFontRef?,apply: (TextFontRef)->Unit
         apply(face.reference(requireNotNull(reference.sha256),reference.namedInstance,values))
     }
     // Keep the existing axis page/slider. Last value wins on each display frame.
-    var pending by remember(reference?.sha256,reference?.faceIndex,axis.tag) { mutableStateOf<Float?>(null) }
+    var pending by remember(reference,axis.tag) { mutableStateOf<Float?>(null) }
     val currentCommit by rememberUpdatedState(::commit)
-    LaunchedEffect(pending) {
+    LaunchedEffect(reference,pending) {
         if(pending!=null) {withFrameNanos { };pending=null;currentCommit()}
     }
     if(axis.minimum<axis.maximum) Slider(value,onValueChange={value=it;pending=it},onValueChangeFinished={pending=null;commit()},valueRange=axis.minimum..axis.maximum)
