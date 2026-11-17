@@ -1,4 +1,6 @@
 # Fluxx: Android Motion Graphics Compositor
+
+**Current T5 stop (2026-10-09):** FIX `85b9de4` and EXPLODE `59a54a0` passed their compile/JVM/host gates and are implemented in source, device-unverified. T5 is dropped under the approved droppable-stage rule. The user's indivisible cursive-word decision resolves the historical emergency-wrap finding, but a new host proof shows mandatory Arabic lam-alef is lost across separate style items even with full source context and optional ligatures off. Cross-style shaping requires a further style-ownership decision beyond the approved wrapping change. No partial RTL code or production fonts remain; stored RTL still receives the existing rendering error. The diagnostic and this report remain uncommitted after the two feature commits. [Evidence, limits and exact manual tests](../checkpoints/TEXT_FIX_EXPLODE_T5.md). Earlier checkpoint statements below retain their historical context.
 ## Software Design Document (SDD) — Full Vision
 
 > **Scope note:** This document describes Fluxx's complete target architecture and feature set — the north star. It is **not** the v0.1 build scope. For what actually ships first, in what order, and why, see `FLUXX_ROADMAP.md`. Nothing in v0.1 should paint the engine into a corner that blocks anything described here later.

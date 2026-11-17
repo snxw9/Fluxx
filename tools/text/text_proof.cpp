@@ -38,7 +38,34 @@ int main(int argc, char** argv) {
                 read(root/(std::string(files[family])+"-"+styles[style]+".ttf"))});
         FontManager manager(inputs);
         const std::string command(argv[2]);
-        if(command=="explodeboundaryproof") {
+        if(command=="cursivestyleproof" && argc==4) {
+            const auto bytes=read(argv[3]);
+            auto* blob=hb_blob_create(reinterpret_cast<const char*>(bytes.data()),static_cast<unsigned>(bytes.size()),HB_MEMORY_MODE_READONLY,nullptr,nullptr);
+            auto* face=hb_face_create(blob,0);auto* font=hb_font_create(face);hb_ot_font_set_funcs(font);
+            const char* source="\xd9\x84\xd8\xa7"; // lam + alef, one required ligature in this face.
+            auto shape=[&](unsigned start,int length,bool optional) {
+                auto* buffer=hb_buffer_create();hb_buffer_set_direction(buffer,HB_DIRECTION_RTL);
+                hb_buffer_set_script(buffer,HB_SCRIPT_ARABIC);hb_buffer_set_language(buffer,hb_language_from_string("ar",-1));
+                hb_buffer_set_cluster_level(buffer,HB_BUFFER_CLUSTER_LEVEL_MONOTONE_GRAPHEMES);
+                // Full pre/post context is available, even for each individual style item.
+                hb_buffer_add_utf8(buffer,source,4,start,length);
+                const hb_feature_t off[]={{HB_TAG('l','i','g','a'),0,0,UINT32_MAX},{HB_TAG('c','l','i','g'),0,0,UINT32_MAX}};
+                hb_shape(font,buffer,optional?nullptr:off,optional?0:2);
+                unsigned count=0;const auto* info=hb_buffer_get_glyph_infos(buffer,&count);
+                std::vector<uint32_t> result;for(unsigned i=0;i<count;++i) result.push_back(info[i].codepoint);
+                hb_buffer_destroy(buffer);return result;
+            };
+            for(bool optional:{true,false}) {
+                const auto whole=shape(0,4,optional),lam=shape(0,2,optional),alef=shape(2,2,optional);
+                require(whole.size()==1 && lam.size()==1 && alef.size()==1 && whole[0] && lam[0] && alef[0],
+                    "Cursive style fixture needs a covering font with required lam-alef ligation");
+                require(whole[0]!=lam[0] && whole[0]!=alef[0],"Style pieces unexpectedly retain the required ligature");
+                std::cout<<"PASS: optional ligatures "<<(optional?"on":"off")<<", whole lam-alef glyph "<<whole[0]
+                    <<", separate style items with full context "<<lam[0]<<' '<<alef[0]
+                    <<". Keeping the word on one line does not restore a mandatory glyph across a style boundary.\n";
+            }
+            hb_font_destroy(font);hb_face_destroy(face);hb_blob_destroy(blob);
+        } else if(command=="explodeboundaryproof") {
             const auto shaped=manager.shape("fluxx.sans","A A A",false);
             require(shaped->glyphs.size()==5,"Explode boundary fixture unexpectedly ligated");
             std::vector<BreakCluster> clusters;

@@ -1788,6 +1788,16 @@
       "sha256": "867b73c6a954a4a64616906d179f94572a748790a1d022ebeeff07f56ea0221a",
       "license_path": "tools/text/fixtures/SourceSerif4-OFL.txt",
       "license_sha256": "75784a295293a8992f5a8d99210566e0064a012e6dab6731305e3787f15896c7"
+    },
+    "noto-arabic-cursive-style": {
+      "repo": "notofonts/noto-fonts",
+      "commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+      "path": "tools/text/fixtures/NotoSansArabic-Regular.ttf",
+      "sha256": "ceea25b464a656dc3b26849bab9356740401af62aedf1bfa8b7f0d9b75925b1b",
+      "license_path": "tools/text/fixtures/NotoSansArabic-Regular-OFL.txt",
+      "license_sha256": "0dab92d0544f7b233403f14b84a663bdbfa746982eda629e7f4f9ffe1b036feb",
+      "url": "https://raw.githubusercontent.com/notofonts/noto-fonts/ffebf8c1ee449e544955a7e813c54f9b73848eac/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf",
+      "license_url": "https://raw.githubusercontent.com/notofonts/noto-fonts/ffebf8c1ee449e544955a7e813c54f9b73848eac/LICENSE"
     }
   }
 }

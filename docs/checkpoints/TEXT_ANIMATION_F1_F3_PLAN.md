@@ -192,20 +192,20 @@ Prepare all four Based On maps and a permutation per variant per seed before pla
 
 Animator and selector vector order is significant. Each animator samples tracks once per frame and applies its resolved cluster weight c.
 
-| Property           | Stored semantics                          | Application                                 |
-|--------------------|-------------------------------------------|---------------------------------------------|
-| Position           | XY displacement, local composition pixels | Add c×position                              |
-| Scale              | XY percentages; identity 100/100          | Multiply by 1+c×(scale/100−1)               |
-| Rotation           | Degrees; identity 0                       | Rotate by c×rotation                        |
-| Opacity            | Percentage; identity 100                  | Multiply by clamp(1+c×(opacity/100−1),0,1)  |
-| Skew               | Degrees; identity 0                       | Shear by weighted angle                     |
-| Skew axis          | Degrees                                   | Orient the shear axis                       |
-| Anchor point       | XY anchor displacement                    | Move by -c×anchor before affine transform   |
-| Fill/stroke colour | Target ARGB                               | Blend current colour toward target          |
-| Stroke width       | Signed pixel delta                        | Add to requested width before clamping      |
-| Tracking amount    | Signed thousandths-of-em delta            | Add at cluster boundaries                   |
-| Line anchor        | Tracking expansion anchor, 0–100%         | Shift line by -anchor/100 × tracking sum     |
-| Blur               | Signed pixel delta to requested softness  | Add before shared SDF clamp                 |
+| Property           | Stored semantics                          | Application                                |
+|--------------------|-------------------------------------------|--------------------------------------------|
+| Position           | XY displacement, local composition pixels | Add c×position                             |
+| Scale              | XY percentages; identity 100/100          | Multiply by 1+c×(scale/100−1)              |
+| Rotation           | Degrees; identity 0                       | Rotate by c×rotation                       |
+| Opacity            | Percentage; identity 100                  | Multiply by clamp(1+c×(opacity/100−1),0,1) |
+| Skew               | Degrees; identity 0                       | Shear by weighted angle                    |
+| Skew axis          | Degrees                                   | Orient the shear axis                      |
+| Anchor point       | XY anchor displacement                    | Move by -c×anchor before affine transform  |
+| Fill/stroke colour | Target ARGB                               | Blend current colour toward target         |
+| Stroke width       | Signed pixel delta                        | Add to requested width before clamping     |
+| Tracking amount    | Signed thousandths-of-em delta            | Add at cluster boundaries                  |
+| Line anchor        | Tracking expansion anchor, 0–100%         | Shift line by -anchor/100 × tracking sum   |
+| Blur               | Signed pixel delta to requested softness  | Add before shared SDF clamp                |
 
 Colour uses existing linear-light premultiplied interpolation with weight clamp(c,0,1). Negative influence does not extrapolate colour; document this difference from signed spatial properties.
 
@@ -300,7 +300,7 @@ Preserve all field ordinals and permanently retain the v10 loader.
 |----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | TextAnimator         | id:ulong, name:string, enabled:AnimatableProperty1D, selectors:[TextRangeSelector], anchor_grouping:AnimatableProperty1D                                                                     |
 | TextRangeSelector    | id:ulong; enabled, start, end, offset, units, based_on, shape, smoothness, ease_high, ease_low, mode, amount, min_amount, max_amount, randomize_order (all AnimatableProperty1D); seed:ulong |
-| TextPayload          | ligatures:AnimatableProperty1D (default-on, validated boolean, hold evaluation) |
+| TextPayload          | ligatures:AnimatableProperty1D (default-on, validated boolean, hold evaluation)                                                                                                              |
 | TextPropertyOverride | scalar:AnimatableProperty1D, vector:AnimatableProperty2D, colour:AnimatableColour                                                                                                            |
 
 Existing property_id identifies one typed payload:

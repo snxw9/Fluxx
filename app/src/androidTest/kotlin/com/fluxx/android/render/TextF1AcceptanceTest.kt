@@ -64,7 +64,9 @@ class TextF1AcceptanceTest {
                         canary[0]=project
                         retainedAllocationCanary=canary
                         val detected=Debug.getThreadAllocCount()
-                        assertTrue("ART thread allocation counter unavailable/unreliable on this device",initial>=0 && detected>initial)
+                        assertTrue("ART thread allocation counter unavailable/unreliable on this device",
+                            initial in 0..<detected
+                        )
                         for (pass in 0..1) {
                             if(pass==1) {
                                 val until=SystemClock.elapsedRealtime()+180_000

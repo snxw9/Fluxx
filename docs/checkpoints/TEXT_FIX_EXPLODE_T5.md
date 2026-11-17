@@ -35,7 +35,7 @@ Protected APIs remain unchanged: `PreviewController`, editor gesture transaction
 
 EXPLODE's source gate passed: Kotlin Debug/Release, app instrumentation-source compilation and all 246 JVM tests, zero failures/errors/skips (`explode-complete.log`, `explode-final-jvm.log`). Core/native product sources are unchanged from the passing FIX native Debug/Release/both-ABI and core-instrumentation checks. Host Release compiled the additional boundary proof; that proof and the full host selftest passed. Existing six shaping references and 1,445 checksum results remain applicable to unchanged font/shaping inputs. No device run or APK packaging occurred. T5 follows EXPLODE and uses the user's final Unicode Joining_Type decision: a cursive-joining word is indivisible for emergency wrapping and may overflow; normal UAX14 opportunities remain unchanged. No partial RTL support or new Edit Text sub-screen is authorized by this checkpoint.
 
-FIX is commit `85b9de4`. The two pre-existing user edits in `TextF1AcceptanceTest.kt` and `TEXT_ANIMATION_F1_F3_PLAN.md` were excluded.
+FIX is commit `85b9de4`; EXPLODE is commit `59a54a0`. The two pre-existing user edits in `TextF1AcceptanceTest.kt` and `TEXT_ANIMATION_F1_F3_PLAN.md` were excluded.
 
 ### EXPLODE representation finding and concrete proposal
 
@@ -62,3 +62,25 @@ No font/assets are added: APK asset delta zero; code-size delta unmeasured witho
 3. Exercise tracking, kerning, physical alignment, indents, justification, wrapping, mixed fonts/run scales, faux styles, super/subscript and baseline shifts. Verify exact placement at several rotation/negative-scale/position animation times; verify actionable refusal and no document change for unrepresentable partial style runs, emergency-wrapped words and animator shape changes.
 4. Verify frozen layout properties at an active playhead and layer in-point outside its range; inspect dropped animators, preserved fill/stroke/opacity/transform tracks, signed keys, trim/start/duration, logical names and z-order. Each piece must refuse animated spatial tracks with the Group suggestion.
 5. Verify one-step undo/redo, copy/paste, save/reopen, out-of-bounds Group anchors and Fit/Stretch/hit overlays. Repeat with an imported static/variable font and missing/restored fonts. Run 500+ glyph performance/counter canaries and inspect four-at-a-time batching; no Android performance claim is made.
+
+## T5 dropped after EXPLODE — 2026-10-09
+
+The user's final Joining_Type decision remains accepted: joining words are indivisible for emergency wrapping, while normal UAX14 opportunities remain unchanged. This resolves the historical emergency-break finding. T5 was investigated but is not implemented, and the existing RTL rendering rejection remains. The partial production prototype was removed; no Arabic/Hebrew production fonts were added.
+
+A new independent constraint triggers the approved droppable-stage rule. The renderer shapes each style run separately, including paint-only boundaries. In pinned Noto Sans Arabic, whole lam-alef U+0644 U+0627 shapes to required glyph **704**. Shaping the two style items separately, with the entire source supplied as pre/post context, produces glyphs **668 and 47**. This happens with optional `liga`/`clig` both on and off. Keeping the word on one line cannot restore the mandatory cross-item glyph. Preserving that glyph across differently styled logical ranges requires cross-style shaping and an explicit glyph style-ownership rule (or a representation for partitioning its styling). The current cluster modifier owns one paint/affine set. No claim is made that a protected API necessarily must change; the unresolved design decision itself exceeds the single approved T5 deviation. T5 therefore stops after commit 2 rather than silently dropping styles or required joining.
+
+Reproduce after `py -3 tools/text/build_host.py`:
+
+```powershell
+tools/text/results/host-build/Release/text-proof.exe core-engine/src/main/assets/fonts cursivestyleproof tools/text/fixtures/NotoSansArabic-Regular.ttf
+```
+
+The host-only OFL fixture comes from [pinned official Noto sources](https://github.com/notofonts/noto-fonts/tree/ffebf8c1ee449e544955a7e813c54f9b73848eac/hinted/ttf/NotoSansArabic), commit `ffebf8c1ee449e544955a7e813c54f9b73848eac`. Font SHA-256: `ceea25b464a656dc3b26849bab9356740401af62aedf1bfa8b7f0d9b75925b1b`. Its OFL file and checksum are registered in `TEXT_INPUTS.json`; `fetch_cursive_style_fixture.py` reproduces the fixture without writing APK assets. Independent hb-shape 14.3.1 also returns glyph 704 for the whole word with `--unicodes=0644,0627 --direction=rtl --script=Arab --language=ar --font-funcs=ot --no-glyph-names --output-format=json --features=liga=0,clig=0`.
+
+After restoring production sources to EXPLODE, host Release compilation, the style-boundary proof (both optional modes), full selftest, all six existing shaping parity references and **1,447** input checksum checks passed. The Arabic fixture is a diagnostic, not a completed Arabic/Hebrew parity suite. No T5 Android compile, device acceptance, performance, visual parity or supported RTL claim is made. FIX/EXPLODE compile and JVM evidence above remains applicable; production code is unchanged. Direction would remain inside held documents, so it would not add a new multiplicative dimension to the existing 64-layout cap, but a completed T5 preparation design is still outstanding.
+
+APK production asset delta remains zero for both commits and this diagnostic; code-size delta is unmeasured without packaging. Host-only Arabic fixture size is 240,456 bytes, excluded from APK assets. No third feature commit was created; diagnostic source/fixture/manifest and current stop reports remain uncommitted. The two pre-existing user edits remain untouched.
+
+### T5 user-run status
+
+There is no T5 acceptance list to run: it is dropped and Arabic/Hebrew rendering remains unsupported. A regression check may verify that an older RTL-attributed document retains its direction through save/reopen and still reports the existing actionable rendering error. Do not treat this as RTL rendering acceptance. The exact FIX and EXPLODE manual lists above remain required; their source-only instrumentation has not been executed on a device.
