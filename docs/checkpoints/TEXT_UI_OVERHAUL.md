@@ -171,3 +171,154 @@ Implemented in source, device-unverified.
 9. **Stroke clamp message:** set a large stroke on small text (whole layer, then a selection with a delta, then an imported face). The feedback strip shows `Requested X px | Effective Y px | SDF limit` on one line only while clamped and disappears when not; TalkBack reads the full text.
 10. **Icons:** at 24dp distinguish Size, V scale, H scale, Baseline, Leading; Source vs Align left; Delete (bin) vs Cancel/Close; header ⋮ vs rail actions; long-press shows the label for every face control.
 11. Regression: all text controls still edit with one undo per gesture or entry; Fonts import / named instances / axes / missing fonts; Explode; preview move and box-width handle; save/reopen.
+
+## TEXT UI 5: single-header page, slider popovers, limits, log scale ruler
+
+The pass-2 surface was rejected on the A16 (cluttered, flat, typing-first, and the numeric IME resized the window and shrank the preview). This pass replaces it in one commit. Implemented in source, device-unverified. No `PreviewController`, gesture-protocol, `EditorAction`, batch/draw or schema change. The only model constant touched is `TextLimits.MAX_SIZE` (500 → 1000 px; see Deviations).
+
+### Frame and navigation
+
+- **Edit Text is an ordinary inspector page.** Same `ElementInspectorSheet` frame (12dp sides, 8dp top/bottom), same height and same font scaling as Transform. The fixed 344dp text sheet, its separate height path in `EditorScreen` and the "Preview Expansion ignored" deviation are gone: every page uses `InspectorSheetBudget.height(expanded, fontScale)`.
+- **Shared heights rose to 308 / 344dp** (expanded / standard), for all pages. Numbers: the Character tab needs 6 tile rows (row 1, row 2, 3 style rows, bottom bar). Frame 16 + header 40 = 56dp of chrome. Compact (sheet < 320dp, 40dp targets): 6 × 42dp pitch = 252dp, total 308. Standard (48dp targets): 6 × 48 = 288dp, total 344. The old budgets leave 268 − 56 = 212 < 252 and 328 − 56 = 272 < 288, so they provably cannot hold the tab; both rise by the minimum (+40 / +16dp). Preview/timeline arithmetic is otherwise unchanged (the same clamp leaving a 96/48dp minimum preview, now applied to every layer type).
+- **One header row:** `←` | Character | Paragraph | Animate | (⚠ only while there is an error or message; tap shows it) | ⋮. Removed: second chrome row, Layer tools text, duplicate/delete icons, ✓/Done everywhere (rail, numeric entry, colour picker, Fonts, and the dead fill-colour "Done" row in `ElementInspectorSheet`), per-tab ⋮ and the feedback strip. The one ⋮ holds exactly Explode Text, Reset {tab} style · scope, Manual kerning, Relative size (the last two open the slider popover anchored on ⋮).
+- **Back** (`TextInspectorBack`): Explode dialog → reset-animation confirmation → popover (the Layer base row first returns to Justify) → Source typing commits → sub-page (Fonts / Colour) returns to the tab → landing grid (selection cleared). System Back, Escape and the editor's top-left arrow share it. Popovers are focusable popups, so system Back closes them before the page sees it.
+- **Rail:** the same `InspectorUtilityRail` as Transform/Opacity (now `internal`, with optional key glyph/state, extra menu items and an anchored confirmation). The diamond keeps hollow / centre-mark / filled and the Hold squares and acts on the focused text property; Graph disabled; property-options ⋮ = Reset {property} value, Enable/Freeze, Reset animation… (anchored confirmation), Hold or easing. Prev/Next-key buttons, ✓ and the 3D icon are removed from the text rail (`show3D=false`).
+- **Prev/Next follow focus:** `TextFocus.owner` = the open popover's property, otherwise the last touched control (the colour popover uses its Fill/Stroke target). The panel reports it through the existing `onPropertyFocus`; the action bar's Prev/Next already route through `ContextualNavigation` with that property. The only fix needed was making an open popover count as focus; `TextFocusNavigationTest` covers it.
+
+### Final tile inventory
+
+Tiles use the landing-grid language: 40dp, `SurfaceHigh`, 10dp radius, 1dp `TextPrimary` border when active, pressed overlay, icon plus optional 8sp value caption bottom-right, and a long-press label, content description and state on every tile. Pitch is 42dp compact / 48dp standard (the whole pitch is the touch target). 1dp `Border` hairlines separate groups.
+
+| Tab / row | Tiles (left to right) |
+|---|---|
+| Character row 1 | Fill/Stroke dual-colour tile (front square = fill, back ring = stroke) · Stroke width · right-aligned "Fill over stroke" label + real `Switch` |
+| Character row 2 | Tracking · Leading · Horizontal scale · Link (uniform H/V) · Vertical scale · Baseline shift |
+| Character style grid (3×3) | Bold · Italic · Underline / Strikethrough · Superscript · Subscript / All caps · Lowercase · Ligatures |
+| Beside the grid (hairline) | Small caps · Kerning (Metrics/Off) |
+| Paragraph row 1 | Align left · centre · right · Justify (choice popover: 4 justify variants, Inherit, Layer base ▸ → base L/C/R) |
+| Paragraph row 2 | Left indent · Right indent · First-line indent · Space before · Space after |
+| Paragraph row 3 | Point/Box toggle · Box width (popover adds Auto and Fill composition) · Direction (LTR/RTL, storage only) |
+| Bottom bar (Character, Paragraph) | Font chip (opens Fonts page) · Size (ladder) · inline text field (selection chip "N ×" inside it while a selection exists) |
+| Animate | F3 placeholder; no bottom bar |
+| Header ⋮ | Explode Text · Reset {tab} style · Manual kerning (popover + Reset selected manual spacing) · Relative size (popover) |
+
+Large font scales (> 1.2): the same face tiles reflow in order into a labelled 3-column grid; whole rows page from an `n/m` button; the page never scrolls.
+
+### Slider popovers and typing
+
+- Tapping a numeric tile opens a small popover anchored directly above it (below if there is no room), scaled out from the anchor and clamped horizontally with 8dp margins (`PopoverPlacer`). It is never centred and never a sheet. Contents: `[↺]  slider ——●  [value]`. Tap outside or Back closes it.
+- The value is tappable: it becomes an inline field (select-all, numeric IME). IME Done or focus loss / tap outside commits; Escape cancels; Back (which first hides the keyboard) cancels (`TypedEntry`). Typed values clamp to the typed range; every value clamps to the hard cap.
+- Reset returns to the property default and respects inheritance: run values return to neutral (relative size 100%, deltas 0) and layer values to the model default (e.g. 72px).
+- Font size snaps to the 23-rung ladder (8 … 300); Leading follows the same ladder plus 0. Other sliders are continuous with a soft snap (1.2% of span) at 0 and the default; detents every 10 px / 10 thousandths of an em / 50% / 5 px of stroke.
+- Haptics go through the View, so the system touch-feedback setting is respected: a press when the thumb is grabbed, and a tick per ladder rung or detent bucket and on crossing 0/default (≥ 35ms apart).
+- One undo per drag (begin on first move, finish on release) or per typed commit/reset; live preview is conflated to one publish per frame through the existing `onPayloadPreview` path.
+- Icon drag-scrubbing and every −/+ button are gone (`TextNumericGesture.kt` deleted).
+
+### Keyboard
+
+`EditorScreen` no longer applies `imePadding()` and no longer re-lays out the editor while typing: the action bar and timeline stay and the preview height is unchanged. With the existing edge-to-edge window this is the adjustNothing equivalent, scoped to the editor. Other screens keep their own inset handling and the manifest is unchanged. Only the focused popover or the inline text editor lifts above the keyboard: popovers are positioned using the host window's IME height (`rememberVisibleBottom`, `LocalHostImeBottom`). The Transform/Opacity value boxes now open the same anchored entry popover.
+
+### Fonts page and colour
+
+- **Fonts** is a page in the same frame (`←` returns to the tab). Left column: search, import, delete (imported families, inline confirmation), and the families, with bundled names drawn in their own face (Sans/Serif/Mono; imported names use UI text). "Default" merges Inherit and Layer base: choosing it inherits, and its right column lists the layer base fonts. Right column: styles / collection faces / named instances (a modified preset is labelled). Variable faces add one row of axis tiles; each opens the slider popover (frame-conflated preview, one transaction per drag, typed entry, reset to default). Library hashing, isolated-process import and missing-identity handling are unchanged.
+- **Colour** opens from the Fill/Stroke tile as an anchored popover: Fill/Stroke target, palette swatches (the active palette or 12 defaults; a swatch keeps the current alpha), an alpha slider, Inherit (with a selection) and "Custom…", which swaps to the Colour page (global picker incl. eyedropper) in the same frame. There is no Done: edits apply live, leaving the page commits once, and an untouched page cancels.
+
+### Limits as implemented (`PropertyLimits`)
+
+| Property | Slider / ladder | Typed range | Hard cap |
+|---|---|---|---|
+| Font size (px) | ladder 8–300 | 8–1000 | 8–1000 |
+| Relative run size (%) | 10–400 | 1–1000 | 1–1000 |
+| Tracking / manual spacing (1/1000 em) | −100…+100 | −500…+500 | ±1000 |
+| Leading (px) | ladder 0, 8–300 | 0–2000 | ±2000 |
+| Horizontal / vertical glyph scale (%) | 10–400 | 1–1000 | 1–1000 |
+| Baseline shift (px) | −100…+100 | −1000…+1000 | ±1000 |
+| Stroke width (px) / selection delta | 0–50 / −50…+50 | 0–200 / ±200 | 0–200 / ±200 |
+| Indents L/R, space before/after (px) | 0–100 | 0–500 | 0–500 |
+| First-line indent (px) | −100…+100 | −500…+500 | ±500 |
+| Box width (px) | 0–2000 | 0–20000 | 0–20000 |
+| Opacity / colour alpha (%) | 0–100 | 0–100 | 0–100 |
+| Layer scale (%) | log ruler 0.05–10000 | ±50000 | ±50000 |
+| Position (px) | pad, unbounded | ±10 × composition size | ±10 × composition size |
+| Rotation (°) | dial, never wraps | ±36000 (±100 turns) | ±36000 |
+
+Extreme-value audit: SDF glyphs rasterise at a fixed 48 ppem with spread 8 (`font_manager.h`), so display size and layer scale never grow the atlas or the glyph cache; stroke and softness are bounded by `TextSdfLimits` (10% of size). Layer matrices, hit testing and anchor compensation stay finite at ±500× and ±100 turns (`ExtremeValuesTest`). Layout bounds are floats scaled from the measured layout, with no integer conversion.
+
+### Scale ruler (Transform)
+
+`LogScaleRuler` replaces the linear ruler (0.8dp per 1%, clamped 5%–1000%).
+
+- **Look:** a rounded `SurfaceHigh` strip with a hairline border and a fixed bright centre needle with a notch; ticks scroll under it. Majors at 1/2/5 × 10ⁿ % are labelled (0.05 … 10k); minors sit at the other integer multiples; 100% is taller and brighter; ticks fade and shrink towards both edges. A large monospace readout sits above (`175%`): tap to type (anchored entry, ±50000%), double-tap to reset to 100%. The link toggle sits at its right.
+- **Mapping:** `scale = base · 2^(dx / 96dp)`, relative to the value at drag start, with a velocity gain from 1× (≤ 400dp/s) to 2.5× (≥ 2400dp/s). Range 0.05%–10000%; typed values beyond it pin the needle to the end, and a negative scale keeps its sign while the ruler moves its magnitude.
+- **Detents:** a light tick crossing 25/50/100/200/400…, a strong tick crossing or landing on 100%, and a soft snap of ±0.03 doublings (≈ ±2%) around 100% that a continued drag passes through.
+- **Inertia:** flings above 600dp/s continue (τ = 300ms) and stop on touch; one undo per drag, inertia included.
+- **Link:** linked mode keeps the X:Y ratio captured at drag start (Y now within the ±500× hard cap); unlinked shows Width and Height rulers.
+- **Drawing:** a single `Canvas`; tick geometry and label layouts are prepared once, so nothing is allocated per frame. A `@Preview` is included. The W/H typed boxes are replaced by the ruler readouts; Flip H/V stays in the layer menu.
+
+### Deviations
+
+1. **Shared heights are 308/344dp, not 268/328.** The numbers are above. All pages, the preview and the timeline scale identically; Edit Text and Transform have the same height.
+2. **No drag handle on Edit Text.** The single header row replaces the parent chrome (handle, name row, section tabs), so swipe-to-dismiss is unavailable on text pages; `←` / Back navigate.
+3. **The font size typed minimum is 8px, not 1px.** `TextLimits.MIN_SIZE` is provisional pending the small-size acceptance, so typing 1–7 clamps to 8. The maximum was raised in the model (500 → 1000px). Decoding clamps, so older files are unaffected.
+4. **Underline and Strikethrough are disabled tiles** with a stated reason: the document has no such run fields and this pass forbids schema changes.
+5. **Small caps and Kerning** (existing capabilities) sit beside the 3×3 style grid behind a hairline; the grid itself is exactly the nine requested tiles.
+6. **"Split ligatures at nonzero tracking"** stays the fixed renderer rule; there is no model flag to toggle. The Ligatures tile's state reads "On, split while tracking is not zero".
+7. **Limits rows:** Leading's typed range is 0–2000 per the table, but its hard cap is ±2000 so existing negative leading is preserved rather than silently rewritten. First-line indent keeps negative (hanging) indents, ±500. Relative run size, stroke delta and box width were added as rows (they were not in the requested table).
+8. **Hyphenation** has no model field and is not shown. The Paragraph point/box toggle sets point (width 0) or box (fill composition width).
+9. **The feedback strip is removed.** Errors and messages appear behind a ⚠ header icon (messages auto-clear after 5s); the stroke clamp line appears inside the Stroke width popover.
+10. **Source text** is typed in an anchored editor lifted above the IME. Tap outside, Back or keyboard dismissal commits; hardware Escape cancels. Back does not discard typed text, unlike numeric fields where Back cancels.
+11. **Imported font names** use UI text (no font parsing in Compose); bundled names render in their own face.
+12. **Explode Text stays a centred dialog** (the existing dialog, unchanged).
+13. **Transform value boxes** (Position X/Y, rotation, opacity) keep their boxes but type through the anchored entry popover, so the keyboard never resizes the editor.
+
+### Tests
+
+These JVM tests were updated because the UI structure they test legitimately changed:
+
+- `TextInspectorChromeTest`: Back signature, shared heights, icon list without Done/−/+.
+- `TextInspectorFaceTest`: new tab inventory, widths, labelled fallback.
+- `TextInspectorStateTest`: the scrub-acceleration test is replaced by linked-scale/reset tests; the numeric-mode restore by colour/source/fonts restore; caps now come from `PropertyLimits`.
+
+New tests:
+
+- `InspectorLimitsTest`: every limits row, ladder snapping, soft snap/detents, typed parse/clamp, typed commit/cancel, popover placement and clamping.
+- `ScaleRulerMathTest`: round trip, range ends, base-relative drag, 100% snap, detents, gain, reach, inertia, linked ratio, ticks.
+- `TextFocusNavigationTest`: focus owner; Prev/Next via `EditorViewModel.navigateBoundary`.
+- `ExtremeValuesTest`: size 1000, ±500× scale, ±100 turns.
+
+The instrumented `TextInspectorLayoutTest` was rewritten for the shared frame (it compiles; it has not been run).
+
+**Gate:** `text-ui-5-gate.log`: app Kotlin Debug and Release, instrumentation-source compilation and **291** JVM tests (270 previous + 21 new), zero failures, errors or skips. The first run failed one new test (`tileCaptionsStayTiny`: the caption printed `1000` instead of `1k`), which was fixed before the passing run. No APK packaging, device run or host/native change (the native text code was read, not modified). Existing Gradle-option and pre-existing safe-call warnings remain.
+
+### Exact A16 user-run list
+
+1. Run the JVM inspector tests and `TextInspectorLayoutTest` from Android Studio.
+2. **Sheet height identical to Transform:** select a text layer, open Transform and note the sheet top; open Edit Text: same top, same preview and timeline size, in both preview sizes (308 / 344dp) and after toggling Preview Expansion while Edit Text is open.
+3. **The keyboard does not shrink the preview:** tap the text field, a numeric value in a popover, a Transform X/Y box, the scale readout and the Fonts search. The preview, action bar, timeline and sheet must not move or resize; only the editor/popover sits above the keyboard, and the edited layer stays visible and unscaled.
+4. **Popover anchoring at screen edges:** open popovers for the leftmost (Tracking, Fill/Stroke) and rightmost (Baseline, Space after) tiles, the Size tile in the bottom bar and the header ⋮ popovers. Each sits directly above its tile (below if there is no room), fully on screen with ~8dp margins, scales out from the tile, and closes on an outside tap and on Back.
+5. **Typing in a popover:** tap the value and confirm everything is selected; type and press IME Done (commits, one undo). Repeat and tap outside (commits). Repeat and press Back (the keyboard hides and the value is unchanged). Hardware Escape cancels.
+6. **Font ladder haptics:** drag the Size slider slowly across the range: one tick per rung (8…300), snapping to rungs. Typed 70 and 1000 are kept; reset returns to 72 (or 100% with a selection). Repeat with system touch feedback off: no haptics.
+7. **Other sliders:** Tracking, Leading, H/V scale with Link on and off, Baseline, Stroke width (clamp note), indents, spacing, Box width (+ Auto/Fill), Manual kerning, Relative size and colour alpha: soft snap at 0/default, ticks at detents, one undo per drag, live preview.
+8. **Scale ruler:**
+   - Feel the strong tick and soft snap at 100%, and drag through it; light ticks at 25/50/200/400.
+   - 10000% is reachable in one or two quick drags; a fling continues briefly and stops when touched.
+   - Double-tap the readout to reset to 100%; type 50000 and −200 (the needle pins to the end / moves the magnitude).
+   - Linked and unlinked rulers; one undo per drag.
+9. **Rotation 5+ turns without typing:** keep circling the dial past 1800°; the value never wraps or clamps. Typing `7x90` gives 2610°.
+10. **Fonts page two-column navigation:**
+    - Search; choose Default (the right column shows the layer base fonts).
+    - Bundled families (names in their own face) and styles; imported family faces and named instances.
+    - Axis tiles with slider popovers.
+    - Import, delete with inline confirmation, the missing-font banner; `←` returns to the tab.
+11. **Colour popover from the icon:**
+    - It opens anchored on the Fill/Stroke tile.
+    - Switch target, tap swatches (alpha kept), drag alpha, Inherit with a selection.
+    - Custom… opens the Colour page in the same frame (the eyedropper works).
+    - `←` commits once; an untouched page leaves no undo entry.
+12. **`←` and system Back:** popover → sub-page → tab → landing grid, one step per press. Start from each of: a slider popover, a typed value, the Justify and Layer base rows, the colour popover, the Colour page, the Fonts page with an axis popover open, Source typing, the reset-animation confirmation and the Explode dialog.
+13. **Rail and focus:**
+    - Diamond states (off / between keys / on key; squares for Source Text, fill-over-stroke, ligatures) follow the focused property.
+    - Check the property-options ⋮ items; there is no Prev/Next, ✓ or 3D in the text rail.
+    - Touch Tracking, then press the action bar's Next keyframe: it goes to the next Tracking key. Open the Size popover: Prev/Next follow Size.
+14. **Large font scale (1.3 and 2.0):** labelled 3-column grid, all tiles present, `n/m` paging of whole rows, nothing scrolls or overlaps, popovers stay on screen.
+15. **Regression:** the selection scope chip in the text field (× clears), Reset {tab} style is one undo, Explode, the Direction RTL message, preview move/box handle, save/reopen, the Transform position pad and anchor mode, Opacity, Timing.

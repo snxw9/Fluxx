@@ -71,7 +71,7 @@ The inspector reports the focused Position/Rotation/Scale/Opacity property to th
   - When the inspector opens, the timeline programmatically scrolls to align the selected layer with the first timeline row.
   - Both clip rows and layer-control headers use matching trailing padding so the bottom-most layer can also scroll to the top row.
   - User vertical scrolling on the timeline dismisses the inspector sheet; programmatic alignment does not dismiss it.
-  - The shared workspace budget reserves 328dp for collapsed preview or 268dp for expanded preview, scaled for fonts and clamped to available height. Exception: while Edit Text is open the sheet uses `TextInspectorBudget.sheetHeight` (344dp at font scale 1) regardless of Preview Expansion, still clamped to leave the minimum preview. Opening the inspector does not resize preview; [timeline geometry](TIMELINE_LAYOUT.md#vertical-regions) owns these measurements.
+  - The shared workspace budget reserves 344dp for collapsed preview or 308dp for expanded preview (`InspectorSheetBudget`; raised from 328/268 in TEXT UI 5 so Edit Text's 6-row Character tab fits with the same frame as every page), scaled for fonts and clamped to leave the minimum preview. Every page, Edit Text included, uses the same height. Opening the inspector does not resize preview; [timeline geometry](TIMELINE_LAYOUT.md#vertical-regions) owns these measurements. The keyboard overlays the editor (no `imePadding`); only the focused popover/inline field lifts above it.
 
 ---
 
@@ -211,7 +211,7 @@ The landing-page navigation, 8-cell grid, trim icons, and scrubbing/hierarchy ge
   - Test "Reset active mode" vs. "Reset all transforms"; ensure opacity is preserved.
 - [ ] **Sheet Interaction & Alignment:**
   - Tap layer to open inspector; confirm timeline auto-scrolls selected layer to row 1; scroll timeline vertically to dismiss.
-  - Verify the 328dp collapsed-preview / 268dp expanded-preview inspector budget, font scaling and small-window clamping; opening the sheet must not resize preview.
+  - Verify the 344dp collapsed-preview / 308dp expanded-preview inspector budget, font scaling and small-window clamping; opening the sheet must not resize preview.
 - [ ] **Duplicate / Copy / Paste:**
   - Tap duplicate on a top, middle and bottom layer -> verify the clone is immediately above its source at the original start time; one undo removes it and restores the previous hierarchy.
   - Hold duplicate -> verify Toast confirmation.

@@ -14,14 +14,16 @@ internal object TextInspectorIcons {
     private const val A="M4,20 L10,4 L16,20 M6,14 L14,14"
     private const val A_SOLID="M4,20 L10,4 L16,20 L13,20 L11,15 L8,15 L6,20 Z M8,12 L11,12 L10,8 Z"
     /** Names deliberately drawn with the same glyph: they are one concept shown in different places. */
-    val ALIASES=listOf(setOf("CASE","NONE"),setOf("DIRECTION","LTR"),setOf("FILL","PAINT"),setOf("CANCEL","CLOSE"),setOf("KEY","ANIMATE"))
+    val ALIASES=listOf(setOf("CASE","NONE"),setOf("DIRECTION","LTR"),setOf("FILL","PAINT"),setOf("CANCEL","CLOSE"),setOf("KEY","ANIMATE"),
+        setOf("ALL","ALL_CAPS"),setOf("LOWER","LOWERCASE"),setOf("SMALL","SMALL_CAPS"),setOf("MISSING","WARNING"))
     /** Glyph names shown in the Edit Text surface; the collision test covers every pair of these. */
     val VISIBLE=listOf("FONT","AXIS","SIZE","FILL","STROKE","STROKE_WIDTH","TRACKING","KERNING","MANUAL_KERNING","LEADING","BASELINE",
         "H_SCALE","V_SCALE","BOLD","ITALIC","CASE","ALL","LOWER","SMALL","SUPER","SUB","LIGATURES","ORDER","INDENT_LEFT","INDENT_RIGHT",
         "INDENT_FIRST","BEFORE","AFTER","BOX","LTR","RTL","SOURCE","PREV","NEXT","KEY","KEY_ANIM","KEY_ON","HOLD_ANIM","HOLD_ON","GRAPH","3D",
-        "OVERFLOW","ACTIONS","DONE","CANCEL","DELETE","RESET","INHERIT","IMPORT","MISSING","EXPLODE","MINUS","PLUS")
+        "OVERFLOW","ACTIONS","CANCEL","DELETE","RESET","INHERIT","IMPORT","MISSING","EXPLODE","UNDERLINE","STRIKE","SCALE_LINK","LINK_OFF",
+        "POINT","AREA","BACK","SEARCH","ALL_CAPS","LOWERCASE","SMALL_CAPS")
     private val FILLED=setOf("FILL","PAINT","BOLD","KEY_ON","HOLD_ON")
-    fun control(control: TextControl)=icon(control.name)
+    fun control(control: TextControl)=icon(when(control) {TextControl.ALL_CAPS->"ALL";TextControl.LOWERCASE->"LOWER";TextControl.SMALL_CAPS->"SMALL";else->control.name})
     fun path(name: String): String=when(name) {
         "FONT"->"M7,21 L7,3 L19,3 M7,11 L16,11"
         "AXIS"->"M3,6 L21,6 M3,18 L21,18 M8,3 L8,9 M16,15 L16,21"
@@ -40,10 +42,18 @@ internal object TextInspectorIcons {
         "BASELINE"->A+" M2,21 L23,21 M21,7 L21,18 M19,9 L21,7 L23,9"
         "BOLD"->"M6,3 L6,21 L13,21 Q21,21 19,15 Q18,12 14,12 Q20,10 18,6 Q17,3 12,3 Z M9,6 L12,6 Q16,6 15,9 L9,9 Z M9,14 L13,14 Q17,14 16,18 L9,18 Z"
         "ITALIC"->"M10,3 L21,3 M3,21 L14,21 M16,3 L8,21"
+        "UNDERLINE"->"M6,3 L6,12 Q6,17 12,17 Q18,17 18,12 L18,3 M4,21 L20,21"
+        "STRIKE"->"M17,6 Q16,3 12,3 Q7,3 7,7 Q7,10 12,11 M12,13 Q17,14 17,17 Q17,21 12,21 Q7,21 6,18 M3,12 L21,12"
+        "SCALE_LINK"->"M2,9 L8,9 L8,15 L2,15 Z M16,9 L22,9 L22,15 L16,15 Z M8,12 L16,12"
+        "LINK_OFF"->"M2,9 L8,9 L8,15 L2,15 Z M16,9 L22,9 L22,15 L16,15 Z M11,10 L13,14"
+        "POINT"->"M6,4 L18,4 M12,4 L12,20 M2,20 L5,20 M19,20 L22,20"
+        "AREA"->"M3,3 L21,3 L21,21 L3,21 Z M7,8 L17,8 M7,12 L17,12 M7,16 L13,16"
+        "BACK"->"M15,4 L7,12 L15,20"
+        "SEARCH"->"M10,3 Q17,3 17,10 Q17,17 10,17 Q3,17 3,10 Q3,3 10,3 Z M15,15 L21,21"
         "CASE","NONE"->A+" M19,13 Q23,10 23,17 L23,21 M23,17 Q18,14 18,18 Q18,22 23,20"
-        "ALL"->"M2,20 L7,4 L12,20 M4,14 L10,14 M13,20 L18,4 L23,20 M15,14 L21,14"
-        "LOWER"->"M3,13 Q10,9 10,17 L10,21 M10,17 Q2,14 2,18 Q2,23 10,20 M15,13 Q22,9 22,17 L22,21 M22,17 Q14,14 14,18 Q14,23 22,20"
-        "SMALL"->A+" M16,20 L20,10 L24,20 M18,16 L22,16"
+        "ALL","ALL_CAPS"->"M2,20 L7,4 L12,20 M4,14 L10,14 M13,20 L18,4 L23,20 M15,14 L21,14"
+        "LOWER","LOWERCASE"->"M3,13 Q10,9 10,17 L10,21 M10,17 Q2,14 2,18 Q2,23 10,20 M15,13 Q22,9 22,17 L22,21 M22,17 Q14,14 14,18 Q14,23 22,20"
+        "SMALL","SMALL_CAPS"->A+" M16,20 L20,10 L24,20 M18,16 L22,16"
         "SUPER"->"M3,12 L12,21 M3,21 L12,12 M16,4 Q23,1 22,6 L16,10 L23,10"
         "SUB"->"M3,3 L12,12 M3,12 L12,3 M16,15 Q23,12 22,17 L16,21 L23,21"
         "LIGATURES"->"M7,22 L7,7 Q7,2 13,3 M3,10 L17,10 M17,10 L17,22 M16,5 L18,5"
@@ -76,7 +86,7 @@ internal object TextInspectorIcons {
         "RESET"->"M4,8 Q18,-1 21,12 Q23,23 9,21 M4,3 L4,9 L10,9"
         "INHERIT"->"M10,14 L14,10 M8,11 L5,14 Q3,16 5,18 L6,19 Q8,21 10,19 L13,16 M16,13 L19,10 Q21,8 19,6 L18,5 Q16,3 14,5 L11,8"
         "IMPORT"->"M12,2 L12,17 M7,12 L12,17 L17,12 M3,17 L3,22 L21,22 L21,17"
-        "MISSING"->"M12,2 L23,22 L1,22 Z M12,8 L12,14 M12,18 L12,19"
+        "MISSING","WARNING"->"M12,2 L23,22 L1,22 Z M12,8 L12,14 M12,18 L12,19"
         "EXPLODE"->"M2,5 L8,5 L8,11 L2,11 Z M16,3 L22,3 L22,9 L16,9 Z M9,16 L15,16 L15,22 L9,22 Z"
         "MINUS"->"M5,12 L19,12"
         "PLUS"->"M5,12 L19,12 M12,5 L12,19"

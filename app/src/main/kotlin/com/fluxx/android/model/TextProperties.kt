@@ -125,10 +125,10 @@ object TextSdfLimits {
 }
 object TextLimits {
     const val MIN_SIZE = 8f // Provisional until the user's small-size/Quarter-preview acceptance.
-    const val MAX_SIZE = 500f
+    const val MAX_SIZE = 1000f // SDF glyphs rasterise at a fixed 48 ppem, so display size never grows the atlas.
     const val MAX_SOURCE_UNITS = 4096
     const val MAX_DOCUMENT_BYTES = 1024L * 1024
-    fun validateSize(value: Float) { require(value.isFinite() && value in MIN_SIZE..MAX_SIZE) { "Text size must be 8–500px" } }
+    fun validateSize(value: Float) { require(value.isFinite() && value in MIN_SIZE..MAX_SIZE) { "Text size must be 8–1000px" } }
     fun decodeSize(value: Float): Float { require(value.isFinite()) { "Nonfinite text size" }; return value.coerceIn(MIN_SIZE, MAX_SIZE) }
     fun ordered(times: List<Long>) { require(times.zipWithNext().all { it.first < it.second }) { "Text keys must be ordered and unique" } }
     fun validateSource(value: String) {

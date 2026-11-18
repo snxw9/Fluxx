@@ -40,38 +40,41 @@ class TextInspectorStateTest {
         val d=TextNumericDraft(layer(),500_000,FrameRate(),TextEditScope(TextSelectionRange(0,2)),TextControl.MANUAL_KERNING)
         assertEquals(listOf(TextManualKerning(0,-12.5f)),d.payload(-12.5f).source.sourceDocument.runAt(0)!!.style.manualKerning.toList())
     }
-    @Test fun accelerationIsBoundedFineAndSymmetric() {
-        val slow=TextScrubTuning.delta(TextControl.BOX,100f,0f)
-        val fast=TextScrubTuning.delta(TextControl.BOX,100f,5000f)
-        assertTrue(fast>slow*10);assertEquals(-fast,TextScrubTuning.delta(TextControl.BOX,-100f,-5000f),0f)
-        assertEquals(fast*.1f,TextScrubTuning.delta(TextControl.BOX,100f,5000f,true),0f)
-        assertEquals(50f*TextScrubTuning.MAX_ACCELERATION,TextScrubTuning.delta(TextControl.TRACKING,100f,5000f),0f)
+    @Test fun linkedGlyphScaleKeepsTheRatioInOneEdit() {
+        val l=layer();val doc=l.text.source.sourceDocument.format(0,0) {it.copy(horizontalScale=100f,verticalScale=50f)}
+        val changed=l.copy(text=l.text.copy(source=AnimatableString(staticValue=doc.text,document=doc)))
+        val d=TextNumericDraft(changed,500_000,FrameRate(),TextEditScope(null),TextControl.H_SCALE)
+        val style=d.payload(200f,linked=true).source.sourceDocument.runAt(0)!!.style
+        assertEquals(200f,style.horizontalScale,0f);assertEquals(100f,style.verticalScale,1e-3f)
+        val unlinked=d.payload(200f,linked=false).source.sourceDocument.runAt(0)!!.style
+        assertEquals(50f,unlinked.verticalScale,0f)
+        // Linked result is held to the glyph-scale hard cap.
+        assertEquals(1000f,TextNumericDraft(changed,500_000,FrameRate(),TextEditScope(null),TextControl.V_SCALE).payload(1000f,true).source.sourceDocument.runAt(0)!!.style.horizontalScale,0f)
     }
-    @Test fun fixedSheetHoldsEveryCharacterRowWithoutPaging() {
-        for(scale in listOf(1f,1.3f,2f)) {
-            val total=TextInspectorBudget.sheetHeight(scale)
-            val rows=TextInspectorLayout.rows(TextTab.CHARACTER,scale)
-            assertEquals(rows.size,TextInspectorBudget.bodyRows(total,scale))
-            assertEquals(1,TextInspectorLayout.pages(rows,TextInspectorBudget.bodyRows(total,scale)).size)
-            assertEquals(1,TextInspectorLayout.pages(TextInspectorLayout.rows(TextTab.PARAGRAPH,scale),TextInspectorBudget.bodyRows(total,scale)).size)
-            assertEquals(if(scale>1.2f) 3 else 4,TextInspectorLayout.columns(scale))
-        }
+    @Test fun resetReturnsToTheInheritedDefault() {
+        val l=layer()
+        assertEquals(72f,TextNumericDraft(l,500_000,FrameRate(),TextEditScope(null),TextControl.SIZE).default,0f)
+        assertEquals(100f,TextNumericDraft(l,500_000,FrameRate(),TextEditScope(TextSelectionRange(0,2)),TextControl.SIZE).default,0f)
+        assertEquals(0f,TextNumericDraft(l,500_000,FrameRate(),TextEditScope(TextSelectionRange(0,2)),TextControl.TRACKING).default,0f)
+        assertEquals(100f,TextNumericDraft(l,500_000,FrameRate(),TextEditScope(null),TextControl.H_SCALE).default,0f)
     }
-    @Test fun savedDraftRestoresCapturedScopeTimeAndLayerWithoutDocumentMutation() {
-        val d=TextNumericDraft(layer(),700_001,FrameRate(24),TextEditScope(TextSelectionRange(2,3)),TextControl.TRACKING)
-        val restored=TextInspectorModeCodec.restore(TextInspectorModeCodec.save(TextInspectorMode.Numeric(d))) as TextInspectorMode.Numeric
-        assertEquals(d.time,restored.draft.time);assertEquals(d.scope,restored.draft.scope)
-        assertEquals(d.layer,restored.draft.layer);assertEquals(d.payload(-12.125f),restored.draft.payload(-12.125f))
+    @Test fun savedColourPageAndSourceDraftRestoreWithoutDocumentMutation() {
         val c=TextInspectorMode.Colour(TextControl.STROKE,layer(),500_000,TextEditScope(TextSelectionRange(0,2)))
         assertEquals(c,TextInspectorModeCodec.restore(TextInspectorModeCodec.save(c)))
+        assertEquals(TextInspectorMode.Source,TextInspectorModeCodec.restore(TextInspectorModeCodec.save(TextInspectorMode.Source)))
+        assertEquals(TextInspectorMode.Fonts,TextInspectorModeCodec.restore(TextInspectorModeCodec.save(TextInspectorMode.Fonts)))
+        assertEquals(TextInspectorMode.Browse,TextInspectorModeCodec.restore(listOf("draft",-1L)))
     }
-    @Test fun mixedValuesRemainExplicitAndScrubStopsAtModelBounds() {
+    @Test fun mixedValuesRemainExplicitAndValuesStopAtTheHardCaps() {
         val l=layer();val doc=l.text.source.sourceDocument.format(2,3) {it.copy(horizontalScale=120f)}
         val changed=l.copy(text=l.text.copy(source=AnimatableString(staticValue=doc.text,document=doc)))
         val d=TextNumericDraft(changed,500_000,FrameRate(),TextEditScope(null),TextControl.H_SCALE)
-        assertTrue(d.mixed);assertEquals(10000f,d.scrubValue(20000f),0f)
-        assertEquals(0f,d.scrubValue(-1f),0f)
+        assertTrue(d.mixed);assertEquals(1000f,d.scrubValue(20000f),0f)
+        assertEquals(1f,d.scrubValue(-1f),0f)
         val size=TextNumericDraft(l,500_000,FrameRate(),TextEditScope(null),TextControl.SIZE)
-        assertEquals(500f,size.scrubValue(10000f),0f)
+        assertEquals(1000f,size.scrubValue(10000f),0f);assertEquals(8f,size.scrubValue(1f),0f)
+        assertEquals(1000f,TextNumericDraft(l,500_000,FrameRate(),TextEditScope(null),TextControl.TRACKING).scrubValue(5000f),0f)
+        assertEquals(1000f,TextNumericDraft(l,500_000,FrameRate(),TextEditScope(TextSelectionRange(0,2)),TextControl.SIZE).scrubValue(5000f),0f)
+        assertEquals(size.initial,size.scrubValue(Float.NaN),0f);assertEquals(1000f,size.scrubValue(Float.POSITIVE_INFINITY),0f)
     }
 }

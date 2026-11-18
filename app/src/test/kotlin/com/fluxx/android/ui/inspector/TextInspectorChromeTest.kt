@@ -5,33 +5,44 @@ import com.fluxx.android.model.*
 import org.junit.Assert.*
 import org.junit.Test
 
-/** Back state machine, header menu, rail key state and icon distinctness. Source-level, not device acceptance. */
+/** Back state machine, header menu, rail key state, icon distinctness and the shared sheet height. Source-level only. */
 class TextInspectorChromeTest {
     private val layer=CompositionLayer(1,LayerType.TEXT,text=TextProperties(source=AnimatableString(staticValue="Text")))
-    private val numeric=TextInspectorMode.Numeric(TextNumericDraft(layer,0,FrameRate(),TextEditScope(null),TextControl.SIZE))
     private val colour=TextInspectorMode.Colour(TextControl.FILL,layer,0,TextEditScope(null))
 
-    @Test fun backLeavesTheInnermostStateFirstThenReturnsToTheGrid() {
+    @Test fun backClosesPopoverThenSubPageThenReturnsToTheGrid() {
         val b=TextInspectorBack
-        assertEquals(TextBackStep.CLOSE_EXPLODE,b.step(numeric,true,true))
-        for(draft in listOf(numeric,colour,TextInspectorMode.Source)) assertEquals(TextBackStep.CANCEL_DRAFT,b.step(draft,false,false))
-        assertEquals(TextBackStep.CLOSE_CONFIRM,b.step(TextInspectorMode.Browse,false,true))
-        assertEquals(TextBackStep.PARENT_CHOICE,b.step(TextInspectorMode.Popover(TextControl.BASE_ALIGNMENT),false,false))
-        for(choice in listOf(TextControl.CASE,TextControl.JUSTIFY,TextControl.BOX))
-            assertEquals(TextBackStep.CLOSE_CHOICE,b.step(TextInspectorMode.Popover(choice),false,false))
-        assertEquals(TextBackStep.CLOSE_FONTS,b.step(TextInspectorMode.Fonts,false,false))
-        // Nothing open: no intermediate "clear selection" step; selection is cleared on the way to the grid.
-        assertEquals(TextBackStep.RETURN_TO_GRID,b.step(TextInspectorMode.Browse,false,false))
+        assertEquals(TextBackStep.CLOSE_EXPLODE,b.step(colour,TextControl.SIZE,true,true))
+        assertEquals(TextBackStep.CLOSE_CONFIRM,b.step(TextInspectorMode.Browse,null,false,true))
+        // A popover always closes first, even on a sub-page.
+        for(page in listOf(TextInspectorMode.Browse,TextInspectorMode.Fonts,colour))
+            assertEquals(TextBackStep.CLOSE_POPOVER,b.step(page,TextControl.TRACKING,false,false))
+        assertEquals(TextBackStep.PARENT_CHOICE,b.step(TextInspectorMode.Browse,TextControl.BASE_ALIGNMENT,false,false))
+        assertEquals(TextBackStep.CLOSE_PAGE,b.step(TextInspectorMode.Fonts,null,false,false))
+        assertEquals(TextBackStep.CLOSE_PAGE,b.step(colour,null,false,false))
+        assertEquals(TextBackStep.FINISH_SOURCE,b.step(TextInspectorMode.Source,null,false,false))
+        assertEquals(TextBackStep.RETURN_TO_GRID,b.step(TextInspectorMode.Browse,null,false,false))
     }
     @Test fun backSequenceFromTheDeepestStateTerminatesAtTheGrid() {
-        // Base alignment row -> Justify row -> Browse -> layer inspector grid.
-        var mode: TextInspectorMode=TextInspectorMode.Popover(TextControl.BASE_ALIGNMENT)
+        // Axis popover on the Fonts page -> Fonts page -> Character tab -> landing grid.
+        var mode: TextInspectorMode=TextInspectorMode.Fonts
+        var popover: TextControl?=TextControl.FONT
         val seen=mutableListOf<TextBackStep>()
         while(true) {
-            val step=TextInspectorBack.step(mode,false,false);seen+=step
-            mode=when(step) {TextBackStep.PARENT_CHOICE->TextInspectorMode.Popover(TextControl.JUSTIFY);TextBackStep.RETURN_TO_GRID->break;else->TextInspectorMode.Browse}
+            val step=TextInspectorBack.step(mode,popover,false,false);seen+=step
+            when(step) {
+                TextBackStep.CLOSE_POPOVER->popover=null
+                TextBackStep.PARENT_CHOICE->popover=TextControl.JUSTIFY
+                TextBackStep.CLOSE_PAGE,TextBackStep.FINISH_SOURCE->mode=TextInspectorMode.Browse
+                TextBackStep.RETURN_TO_GRID->break
+                else->fail("unexpected $step")
+            }
         }
-        assertEquals(listOf(TextBackStep.PARENT_CHOICE,TextBackStep.CLOSE_CHOICE,TextBackStep.RETURN_TO_GRID),seen)
+        assertEquals(listOf(TextBackStep.CLOSE_POPOVER,TextBackStep.CLOSE_PAGE,TextBackStep.RETURN_TO_GRID),seen)
+        // Base alignment row returns to its Justify parent before closing.
+        val chain=mutableListOf<TextBackStep>();popover=TextControl.BASE_ALIGNMENT
+        while(popover!=null) {val s=TextInspectorBack.step(TextInspectorMode.Browse,popover,false,false);chain+=s;popover=if(s==TextBackStep.PARENT_CHOICE) TextControl.JUSTIFY else null}
+        assertEquals(listOf(TextBackStep.PARENT_CHOICE,TextBackStep.CLOSE_POPOVER),chain)
     }
     @Test fun headerMenuHasExactlyFourItems() {
         assertEquals(listOf(TextMenuItem.EXPLODE,TextMenuItem.RESET_STYLE,TextMenuItem.MANUAL_KERNING,TextMenuItem.RELATIVE_SIZE),TextHeaderMenu.items)
@@ -39,7 +50,7 @@ class TextInspectorChromeTest {
         assertEquals(listOf("Explode Text","Reset Character style · Whole layer","Manual kerning","Relative size"),labels)
         assertEquals("Reset Paragraph style · Selection: 3 characters",TextHeaderMenu.label(TextMenuItem.RESET_STYLE,TextTab.PARAGRAPH,"Selection: 3 characters"))
         assertFalse(TextHeaderMenu.enabled(TextMenuItem.RESET_STYLE,TextTab.ANIMATE))
-        for(gone in listOf("Character controls","Paragraph controls","Animate","Done editing","Clear selection","Layer tools","Reset paragraph style ("))
+        for(gone in listOf("Character controls","Paragraph controls","Animate","Done","Clear selection","Layer tools"))
             assertTrue(gone,labels.none {it.contains(gone)})
     }
     @Test fun diamondCarriesKeyStateIncludingHold() {
@@ -60,16 +71,27 @@ class TextInspectorChromeTest {
             if(TextInspectorIcons.ALIASES.any {a in it && b in it}) continue
             assertNotEquals("$a looks identical to $b",TextInspectorIcons.glyph(a),TextInspectorIcons.glyph(b))
         }
-        // Size / vertical scale / horizontal scale are three distinct shapes, none is the old A + arrow form.
         val scales=listOf("SIZE","V_SCALE","H_SCALE").map {TextInspectorIcons.path(it)}
         assertEquals(3,scales.toSet().size);assertTrue(scales.none {it.startsWith("M4,20 L10,4")})
-        // Source no longer resembles ragged alignment lines.
         val alignments=ParagraphAlignment.entries.map {TextInspectorIcons.alignmentPath(it)}
         assertEquals(alignments.size,alignments.toSet().size)
         assertTrue(alignments.none {it==TextInspectorIcons.path("SOURCE")})
+        // No ✓ Done, − or + glyph is shown anywhere in the text UI any more.
+        for(gone in listOf("DONE","MINUS","PLUS")) assertFalse(gone,gone in names)
+        // Every face control resolves to a distinct glyph or an alias.
+        for(tab in TextTab.entries) for(c in TextInspectorLayout.inventory(tab)) assertNotNull(TextInspectorIcons.control(c))
     }
-    @Test fun sheetIsSizedForTheFourRowFace() {
-        assertEquals(344f,TextInspectorBudget.sheetHeight(1f),1e-3f)
-        assertEquals(4,TextInspectorBudget.bodyRows(344f,1f))
+    @Test fun editTextUsesTheSharedInspectorHeight() {
+        // Same height as Transform: the shared budget is sized for the 6-row Character tab.
+        assertEquals(308f,InspectorSheetBudget.EXPANDED,0f);assertEquals(344f,InspectorSheetBudget.STANDARD,0f)
+        assertEquals(InspectorSheetBudget.EXPANDED,TextInspectorBudget.pageHeight(compact=true),1e-3f)
+        assertEquals(InspectorSheetBudget.STANDARD,TextInspectorBudget.pageHeight(compact=false),1e-3f)
+        assertTrue(InspectorSheetBudget.compact(InspectorSheetBudget.EXPANDED));assertFalse(InspectorSheetBudget.compact(InspectorSheetBudget.STANDARD))
+        // Old budgets provably cannot hold six rows of 40dp tiles plus the frame and header.
+        assertTrue(268f-InspectorSheetBudget.FRAME_V-TextInspectorBudget.HEADER<6*TextInspectorBudget.pitch(true))
+        assertTrue(328f-InspectorSheetBudget.FRAME_V-TextInspectorBudget.HEADER<6*TextInspectorBudget.pitch(false))
+        assertEquals(6,TextInspectorBudget.bodyRows(InspectorSheetBudget.EXPANDED,1f,true))
+        assertEquals(6,TextInspectorBudget.bodyRows(InspectorSheetBudget.STANDARD,1f,false))
+        assertEquals(1.3f*344f,InspectorSheetBudget.height(false,1.3f),1e-3f)
     }
 }

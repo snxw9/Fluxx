@@ -1,5 +1,7 @@
 # Edit Text consolidation — approved plan
 
+**TEXT UI 5 (2026-11-18):** the pass-2 rework was rejected on the A16 and is superseded by a single-header inspector page with anchored slider popovers, a shared limits table, keyboard-overlay handling and a log-scale Transform ruler. Shared inspector heights rose to 308/344dp. The current surface, limits, ruler spec, deviations and A16 list are in [TEXT_UI_OVERHAUL.md](../checkpoints/TEXT_UI_OVERHAUL.md#text-ui-5-single-header-page-slider-popovers-limits-log-scale-ruler); §11 below is historical.
+
 **Rework status (2026-11-18):** After the user's A16 review ("too cluttered and confusing"), the follow-up rework is implemented in source, device-unverified, in two commits (tab faces; menu/Back/status/icons). It supersedes the surface sketches in §1, the popover/launcher model in §1–§3, the status header in §2 and the mapping in §4. The current surface and the **final old-to-new inventory** are in [§11](#11-rework-2026-11-18-final-surface-and-inventory). Gate results, deviations and the exact A16 user-run list are in [TEXT_UI_OVERHAUL.md](../checkpoints/TEXT_UI_OVERHAUL.md#rework-commit-2-menu-back-status-and-icons).
 
 Implementation status: all four approved stages are implemented in source; device acceptance remains pending. The historical sketches below are superseded by the approved amendments and the measured final budget, complete inventory, gate results and exact manual lists in [TEXT_UI_OVERHAUL.md](../checkpoints/TEXT_UI_OVERHAUL.md). No F3 animator UI or RTL renderer is included.

@@ -38,7 +38,7 @@ import com.fluxx.android.ui.dialogs.CompositionSettingsDialog
 import com.fluxx.android.ui.dialogs.ExportDialog
 import com.fluxx.android.ui.inspector.ElementInspectorSheet
 import com.fluxx.android.ui.inspector.InspectorPanel
-import com.fluxx.android.ui.inspector.TextInspectorBudget
+import com.fluxx.android.ui.inspector.InspectorSheetBudget
 import com.fluxx.android.ui.preview.CompositionPreview
 import com.fluxx.android.ui.theme.*
 import com.fluxx.android.ui.timeline.TimelineView
@@ -311,24 +311,23 @@ fun EditorScreen(
         },
         containerColor = Background
     ) { innerPadding ->
+        // No imePadding: the keyboard overlays the editor. The window, preview, timeline and inspector never resize
+        // for the IME; only the focused popover or inline field lifts above it (see AnchoredPopover).
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .imePadding()
         ) {
             val isInspectorOpen = inspectorSheetVisible && selectedLayer != null
             // Reserve ruler + track gap + one row + inspector separation in BOTH preview modes.
             // Expansion trades inspector height for canvas height; opening the inspector never moves the preview.
-            val available = (maxHeight - if (textTyping) 0.dp else EditorActionBarHeight + TimelineInspectorAnchorHeight).coerceAtLeast(0.dp)
-            // Edit Text has ONE fixed height sized for its 4-row Character face; Preview Expansion is ignored while it is open.
-            val editTextOpen = isInspectorOpen && textEditOpen && selectedLayer.type == LayerType.TEXT
-            val targetInspectorHeight = if (editTextOpen) TextInspectorBudget.sheetHeight(density.fontScale).dp
-                else (if (isExpandedPreview) 268.dp else 328.dp) * density.fontScale.coerceAtLeast(1f)
+            val available = (maxHeight - EditorActionBarHeight - TimelineInspectorAnchorHeight).coerceAtLeast(0.dp)
+            // One shared height for every inspector page (Edit Text included), sized for Edit Text's 6-row Character tab.
+            val targetInspectorHeight = InspectorSheetBudget.height(isExpandedPreview, density.fontScale).dp
             val minimumPreview=if(available>=264.dp) 96.dp else 48.dp
-            val desiredInspectorHeight=if(isInspectorOpen && selectedLayer?.type==LayerType.TEXT)
+            val desiredInspectorHeight=if(isInspectorOpen)
                 targetInspectorHeight.coerceAtMost((available-minimumPreview).coerceAtLeast(0.dp)) else targetInspectorHeight
-            val previewHeight = (available - if (textTyping) 144.dp * density.fontScale.coerceAtLeast(1f) else desiredInspectorHeight).coerceAtLeast(0.dp)
+            val previewHeight = (available - desiredInspectorHeight).coerceAtLeast(0.dp)
             val inspectorHeight = available - previewHeight
             // Match the real space below the preview, including the bottom system inset.
             SideEffect { addContentHeight = maxHeight - previewHeight + innerPadding.calculateBottomPadding() }
@@ -387,7 +386,7 @@ fun EditorScreen(
                 )
 
                 // 2. Editor Action Bar (7 actions: Undo, Redo, Prev, Play/Pause, Next, Layer, View)
-                if (!textTyping) EditorActionBar(
+                EditorActionBar(
                     hasTimelineContent = project.composition.resolvedDurationUs > 0,
                     isPlaying = previewState.playing,
                     canUndo = editor.canUndo,
@@ -463,7 +462,7 @@ fun EditorScreen(
                 )
 
                 // 3. Lower Timeline Workspace (unconditionally weight(1f) to prevent kick on sheet toggle)
-                if (!textTyping) TimelineView(
+                TimelineView(
                     project = project,
                     mediaRepository = mediaRepository,
                     playheadUs = playheadUs,
