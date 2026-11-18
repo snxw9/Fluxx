@@ -9,6 +9,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -52,6 +54,23 @@ class TextInspectorLayoutTest {
             rows.forEach {r->assertEquals(48f,r.height/pixelsPerDp,1f);assertTrue("row inside body at $s",r.top>=body.top-1f && r.bottom<=body.bottom+1f)}
             assertTrue(compose.onAllNodesWithTag("text-inspector-tabs").fetchSemanticsNodes().isNotEmpty())
         }
+    }
+    @Test fun scopeChipOnlyWithSelectionAndNoStatusOrHoldLabel() {
+        val selection=mutableStateOf<TextSelectionRange?>(null)
+        compose.setContent {
+            MaterialTheme {Box(Modifier.requiredSize(360.dp,TextInspectorBudget.sheetHeight(1f).dp)) {
+                TextInspectorPanel(CompositionLayer(1,LayerType.TEXT,text=TextProperties(source=AnimatableString(staticValue="Text"))),0,FrameRate(),
+                    onAction={},onFocus={},onSourceBegin={},onSourceDraft={_,_,_->},onFinish={},onCancel={},onValueBegin={},onPayloadPreview={},
+                    onCharacter={_,_,_->},onParagraph={_,_,_->},onBox={},compositionWidth=1080,selection=selection.value,onSelection={selection.value=it},error=null,onDismiss={},onTools={},
+                    onExplodePrepare={_,_->},onExplodeCommit={_,_->})
+            }}
+        }
+        assertTrue(compose.onAllNodesWithTag("text-scope-chip").fetchSemanticsNodes().isEmpty())
+        assertTrue(compose.onAllNodesWithText("Hold").fetchSemanticsNodes().isEmpty())
+        assertTrue(compose.onAllNodesWithText("Whole layer",substring=true).fetchSemanticsNodes().isEmpty())
+        compose.runOnIdle {selection.value=TextSelectionRange(0,2)}
+        compose.onNodeWithTag("text-scope-chip").assertExists().performClick()
+        compose.runOnIdle {assertNull(selection.value)}
     }
     @Test fun worstStrokeClampLineFitsOneLineAtEachScale() {
         val widths=mutableMapOf<Float,Float>()

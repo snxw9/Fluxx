@@ -54,6 +54,7 @@ fun EditorTopBar(
     selectedLayerId: Long? = null,
     selectedLayerName: String = "",
     onLayerNameChange: (String) -> Unit = {},
+    backDescription: String? = null,
     modifier: Modifier = Modifier
 ) {
     val focusManager = LocalFocusManager.current
@@ -74,7 +75,7 @@ fun EditorTopBar(
             Box(
                 modifier = Modifier
                     .size(44.dp)
-                    .semantics { contentDescription = if (selectedLayerId == null) "Back to projects" else "Deselect layer" }
+                    .semantics { contentDescription = backDescription ?: if (selectedLayerId == null) "Back to projects" else "Deselect layer" }
                     .clip(RoundedCornerShape(6.dp))
                     .clickable { onExitClick() },
                 contentAlignment = Alignment.Center

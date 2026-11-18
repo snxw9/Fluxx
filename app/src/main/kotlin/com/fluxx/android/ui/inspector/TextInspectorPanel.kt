@@ -153,19 +153,28 @@ import kotlin.math.*
             else->message="Choose a specific property to reset"
         }
     }
-    BackHandler(mode!=TextInspectorMode.Browse || editScope.selected || explode) {
-        when {explode->explode=false;mode==TextInspectorMode.Fonts->closeFonts();mode!=TextInspectorMode.Browse->cancelMode();else->onSelection(null)}
+    // System Back, the editor's top-left arrow (which dispatches Back while Edit Text is open) and Escape share this.
+    fun back() {
+        when(TextInspectorBack.step(mode,explode,resetAnimation)) {
+            TextBackStep.CLOSE_EXPLODE->explode=false
+            TextBackStep.CANCEL_DRAFT->cancelMode()
+            TextBackStep.CLOSE_CONFIRM->resetAnimation=false
+            TextBackStep.PARENT_CHOICE->mode=TextInspectorMode.Popover(TextControl.JUSTIFY)
+            TextBackStep.CLOSE_CHOICE->leaveMode()
+            TextBackStep.CLOSE_FONTS->closeFonts()
+            TextBackStep.RETURN_TO_GRID->{manager.clearFocus();onSelection(null);onTools()}
+        }
     }
+    BackHandler {back()}
     DisposableEffect(layer.id) {onDispose {onCancel()}}
     if(explode) ExplodeTextDialog(layer,time,{explode=false},onExplodePrepare,onExplodeCommit)
     CompositionLocalProvider(LocalTextNumericBindings provides TextNumericBindings(
         {c->focus(c);onValueBegin();TextNumericDraft(layer,time,frameRate,editScope,c)},onPayloadPreview,onFinish,onCancel,::focus,!finishing)) {
-    BoxWithConstraints(Modifier.fillMaxSize().testTag("text-inspector").padding(horizontal=TextInspectorBudget.SIDE.dp).onPreviewKeyEvent {if(it.key==Key.Escape && it.type==KeyEventType.KeyUp && mode!=TextInspectorMode.Browse) {cancelMode();true} else false}) {
+    BoxWithConstraints(Modifier.fillMaxSize().testTag("text-inspector").padding(horizontal=TextInspectorBudget.SIDE.dp).onPreviewKeyEvent {if(it.key==Key.Escape && it.type==KeyEventType.KeyUp && (mode!=TextInspectorMode.Browse || resetAnimation)) {back();true} else false}) {
         val fontScale=density.fontScale
         val large=TextInspectorBudget.large(fontScale)
-        val statusHeight=TextInspectorBudget.statusHeight(fontScale)
         val feedbackHeight=TextInspectorBudget.feedbackHeight(fontScale)
-        val bodyTop=TextInspectorBudget.SOURCE+statusHeight+TextInspectorBudget.TABS
+        val bodyTop=TextInspectorBudget.SOURCE+TextInspectorBudget.TABS
         val pages=TextInspectorLayout.pages(TextInspectorLayout.rows(tab,fontScale),TextInspectorBudget.bodyRows(maxHeight.value,fontScale))
         val pageIndex=page.coerceIn(0,pages.lastIndex)
         val rows=pages[pageIndex]
@@ -209,7 +218,7 @@ import kotlin.math.*
         Column(Modifier.fillMaxSize()) {
             if(mode==TextInspectorMode.Source) {
                 Row(Modifier.fillMaxWidth().height(48.dp),verticalAlignment=Alignment.CenterVertically) {
-                    Text("$scopeLabel · Source Text · Hold",Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall)
+                    Text("Editing Source Text · $scopeLabel",Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall)
                     TextButton(onClick={cancelMode()}) {Text("Cancel")}
                     TextButton(onClick=::sourceDone) {Text("Done")}
                 }
@@ -219,30 +228,37 @@ import kotlin.math.*
                     TextButton(onClick={focus(TextControl.SOURCE);onBeginDraft(true) {mode=TextInspectorMode.Source}},contentPadding=PaddingValues(horizontal=4.dp),modifier=Modifier.weight(1f).fillMaxHeight()) {
                         Icon(TextInspectorIcons.control(TextControl.SOURCE),null,Modifier.size(20.dp))
                         Text(document.text.replace('\n',' ').ifEmpty {"Source Text"},Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis)
-                        Text("Hold",style=MaterialTheme.typography.labelSmall)
+                    }
+                    // Scope chip only while a selection exists; x clears it. Whole layer shows nothing.
+                    if(editScope.selected) {
+                        val count=editScope.count(document)
+                        Box(Modifier.height(48.dp).clickable(role=Role.Button,onClickLabel="Clear selection") {onSelection(null)}
+                            .semantics(mergeDescendants=true) {contentDescription="Selection: $count characters. Clear selection";liveRegion=LiveRegionMode.Polite}
+                            .testTag("text-scope-chip"),contentAlignment=Alignment.Center) {
+                            Surface(shape=RoundedCornerShape(12.dp),color=MaterialTheme.colorScheme.secondaryContainer) {
+                                Row(Modifier.height(28.dp).padding(start=10.dp,end=6.dp),verticalAlignment=Alignment.CenterVertically) {
+                                    Text("$count characters",maxLines=1,style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSecondaryContainer)
+                                    Icon(TextInspectorIcons.icon("CANCEL"),null,Modifier.padding(start=4.dp).size(16.dp),tint=MaterialTheme.colorScheme.onSecondaryContainer)
+                                }
+                            }
+                        }
                     }
                     Box {
-                        TextToolIcon("OVERFLOW","Text utilities",{overflow=true})
+                        TextToolIcon("OVERFLOW","Text menu",{overflow=true})
                         DropdownMenu(overflow,{overflow=false}) {
-                            DropdownMenuItem(text={Text("Explode Text")},onClick={overflow=false;onFinish();explode=true})
-                            DropdownMenuItem(text={Text("Reset text style ($scopeLabel)")},onClick={overflow=false;format {TextRunStyle()}})
-                            DropdownMenuItem(text={Text("Reset paragraph style ($scopeLabel)")},onClick={overflow=false;onParagraph(a,b) {TextParagraphStyle()}})
-                            DropdownMenuItem(text={Text("Manual kerning")},onClick={overflow=false;numeric(TextControl.MANUAL_KERNING)})
-                            DropdownMenuItem(text={Text("Relative size")},onClick={overflow=false;numeric(TextControl.RELATIVE_SIZE)})
-                            DropdownMenuItem(text={Text("Animate · F3 unavailable")},enabled=false,onClick={})
-                            DropdownMenuItem(text={Text("Clear selection")},enabled=editScope.selected,onClick={overflow=false;onSelection(null)})
-                            DropdownMenuItem(text={Text("Layer tools")},onClick={overflow=false;onTools()})
-                            DropdownMenuItem(text={Text("Done editing text")},onClick={overflow=false;onDismiss()})
+                            TextHeaderMenu.items.forEach {item->DropdownMenuItem(text={Text(TextHeaderMenu.label(item,tab,scopeLabel))},enabled=TextHeaderMenu.enabled(item,tab),onClick={
+                                overflow=false
+                                when(item) {
+                                    TextMenuItem.EXPLODE->{onFinish();explode=true}
+                                    // One undo entry: one format/paragraph transaction for the current scope.
+                                    TextMenuItem.RESET_STYLE->if(tab==TextTab.PARAGRAPH) onParagraph(a,b) {TextParagraphStyle()} else format {TextRunStyle()}
+                                    TextMenuItem.MANUAL_KERNING->numeric(TextControl.MANUAL_KERNING)
+                                    TextMenuItem.RELATIVE_SIZE->numeric(TextControl.RELATIVE_SIZE)
+                                }
+                            })}
                         }
                     }
                 }
-                Text("$scopeLabel · ${editScope.title(control)}"+(if(editScope.unit(control).isNotEmpty()) " (${editScope.unit(control)})" else "")+" · "+when {
-                    tab==TextTab.ANIMATE->"F3 unavailable"
-                    editScope.selected->"Current Source Text value · Hold"
-                    owner==null->"Static layer property"
-                    owner==AnimPropertyType.SOURCE_TEXT->"Source Text Hold · "+if(onKey) "On key" else if(animated) "Between keys" else "Animation off"
-                    onKey->"On key at ${CompositionTimecode.format(time,frameRate)}";animated->"Animated · between keys";else->"Animation off"
-                },Modifier.height(statusHeight.dp).fillMaxWidth(),maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall)
                 TextTabsRow(tab,pages.size,pageIndex,!finishing,{t->tabIndex=t.ordinal;page=0;onFocus(if(t==TextTab.ANIMATE) null else owner)},{page=(pageIndex+1)%pages.size})
                 Column(Modifier.weight(1f).fillMaxWidth().testTag("text-inspector-body")) {
                     if(tab==TextTab.ANIMATE) Text("Text animators arrive with F3. No animator controls are available yet.",Modifier.padding(8.dp).semantics {disabled()},
@@ -257,12 +273,15 @@ import kotlin.math.*
                     fun navigate(next: Boolean) {owner?.let {p->val keys=layer.propertyKeyTimes(p);val key=if(next) keys.firstOrNull {it>ownerLocal} else keys.lastOrNull {it<ownerLocal};key?.let {onAction(EditorAction.Seek(Math.addExact(it,layer.resolvedKeyframeAnchorUs)))}}}
                     if(editScope.selected) Spacer(Modifier.size(48.dp)) else TextToolIcon("PREV","Previous ${owner?.name ?: "property"} key",{navigate(false)},owner!=null && animated && !finishing)
                     val diamondLabel=when {owner==null->"Keyframes unavailable for selection or Animate";!animated->"Enable $owner animation at playhead";onKey->"Remove $owner keyframe at playhead";else->"Add $owner keyframe at playhead"}
-                    if(editScope.selected) Spacer(Modifier.size(48.dp)) else TextToolIcon("KEY",diamondLabel,{
+                    // Diamond glyph + state description + polite live region replace the deleted status line.
+                    if(editScope.selected) Spacer(Modifier.size(48.dp)) else TextVectorButton(TextInspectorIcons.icon(TextKeyState.icon(owner,animated,onKey)),diamondLabel,
+                        Modifier.size(48.dp).testTag("text-key-diamond"),animated,owner!=null && !finishing,
+                        state=TextKeyState.description(owner,animated,onKey,CompositionTimecode.format(time,frameRate))) {
                         owner?.let {p->onAction(if(!animated) EditorAction.ToggleAnimated(layer.id,p,true,time) else if(onKey) EditorAction.RemoveKeyframe(layer.id,p,ownerLocal)
                             else if(p==AnimPropertyType.SOURCE_TEXT) EditorAction.SetTextPayload(layer.id,TextEdits.document(layer,time,document))
                             else if(p==AnimPropertyType.FILL_COLOUR || p==AnimPropertyType.STROKE_COLOUR) TextEdits.colour(layer,time,p,layer.text.colour(p).evaluate(local))
                             else EditorAction.SetKeyframe(layer.id,p,ownerLocal,layer.text.scalarValue(p,local))) }
-                    },owner!=null && !finishing,animated)
+                    }
                     if(editScope.selected) Spacer(Modifier.size(48.dp)) else TextToolIcon("NEXT","Next ${owner?.name ?: "property"} key",{navigate(true)},owner!=null && animated && !finishing)
                     Box {
                         TextToolIcon("ACTIONS","Animation actions for ${owner?.name ?: "selection"}",{animationMenu=true},tab!=TextTab.ANIMATE && !finishing)
@@ -299,7 +318,7 @@ import kotlin.math.*
                 is TextInspectorMode.Numeric->current.draft.control
             }
             val height=if(current is TextInspectorMode.Numeric) 2 else 1
-            val targetRow=TextInspectorLayout.overlayRow(anchorControl?.let {TextInspectorLayout.rowOf(rows,it)},height,rows.size)
+            val targetRow=TextInspectorLayout.overlayRow(TextInspectorLayout.rowOf(rows,anchorControl),height,rows.size)
             val overlay=Modifier.fillMaxWidth().offset(y=(bodyTop+targetRow*TextInspectorBudget.ROW).dp).height((height*TextInspectorBudget.ROW).dp)
             if(current is TextInspectorMode.Numeric) TextNumericStrip(current.draft,onPayloadPreview,{onFinish();leaveMode()},::cancelMode,onValueBegin,{numericNote=it},
                 if(current.draft.control==TextControl.MANUAL_KERNING) ({cancelMode();format {it.copy(manualKerning=FrozenList.empty())}}) else null,overlay)
@@ -420,16 +439,19 @@ internal fun shortLabel(c: TextControl)=when(c) {
     TextControl.JUSTIFY->"Justify";else->c.label
 }
 @OptIn(ExperimentalFoundationApi::class)
-@Composable internal fun TextVectorButton(vector: ImageVector,label: String,modifier: Modifier=Modifier,selected: Boolean=false,enabled: Boolean=true,text: String?=null,click: ()->Unit) {
+@Composable internal fun TextVectorButton(vector: ImageVector,label: String,modifier: Modifier=Modifier,selected: Boolean=false,enabled: Boolean=true,text: String?=null,
+    state: String?=null,click: ()->Unit) {
     var tooltip by remember {mutableStateOf(false)}
     Row(modifier.height(48.dp).background(if(selected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
         .combinedClickable(enabled=enabled,onClick=click,onLongClick={tooltip=true},role=Role.Button,onClickLabel=label)
-        .semantics(mergeDescendants=true) {contentDescription=label;stateDescription=if(!enabled) "Unavailable" else if(selected) "Selected" else "Not selected"},
+        .semantics(mergeDescendants=true) {contentDescription=label
+            stateDescription=state ?: if(!enabled) "Unavailable" else if(selected) "Selected" else "Not selected"
+            if(state!=null) liveRegion=LiveRegionMode.Polite},
         horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically) {
         val tint=MaterialTheme.colorScheme.onSurface.copy(alpha=if(enabled) 1f else .38f)
         Icon(vector,null,Modifier.size(22.dp),tint=tint)
         if(text!=null) Text(text,maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall,color=tint)
-        DropdownMenu(tooltip,{tooltip=false}) {DropdownMenuItem(text={Text(label)},onClick={tooltip=false})}
+        DropdownMenu(tooltip,{tooltip=false}) {DropdownMenuItem(text={Text(if(state!=null) "$label · $state" else label)},onClick={tooltip=false})}
     }
 }
 @OptIn(ExperimentalFoundationApi::class)

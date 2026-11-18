@@ -1,5 +1,7 @@
 # Edit Text consolidation — approved plan
 
+**Rework status (2026-11-18):** After the user's A16 review ("too cluttered and confusing"), the follow-up rework is implemented in source, device-unverified, in two commits (tab faces; menu/Back/status/icons). It supersedes the surface sketches in §1, the popover/launcher model in §1–§3, the status header in §2 and the mapping in §4. The current surface and the **final old-to-new inventory** are in [§11](#11-rework-2026-11-18-final-surface-and-inventory). Gate results, deviations and the exact A16 user-run list are in [TEXT_UI_OVERHAUL.md](../checkpoints/TEXT_UI_OVERHAUL.md#rework-commit-2-menu-back-status-and-icons).
+
 Implementation status: all four approved stages are implemented in source; device acceptance remains pending. The historical sketches below are superseded by the approved amendments and the measured final budget, complete inventory, gate results and exact manual lists in [TEXT_UI_OVERHAUL.md](../checkpoints/TEXT_UI_OVERHAUL.md). No F3 animator UI or RTL renderer is included.
 
 Status: APPROVED for four ordered implementation commits, 2026-10-09. User amendments supersede the original sketches below: Character row 2 is Tracking/Leading/Case/Format (Baseline in Format); standard quick row is Stroke width/H scale/V scale/Baseline. Paragraph row 2 is Box width/Indents popover/Spacing popover/Direction. Independently scrolling virtualized Fonts family/axis lists are approved; accessibility-size popovers/choice lists may scroll, with searchable choice dialogs as needed. Wide-range scrubbing uses velocity acceleration; all tunables are centralized. Graph/3D remain visibly disabled. Parent chrome must be subtracted or removed, with source-budget/layout assertions at 360dp and font scales 1/1.3/2. See [implementation gates and inventory audit](../checkpoints/TEXT_UI_OVERHAUL.md). T1–T4 were tested on device by the user; all new UI remains device-unverified. T5 remains dropped and this plan does not implement F3.
@@ -214,3 +216,82 @@ Each commit: compile/JVM/host checks only, no APK/device runs by the agent; list
 12. Test IME Done, explicit Cancel, system/predictive Back, outside tap, tab/layer/key navigation, rotation, background/foreground and layer deletion in every editor mode. Verify first Back exits the mode, preview visibility where height permits, active tab/focus restoration and no double commits or writes to another layer. Repeat 500+ glyph typing/font/axis/width stress with timing logs and existing allocation/parity counters; assess latency from measurements only.
 
 Approval requested on this document before any Part B product changes, especially Fonts popup list scrolling versus pagination and the extreme large-font overflow fallback.
+
+## 11. Rework 2026-11-18: final surface and inventory
+
+Implemented in source, device-unverified. No PreviewController, gesture-protocol or batch/draw change; no new sub-screen; the sheet never scrolls.
+
+**Surface (360dp, font scale 1, one fixed height 344dp):** Source bar 48 (excerpt, selection chip only while a selection exists, one ⋮) · tabs 40 (Character / Paragraph / Animate) · tab face 4 × 48 · feedback strip 16 · rail 48 (Prev, diamond, Next, animation-actions ⋮, Graph, 3D, ✓). Text mode has no parent chrome. Preview Expansion is ignored while Edit Text is open.
+
+```text
+Character  [ Font chip (1.8)       ][ Size    ][ Fill|Stroke (1.2) ]
+           [ Tracking ][ Leading  ][ Baseline][ Stroke width       ]
+           [ H scale  ][ V scale  ][ Kerning ][ Paint order        ]
+           [ B ][ I ][ Case ][ x² ][ x₂ ][ fi ]   (six 57dp toggles)
+Paragraph  [ Left ][ Centre ][ Right ][ Justify ▸ ]
+           [ L indent ][ R indent ][ First indent ][ Direction ]
+           [ Before ][ After ][ Box width ][ — ]
+```
+
+At font scale >1.2 the same cells reflow, in the same order, into a labelled 3-column grid (6 Character rows, 4 Paragraph rows). When a window cannot grant the fixed height, whole rows page from an `n/m` button at the end of the tab row.
+
+**Overlays (only real choices), all inside the sheet:** Case (one row of four), Justify (one row: four justify variants, Inherit, Layer base ▸ which swaps the row to ‹ / base L / C / R), Box width (one row: Auto (0) / Fill composition), exact numeric entry (two rows), Fonts (≤ max(40% window, 240dp), never taller than the sheet; lists scroll internally) and the Global Colour Picker (labelled "Fill colour — Whole layer" / "… override — Selection: N characters"). The sheet is docked below the action bar and never overlaps the preview, so no overlay can hide the edited layer; no viewport pan is needed.
+
+| Old control / popup action / menu item (TEXT UI 4) | New location (rework) |
+|---|---|
+| Source bar excerpt; tap to type | Source bar; unchanged typing mode (Cancel / Done header now reads "Editing Source Text · scope") |
+| Source bar "Hold" label | Removed; Hold is shown by the rail diamond's square glyph and its accessibility state |
+| Status line "Whole layer · property · Source Text Hold · Animation off" | Removed. Key/animation state: diamond glyph (hollow / centre mark / filled; squares for Hold owners) + state description + polite live region. Scope: selection chip. Property name/unit: long-press label and numeric-entry title. Errors/limits: feedback strip |
+| Font chip → Fonts popup (Dialog) | Character R1 Font chip → in-sheet Fonts |
+| Fonts: search, import, delete, close | Fonts toolbar row (delete uses a bin glyph) |
+| Fonts: delete confirmation dialog | Inline confirmation row inside Fonts |
+| Fonts: missing / error lines | Same, one line each inside Fonts |
+| Fonts: bundled + imported family list | Fonts family list (internal scroll) |
+| Fonts: style dropdown (Default / named instances / bundled styles / static note) | Fonts horizontally scrolling style row; current choice ✓, modified preset labelled |
+| Fonts: axis rows (scrub, exact, reset) | Fonts axis list; exact entry is an inline row (Default / Cancel / Done) instead of a dialog |
+| Fonts: Inherit layer font; Layer base font menu | Fonts bottom row (unchanged actions) |
+| Size cell | Character R1 Size (layer px; relative % with a selection) |
+| Paint launcher → Paint popup | Character R1 Fill / Stroke swatch pair (solid chip vs ring, labelled "Fill"/"Stroke") |
+| Paint: Fill / Stroke colour → picker (Dialog) | Swatch → in-sheet Global Colour Picker, Fill vs Stroke and scope in its title |
+| Paint: Inherit fill / Inherit stroke (selection) | "Inherit" button in the colour picker title row (selection scope); also rail ⋮ → Reset value |
+| Paint: Stroke width | Character R2 Stroke width |
+| Paint: Paint order | Character R3 Paint order two-state toggle (layer-only; selection explains) |
+| Paint: requested/effective stroke line (always shown) | Feedback strip, only while clamped: `Requested X px | Effective Y px | SDF limit` |
+| Tracking cell | Character R2 Tracking |
+| Leading cell / Format → Leading | Character R2 Leading |
+| Quick row / Format → Baseline | Character R2 Baseline shift |
+| Quick row / Format → H scale, V scale | Character R3 H scale, V scale (three distinct glyphs: size, V scale, H scale) |
+| Format → Kerning launcher → Metrics / Off | Character R3 Kerning; tap toggles Metrics ↔ Off |
+| Format → Bold, Italic | Character R4 toggles |
+| Case cell / Format → Case → four choices | Character R4 Case → one-row choice of four |
+| Format → Superscript, Subscript | Character R4 toggles (tap active returns Normal) |
+| Format → Ligatures | Character R4 toggle (layer-only) |
+| Format / Character controls → Relative size | Header ⋮ → Relative size (existing numeric editor) |
+| Format / Character controls → Manual kerning; "Reset selected manual spacing" | Header ⋮ → Manual kerning (existing numeric editor; its action row has Reset selected manual spacing) |
+| Character controls popup (all of the above + Fonts/Paint links) | Deleted: every item is on the face or in the menu |
+| Format popup | Deleted |
+| L / C / R alignment | Paragraph R1 |
+| Justify launcher → four justify choices | Paragraph R1 Justify → one-row choice |
+| Justify popup: Inherit layer alignment | Same choice row: Inherit |
+| Justify popup: Layer base alignment menu | Same choice row: Layer base ▸ → ‹ / base L / C / R (layer-only) |
+| Paragraph controls popup (7 alignments, launchers, Inherit, More/base) | Deleted: Paragraph R1 + Justify row |
+| Indents launcher → three indent fields | Paragraph R2 Left / Right / First-line indent |
+| Spacing launcher → before / after | Paragraph R3 Space before / after |
+| Box launcher / cell → numeric, Auto, Fill composition | Paragraph R3 Box width: value = exact entry; icon tap = one-row Auto (0) / Fill composition |
+| Direction launcher → LTR / RTL + note | Paragraph R2 Direction toggle; RTL shows "stored only; RTL rendering unsupported" in the feedback strip |
+| Numeric exact-entry dialog (field, Fine, −, +, Cancel, Done, validation, stroke note) | In-sheet two-row strip beside the cell; validation in the feedback strip |
+| Large-font "Open … controls" fallback | Labelled 3-column grid of the same cells |
+| Header ⋮: Character controls / Paragraph controls | Removed (everything is on the face) |
+| Header ⋮: Animate · F3 unavailable | Removed (Animate tab remains visibly inert) |
+| Header ⋮: Explode Text | Header ⋮ → Explode Text (existing dialog unchanged) |
+| Header ⋮: Reset text style; Reset paragraph style | Header ⋮ → one "Reset {Character|Paragraph} style · {scope}" for the current tab; one undo entry; disabled on Animate |
+| Header ⋮: Clear selection | Selection chip × (and Back) |
+| Header ⋮: Layer tools | Back (top-left arrow or system Back) returns to the layer inspector grid |
+| Header ⋮: Done editing text | Rail ✓ (unchanged Done behaviour) |
+| Format cell ⋮ glyph (third ⋮) | Removed with Format; rail animation-actions glyph is now dots + diamond |
+| Rail Prev / Diamond / Next / Graph / 3D / Done | Unchanged positions; diamond shows key state |
+| Rail ⋮: Reset value, Enable / Freeze, Reset animation…, Hold, easing | Unchanged; Reset animation confirms in a one-row strip above the rail instead of a dialog |
+| Back: cancel mode, then clear selection, then the parent | Back leaves the innermost state (Explode → draft → confirm → base row → choice row → Fonts); otherwise returns to the layer inspector grid and clears the selection. The top-left arrow dispatches the same Back |
+| Animate tab | Unchanged inert placeholder with reason |
+
+Nothing in the TEXT UI 4 inventory was removed without a destination above.

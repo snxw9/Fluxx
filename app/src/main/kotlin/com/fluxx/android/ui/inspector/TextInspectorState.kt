@@ -111,6 +111,50 @@ internal data class TextEditScope(val range: TextSelectionRange?) {
         return document.boundaries.count {it>=r.start && it<r.end}
     }
 }
+/** One Back transition, innermost first. System Back and the editor's top-left arrow share it. */
+internal enum class TextBackStep { CLOSE_EXPLODE, CANCEL_DRAFT, CLOSE_CONFIRM, PARENT_CHOICE, CLOSE_CHOICE, CLOSE_FONTS, RETURN_TO_GRID }
+internal object TextInspectorBack {
+    fun step(mode: TextInspectorMode,explode: Boolean,confirming: Boolean): TextBackStep=when {
+        explode->TextBackStep.CLOSE_EXPLODE
+        mode is TextInspectorMode.Numeric || mode is TextInspectorMode.Colour || mode==TextInspectorMode.Source->TextBackStep.CANCEL_DRAFT
+        confirming->TextBackStep.CLOSE_CONFIRM
+        mode is TextInspectorMode.Popover && mode.group==TextControl.BASE_ALIGNMENT->TextBackStep.PARENT_CHOICE
+        mode is TextInspectorMode.Popover->TextBackStep.CLOSE_CHOICE
+        mode==TextInspectorMode.Fonts->TextBackStep.CLOSE_FONTS
+        // Nothing transient: return straight to the layer inspector grid, clearing any selection.
+        else->TextBackStep.RETURN_TO_GRID
+    }
+}
+
+/** The single header ⋮ menu: exactly these four items. */
+internal enum class TextMenuItem { EXPLODE, RESET_STYLE, MANUAL_KERNING, RELATIVE_SIZE }
+internal object TextHeaderMenu {
+    val items=TextMenuItem.entries.toList()
+    fun label(item: TextMenuItem,tab: TextTab,scopeLabel: String)=when(item) {
+        TextMenuItem.EXPLODE->"Explode Text"
+        TextMenuItem.RESET_STYLE->if(tab==TextTab.ANIMATE) "Reset text style (no Animate formatting)"
+            else "Reset ${tab.name.lowercase().replaceFirstChar {it.uppercase()}} style · $scopeLabel"
+        TextMenuItem.MANUAL_KERNING->"Manual kerning"
+        TextMenuItem.RELATIVE_SIZE->"Relative size"
+    }
+    fun enabled(item: TextMenuItem,tab: TextTab)=item!=TextMenuItem.RESET_STYLE || tab!=TextTab.ANIMATE
+}
+
+/** Rail diamond: key/animation state replaces the old status line. Hold owners use square glyphs. */
+internal object TextKeyState {
+    val HOLD_OWNERS=setOf(AnimPropertyType.SOURCE_TEXT,AnimPropertyType.STROKE_OVER_FILL,AnimPropertyType.LIGATURES)
+    fun icon(owner: AnimPropertyType?,animated: Boolean,onKey: Boolean): String {
+        val hold=owner in HOLD_OWNERS
+        return when {!animated->"KEY";onKey->if(hold) "HOLD_ON" else "KEY_ON";else->if(hold) "HOLD_ANIM" else "KEY_ANIM"}
+    }
+    fun description(owner: AnimPropertyType?,animated: Boolean,onKey: Boolean,timecode: String)=when {
+        owner==null->"No keyframes for this control"
+        !animated->"$owner: animation off"
+        onKey->"$owner: on key at $timecode"+if(owner in HOLD_OWNERS) ", Hold" else ""
+        else->"$owner: animated, between keys"+if(owner in HOLD_OWNERS) ", Hold" else ""
+    }
+}
+
 internal data class TextInspectorFocus(val tab: TextTab=TextTab.CHARACTER,val control: TextControl=TextControl.SIZE)
 internal sealed interface TextInspectorMode {
     data object Browse: TextInspectorMode
@@ -253,7 +297,6 @@ internal object TextInspectorModeCodec {
 internal object TextInspectorBudget {
     const val PARENT_CHROME=0f
     const val SOURCE=48f
-    const val STATUS=32f
     const val TABS=40f
     const val ROW=48f
     const val FEEDBACK=16f
@@ -262,9 +305,8 @@ internal object TextInspectorBudget {
     const val MIN_TARGET=48f
     const val SCRUB_ZONE=36f
     fun large(fontScale: Float)=fontScale>1.2f
-    fun statusHeight(fontScale: Float)=STATUS*fontScale.coerceAtLeast(1f)
     fun feedbackHeight(fontScale: Float)=FEEDBACK*fontScale.coerceAtLeast(1f)
-    private fun chrome(fontScale: Float)=PARENT_CHROME+SOURCE+statusHeight(fontScale)+TABS+feedbackHeight(fontScale)+RAIL
+    private fun chrome(fontScale: Float)=PARENT_CHROME+SOURCE+TABS+feedbackHeight(fontScale)+RAIL
     fun sheetHeight(fontScale: Float)=chrome(fontScale)+ROW*TextInspectorLayout.rows(TextTab.CHARACTER,fontScale).size
     fun bodyHeight(total: Float,fontScale: Float)=(total-chrome(fontScale)).coerceAtLeast(0f)
     fun bodyRows(total: Float,fontScale: Float)=kotlin.math.floor(bodyHeight(total,fontScale)/ROW+1e-3f).toInt()
