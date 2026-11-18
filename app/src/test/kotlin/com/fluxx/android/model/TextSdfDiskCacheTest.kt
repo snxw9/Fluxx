@@ -44,4 +44,18 @@ class TextSdfDiskCacheTest {
         assertThrows(IllegalArgumentException::class.java) {cache.storePacket(ByteArray(40))}
         assertTrue(cache.seeds(setOf(font)).isEmpty())
     }
+    @Test fun keyCarriesTheGeneratorVersionAndOlderBitmapsAreNeverReused() {
+        // TEXT FIX 9b: FreeType SDFs with overlap holes were cached as v1; the coverage-correct generator is v2.
+        assertEquals(2,SdfDiskCache.GENERATOR)
+        val native=File("../core-engine/src/main/cpp/text/sdf_coverage.h").readText()
+        assertTrue("Kotlin and native generator versions agree",native.contains("constexpr unsigned GeneratorVersion = ${SdfDiskCache.GENERATOR};"))
+        assertEquals("v2-48-8-$font-7.sdf",SdfDiskCache.key(font,7))
+        val directory=folder.newFolder()
+        // A v1 bitmap left by an older build is a valid record with the old name: it must not seed and must be deleted.
+        SdfDiskCache(directory).storePacket(packet(7));val current=directory.listFiles()!!.single()
+        val stale=File(directory,"v1-48-8-$font-7.sdf");current.copyTo(stale);current.delete()
+        val cache=SdfDiskCache(directory)
+        assertTrue(cache.seeds(setOf(font)).isEmpty());assertFalse(stale.exists())
+        cache.storePacket(packet(7));assertEquals(listOf(SdfDiskCache.key(font,7)),directory.listFiles()!!.map {it.name})
+    }
 }

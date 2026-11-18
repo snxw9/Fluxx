@@ -1,5 +1,6 @@
 #include "font_manager.h"
 #include "sdf_tiers.h"
+#include "sdf_coverage.h"
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_MODULE_H
@@ -71,6 +72,7 @@ struct FontManager::Impl {
     std::list<LayoutEntry> layouts;
     size_t budget;
     uint64_t rasterizations = 0, hits = 0, waitNs = 0;
+    uint64_t coverageRebuilds = 0; // TEXT FIX 9b: SDFs rebuilt from coverage after failing the self-check.
     explicit Impl(size_t bytes) : budget(bytes) {}
     ~Impl() { faces.clear(); if (library) FT_Done_FreeType(library); }
     std::unique_lock<std::mutex> lock() {
@@ -455,6 +457,34 @@ std::shared_ptr<const Layout> FontManager::shapeStyled(const std::string& id,con
     return out;
 }
 
+namespace {
+// TEXT FIX 9b: FreeType 2.14's SDF renderer inverts the sign at overlapping-contour junctions (variable fonts and
+// instances generated from them), even with "overlaps" on. Self-check the SDF against a supersampled non-zero-winding
+// coverage raster of the same outline, on the same grid; rebuild only glyphs that fail (coverage_sdf::fromMask).
+// Cost: one coverage raster per new SDF (mask <= 1 Mi pixels, k <= 4); the distance transform runs only on failure.
+template<class Impl> void verifyCoverage(Impl& impl, FT_Face face, uint32_t glyphId, SdfGlyph& image) {
+    if (image.width <= 0 || image.height <= 0) return;
+    ftCheck(FT_Load_Glyph(face, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP), "FT_Load_Glyph coverage");
+    auto& outline = face->glyph->outline;
+    const unsigned k = coverage_sdf::supersample(image.width, image.height);
+    // SDF row 0 spans [top-1, top] px; move the grid's bottom-left to the origin, then scale by k.
+    FT_Outline_Translate(&outline, -static_cast<FT_Pos>(image.left) * 64, -static_cast<FT_Pos>(image.top - image.height) * 64);
+    FT_Matrix scale{static_cast<FT_Fixed>(k) << 16, 0, 0, static_cast<FT_Fixed>(k) << 16};
+    FT_Outline_Transform(&outline, &scale);
+    const unsigned mw = static_cast<unsigned>(image.width) * k, mh = static_cast<unsigned>(image.height) * k;
+    std::vector<uint8_t> mask(static_cast<size_t>(mw) * mh);
+    FT_Bitmap target{};
+    target.rows = mh; target.width = mw; target.pitch = static_cast<int>(mw); target.buffer = mask.data();
+    target.num_grays = 256; target.pixel_mode = FT_PIXEL_MODE_GRAY;
+    ftCheck(FT_Outline_Get_Bitmap(impl.library, &outline, &target), "FT_Outline_Get_Bitmap coverage");
+    for (auto& value : mask) value = value >= 128 ? 1 : 0;
+    if (coverage_sdf::compare(image.pixels, mask, image.width, image.height, k).failed()) {
+        image.pixels = coverage_sdf::fromMask(mask, image.width, image.height, k, image.spread);
+        ++impl.coverageRebuilds;
+    }
+}
+}
+
 std::shared_ptr<const SdfGlyph> FontManager::sdf(const std::string& id, uint32_t glyphId, bool overlaps, unsigned tierPpem) {
     auto guard = impl_->lock();
     auto& face = impl_->resolve(id);
@@ -500,6 +530,7 @@ std::shared_ptr<const SdfGlyph> FontManager::sdf(const std::string& id, uint32_t
             const auto* row = bitmap.pitch >= 0 ? bitmap.buffer + y * bitmap.pitch : bitmap.buffer + (result->height - 1 - y) * -bitmap.pitch;
             std::copy_n(row, result->width, result->pixels.data() + static_cast<size_t>(y) * result->width);
         }
+        verifyCoverage(*impl_, face.ft, glyphId, *result);
     }
     impl_->rasters.push_back({key, result});
     impl_->index[key] = std::prev(impl_->rasters.end());
@@ -573,7 +604,7 @@ std::vector<uint32_t> FontManager::latinGlyphs(const std::string& id) {
 }
 FontStats FontManager::stats() {
     auto guard = impl_->lock();
-    FontStats result{impl_->rasterizations, impl_->hits, impl_->waitNs, 0, 0, impl_->layouts.size(), impl_->shapes,impl_->shapingNs,impl_->rasterNs};
+    FontStats result{impl_->rasterizations, impl_->hits, impl_->waitNs, 0, 0, impl_->layouts.size(), impl_->shapes,impl_->shapingNs,impl_->rasterNs,impl_->coverageRebuilds};
     for (const auto& entry : impl_->rasters) {
         result.cacheBytes += entry.value->pixels.size();
         if (entry.value.use_count() > 1) result.pinnedBytes += entry.value->pixels.size();

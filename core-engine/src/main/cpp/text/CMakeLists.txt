@@ -25,7 +25,7 @@ function(fluxx_font_dependencies)
 endfunction()
 fluxx_font_dependencies()
 
-add_library(fluxx_text STATIC font_manager.cpp atlas_packer.cpp prepared_text_packet.cpp font_inspection.cpp paragraph_layout.cpp)
+add_library(fluxx_text STATIC font_manager.cpp sdf_coverage.cpp atlas_packer.cpp prepared_text_packet.cpp font_inspection.cpp paragraph_layout.cpp)
 target_link_libraries(fluxx_text PUBLIC freetype fluxx_harfbuzz)
 target_include_directories(fluxx_text PUBLIC "${CMAKE_CURRENT_LIST_DIR}")
 target_compile_features(fluxx_text PUBLIC cxx_std_17)

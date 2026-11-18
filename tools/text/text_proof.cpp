@@ -4,6 +4,8 @@
 #include "paragraph_layout.h"
 #include "text_diagnostics.h"
 #include "atlas_packer.h"
+#include "sdf_coverage.h"
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -13,6 +15,8 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_MULTIPLE_MASTERS_H
+#include FT_OUTLINE_H
+#include FT_MODULE_H
 #include <hb.h>
 #include <hb-ot.h>
 
@@ -136,6 +140,196 @@ int main(int argc, char** argv) {
             const auto packet=encodePreparedText(*rich,imported);
             require(layoutMetrics(*decodePreparedText(packet.data(),packet.size()))==layoutMetrics(*rich),"Imported CFF transport changed rich metrics");
             std::cout<<"PASS: CFF variable outline/advance changes, clamping, independent FT/HB advance agreement and prepared transport\n";
+        } else if(command=="sdfregress") {
+            // TEXT FIX 9b regression: (1) synthetic overlap union, (2) FreeType byte-mapping parity of the rebuild path,
+            // (3) bundled fonts keep FreeType's bytes (zero rebuilds) at every tier, (4) optional font files: zero holes.
+            namespace cs=fluxx::text::coverage_sdf;
+            require(cs::GeneratorVersion==2,"Generator version");
+            require(cs::encode(0,8)==128 && cs::encode(8,8)==255 && cs::encode(-8,8)==0 && cs::encode(4,8)==192 && cs::encode(-4,8)==64,"FreeType byte mapping");
+            require(cs::supersample(55,57)==4 && cs::supersample(371,383)==2 && cs::supersample(2048,2048)==1,"Supersample bound");
+            {   // Two overlapping rectangles + a crossing bar, as overlapping contours would fill (non-zero winding union).
+                const int w=40,h=40;const unsigned k=4;std::vector<uint8_t> mask(w*k*h*k);
+                auto fill=[&](int x0,int y0,int x1,int y1){for(int y=y0*4;y<y1*4;++y)for(int x=x0*4;x<x1*4;++x)mask[y*w*k+x]=1;};
+                fill(10,10,22,30);fill(18,10,30,30);fill(8,18,32,22);
+                const auto sdf=cs::fromMask(mask,w,h,k,8);
+                for(int y=10;y<30;++y)for(int x=10;x<30;++x) require(sdf[y*w+x]>=128,"Overlap union has a hole");
+                require(sdf[2*w+2]<128 && sdf[35*w+35]<128,"Outside reads inside");
+                require(!cs::compare(sdf,mask,w,h,k).failed(),"Rebuilt SDF fails its own check");
+            }
+            double maxMean=0;int maxDiff=0;
+            for(const char* font:{"fluxx.sans","fluxx.serif","fluxx.mono"}) for(char c:std::string("oOHnbd8")) {
+                // Parity: on glyphs FreeType gets right, the coverage rebuild reproduces FreeType's bytes closely.
+                FontManager probe(inputs);const auto gid=probe.glyphForCodepoint(font,static_cast<unsigned char>(c));
+                const auto ft=probe.sdf(font,gid);
+                FT_Library lib=nullptr;require(FT_Init_FreeType(&lib)==0,"FT");FT_Face face=nullptr;
+                const auto& bytes=inputs[std::string(font)=="fluxx.serif"?1:std::string(font)=="fluxx.mono"?2:0].bytes;
+                require(FT_New_Memory_Face(lib,bytes.data(),static_cast<FT_Long>(bytes.size()),0,&face)==0,"face");
+                FT_Set_Pixel_Sizes(face,0,ft->ppem);require(FT_Load_Glyph(face,gid,FT_LOAD_NO_HINTING|FT_LOAD_NO_BITMAP)==0,"load");
+                const unsigned k=cs::supersample(ft->width,ft->height);
+                FT_Outline_Translate(&face->glyph->outline,-ft->left*64,-(ft->top-ft->height)*64);
+                FT_Matrix m{static_cast<FT_Fixed>(k)<<16,0,0,static_cast<FT_Fixed>(k)<<16};FT_Outline_Transform(&face->glyph->outline,&m);
+                std::vector<uint8_t> mask(static_cast<size_t>(ft->width)*k*ft->height*k);FT_Bitmap bm{};
+                bm.rows=ft->height*k;bm.width=ft->width*k;bm.pitch=static_cast<int>(ft->width*k);bm.buffer=mask.data();bm.num_grays=256;bm.pixel_mode=FT_PIXEL_MODE_GRAY;
+                require(FT_Outline_Get_Bitmap(lib,&face->glyph->outline,&bm)==0,"raster");for(auto& v:mask) v=v>=128;
+                const auto rebuilt=cs::fromMask(mask,ft->width,ft->height,k,ft->spread);
+                double sum=0;for(size_t i=0;i<rebuilt.size();++i){const int d=std::abs(int(rebuilt[i])-int(ft->pixels[i]));sum+=d;maxDiff=std::max(maxDiff,d);}
+                maxMean=std::max(maxMean,sum/rebuilt.size());
+                FT_Done_Face(face);FT_Done_FreeType(lib);
+            }
+            std::cout<<"parity: worst mean |rebuilt-FreeType| = "<<maxMean<<" / 255, worst pixel "<<maxDiff<<'\n';
+            require(maxMean<=2.0,"Coverage rebuild drifts from FreeType's mapping");
+            // Independent references: raw FreeType SDF bytes, and a supersampled coverage mask on the same grid.
+            FT_Library refLib=nullptr;require(FT_Init_FreeType(&refLib)==0,"FT");
+            struct Raw { std::vector<uint8_t> pixels; int w=0,h=0,left=0,top=0; };
+            auto rawSdf=[&](FT_Face face,FT_UInt gid,unsigned ppem,unsigned spread) {
+                FT_Bool on=1;FT_Property_Set(refLib,"sdf","overlaps",&on);FT_Int sp=static_cast<FT_Int>(spread);FT_Property_Set(refLib,"sdf","spread",&sp);
+                FT_Set_Pixel_Sizes(face,0,ppem);Raw r;
+                require(FT_Load_Glyph(face,gid,FT_LOAD_NO_HINTING|FT_LOAD_NO_BITMAP)==0,"load");
+                if(face->glyph->outline.n_contours==0) return r;
+                require(FT_Render_Glyph(face->glyph,FT_RENDER_MODE_SDF)==0,"sdf");const auto& b=face->glyph->bitmap;
+                r.w=static_cast<int>(b.width);r.h=static_cast<int>(b.rows);r.left=face->glyph->bitmap_left;r.top=face->glyph->bitmap_top;
+                r.pixels.resize(static_cast<size_t>(r.w)*r.h);for(int y=0;y<r.h;++y) std::copy_n(b.buffer+y*b.pitch,r.w,r.pixels.data()+static_cast<size_t>(y)*r.w);
+                return r;
+            };
+            auto maskOf=[&](FT_Face face,FT_UInt gid,unsigned ppem,const Raw& r,unsigned k) {
+                FT_Set_Pixel_Sizes(face,0,ppem);require(FT_Load_Glyph(face,gid,FT_LOAD_NO_HINTING|FT_LOAD_NO_BITMAP)==0,"load");
+                FT_Outline_Translate(&face->glyph->outline,-r.left*64,-(r.top-r.h)*64);
+                FT_Matrix m{static_cast<FT_Fixed>(k)<<16,0,0,static_cast<FT_Fixed>(k)<<16};FT_Outline_Transform(&face->glyph->outline,&m);
+                std::vector<uint8_t> mask(static_cast<size_t>(r.w)*k*r.h*k);FT_Bitmap bm{};
+                bm.rows=r.h*k;bm.width=r.w*k;bm.pitch=static_cast<int>(r.w*k);bm.buffer=mask.data();bm.num_grays=256;bm.pixel_mode=FT_PIXEL_MODE_GRAY;
+                require(FT_Outline_Get_Bitmap(refLib,&face->glyph->outline,&bm)==0,"raster");for(auto& v:mask) v=v>=128;return mask;
+            };
+            // For every glyph: a raw FreeType SDF that passes is kept byte-for-byte; one that fails is rebuilt and passes.
+            auto verify=[&](const std::string& id,const std::vector<uint8_t>& bytes,FontManager& manager,const std::vector<uint32_t>& glyphs,unsigned tier,size_t& kept,size_t& rebuilt) {
+                FT_Face face=nullptr;require(FT_New_Memory_Face(refLib,bytes.data(),static_cast<FT_Long>(bytes.size()),0,&face)==0,"face");
+                const unsigned ppem=tier?tier:48,spread=tier?(tier==96?16u:32u):8u;
+                for(auto gid:glyphs) {
+                    const auto got=manager.sdf(id,gid,true,tier);const auto raw=rawSdf(face,gid,ppem,spread);
+                    require(got->width==raw.w && got->height==raw.h && got->left==raw.left && got->top==raw.top,"Grid changed");
+                    if(raw.w==0) continue;
+                    const unsigned k=cs::supersample(raw.w,raw.h);const auto mask=maskOf(face,gid,ppem,raw,k);
+                    if(!cs::compare(raw.pixels,mask,raw.w,raw.h,k).failed()) {require(got->pixels==raw.pixels,"A correct FreeType SDF changed");++kept;}
+                    else {require(!cs::compare(got->pixels,mask,raw.w,raw.h,k).failed(),"Rebuilt SDF still has holes");++rebuilt;}
+                }
+                FT_Done_Face(face);
+            };
+            for(unsigned tier:{0u,96u,192u,384u}) {
+                FontManager bundled(inputs);size_t kept=0,rebuilt=0;
+                for(const auto& in:inputs) {
+                    std::vector<uint32_t> glyphs;
+                    // Full Latin-1 at the base tier; a mixed sample (round, straight, overlapping, composite) at the larger tiers.
+                    const std::string sample=tier?"aegoHO&@8\xC5\xE9":"";
+                    if(!tier) for(uint32_t cp=32;cp<256;++cp) {const auto g=bundled.glyphForCodepoint(in.id,cp);if(g) glyphs.push_back(g);}
+                    else for(unsigned char c:sample) {const auto g=bundled.glyphForCodepoint(in.id,c);if(g) glyphs.push_back(g);}
+                    verify(in.id,in.bytes,bundled,glyphs,tier,kept,rebuilt);
+                }
+                std::cout<<"bundled tier "<<(tier?tier:48)<<": "<<kept<<" FreeType-identical, "<<rebuilt<<" rebuilt (FreeType sign errors), 0 holes\n";
+            }
+            for(int a=3;a<argc;++a) {
+                const std::string path(argv[a]);const auto bytes=read(path);auto set=inputs;set.push_back({"import.regress",bytes});
+                FontManager imported(std::move(set));
+                for(unsigned tier:{0u,96u,192u,384u}) {
+                    std::vector<uint32_t> glyphs;for(uint32_t cp=33;cp<127;++cp) {const auto g=imported.glyphForCodepoint("import.regress",cp);if(g) glyphs.push_back(g);}
+                    size_t kept=0,rebuilt=0;const auto start=std::chrono::steady_clock::now();
+                    verify("import.regress",bytes,imported,glyphs,tier,kept,rebuilt);
+                    const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
+                    std::cout<<std::filesystem::path(path).filename().string().substr(0,12)<<" tier "<<(tier?tier:48)<<": "<<kept<<" identical, "<<rebuilt
+                        <<" rebuilt, 0 holes ("<<ms/std::max<size_t>(glyphs.size(),1)<<" ms/glyph incl. reference)\n";
+                }
+            }
+            FT_Done_FreeType(refLib);
+            std::cout<<"PASS: coverage-correct SDF regression\n";
+        } else if(command=="ftaudit" && argc>=4) {
+            // Which raw FreeType SDFs fail the coverage self-check, by how much, and how long each step costs.
+            namespace cs=fluxx::text::coverage_sdf;
+            const std::string which(argv[3]);const unsigned ppem=argc>=5?static_cast<unsigned>(std::stoul(argv[4])):48u;
+            const unsigned spread=ppem==48?8u:ppem==96?16u:32u;
+            std::vector<std::pair<std::string,std::vector<uint8_t>>> fonts;
+            if(which=="bundled") for(const auto& in:inputs) fonts.push_back({in.id,in.bytes}); else fonts.push_back({which,read(which)});
+            FT_Library lib=nullptr;require(FT_Init_FreeType(&lib)==0,"FT");
+            FT_Bool on=1;FT_Property_Set(lib,"sdf","overlaps",&on);FT_Int sp=static_cast<FT_Int>(spread);FT_Property_Set(lib,"sdf","spread",&sp);
+            double sdfMs=0,checkMs=0,rebuildMs=0;size_t total=0,failed=0;
+            for(const auto& [name,bytes]:fonts) {
+                FT_Face face=nullptr;require(FT_New_Memory_Face(lib,bytes.data(),static_cast<FT_Long>(bytes.size()),0,&face)==0,"face");
+                FT_Set_Pixel_Sizes(face,0,ppem);
+                int fontFailed=0,worstHoles=0,worstSpills=0;FT_UInt worstGlyph=0;
+                for(FT_ULong cp=32;cp<0x250;++cp) { const FT_UInt gid=FT_Get_Char_Index(face,cp);if(!gid) continue;
+                    auto t0=std::chrono::steady_clock::now();
+                    if(FT_Load_Glyph(face,gid,FT_LOAD_NO_HINTING|FT_LOAD_NO_BITMAP) || face->glyph->outline.n_contours==0) continue;
+                    if(FT_Render_Glyph(face->glyph,FT_RENDER_MODE_SDF)) continue;
+                    const auto& b=face->glyph->bitmap;const int w=static_cast<int>(b.width),h=static_cast<int>(b.rows),left=face->glyph->bitmap_left,top=face->glyph->bitmap_top;
+                    std::vector<uint8_t> sdf(static_cast<size_t>(w)*h);for(int y=0;y<h;++y) std::copy_n(b.buffer+y*b.pitch,w,sdf.data()+static_cast<size_t>(y)*w);
+                    auto t1=std::chrono::steady_clock::now();
+                    FT_Load_Glyph(face,gid,FT_LOAD_NO_HINTING|FT_LOAD_NO_BITMAP);
+                    const unsigned k=cs::supersample(w,h);
+                    FT_Outline_Translate(&face->glyph->outline,-left*64,-(top-h)*64);
+                    FT_Matrix m{static_cast<FT_Fixed>(k)<<16,0,0,static_cast<FT_Fixed>(k)<<16};FT_Outline_Transform(&face->glyph->outline,&m);
+                    std::vector<uint8_t> mask(static_cast<size_t>(w)*k*h*k);FT_Bitmap bm{};
+                    bm.rows=h*k;bm.width=w*k;bm.pitch=static_cast<int>(w*k);bm.buffer=mask.data();bm.num_grays=256;bm.pixel_mode=FT_PIXEL_MODE_GRAY;
+                    FT_Outline_Get_Bitmap(lib,&face->glyph->outline,&bm);for(auto& v:mask) v=v>=128;
+                    const auto check=cs::compare(sdf,mask,w,h,k);
+                    auto t2=std::chrono::steady_clock::now();
+                    if(check.failed()) {cs::fromMask(mask,w,h,k,spread);++failed;++fontFailed;
+                        if(check.holes+check.spills>worstHoles+worstSpills){worstHoles=check.holes;worstSpills=check.spills;worstGlyph=gid;}}
+                    auto t3=std::chrono::steady_clock::now();
+                    sdfMs+=std::chrono::duration<double,std::milli>(t1-t0).count();checkMs+=std::chrono::duration<double,std::milli>(t2-t1).count();
+                    rebuildMs+=std::chrono::duration<double,std::milli>(t3-t2).count();++total;
+                }
+                std::cout<<name.substr(0,24)<<": failed "<<fontFailed<<" worst gid "<<worstGlyph<<" holes="<<worstHoles<<" spills="<<worstSpills<<'\n';
+                FT_Done_Face(face);
+            }
+            std::cout<<"ppem "<<ppem<<": "<<total<<" glyphs, "<<failed<<" failed; FreeType SDF "<<sdfMs/total<<" ms/glyph, check "<<checkMs/total
+                <<" ms/glyph, rebuild "<<(failed?rebuildMs/failed:0)<<" ms/failed glyph\n";
+            FT_Done_FreeType(lib);
+        } else if(command=="sdfcheck" && argc>=4) {
+            // TEXT FIX 9: compare the engine SDF's inside/outside sign with an independent FreeType coverage raster.
+            const std::string fontArg(argv[3]);
+            std::vector<FontInput> set=inputs;std::string id=fontArg;
+            std::vector<std::pair<uint32_t,float>> variation;
+            if(argc>=6 && std::string(argv[5]).find('=')!=std::string::npos) { const std::string v(argv[5]);
+                variation.push_back({static_cast<uint32_t>(v[0])<<24|static_cast<uint32_t>(v[1])<<16|static_cast<uint32_t>(v[2])<<8|static_cast<uint32_t>(v[3]),std::stof(v.substr(5))}); }
+            if(fontArg.rfind("fluxx.",0)!=0) {id="import.check";set.push_back({id,read(fontArg),0,-1,variation});}
+            FontManager checked(std::move(set));
+            const std::string chars=argc>=5?argv[4]:"gpqyHabo0&";
+            const unsigned tierArg=argc>=6 && std::string(argv[5]).find('=')==std::string::npos?static_cast<unsigned>(std::stoul(argv[5])):0u;
+            FT_Library ft=nullptr;require(FT_Init_FreeType(&ft)==0,"FT init");
+            const auto bytes=fontArg.rfind("fluxx.",0)==0?std::vector<uint8_t>{}:read(fontArg);
+            FT_Face face=nullptr;
+            if(!bytes.empty()) require(FT_New_Memory_Face(ft,bytes.data(),static_cast<FT_Long>(bytes.size()),0,&face)==0,"FT face");
+            else require(FT_New_Memory_Face(ft,inputs[fontArg=="fluxx.serif"?1:fontArg=="fluxx.mono"?2:0].bytes.data(),
+                static_cast<FT_Long>(inputs[fontArg=="fluxx.serif"?1:fontArg=="fluxx.mono"?2:0].bytes.size()),0,&face)==0,"FT face");
+            if(!variation.empty()) {
+                FT_MM_Var* mm=nullptr;require(FT_Get_MM_Var(face,&mm)==0,"MM var");
+                std::vector<FT_Fixed> coords(mm->num_axis);
+                for(FT_UInt a=0;a<mm->num_axis;++a) { coords[a]=mm->axis[a].def;
+                    for(const auto& v:variation) if(mm->axis[a].tag==v.first) coords[a]=static_cast<FT_Fixed>(v.second*65536.f); }
+                require(FT_Set_Var_Design_Coordinates(face,mm->num_axis,coords.data())==0,"coords");FT_Done_MM_Var(ft,mm);
+            }
+            for(char c:chars) for(int overlaps=1;overlaps>=0;--overlaps) {
+                const auto gid=checked.glyphForCodepoint(id,static_cast<uint32_t>(static_cast<unsigned char>(c)));
+                const auto sdf=checked.sdf(id,gid,overlaps!=0,tierArg);
+                require(FT_Set_Pixel_Sizes(face,0,sdf->ppem)==0,"size");
+                require(FT_Load_Glyph(face,gid,FT_LOAD_NO_HINTING|FT_LOAD_NO_BITMAP|FT_LOAD_RENDER)==0,"render");
+                const auto& cov=face->glyph->bitmap;
+                int holes=0,spill=0,ink=0;
+                std::string art;
+                for(int y=0;y<sdf->height;++y) {
+                    for(int x=0;x<sdf->width;++x) {
+                        // SDF bearings include the spread; map each SDF pixel to the coverage raster.
+                        const int cx=x+sdf->left-face->glyph->bitmap_left,cy=y-sdf->top+face->glyph->bitmap_top;
+                        const int coverage=(cx>=0&&cy>=0&&cx<static_cast<int>(cov.width)&&cy<static_cast<int>(cov.rows))?cov.buffer[cy*cov.pitch+cx]:0;
+                        const bool inside=sdf->pixels[y*sdf->width+x]>=128;
+                        if(coverage>=224) {++ink;if(!inside) ++holes;}
+                        if(coverage==0 && inside) ++spill;
+                        if(argc>=7) art+=coverage>=224&&!inside?'X':inside?'#':coverage>0?'+':'.';
+                    }
+                    if(argc>=7) art+='\n';
+                }
+                std::cout<<"'"<<c<<"' gid="<<gid<<" overlaps="<<overlaps<<" ppem="<<sdf->ppem<<" spread="<<sdf->spread<<" "<<sdf->width<<"x"<<sdf->height
+                    <<" ink="<<ink<<" holes="<<holes<<" spill="<<spill<<'\n';
+                if(argc>=7 && overlaps==1) std::cout<<art;
+            }
+            FT_Done_Face(face);FT_Done_FreeType(ft);
         } else if(command=="inspect" && argc==4) {
             const auto bytes=read(argv[3]);std::cout<<inspectFont(bytes.data(),bytes.size())<<'\n';
         } else if (command == "shape" && argc == 5) {

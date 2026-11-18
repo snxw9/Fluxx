@@ -7,15 +7,25 @@ import java.security.MessageDigest
 
 /** Preparation-only, disposable, integrity-checked per-glyph cache. Exact user.* identities
  * hash font SHA-256, face, named instance and variation coordinates in FontLibraryRepository.
- * Settings version additionally pins FreeType/SDF ppem, spread and overlap mode. */
+ * The name pins the SDF generator version, ppem, spread and overlap mode: a generator change (TEXT FIX 9b: coverage
+ * rebuild of FreeType sign errors) can never re-seed bitmaps made by an older generator; those files are deleted. */
 class SdfDiskCache(private val directory: File,private val cap: Long=64L*1024*1024) {
+    companion object {
+        /** Must equal the native coverage_sdf::GeneratorVersion. */
+        const val GENERATOR=2
+        const val PREFIX="v$GENERATOR-48-8"
+        fun key(font: String,glyph: Int)="$PREFIX-$font-$glyph.sdf"
+    }
     private fun digest(bytes: ByteArray)=MessageDigest.getInstance("SHA-256").digest(bytes)
-    private fun file(font: String,glyph: Int)=File(directory,"v1-48-8-$font-$glyph.sdf")
+    private fun file(font: String,glyph: Int)=File(directory,key(font,glyph))
+    /** Bitmaps from another generator version are never reused (they may carry FreeType's overlap holes). */
+    private fun dropStale() { directory.listFiles().orEmpty().filter {it.name.endsWith(".sdf") && !it.name.startsWith("$PREFIX-")}.forEach {it.delete()} }
     private fun identity(font: String)=font.matches(Regex("user\\.[a-f0-9]{64}"))
     @Synchronized fun seeds(fonts: Set<String>): ByteArray {
         if(!directory.isDirectory) return ByteArray(0)
+        dropStale()
         val records=ArrayList<ByteArray>();var total=8
-        val files=directory.listFiles().orEmpty().filter { f -> fonts.any {identity(it) && f.name.startsWith("v1-48-8-$it-")} }
+        val files=directory.listFiles().orEmpty().filter { f -> fonts.any {identity(it) && f.name.startsWith("$PREFIX-$it-")} }
             .sortedByDescending { it.lastModified() }
         for(f in files) {
             if(f.length() !in 33..(4L*1024*1024+120) || f.length()+total>8L*1024*1024) continue

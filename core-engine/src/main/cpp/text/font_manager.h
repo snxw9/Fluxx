@@ -73,6 +73,7 @@ struct FontStats {
     size_t cacheBytes, pinnedBytes, layouts;
     uint64_t shapes=0;
     uint64_t shapingNs=0,rasterNs=0;
+    uint64_t coverageRebuilds=0; // TEXT FIX 9b: SDFs rebuilt from a coverage mask after failing the sign self-check.
 };
 
 /** CPU only. All face mutation is serialized; immutable results outlive the manager safely.
