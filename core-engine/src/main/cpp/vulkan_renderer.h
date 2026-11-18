@@ -113,6 +113,7 @@ private:
     std::vector<DrawEntry> mDrawOrder;
     std::unique_ptr<fluxx::text::TextRenderer> mText;
     std::map<int64_t,std::shared_ptr<const fluxx::text::Layout>> mTextLayouts;
+    std::vector<std::shared_ptr<const fluxx::text::Layout>> mTierLayouts; // TEXT FIX 9d: reused per frame.
     int64_t mNextTextHandle=1;
     bool mTextPrepared=false;
     std::vector<int64_t> mPreparedTextHandles;

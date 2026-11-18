@@ -43,14 +43,18 @@ PackedAtlas packGlyphs(std::vector<std::shared_ptr<const SdfGlyph>> glyphs, int 
     return atlas;
 }
 PagedAtlas packGlyphPages(std::vector<std::shared_ptr<const SdfGlyph>> glyphs, unsigned maxPages) {
-    if(maxPages<1 || maxPages>4) throw std::invalid_argument("Invalid atlas page budget");
+    // TEXT FIX 9d: TEXT UI 6 caps the atlas at 6 pages (24 MiB; 3 on low-RAM devices) and the JNI accepts 1..8; the E2
+    // bound of 4 made the renderer throw when growing past 4 pages (seen on the A16 in the per-character F2 fixture).
+    if(maxPages<1 || maxPages>MaxAtlasPages) throw std::invalid_argument("Invalid atlas page budget");
     PagedAtlas result;
     for(unsigned page=0;page<maxPages && !glyphs.empty();++page) {
         auto packed=packGlyphs(glyphs,2048);
-        std::set<std::pair<std::string,uint32_t>> placed;
-        for(const auto& entry:packed.placements) placed.emplace(entry.glyph->fontId,entry.glyph->glyphId);
+        // TEXT FIX 9d: identity is the bitmap itself. Keying by (font, glyph) dropped a glyph's other tiers (48 placed on
+        // one page silently discarded its unplaced 192/384 copy) once packing spilled onto a second page.
+        std::set<const SdfGlyph*> placed;
+        for(const auto& entry:packed.placements) placed.insert(entry.glyph.get());
         glyphs.erase(std::remove_if(glyphs.begin(),glyphs.end(),[&](const auto& glyph) {
-            return !glyph->width || !glyph->height || placed.count({glyph->fontId,glyph->glyphId});
+            return !glyph->width || !glyph->height || placed.count(glyph.get());
         }),glyphs.end());
         result.pages.push_back(std::move(packed));
     }

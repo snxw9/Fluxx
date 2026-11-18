@@ -619,6 +619,19 @@ int main(int argc, char** argv) {
                 oversized.push_back(glyph);
             }
             require(packGlyphPages(oversized,4).rejected>0,"Four-page capacity must reject before draws");
+            { bool threw=false;try { packGlyphPages(corpus,MaxAtlasPages+1); } catch(const std::exception&) { threw=true; }require(threw,"Page budget above the JNI clamp must be rejected"); }
+            require(packGlyphPages(corpus,6).rejected==0,"The 24 MiB six-page cap (TEXT UI 6) must be accepted by the packer");
+            {   // TEXT FIX 9d: the same (font, glyph) at two tiers; the large copy only fits on page 2 and must not be dropped.
+                std::vector<std::shared_ptr<const SdfGlyph>> tiered;
+                for(unsigned ppem:{48u,384u}) for(unsigned i=0;i<2;++i) {
+                    auto glyph=std::make_shared<SdfGlyph>(); glyph->fontId="synthetic"; glyph->glyphId=i; glyph->ppem=ppem;
+                    glyph->width=glyph->height=ppem==48?40:1500; glyph->pixels.resize(size_t(glyph->width)*glyph->height);
+                    tiered.push_back(glyph);
+                }
+                auto packed=packGlyphPages(tiered,4); size_t placed=0;
+                for(const auto& page:packed.pages) placed+=page.placements.size();
+                require(packed.rejected==0 && placed==tiered.size(),"Every tier of a glyph must be placed or counted as rejected");
+            }
             std::cout << "PASS: dual ligature layouts/600 cached switches, cluster metadata, 4096-glyph modes, fallback, newline, missing glyph, UTF8, pinned LRU/lifetime, concurrent shaping/rasterization\n";
         } else throw std::runtime_error("Unknown CPU proof command");
         return 0;

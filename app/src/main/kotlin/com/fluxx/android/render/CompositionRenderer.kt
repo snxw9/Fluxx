@@ -59,6 +59,12 @@ class CompositionRenderer(private val context: Context, private val repository: 
         }
         var lastIndex=0
         fun index(source: TextSourceDocument,ligatures: Boolean): Int = requireNotNull(sourceIndices[source])*2+(if(ligatures) 0 else 1)
+        // SDF tier state, prepared once so the per-frame tier policy allocates nothing (TEXT FIX 9d).
+        /** Distinct non-whitespace characters per source alternative: the atlas estimate for this layer. */
+        val glyphCounts=IntArray(sources.size) { s -> sources[s].text.filterNot { it.isWhitespace() }.toSet().size.coerceAtLeast(1) }
+        /** Every native handle this layer draws with (layouts and per-character catalogues). */
+        val tierHandles=(layouts.map { it.handle }+catalogueHandles.toList()).distinct().toLongArray()
+        var tier=SdfAtlasTiers.NO_TIER
     }
     private val selectorEase by lazy { SelectorEaseTable() }
     private var preparedText = emptyArray<PreparedText>()
@@ -156,58 +162,88 @@ class CompositionRenderer(private val context: Context, private val repository: 
         if(interactive && TextEditTimings.waitingFor(project)) TextEditTimings.frameReady(project,RenderBridge.textStats(session))
     }
     // ---- SDF atlas tiers -------------------------------------------------------------------------------------
-    private val textTierByLayer = HashMap<Long, Int>()
     private var lastPreviewCall = 0L
     private var lastPreviewTime = -1L
+    private var streamingRate: com.fluxx.android.model.FrameRate? = null
+    private var streamingSpanUs = 0L
+    // Per-frame tier state, rebuilt only when the prepared text changes (TEXT FIX 9d: the F1 zero-allocation window
+    // covers this path; TEXT UI 6's HashMap/ArrayList/Request/boxing version allocated ~90 objects per frame).
+    private var tierPlanFor: Array<PreparedText>? = null
+    private var tierAllHandles = LongArray(0)
+    private var tierSlots = emptyArray<IntArray>()
+    private var tierPpems = IntArray(0)
+    private var tierGlyphs = IntArray(0)
+    private var tierHandleTiers = IntArray(0)
+    private var tierSent = IntArray(0)
+    private fun tierPlan() {
+        if (tierPlanFor === preparedText) return
+        val handles = preparedText.flatMap { it.tierHandles.toList() }.distinct().toLongArray()
+        tierAllHandles = handles
+        tierSlots = Array(preparedText.size) { e -> IntArray(preparedText[e].tierHandles.size) { handles.indexOf(preparedText[e].tierHandles[it]) } }
+        tierPpems = IntArray(preparedText.size); tierGlyphs = IntArray(preparedText.size)
+        tierHandleTiers = IntArray(handles.size); tierSent = IntArray(handles.size) { -1 }
+        tierPlanFor = preparedText
+    }
     /**
      * Picks each text layer's SDF tier from its on-screen pixels per em (with hysteresis) and hands the result to the
      * native renderer before preparation. Inactive layers drop to the base tier. Export generates inline (synchronous);
-     * preview generates off-thread and uses the previous tier until the sharper glyphs are ready.
+     * preview generates off-thread and uses the previous tier until the sharper glyphs are ready. Steady state
+     * allocates nothing: preallocated arrays, indexed loops, and the native call only when a handle's tier changes.
      */
     private fun applyTextTiers(project: ProjectDocument, timeUs: Long, outputScale: Float) {
         if (preparedText.isEmpty()) return
+        tierPlan()
         val comp = project.composition
-        val byHandle = HashMap<Long, Int>()
-        val requests = ArrayList<SdfAtlasTiers.Request>()
-        for (entry in preparedText) {
+        for (e in preparedText.indices) {
+            val entry = preparedText[e]
             val layer = entry.layer
             val active = layer.visible && layer.timing.isActive(timeUs) && (comp.durationUs == null || timeUs < comp.durationUs)
             val local = timeUs - layer.resolvedKeyframeAnchorUs
             val source = layer.text.source.evaluateDocument(local)
+            val index = entry.index(source, layer.text.effectiveLigatures(local))
             val tier = if (!active) SdfAtlasTiers.BASE else {
                 layer.evaluatedTransformInto(timeUs, evaluatedTransform)
                 val size = layer.text.size.evaluate(local)
-                val runScale = source.runs.maxOfOrNull { it.style.sizeFactor * maxOf(it.style.horizontalScale, it.style.verticalScale) / 100f } ?: 1f
-                val animation = entry.animations[entry.index(source, layer.text.effectiveLigatures(local))]
+                val runs = source.runs
+                var runScale = 0f; var bold = false
+                for (r in 0 until runs.size) { val style = runs[r].style
+                    runScale = maxOf(runScale, style.sizeFactor * maxOf(style.horizontalScale, style.verticalScale) / 100f); bold = bold || style.fauxBold }
+                if (runs.size == 0) runScale = 1f
+                val animation = entry.animations[index]
                 animation.evaluate(local)
-                val referenceWidth = layer.referenceWidth.takeIf { it > 0 } ?: comp.width
-                val referenceHeight = layer.referenceHeight.takeIf { it > 0 } ?: comp.height
+                val referenceWidth = if (layer.referenceWidth > 0) layer.referenceWidth else comp.width
+                val referenceHeight = if (layer.referenceHeight > 0) layer.referenceHeight else comp.height
                 val projection = maxOf(comp.width.toFloat() / referenceWidth, comp.height.toFloat() / referenceHeight)
                 val layerScale = maxOf(kotlin.math.abs(evaluatedTransform[2]), kotlin.math.abs(evaluatedTransform[3])) * projection
                 val px = SdfAtlasTiers.pixelsPerEm(size, runScale, SdfAtlasTiers.maxGlyphScale(animation.modifiers), layerScale, outputScale)
-                val distance = SdfAtlasTiers.distanceEm(layer.text.strokeWidth.evaluate(local), size, source.runs.any { it.style.fauxBold },
+                val distance = SdfAtlasTiers.distanceEm(layer.text.strokeWidth.evaluate(local), size, bold,
                     SdfAtlasTiers.maxModifierDistanceEm(animation.modifiers))
-                SdfAtlasTiers.select(px, textTierByLayer[layer.id], distance)
+                SdfAtlasTiers.selectTier(px, entry.tier, distance)
             }
-            textTierByLayer[layer.id] = tier
-            requests += SdfAtlasTiers.Request(layer.id, tier, source.text.filterNot { it.isWhitespace() }.toSet().size.coerceAtLeast(1))
+            entry.tier = tier
+            tierPpems[e] = tier; tierGlyphs[e] = entry.glyphCounts[index / 2]
         }
         // Stay inside the shared atlas cap: highest tiers step down first (native packing degrades further if needed).
-        val granted = SdfAtlasTiers.degrade(requests, SdfAtlasTiers.capBytes(lowRam))
-        for (entry in preparedText) {
-            val tier = granted[entry.layer.id] ?: SdfAtlasTiers.BASE
-            for (handle in entry.layouts.map { it.handle } + entry.catalogueHandles.toList()) byHandle[handle] = maxOf(byHandle[handle] ?: SdfAtlasTiers.BASE, tier)
+        SdfAtlasTiers.degradeInPlace(tierPpems, tierGlyphs, preparedText.size, SdfAtlasTiers.capBytes(lowRam))
+        java.util.Arrays.fill(tierHandleTiers, SdfAtlasTiers.BASE)
+        var sharp = false
+        for (e in preparedText.indices) for (slot in tierSlots[e]) {
+            if (tierPpems[e] > tierHandleTiers[slot]) tierHandleTiers[slot] = tierPpems[e]
+            if (tierPpems[e] > SdfAtlasTiers.BASE) sharp = true
         }
-        val handles = byHandle.keys.toLongArray()
-        RenderBridge.textTiers(session, handles, IntArray(handles.size) { byHandle.getValue(handles[it]) }, !interactive)
+        if (!tierHandleTiers.contentEquals(tierSent)) {
+            RenderBridge.textTiers(session, tierAllHandles, tierHandleTiers, !interactive)
+            System.arraycopy(tierHandleTiers, 0, tierSent, 0, tierSent.size)
+        }
+        if (!sharp) return // Base tier only: nothing for the isolated worker.
         // Imported-font glyphs the renderer cannot rasterise itself: preview fetches them in the background (the lower
         // tier stays until they arrive); export fetches them now, so every exported frame is deterministic.
-        var tierRequests=synchronized(tierLock) { RenderBridge.textTierRequests(session) }
-        if(interactive) tierFetcher.submit(tierRequests)
-        else for(round in 0 until EXPORT_TIER_ROUNDS) {
-            if(tierRequests.isEmpty()) break
+        var tierRequests = synchronized(tierLock) { RenderBridge.textTierRequests(session) }
+        if (interactive) { if (tierRequests != null) tierFetcher.submit(tierRequests) }
+        else for (round in 0 until EXPORT_TIER_ROUNDS) {
+            if (tierRequests == null) break
             tierFetcher.fetchNow(tierRequests)
-            tierRequests=synchronized(tierLock) { RenderBridge.textTierRequests(session) } // Deferred keys come back here.
+            tierRequests = synchronized(tierLock) { RenderBridge.textTierRequests(session) } // Deferred keys come back here.
         }
     }
 
@@ -277,11 +313,11 @@ class CompositionRenderer(private val context: Context, private val repository: 
         return result
     }
 
-    fun render(project: ProjectDocument, timeUs: Long, cancelled: () -> Boolean = { false }) =
+    fun render(project: ProjectDocument, timeUs: Long, cancelled: () -> Boolean = NEVER_CANCELLED) =
         renderTarget(project, timeUs, project.composition.width, project.composition.height, cancelled)
 
     fun renderPreview(project: ProjectDocument, timeUs: Long, resolution: PreviewResolution,
-        cancelled: () -> Boolean = { false }) {
+        cancelled: () -> Boolean = NEVER_CANCELLED) {
         check(interactive) { "Preview quality is only available on a surface-backed renderer" }
         val comp = project.composition
         if (resolution != previewQuality || comp.width != previewCompWidth || comp.height != previewCompHeight) {
@@ -293,7 +329,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
         // Sharper SDF tiers are generated off-thread; this frame used the previous tier. Unless frames are already
         // streaming (playback), wait (cancellably) for the glyphs and redraw once so a settled frame becomes sharp.
         val now = System.nanoTime()
-        val frame = comp.frameRate.let { it.frameTimeUs(3) - it.frameTimeUs(0) }
+        // Cached per frame rate: FrameRate's exact arithmetic allocates (~19 objects), and this runs every preview frame.
+        if (comp.frameRate != streamingRate) { streamingRate = comp.frameRate; streamingSpanUs = comp.frameRate.let { it.frameTimeUs(3) - it.frameTimeUs(0) } }
+        val frame = streamingSpanUs
         val streaming = lastPreviewTime >= 0 && timeUs > lastPreviewTime && timeUs - lastPreviewTime <= frame && now - lastPreviewCall < 100_000_000L
         lastPreviewCall = now; lastPreviewTime = timeUs
         if (streaming || RenderBridge.awaitTextTiers(session, 0) == 0) return
@@ -489,6 +527,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
             Thread(runnable,"fluxx-imported-tiers").apply { isDaemon=true;priority=Thread.NORM_PRIORITY-1 } }
         /** Export rounds for deferred tier keys (each worker reply is <= 8 MiB / 20 s). */
         private const val EXPORT_TIER_ROUNDS=8
+        /** Shared default: a `{ false }` default argument allocates a new lambda on every call (F1 zero-allocation window). */
+        private val NEVER_CANCELLED: () -> Boolean = { false }
     }
     fun resize(width: Int,height: Int) = RenderBridge.resize(session,width,height)
     override fun close() {

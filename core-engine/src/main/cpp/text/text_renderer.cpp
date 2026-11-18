@@ -287,6 +287,7 @@ void TextRenderer::trimReady() {
     for(const auto& key:order) {
         if(readyBytes_<=cpuBudget_) break;
         readyBytes_-=ready_[key]->pixels.size(); ready_.erase(key); readyUse_.erase(key); ++stats_.tierEvictions;
+        if(external(std::get<0>(key))) externalSettled_.clear();
     }
 }
 size_t TextRenderer::awaitTiers(int timeoutMs) {
@@ -295,17 +296,26 @@ size_t TextRenderer::awaitTiers(int timeoutMs) {
     return queue_.size()+(busy_?1:0)+externalInFlight_.size();
 }
 std::vector<TierKey> TextRenderer::takeExternalRequests(const std::vector<std::shared_ptr<const Layout>>& layouts,size_t max) {
-    std::vector<TierKey> requests;std::set<Key> seen;
+    // Steady state allocates nothing (TEXT FIX 9d): a layout whose external keys are all settled at its tier is skipped
+    // until an external glyph is evicted or deferred; keys are only built for glyphs of external fonts.
+    std::vector<TierKey> requests;
     std::lock_guard<std::mutex> lock(tierMutex_);
     for(const auto& layout:layouts) {
         const unsigned tier=tierFor(layout.get());
         if(tier==tiers::BasePpem) continue;
-        for(size_t i=0;i<layout->glyphs.size() && requests.size()<max;++i) {
-            Key key{layout->glyphFont(i),layout->glyphs[i].id,tier};
-            if(!external(std::get<0>(key)) || !seen.insert(key).second) continue;
-            if(retained_.count(key) || ready_.count(key) || failed_.count(key) || externalInFlight_.count(key)) continue;
-            externalInFlight_.insert(key);requests.push_back({std::get<0>(key),std::get<1>(key),tier});
+        const auto settled=externalSettled_.find(layout.get());
+        if(settled!=externalSettled_.end() && settled->second==tier) continue;
+        bool complete=true;
+        for(size_t i=0;i<layout->glyphs.size();++i) {
+            const auto& font=layout->glyphFont(i);
+            if(!external(font)) continue;
+            Key key{font,layout->glyphs[i].id,tier};
+            if(retained_.count(key) || ready_.count(key) || failed_.count(key)) continue;
+            complete=false;
+            if(externalInFlight_.count(key) || requests.size()>=max) continue;
+            externalInFlight_.insert(key);requests.push_back({font,layout->glyphs[i].id,tier});
         }
+        if(complete) externalSettled_[layout.get()]=tier; else externalSettled_.erase(layout.get());
     }
     stats_.tierExternalRequested+=requests.size();
     return requests;
@@ -322,6 +332,7 @@ size_t TextRenderer::supplyTierGlyphs(const TierReply& reply) {
         }
         for(const auto& k:reply.failed) { const Key key{k.fontId,k.glyphId,k.ppem};if(externalInFlight_.erase(key)) { failed_.insert(key);++stats_.tierExternalFailed; } }
         for(const auto& k:reply.deferred) externalInFlight_.erase(Key{k.fontId,k.glyphId,k.ppem}); // Asked for again next frame.
+        if(!reply.deferred.empty()) externalSettled_.clear();
         stats_.tierExternalSupplied+=accepted;
         trimReady();
     }
@@ -412,6 +423,7 @@ void TextRenderer::pack(bool proofOnly) {
         destroyAtlas(); allocatedPages_=count; createAtlas(); ++stats_.arrayRecreations; stats_.atlasPages=count;
     } else if(!image_) { allocatedPages_=std::max(allocatedPages_,count); createAtlas(); stats_.atlasPages=allocatedPages_; }
     retained_=std::move(candidates); packed_=std::move(packed); placements_.clear();
+    { std::lock_guard<std::mutex> settledLock(tierMutex_); externalSettled_.clear(); } // Repacked atlas: rescan external keys.
     for(unsigned page=0;page<packed_.pages.size();++page) for(const auto& p:packed_.pages[page].placements)
         placements_.emplace(Key{p.glyph->fontId,p.glyph->glyphId,p.glyph->ppem},PagePlacement{p,page});
     dirty_=true; ++stats_.generation;

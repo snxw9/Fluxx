@@ -1614,9 +1614,10 @@ bool VulkanRenderer::setTextTiers(const int64_t* handles,const int32_t* ppems,si
 }
 std::vector<uint8_t> VulkanRenderer::takeTextTierRequests() {
     if(!mText) return {};
-    std::vector<std::shared_ptr<const fluxx::text::Layout>> layouts;
-    for(const auto& entry:mTextLayouts) layouts.push_back(entry.second);
-    const auto keys=mText->takeExternalRequests(layouts);
+    mTierLayouts.clear(); // Reused: no allocation per frame once warm.
+    for(const auto& entry:mTextLayouts) mTierLayouts.push_back(entry.second);
+    const auto keys=mText->takeExternalRequests(mTierLayouts);
+    mTierLayouts.clear();
     return keys.empty()?std::vector<uint8_t>{}:fluxx::text::encodeTierRequests(keys);
 }
 size_t VulkanRenderer::supplyTextTierGlyphs(const uint8_t* bytes,size_t length) {

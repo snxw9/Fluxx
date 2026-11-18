@@ -1005,3 +1005,12 @@ Every touch target is at least 40dp.
     - keyframe tap-to-seek and hold-drag snapping to markers;
     - marker navigation (Prev/Next);
     - save and reopen (marker colours and descriptions persist).
+
+## TEXT FIX 9 (font import, variable-font SDF holes, sharp imported/animated glyphs, device suites)
+
+See [TEXT_FIX_9.md](TEXT_FIX_9.md). It covers:
+
+- the import regression root cause and the visible-error rules (9a);
+- the overlap-safe SDF and its generator-version cache key (9b);
+- the imported/animated tier protocol and caps (9c);
+- the instrumented suite results, fixes and findings, the deviations, and the A16 manual test list (9d).

@@ -14,5 +14,7 @@ struct PackedAtlas {
 PackedAtlas packGlyphs(std::vector<std::shared_ptr<const SdfGlyph>> glyphs, int size);
 struct PagedAtlas { std::vector<PackedAtlas> pages; size_t rejected=0; };
 // One guard texel per glyph. Page allocation never changes glyph/draw ordering.
+// Matches the JNI clamp (RenderBridge.configureText): 2048x2048 R8 pages, 4 MiB each.
+constexpr unsigned MaxAtlasPages = 8;
 PagedAtlas packGlyphPages(std::vector<std::shared_ptr<const SdfGlyph>> glyphs, unsigned maxPages);
 }

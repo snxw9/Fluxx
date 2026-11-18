@@ -37,7 +37,7 @@ class ImportedTierTest {
         // Same per-layer policy for every font: px/em with 15% hysteresis; catalogue (animated/Explode) handles follow the layer.
         assertEquals(SdfAtlasTiers.select(300f, null), SdfAtlasTiers.select(300f, null))
         assertEquals(192, SdfAtlasTiers.select(250f, null)); assertEquals(384, SdfAtlasTiers.select(1000f, null))
-        assertTrue(src("src/main/kotlin/com/fluxx/android/render/CompositionRenderer.kt").contains("entry.layouts.map { it.handle } + entry.catalogueHandles.toList()"))
+        assertTrue(src("src/main/kotlin/com/fluxx/android/render/CompositionRenderer.kt").contains("val tierHandles=(layouts.map { it.handle }+catalogueHandles.toList()).distinct().toLongArray()"))
     }
     @Test fun requestWireRoundTripAndCaps() {
         val bytes = TierWire.encodeRequests(keys)

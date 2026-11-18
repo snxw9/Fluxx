@@ -65,7 +65,8 @@ public:
     void upload(VkCommandBuffer command);
     void draw(VkCommandBuffer command, const TextMesh& mesh, const TextPush& push);
     void begin();
-    void forget(const Layout* layout) { preparedLayouts_.erase(layout); wantedTier_.erase(layout); tierCap_.erase(layout); resolvedTier_.erase(layout); }
+    void forget(const Layout* layout) { preparedLayouts_.erase(layout); wantedTier_.erase(layout); tierCap_.erase(layout); resolvedTier_.erase(layout);
+        std::lock_guard<std::mutex> lock(tierMutex_); externalSettled_.erase(layout); }
     // Atlas tier (ppem from sdf_tiers.h) wanted for a layout; returns true when it changed (forces re-collection).
     bool setTier(const Layout* layout, unsigned ppem);
     // Export: generate missing tier glyphs inline (deterministic). Preview: generate off-thread, fall back meanwhile.
@@ -147,6 +148,8 @@ private:
     std::deque<Key> queue_;
     std::set<Key> queued_, failed_;
     std::set<Key> externalInFlight_;
+    // Layouts whose external keys were all ready/retained/failed at the given tier (skip the scan; cleared on eviction).
+    std::map<const Layout*,unsigned> externalSettled_;
     std::map<Key,std::shared_ptr<const SdfGlyph>> ready_;
     std::map<Key,uint64_t> readyUse_;
     size_t readyBytes_=0, cpuBudget_=tiers::CpuBudget;

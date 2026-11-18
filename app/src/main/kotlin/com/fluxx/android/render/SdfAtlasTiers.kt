@@ -41,22 +41,26 @@ object SdfAtlasTiers {
     fun distanceScale(ppem: Int) = (BASE_SPREAD.toFloat() / BASE) / encodableEm(ppem)
     /** Largest px/em a tier serves sharply. */
     fun sharpLimit(ppem: Int) = ppem * MAX_MAGNIFICATION
-    fun lower(ppem: Int) = PPEM.lastOrNull { it < ppem } ?: BASE
+    fun lower(ppem: Int): Int { var result = BASE; for (p in PPEM) if (p < ppem) result = p; return result }
 
     fun pixelsPerEm(size: Float, runScale: Float, glyphScale: Float, layerScale: Float, outputScale: Float): Float {
         val px = abs(size) * abs(runScale) * abs(glyphScale) * abs(layerScale) * abs(outputScale)
         return if (px.isFinite()) px else 0f
     }
     /** Highest tier whose spread still encodes [distanceEm] (stroke + softness + bold) plus the AA margin. */
-    fun maxTierFor(distanceEm: Float) = PPEM.filter { encodableEm(it) >= distanceEm + AA_MARGIN_EM }.maxOrNull() ?: BASE
-    fun ideal(pxPerEm: Float) = PPEM.firstOrNull { pxPerEm <= sharpLimit(it) } ?: PPEM.last()
+    // Loops over the primitive table: these run every preview frame and must not allocate or box (TEXT FIX 9d).
+    fun maxTierFor(distanceEm: Float): Int { var result = BASE; for (p in PPEM) if (encodableEm(p) >= distanceEm + AA_MARGIN_EM && p > result) result = p; return result }
+    fun ideal(pxPerEm: Float): Int { for (p in PPEM) if (pxPerEm <= sharpLimit(p)) return p; return PPEM[PPEM.size - 1] }
 
     /** Tier for this frame with hysteresis around every threshold. [current] is the layer's previous tier. */
-    fun select(pxPerEm: Float, current: Int?, distanceEm: Float = 0f): Int {
-        if (!pxPerEm.isFinite() || pxPerEm <= 0f) return current?.takeIf { it in PPEM } ?: BASE
+    fun select(pxPerEm: Float, current: Int?, distanceEm: Float = 0f): Int = selectTier(pxPerEm, current ?: NO_TIER, distanceEm)
+    /** [select] without boxing: [current] is [NO_TIER] when the layer has no previous tier. */
+    const val NO_TIER = 0
+    fun selectTier(pxPerEm: Float, current: Int, distanceEm: Float = 0f): Int {
+        if (!pxPerEm.isFinite() || pxPerEm <= 0f) return if (current in PPEM) current else BASE
         val cap = maxTierFor(distanceEm)
         val target = min(ideal(pxPerEm), cap)
-        if (current == null || current !in PPEM || current > cap) return target
+        if (current !in PPEM || current > cap) return target
         return when {
             target > current -> if (pxPerEm > sharpLimit(current) * (1 + HYSTERESIS)) target else current
             target < current -> if (pxPerEm < sharpLimit(lower(current)) * (1 - HYSTERESIS)) target else current
@@ -75,14 +79,21 @@ object SdfAtlasTiers {
      * down one tier at a time until it fits. The base tier is never degraded further (native packing decides).
      */
     fun degrade(requests: List<Request>, capBytes: Long): Map<Long, Int> {
-        val tiers = requests.associate { it.id to it.ppem }.toMutableMap()
-        fun bytes() = requests.sumOf { glyphBytes(tiers.getValue(it.id)) * it.glyphs }
-        while (bytes() > capBytes * .85) {
-            val highest = tiers.values.maxOrNull() ?: break
-            if (highest <= BASE) break
-            for ((id, ppem) in tiers) if (ppem == highest) tiers[id] = lower(ppem)
+        val ppems = IntArray(requests.size) { requests[it].ppem }
+        degradeInPlace(ppems, IntArray(requests.size) { requests[it].glyphs }, requests.size, capBytes)
+        return requests.indices.associate { requests[it].id to ppems[it] }
+    }
+    /**
+     * Allocation-free form of [degrade] for the per-frame render path (TEXT FIX 9d: the F1 zero-allocation window):
+     * steps the highest tiers in [ppems] down in place until the estimate fits.
+     */
+    fun degradeInPlace(ppems: IntArray, glyphs: IntArray, count: Int, capBytes: Long) {
+        while (true) {
+            var bytes = 0L; var highest = BASE
+            for (i in 0 until count) { bytes += glyphBytes(ppems[i]) * glyphs[i]; if (ppems[i] > highest) highest = ppems[i] }
+            if (bytes <= capBytes * .85 || highest <= BASE) return
+            for (i in 0 until count) if (ppems[i] == highest) ppems[i] = lower(highest)
         }
-        return tiers
     }
     data class Entry(val ppem: Int, val lastUse: Long)
     /** Order in which cached glyphs leave the atlas under the cap: highest tier first, then least recently used. */

@@ -162,8 +162,9 @@ JNIEXPORT jint JNICALL Java_com_fluxx_android_engine_RenderBridge_awaitTextTiers
 JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_RenderBridge_textTierRequests(JNIEnv* env,jobject,jlong session) {
     try {
         const auto bytes=reinterpret_cast<VulkanRenderer*>(session)->takeTextTierRequests();
+        if(bytes.empty()) return nullptr; // No Java allocation on the steady-state frame path.
         const auto result=env->NewByteArray(static_cast<jsize>(bytes.size()));
-        if(result && !bytes.empty()) env->SetByteArrayRegion(result,0,static_cast<jsize>(bytes.size()),reinterpret_cast<const jbyte*>(bytes.data()));
+        if(result) env->SetByteArrayRegion(result,0,static_cast<jsize>(bytes.size()),reinterpret_cast<const jbyte*>(bytes.data()));
         return result;
     } catch(const std::exception& error) { textFailure(env,error); return nullptr; }
 }

@@ -310,3 +310,219 @@ The test uses the committed OFL fixture `SourceSerif4Variable-Roman.otf`. The fi
 - At 384, 4 bundled glyphs had FreeType holes; the coverage tier has none.
 - The 48 ppem base is unchanged: 2206 glyphs identical, 58 rebuilt.
 - Playfair has 0 holes at every tier.
+
+## 9d. Deferred device suites: results, fixes, findings
+
+### How the suites were run (A16, SM-A165F, Android 16)
+
+- The app and test APKs were installed with `adb install -r` (`-t` for the test APK). App data and projects were kept, and **nothing was uninstalled**.
+- `connectedDebugAndroidTest` was used only with `-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true`, because the default uninstall would delete the user's projects. That task applies only the first class of a comma-separated `class` argument, so the later runs use `am instrument` directly. The long F2 run used a detached `nohup am instrument … > /data/local/tmp/f2b.txt` so a host session loss cannot stop it.
+- Run labels: `textRunLabel=a16-fix9-0N` and `e1aLabel=r28` (the build uses NDK 28.2). Reports are under `Android/data/com.fluxx.android.debug/files/text/<label>/`.
+
+Commands used:
+
+```
+gradle :app:connectedDebugAndroidTest :core-engine:connectedDebugAndroidTest --continue \
+  -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true \
+  -Pandroid.testInstrumentationRunnerArguments.notClass=com.fluxx.android.render.TextF2AcceptanceTest
+adb shell am instrument -w -r -e class <Class[#method],...> -e textRunLabel a16-fix9-0N \
+  com.fluxx.android.debug.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+### Real bugs found by the device suites and fixed here (all inside this task's tier/atlas scope)
+
+1. **Per-frame allocations in the preview loop** (F1 `fiveHundredGlyphsAllocateNothing…`: *Kotlin worker must allocate zero objects*). The measured window held 54,136 objects over 600 frames.
+   - Source: an on-device ART per-thread counter diagnostic (temporary, not committed).
+   - About 70 objects per frame came from the TEXT UI 6 tier policy in `applyTextTiers`:
+     - `HashMap`, `ArrayList` and `Request` objects;
+     - `Long`/`Int` boxing;
+     - `filterNot().toSet()`;
+     - `filter` / `lastOrNull`.
+   - 19 per frame came from the settle check's `FrameRate.frameTimeUs` arithmetic.
+   - 1 per frame came from a `{ false }` default-argument lambda.
+   - 9c's empty JNI tier-request array added 1 more.
+   - **Fix:**
+     - per-layer glyph counts, handle lists and tier arrays are prepared once;
+     - `SdfAtlasTiers.selectTier` and `degradeInPlace` are primitive forms (`select` and `degrade` keep their API and decisions; JVM tests check equivalence);
+     - `textTiers` is only called when a handle's tier changes;
+     - `textTierRequests` returns `null` and is skipped when every layer is on the base tier;
+     - the frame span is cached per frame rate;
+     - one shared `NEVER_CANCELLED` lambda is used as the default;
+     - natively, external tier scans are skipped once a layout's keys have settled, and the layout vector is reused.
+   - **Result on the A16:** `workerThreadAllocDelta` **0** and `nativeNewDelta` **0** in the F1 window. `workerThreadAllocDelta` is also 0 in every F2 report.
+2. **The atlas packer rejected the TEXT UI 6 page cap** (F2 `characterRepresentativeColdAndThermal`: *Invalid atlas page budget*).
+   - TEXT UI 6 configures 6 pages (24 MiB; 3 on low-RAM devices), and the JNI accepts 1–8. `packGlyphPages` still allowed only 4 (an E2 bound).
+   - So a frame that had to grow the atlas past 4 pages threw instead of growing or raising the typed capacity error.
+   - **Fix:** `MaxAtlasPages = 8`. The host `selftest` now asserts that 6 pages are accepted and 9 are rejected.
+3. **Multi-page packing dropped a glyph's other tiers** (F2 `characterRepresentativeColdAndThermal`, second run: *Missing prepared glyph*). Fix 2 exposed this one.
+   - `packGlyphPages` removed glyphs that had been placed on a page by `(fontId, glyphId)`, ignoring the ppem.
+   - When the 48 ppem copy of a glyph landed on page 1, its 192/384 ppem copy, which did not fit on page 1, was discarded instead of carried to page 2.
+   - The glyph was not counted in `rejected`, so `prepareMesh` found no placement for a required glyph.
+   - This has been latent since TEXT UI 6 (tiers). It only shows once tiered text spills past one page.
+   - **Fix:** placed glyphs are identified by bitmap identity (`const SdfGlyph*`).
+   - The host `selftest` adds a two-tier case where the 384 ppem copies only fit on page 2. Every copy must be placed, with 0 rejected.
+
+### Environment-blocked (not product failures)
+
+- **Vulkan validation:** `TextGpuProofTest` and four `TextGpuAcceptanceTest` tests (matrix, capacity, array growth, and the 30-cycle surface/renderer lifecycle), plus the final assertion of F1 and F2 performance, require `VK_LAYER_KHRONOS_validation`.
+  - The official Khronos Android release (1.4.363.1; sha256 matches GitHub's digest) was downloaded to the host scratch folder.
+  - Installing it into the debug app's data directory and enabling `gpu_debug_*` on the phone was blocked by the session's permission policy. Nothing was changed on the phone.
+  - The commands for the user are listed in the final report.
+- **`E1aGoldenExportTest`:** needs `app/src/androidTest/assets/e1a/source.mp4`, which is git-ignored local media that is not present.
+
+### Findings (reported, not changed: design or limits outside this task)
+
+- **60 fps is not met.** F2 frame time on the A16, p50 / p99, at FULL preview:
+  - 660 glyphs: **33–37 / 40–44 ms**;
+  - 720 glyphs, rich: 34 / 40–41 ms;
+  - 4,096 glyphs (maximum, rich maximum, wrapped maximum): **330–341 / 354–365 ms** in run 05, and **434–439 / 449–480 ms** in run 06 (rich and imported maximum, after about 80 min of continuous load).
+
+  The tests assert p99 ≤ 16.7 ms and fail ("report limits before lowering them"). Limits and fixtures were not changed.
+- **Native allocations in the rich and wrapped paths:** `nativeNewDelta` was 624–1,277 per 600-frame window for rich-representative, and 2,063–3,618 for rich/wrapped-maximum. The plain F1/F2 fixtures are 0. This comes from the T1/T3 rich/wrapped mesh path, which this task did not touch.
+- **The idle prewarm counts against F1's preparation counter.**
+  - `TextIdlePrewarm.foreground` (the FIX pass, `85b9de4`) warms 12 bundled faces × 190 scalars on the **shared** base catalog, 1.5 s after the last layout preparation.
+  - Rendering frames does not count as foreground activity, so it runs during playback.
+  - Diagnostic on the A16: +572 rasterisations in the window while it runs, **+0** once it has finished. Atlas uploads, shapes and generation were 0 in both cases, so the render path itself is clean.
+  - F1 and F2-representative "prepared counter 1 changed" is this. Whether the prewarm should pause during playback is a design decision for later.
+- **`characterMaximumColdAndThermal` and `advancedModifierMaximumColdAndThermal` time out** under the 15-minute harness limit at the measured 4096-glyph frame time (see the run 06 results below).
+
+### F2 results, run `a16-fix9-06` (APK with fixes 1–2; detached `am instrument`, 10 tests, 21:50 → 23:11)
+
+`Tests run: 10, Failures: 8`.
+
+- **Passed:**
+  - `characterRandomAndReversePreEncodePixelsMatch`
+  - `randomAndReversePreEncodePixelsMatch`
+
+  Both have pre-encode pixels identical for random and reverse seeks (`matched: true`, 8 seek times).
+- **Frame time.** All of these failures report "p99 exceeds 60fps; report limits before lowering them" and "Vulkan validation failure". The validation failure is environmental: the layer is absent, see above.
+
+  | Fixture (pass 0 cold / pass 1 after 180 s thermal load) | glyphs | frame p50 ms | frame p99 ms | mesh p50 ms | native `new` Δ | Kotlin alloc Δ | worker IPC Δ |
+  |---|---|---|---|---|---|---|---|
+  | t1 rich maximum | 4096 | 438.9 / 437.6 | 477.5 / 470.4 | 10.5 / 10.5 | 3618 / 2063 | 0 / 0 | 0 / 0 |
+  | t2 imported variable maximum | 4096 | 434.4 / 433.9 | 479.9 / 449.5 | 10.6 / 10.5 | 65593 / 24582 | 3 / 0 | 1 / 0 |
+  | t2 imported variable representative | 700 | 39.6 / — | 53.8 / — | 1.6 / — | 27272 / — | 18 / — | 1 / — |
+  | t3 wrapped representative | 720 | 35.6 / 34.8 | 43.6 / 255.9 | 1.7 / 1.6 | 1277 / 624 | 0 / 0 | 0 / 0 |
+  | t4 modifiers representative | 720 | 94.0 / 93.9 | 1602 / 359.9 | 1.6 / 1.6 | 4422 / 624 | 0 / 0 | 0 / 0 |
+  | t4 characters representative | 720 | 105.9 / — | 1631 / — | 2.1 / — | 39566 / — | 0 / — | 0 / — |
+
+- **Also failed on prepared counters:** the rich, imported and modifier maximum or representative pass 0 reports "prepared counter 2/5 changed".
+  - Counters 2 and 5 are atlas uploads and atlas generation (`TextDebugBridge.frameCounters`).
+  - Pass 0 starts 120 frames after the first frame. Sharp tiers generated off-thread arrive inside the window, and the atlas re-uploads once to switch the layer up a tier. This is the TEXT UI 6 asynchronous tier design.
+  - Pass 1 (after warm-up and thermal load) has no change on either counter.
+- **Imported variable (maximum and representative):** pass 0 has 1 worker IPC (`FontWorkerClient.requestCount`, which is process-wide) and 3 and 18 render-thread Kotlin allocations inside the window. This fits one imported-tier fetch (9c): the render thread hands the request bytes from JNI to the tier executor, and the IPC runs there without blocking the frame. The exact frame was not traced.
+  - It is asynchronous: the frame never waits on it.
+  - The harness still counts any IPC during prepared evaluation as a failure. It is listed under Findings.
+- **`characterRepresentativeColdAndThermal`:** *Missing prepared glyph* (bug 3 above, fixed).
+- **`importedVariableRepresentativeColdAndThermal` (run 06):** pass 0 completed. Pass 1 failed with `check(RenderBridge.finish(session))`, meaning `finishFrame` returned false: either the 5 s GPU fence wait expired or `flushBatch` failed.
+  - The log buffer had already wrapped when it was read.
+  - It was re-run with the packer fix and logcat captured (below).
+- **`characterMaximumColdAndThermal` and `advancedModifierMaximumColdAndThermal`:** `TimeoutException`.
+  - The whole test runs under `future.get(15, MINUTES)`. At about 435 ms per 4096-glyph frame, two passes of 720 frames plus 180 s of thermal load and 120 warm-up frames come to about 14–15 min before cold preparation, so the limit expires.
+  - This is a consequence of the frame-time finding, not a hang.
+
+### Re-run after the packer fix (`a16-fix9-07`)
+
+This run used the APK with fixes 1–3. Command:
+
+```
+adb shell "nohup am instrument -w -r -e class com.fluxx.android.render.TextF2AcceptanceTest#characterRepresentativeColdAndThermal,com.fluxx.android.render.TextF2AcceptanceTest#importedVariableRepresentativeColdAndThermal -e textRunLabel a16-fix9-07 com.fluxx.android.debug.test/androidx.test.runner.AndroidJUnitRunner > /data/local/tmp/f2c.txt 2>&1 &"
+```
+
+Result: `Tests run: 2, Failures: 2`. Both tests now **complete both passes**: no *Missing prepared glyph* and no `finish` failure. Logcat for the run (from 00:22, captured this time) has no `VK_ERROR`, device-lost or fence messages. The `finish` failure in run 06 did not reproduce, so it stays a finding. Both remaining failures are the known findings only (p99, validation, native allocations, cold-pass counters, one imported-tier IPC).
+
+| Fixture (pass 0 / pass 1) | glyphs | frame p50 ms | frame p99 ms | mesh p50 ms | native `new` Δ | Kotlin alloc Δ | worker IPC Δ |
+|---|---|---|---|---|---|---|---|
+| t2 imported variable representative | 700 | 27.5 / 28.7 | 35.1 / 32.8 | 1.8 / 1.8 | 73996 / 4334 | 13 / 0 | 1 / 0 |
+| t4 characters representative | 720 | 81.9 / 82.0 | 1607 / 165.5 | 2.2 / 2.1 | 38283 / 1884 | 0 / 0 | 0 / 0 |
+
+`characterMaximumColdAndThermal` was not re-run. The 15-minute harness limit makes a 4096-glyph run at the measured frame time time out regardless of the fix (see above).
+
+## Deviations from the TEXT FIX 9 spec
+
+1. **Tiers above 48 ppem are built from coverage, not FreeType's SDF renderer** (9c).
+   - The tier bitmap is the coverage-correct SDF (`sdf_coverage`) on FreeType's NORMAL-preset grid padded by the spread.
+   - FreeType's SDF has holes at overlapping contours (9b) at every size.
+   - At 48 ppem, FreeType output that passes the coverage check is used byte for byte, and only failing glyphs are rebuilt.
+   - The host `sdfregress` puts bundled tier drift against the previous output at ≤ 0.53/255, with 0 holes.
+2. **Vulkan validation was not enabled on the phone.**
+   - Installing the layer and changing `gpu_debug_*` settings was blocked by this session's permission policy.
+   - As a result:
+     - `TextGpuProofTest` is not run;
+     - four `TextGpuAcceptanceTest` tests are not run;
+     - every performance test also reports "Vulkan validation failure".
+3. **`E1aGoldenExportTest` was not run:** its source video asset is not in the checkout.
+4. **The instrumented runs use `am instrument`, not only `connectedDebugAndroidTest`.**
+   - The Gradle task only honours the first class in a list.
+   - By default it uninstalls the app, which would delete the user's projects.
+5. **The performance limits (60 fps p99, zero native allocations in the rich/wrapped paths, idle-prewarm counters) fail as findings.** As the spec requires, these were reported, not relaxed.
+
+## Tests
+
+- **JVM:** **377 tests, 0 failures** (`gradle testDebugUnitTest`). 357 at the start of TEXT FIX 9, plus 20 new:
+
+  | Commit | New tests |
+  |---|---|
+  | 9a | `FontImportTest` × 7 |
+  | 9b | `TextSdfDiskCacheTest.keyCarriesTheGeneratorVersionAndOlderBitmapsAreNeverReused` |
+  | 9c | `ImportedTierTest` × 8 |
+  | 9d | `PerFrameTierPathTest` × 4 |
+
+- **Existing tests updated:** `ImportedTierTest.importedFacesAndCataloguesSelectTiersLikeBundledText` (9c's own test) now checks the prepared `tierHandles` line instead of the per-frame `map` expression it replaced. No other existing test was changed.
+- **Host (`text-proof.exe core-engine/src/main/assets/fonts …`):** `selftest` PASS (including the 9d page-budget and two-tier packing cases), `sdfregress` PASS, `tierproof` PASS.
+- **Instrumented (A16):**
+
+  | Suite | Result |
+  |---|---|
+  | core-engine `TextCpuProofTest` | 2/2 |
+  | `FontImportAcceptanceTest` | 4/4 |
+  | `ImportedTierAcceptanceTest` | 3/3 |
+  | `TextExplodeAcceptanceTest` | 4/4 |
+  | `TextFixAcceptanceTest` | 2/2 |
+  | `TextInspectorLayoutTest` | 3/3 |
+  | `PaletteRepositoryTest` | 5/5 |
+  | `LayerTransformationTest` | 3/3 |
+  | `PaletteBrowserTest` | pass on rerun |
+  | F1 parity | pass |
+  | F1 zero-allocation window | allocations 0/0 after the fix; fails only on the idle-prewarm counter (finding) |
+  | F2 | parity tests pass; performance tests fail on the findings above |
+  | `TextGpuProofTest`, 4 × `TextGpuAcceptanceTest`, `E1aGoldenExportTest` | blocked (environment) |
+
+## A16 manual test list
+
+Install the debug APK with `adb install -r` (keeps projects). Then:
+
+1. **Import a static font.** Fonts page → Import → pick a static `.ttf` or `.otf`.
+   - "Importing font…" appears, then "Imported <family> (<n> faces)" for about 4 s.
+   - The family appears in the list.
+   - Apply it to a text layer.
+2. **Import a variable font** (Playfair, Vibes or Source Serif variable).
+   - It imports with its named instances and axes.
+   - Weight and optical-size changes apply.
+3. **Import errors are visible.**
+   - Import a non-font file (for example a `.txt` renamed to `.ttf`).
+   - A red error line stays until dismissed.
+   - Leave the app during an import and come back: the status (success or error) is still shown, and the Fonts page is still open.
+4. **Delete and re-import.**
+   - Delete an imported family: layers that use it show the missing-font line.
+   - Import the same file again: those layers render again without restarting.
+5. **Playfair weights.** Playfair variable and the Playfair static faces at Regular, Medium, Bold and Black, upper and lower case, digits and symbols:
+   - no black holes or filled counters (g, p, q, y, e, a, o, 8, @, &);
+   - also at small sizes (24–48 px).
+6. **Sharpness at 300, 500 and 1000 px.** Set the text size (or the layer scale) so that letters are about 300, 500 and 1000 px tall in the preview, for bundled Sans/Serif/Mono and for an imported static and variable font:
+   - edges and corners stay crisp after a brief settle (≤ 1 s), with no blur and no rounded corners;
+   - export a short clip and check the same frames in the exported video.
+7. **Explode and animated sharpness.**
+   - Apply Explode, or a per-character scale-up animator, to large imported text.
+   - The magnified glyphs are as sharp as static text of that size.
+   - No flicker when scrubbing back and forth across the animation.
+8. **Worker crash tolerance.** The isolated `:font_worker` runs under its own uid, so a non-root `adb shell kill` cannot stop it. Use the instrumented check instead:
+   `adb shell am instrument -w -e class com.fluxx.android.fonts.ImportedTierAcceptanceTest#workerCrashDegradesToTheLowerTierWithAnError com.fluxx.android.debug.test/androidx.test.runner.AndroidJUnitRunner`.
+   It kills the worker mid-request, then checks that the lower tier stays in use with an error (no app crash) and that the next request succeeds. Afterwards, open the app and check that large imported text still renders sharply.
+9. **Scrubbing performance with large imported text.**
+   - A project with a 1080×1920 composition, one paragraph of about 600 characters in an imported variable font at 100+ px, and one animator.
+   - Scrub quickly for 30 s: no stalls longer than a frame or two, no "font worker timed out" error, and no growth in app memory in Android Studio's profiler after the scrub.
+10. **Regression.**
+    - Bundled fonts and the Fonts page browse/search work.
+    - Text inspector pages work.
+    - Save and reopen a project with imported fonts: the fonts resolve and the text renders the same.
