@@ -30,6 +30,14 @@ class FontLibraryRepository private constructor(private val context: Context) {
         mutable.value=if(index.exists() || File(index.path+".bak").exists()) FontMetadataCodec.decode(AtomicFile(index).readFully()) else emptyList()
         loaded=true
     }
+    private val importer=FontImportRunner<Uri>(worker) { uri ->
+        try { import(uri) } catch(failure: Throwable) { android.util.Log.w(TAG,"Font import failed",failure);throw failure }
+    }
+    /** The last import's outcome; survives the Fonts page leaving composition. */
+    val importStatus=importer.status
+    /** Starts an import in the repository scope (never a composition scope); the result arrives via [importStatus]. */
+    fun startImport(uri: Uri)=importer.start(uri)
+    fun dismissImportStatus()=importer.dismiss()
     /** SAF grants are used only during this import; no persistent grant or online download. */
     suspend fun import(uri: Uri,faces: Set<Int>?=null): FontLibraryEntry=worker.async {
         val staging=File.createTempFile("font-import-",".bin",context.cacheDir)
@@ -52,23 +60,22 @@ class FontLibraryRepository private constructor(private val context: Context) {
             val selected=inspected.filter { faces==null || it.index in faces }
             val imported=lock.withLock {
                 loadLocked()
-                val existing=mutable.value.find { it.sha256==hash }
-                val entry=FontLibraryEntry(hash,staging.length(),(existing?.faces.orEmpty()+selected).distinctBy { it.index }.sortedBy { it.index })
-                val next=mutable.value.filterNot { it.sha256==hash }+entry
+                val (entry,next)=FontLibraryIndex.add(mutable.value,hash,staging.length(),selected)
                 val encoded=FontMetadataCodec.encode(next) // Limits checked before any permanent write.
                 val file=AtomicFile(File(directory,hash));val stream=file.startWrite()
                 try { staging.inputStream().use { it.copyTo(stream) };file.finishWrite(stream) }
                 catch(e: Exception) { file.failWrite(stream);throw e }
                 writeIndex(encoded);revision=Math.addExact(revision,1);mutable.value=next;entry
             }
-            for(face in imported.faces) com.fluxx.android.render.TextIdlePrewarm.imported(context,face.reference(imported.sha256))
+            // Background warm-up only: it can never fail or stall the import.
+            for(face in imported.faces) runCatching { com.fluxx.android.render.TextIdlePrewarm.imported(context,face.reference(imported.sha256)) }
             imported
         } finally { staging.delete() }
     }.await()
     /** Caller supplies the existing confirmation dialog; requested project refs are untouched. */
     suspend fun delete(hash: String)=worker.async { lock.withLock {
         require(hash.matches(Regex("[a-f0-9]{64}")));loadLocked()
-        val next=mutable.value.filterNot { it.sha256==hash }
+        val next=FontLibraryIndex.remove(mutable.value,hash)
         if(next.size!=mutable.value.size) {
             writeIndex(FontMetadataCodec.encode(next));revision=Math.addExact(revision,1);mutable.value=next
             AtomicFile(File(directory,hash)).delete()
@@ -105,6 +112,7 @@ class FontLibraryRepository private constructor(private val context: Context) {
         catch(e: Exception) { atomic.failWrite(stream);throw e }
     }
     companion object {
+        private const val TAG="FluxxFonts"
         @Volatile private var instance: FontLibraryRepository?=null
         fun getInstance(context: Context)=instance ?: synchronized(this) {
             instance ?: FontLibraryRepository(context.applicationContext).also { instance=it }

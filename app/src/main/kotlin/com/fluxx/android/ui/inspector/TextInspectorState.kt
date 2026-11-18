@@ -200,6 +200,11 @@ internal sealed interface TextInspectorMode {
     data object Fonts: TextInspectorMode
 }
 
+/** Which page survives the activity stopping (the system font picker stops it): only Fonts; drafts always cancel. */
+internal object TextInspectorLifecycle {
+    fun afterStop(mode: TextInspectorMode): TextInspectorMode=if(mode==TextInspectorMode.Fonts) mode else TextInspectorMode.Browse
+}
+
 /** Receives one colour interaction: begin once, live previews, then finish (one undo entry) or cancel. */
 internal interface TextDraftSink { fun begin(); fun preview(payload: TextProperties); fun finish(); fun cancel() }
 

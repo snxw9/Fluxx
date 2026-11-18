@@ -141,10 +141,14 @@ import kotlinx.coroutines.delay
         if(mode==TextInspectorMode.Fonts && axisSnapshot!=null) {onCancel();axisSnapshot=null}
         mode=TextInspectorMode.Browse
     }
+    /**
+     * Backgrounding cancels every live draft. It does NOT leave the Fonts page: the system font picker stops this
+     * activity, and leaving the page then disposed the picker launcher, silently dropping the chosen file (TEXT FIX 9).
+     */
     fun cancelAll() {
         numericCancel();colourSession.cancel();popoverName=null
         if(mode==TextInspectorMode.Source || axisSnapshot!=null) onCancel()
-        axisSnapshot=null;manager.clearFocus();mode=TextInspectorMode.Browse
+        axisSnapshot=null;manager.clearFocus();mode=TextInspectorLifecycle.afterStop(mode)
     }
     val lifecycle=LocalLifecycleOwner.current
     val context=LocalContext.current

@@ -34,7 +34,26 @@ internal sealed interface FontFamilyItem {
     data class Imported(override val name: String,val faces: List<Pair<FontLibraryEntry,FontFaceMetadata>>): FontFamilyItem
 }
 
+/** One status line on the Fonts page; errors are tappable to dismiss. */
+internal data class FontStatusLine(val text: String,val kind: Kind,val dismissible: Boolean) {enum class Kind {ERROR,WORKING,DONE,MISSING}}
+
 internal object TextFontsModel {
+    /** How long the "Imported …" confirmation stays. */
+    const val CONFIRMATION_MS=4_000L
+    /**
+     * Status lines in priority order: page errors (load/delete), import failure, import progress / confirmation, then the
+     * missing-font notice. Nothing hides an error any more (the old ordered `when` let the missing line win).
+     */
+    fun statusLines(error: String?,status: FontImportStatus,missing: String?): List<FontStatusLine> = buildList {
+        if(error!=null) add(FontStatusLine(error,FontStatusLine.Kind.ERROR,true))
+        when(status) {
+            is FontImportStatus.Failed->add(FontStatusLine(status.message,FontStatusLine.Kind.ERROR,true))
+            FontImportStatus.Importing->add(FontStatusLine("Importing font…",FontStatusLine.Kind.WORKING,false))
+            is FontImportStatus.Imported->add(FontStatusLine("Imported ${status.family} (${status.faces} ${if(status.faces==1) "face" else "faces"})",FontStatusLine.Kind.DONE,true))
+            FontImportStatus.Idle->Unit
+        }
+        if(missing!=null) add(FontStatusLine(missing,FontStatusLine.Kind.MISSING,false))
+    }
     val BUNDLED=listOf("fluxx.sans" to "Inter","fluxx.serif" to "Noto Serif","fluxx.mono" to "JetBrains Mono")
     fun bundledBase(id: String)=id.removeSuffix(".bold-italic").removeSuffix(".italic").removeSuffix(".bold")
     /** Default first, then bundled, then imported faces grouped by family name; filtered by the search text. */
@@ -64,7 +83,8 @@ internal object TextFontsModel {
     val context=LocalContext.current;val repository=remember(context) {FontLibraryRepository.getInstance(context)}
     val entries by repository.state.collectAsState();val scope=rememberCoroutineScope()
     var search by remember {mutableStateOf("")};var error by remember {mutableStateOf<String?>(null)}
-    var importing by remember {mutableStateOf(false)};var deletion by remember {mutableStateOf<List<FontLibraryEntry>?>(null)}
+    val importStatus by repository.importStatus.collectAsState();val importing=importStatus is FontImportStatus.Importing
+    var deletion by remember {mutableStateOf<List<FontLibraryEntry>?>(null)}
     var browsing by remember {mutableStateOf<FontFamilyItem?>(null)}
     var axisOpen by remember {mutableStateOf<String?>(null)}
     val applied=TextFontsModel.selected(reference,entries)
@@ -72,11 +92,11 @@ internal object TextFontsModel {
     val families=remember(entries,search) {TextFontsModel.families(entries,search)}
     val selectedEntry=entries.find {it.sha256==reference?.sha256}
     val selectedFace=selectedEntry?.faces?.find {it.index==reference?.faceIndex}
-    LaunchedEffect(repository) {runCatching {repository.load()}.onFailure {error=it.message}}
-    val importer=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->if(uri!=null) scope.launch {
-        importing=true;error=null
-        try {repository.import(uri)} catch(failure: Exception) {error=failure.message ?: "Font import failed"} finally {importing=false}
-    }}
+    LaunchedEffect(repository) {runCatching {repository.load()}.onFailure {error=FontImportErrors.message(it)}}
+    // The import runs in the repository scope: leaving this page or recomposing can never cancel it or lose its result.
+    val importer=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->if(uri!=null) repository.startImport(uri)}
+    // A success confirmation is brief; errors stay until tapped or the next action.
+    LaunchedEffect(importStatus) {if(importStatus is FontImportStatus.Imported) {kotlinx.coroutines.delay(TextFontsModel.CONFIRMATION_MS);repository.dismissImportStatus()}}
     Column(modifier.testTag("text-fonts")) {
         Row(Modifier.fillMaxWidth().height(hit),verticalAlignment=Alignment.CenterVertically) {
             Row(Modifier.weight(1f).height(36.dp).clip(RoundedCornerShape(10.dp)).background(SurfaceHigh).padding(horizontal=8.dp),verticalAlignment=Alignment.CenterVertically) {
@@ -87,9 +107,9 @@ internal object TextFontsModel {
                         if(search.isEmpty()) Text("Find font",style=MaterialTheme.typography.bodySmall,color=TextSecondary,maxLines=1)
                         inner()}})
             }
-            InspectorIconButton(InspectorIcons.icon("IMPORT"),if(importing) "Importing font" else "Import font",enabled=!importing) {importer.launch(arrayOf("*/*"))}
+            InspectorIconButton(InspectorIcons.icon("IMPORT"),if(importing) "Importing font" else "Import font",enabled=!importing) {error=null;repository.dismissImportStatus();importer.launch(arrayOf("*/*"))}
             val imported=family as? FontFamilyItem.Imported
-            InspectorIconButton(InspectorIcons.icon("DELETE"),"Delete imported font file",enabled=imported!=null && !importing) {deletion=imported?.faces?.map {it.first}?.distinctBy {it.sha256}}
+            InspectorIconButton(InspectorIcons.icon("DELETE"),"Delete imported font file",enabled=imported!=null && !importing) {error=null;repository.dismissImportStatus();deletion=imported?.faces?.map {it.first}?.distinctBy {it.sha256}}
         }
         when {
             deletion!=null -> Row(Modifier.fillMaxWidth().height(hit),verticalAlignment=Alignment.CenterVertically) {
@@ -97,12 +117,16 @@ internal object TextFontsModel {
                 Text("Delete ${files.size} file(s), ${files.sumOf {it.faces.size}} faces? Projects keep the request.",Modifier.weight(1f),color=TextPrimary,
                     maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall)
                 TextButton(onClick={deletion=null}) {Text("Cancel",color=TextSecondary)}
-                TextButton(onClick={deletion=null;browsing=null;scope.launch {files.forEach {f->runCatching {repository.delete(f.sha256)}.onFailure {error=it.message}}}}) {Text("Delete",color=TextPrimary)}
+                TextButton(onClick={deletion=null;browsing=null;scope.launch {files.forEach {f->try {repository.delete(f.sha256)} catch(failure: Throwable) {if(failure is kotlinx.coroutines.CancellationException) throw failure;error=FontImportErrors.message(failure)}}}}) {Text("Delete",color=TextPrimary)}
             }
-            reference?.sha256!=null && selectedFace==null -> Text("Requested ${reference.family} ${reference.styleName} missing · Inter fallback · identity retained",
-                maxLines=1,overflow=TextOverflow.Ellipsis,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.labelSmall)
-            error!=null -> Text(error.orEmpty(),color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.labelSmall,maxLines=1,overflow=TextOverflow.Ellipsis)
         }
+        // Every status line is shown, errors first: the missing-font line can no longer hide an import/delete/load error.
+        val missing=if(reference?.sha256!=null && selectedFace==null) "Requested ${reference.family} ${reference.styleName} missing · Inter fallback · identity retained" else null
+        for(line in TextFontsModel.statusLines(error,importStatus,missing)) Text(line.text,
+            Modifier.fillMaxWidth().testTag("text-fonts-status-${line.kind.name.lowercase()}").then(if(line.dismissible) Modifier.clickable(onClickLabel="Dismiss") {
+                if(line.text==error) error=null else repository.dismissImportStatus()} else Modifier),
+            color=if(line.kind==FontStatusLine.Kind.ERROR) MaterialTheme.colorScheme.error else TextSecondary,
+            style=MaterialTheme.typography.labelSmall,maxLines=2,overflow=TextOverflow.Ellipsis)
         Row(Modifier.weight(1f).fillMaxWidth().padding(top=2.dp)) {
             LazyColumn(Modifier.weight(1.1f).fillMaxHeight().testTag("text-fonts-families")) {
                 items(families,key={it.name+(it as? FontFamilyItem.Bundled)?.id}) {item->

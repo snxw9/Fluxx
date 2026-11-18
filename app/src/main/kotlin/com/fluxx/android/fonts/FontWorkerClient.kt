@@ -16,11 +16,14 @@ class FontWorkerClient(context: Context) {
         require(input.length() in 1..FontWorkerService.MAX_FONT_BYTES.toLong()) { "Font files must be nonempty and at most 16 MiB" }
         val output=File.createTempFile("font-metadata-",".json",context.cacheDir)
         try {
-            withTimeout(60_000) { request(input,output) }
+            bounded { request(input,output) }
             require(output.length() in 1..FontWorkerService.MAX_METADATA_BYTES.toLong()) { "Invalid font metadata size" }
             output.readText(Charsets.UTF_8)
         } finally { output.delete() }
     }
+    /** A worker that never answers ends the call (and releases its binding) with a visible timeout error. */
+    private suspend fun <T> bounded(block: suspend () -> T): T=try { withTimeout(FontImportErrors.WORKER_TIMEOUT_MS) { block() } }
+        catch(e: TimeoutCancellationException) { throw FontWorkerTimeoutException(FontImportErrors.TIMEOUT_MESSAGE) }
     data class FontInput(val id: String,val file: File,val reference: TextFontRef)
     suspend fun prepare(input: ByteArray,fonts: List<FontInput>,ligatures: Boolean,nominal: Boolean=false,seeds: ByteArray=ByteArray(0)): ByteArray=withContext(Dispatchers.IO) {
         require(input.size<=1024*1024 && fonts.size<=64)
@@ -34,7 +37,7 @@ class FontWorkerClient(context: Context) {
             require(seeds.size<=8*1024*1024);cached.writeBytes(seeds)
             val preparationFileNs=System.nanoTime()-transferStart
             val ipcStart=System.nanoTime()
-            withTimeout(60_000) { request(source,output,FontWorkerService.PREPARE,fonts,ligatures,nominal,cached) }
+            bounded { request(source,output,FontWorkerService.PREPARE,fonts,ligatures,nominal,cached) }
             com.fluxx.android.render.TextEditTimings.record("ipc_round_trip",System.nanoTime()-ipcStart)
             require(output.length() in 1..32L*1024*1024) { "Prepared text packet exceeds 32 MiB" }
             val readStart=System.nanoTime()
