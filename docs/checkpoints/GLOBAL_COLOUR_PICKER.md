@@ -1,5 +1,7 @@
 # Global colour picker and inspector grid
 
+> **TEXT UI 8 (2026-11-18):** the FULL variant's controls row is exactly the SV square (no stretch), and the picker is centred vertically in leftover height. The marker popover uses COMPACT with `header = false`. See `TEXT_UI_OVERHAUL.md`, section TEXT UI 8.
+
 > **TEXT UI 7 (2026-11-18):** `FluxxColorPicker` was replaced by the shared `FluxxColourPicker` family (COMPACT popover / FULL page; in-place hex, alpha and RGB entry, one undo per interaction). See `TEXT_UI_OVERHAUL.md`, section TEXT UI 7. The palette repository, eyedropper and hex rules below are unchanged; the layout notes describe the pre-TEXT UI 7 picker.
 
 ## Status — 2026-09-22

@@ -90,7 +90,9 @@ import com.fluxx.android.model.ProjectDocument
 import com.fluxx.android.model.Marker
 import com.fluxx.android.model.Markers
 import androidx.compose.runtime.CompositionLocalProvider
+import com.fluxx.android.ui.inspector.AnchoredPopover
 import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.semantics.semantics
@@ -138,7 +140,6 @@ private fun ExactTimelineTargets(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalViewConfiguration provides exact, content = content)
 }
 
-private data class MarkerDraft(val layerId: Long?, val marker: Marker, val existing: Boolean)
 
 @Composable
 fun TimelineView(
@@ -166,7 +167,41 @@ fun TimelineView(
     val comp = project.composition
     val context = LocalContext.current
     val selectedLayer = comp.layers.firstOrNull { it.id == selectedLayerId }
-    var markerDraft by remember { mutableStateOf<MarkerDraft?>(null) }
+    // TEXT UI 8: one anchored marker popover (description + COMPACT picker), no dialog, no buttons.
+    val popoverConfiguration = LocalViewConfiguration.current
+    var markerSession by remember { mutableStateOf<MarkerEditSession?>(null) }
+    var markerPopoverOpen by remember { mutableStateOf(false) }
+    val gestureBegin by rememberUpdatedState(onBeginGesture)
+    val gesturePreview by rememberUpdatedState(onPreviewGesture)
+    val gestureCommit by rememberUpdatedState(onCommitGesture)
+    val gestureCancel by rememberUpdatedState(onCancelGesture)
+    val markerSink = remember { object : MarkerGestureSink {
+        override fun begin() = gestureBegin()
+        override fun preview(action: EditorAction) = gesturePreview(action)
+        override fun commit() = gestureCommit()
+        override fun cancel() = gestureCancel()
+    } }
+    fun closeMarkerPopover() { markerSession?.close(); markerPopoverOpen = false }
+    fun openMarkerPopover(ref: MarkerRef, marker: Marker) {
+        markerSession?.close()
+        markerSession = MarkerEditSession(ref, marker, markerSink)
+        markerPopoverOpen = true
+    }
+    // Removing the marker (playhead tap, undo, layer deletion) closes its popover.
+    val editedMarkerExists = markerSession?.let { MarkerEditing.find(project, it.ref) != null } ?: false
+    LaunchedEffect(editedMarkerExists) {
+        if (!editedMarkerExists) { markerSession?.detach(); markerSession = null; markerPopoverOpen = false }
+    }
+    val markerPopover: @Composable () -> Unit = {
+        markerSession?.let { session ->
+            AnchoredPopover(markerPopoverOpen, { closeMarkerPopover() }, "marker-popover") {
+                // The timeline zeroes touch-target padding; the popover's controls get the normal minimum back.
+                CompositionLocalProvider(LocalViewConfiguration provides popoverConfiguration) { MarkerPopoverContent(session) }
+            }
+        }
+    }
+    // A retained layer marker outside the trimmed clip has no glyph on the bar: its popover anchors to the playhead target.
+    val markerOnBar = markerSession?.ref?.let { MarkerEditing.drawnOnBar(project, it) } ?: true
     fun tapMarker(owner: Long?, marker: Marker) {
         val anchor = comp.layers.firstOrNull { it.id == owner }?.resolvedKeyframeAnchorUs ?: 0L
         if (comp.frameRate.nearestFrame(playheadUs) == comp.frameRate.nearestFrame(Math.addExact(anchor, marker.timeUs))) {
@@ -174,60 +209,30 @@ fun TimelineView(
                 else EditorAction.DeleteLayerMarker(owner, marker.id))
         } else onMarkerSelect(owner, marker)
     }
-    fun playheadMarker(configure: Boolean) {
-        val time = comp.frameRate.snap(playheadUs)
-        val markers = selectedLayer?.markers ?: comp.markers
-        val anchor = selectedLayer?.resolvedKeyframeAnchorUs ?: 0L
-        val existing = Markers.atFrame(markers, anchor, time, comp.frameRate)
-        if (existing == null && selectedLayer != null && (playheadUs < selectedLayer.timing.startUs ||
-                playheadUs >= (selectedLayer.timing.endUs ?: Long.MAX_VALUE) ||
-                time < selectedLayer.timing.startUs || time >= (selectedLayer.timing.endUs ?: Long.MAX_VALUE))) {
-            android.widget.Toast.makeText(context, "Playhead outside selected layer", android.widget.Toast.LENGTH_SHORT).show()
-            return
-        }
+    fun playheadMarker(hold: Boolean) {
         val defaultColor = when {
-            selectedLayer == null -> Color(0xFFF44336)
+            selectedLayer == null -> MarkerEditing.COMPOSITION_DEFAULT
             selectedLayer.type == LayerType.SOLID -> {
                 val background = Color(selectedLayer.solidColorArgb).compositeOver(Background)
-                if (background.luminance() > .179f) Color(0xFF191919) else Color(0xFFFFC107)
+                (if (background.luminance() > .179f) Color(0xFF191919) else Color(0xFFFFC107)).toArgb()
             }
-            else -> Color(0xFFFF9800)
+            else -> MarkerEditing.LAYER_DEFAULT
         }
-        val marker = existing ?: Marker(Math.addExact(markers.maxOfOrNull { it.id } ?: 0L, 1L),
-            Math.subtractExact(time, anchor), defaultColor.toArgb())
-        if (configure) {
-            onMarkerConfigure()
-            markerDraft = MarkerDraft(selectedLayerId, marker, existing != null)
-        } else if (existing != null) {
-            onMarkerAction(if (selectedLayerId == null) EditorAction.DeleteCompositionMarker(existing.id)
-                else EditorAction.DeleteLayerMarker(selectedLayerId, existing.id))
-        }
-        else {
-            onMarkerAction(if (selectedLayerId == null) EditorAction.AddCompositionMarker(marker)
-                else EditorAction.AddLayerMarker(selectedLayerId, marker))
-            onMarkerSelect(selectedLayerId, marker)
-        }
-    }
-    markerDraft?.let { draft ->
-        MarkerDialog(draft.marker, draft.existing, onDismiss = { markerDraft = null }, onSave = { marker ->
-            val owner = draft.layerId
-            if (owner == null || comp.layers.any { it.id == owner }) {
-                onMarkerAction(if (owner == null) {
-                    if (draft.existing) EditorAction.EditCompositionMarker(marker.id, marker.colorArgb, marker.description)
-                    else EditorAction.AddCompositionMarker(marker)
-                } else {
-                    if (draft.existing) EditorAction.EditLayerMarker(owner, marker.id, marker.colorArgb, marker.description)
-                    else EditorAction.AddLayerMarker(owner, marker)
-                })
-                onMarkerSelect(owner, marker)
+        when (val result = MarkerEditing.playhead(project, selectedLayer, playheadUs, hold, defaultColor)) {
+            MarkerEditing.PlayheadResult.OutsideLayer ->
+                android.widget.Toast.makeText(context, "Playhead outside selected layer", android.widget.Toast.LENGTH_SHORT).show()
+            is MarkerEditing.PlayheadResult.Remove -> onMarkerAction(result.action)
+            is MarkerEditing.PlayheadResult.Create -> {
+                onMarkerConfigure()
+                onMarkerAction(result.action)
+                onMarkerSelect(result.ref.layerId, result.marker)
+                openMarkerPopover(result.ref, result.marker)
             }
-            markerDraft = null
-        }, onDelete = {
-            val owner = draft.layerId
-            if (owner == null) onMarkerAction(EditorAction.DeleteCompositionMarker(draft.marker.id))
-            else if (comp.layers.any { it.id == owner }) onMarkerAction(EditorAction.DeleteLayerMarker(owner, draft.marker.id))
-            markerDraft = null
-        })
+            is MarkerEditing.PlayheadResult.Edit -> {
+                onMarkerConfigure()
+                openMarkerPopover(result.ref, result.marker)
+            }
+        }
     }
     val durationUs = comp.resolvedDurationUs
 
@@ -394,6 +399,8 @@ fun TimelineView(
                             markers = comp.markers,
                             visibleStartUs = ((horizontalScrollState.value - centerXPx) / pxPerUs).toLong().coerceAtLeast(0),
                             visibleEndUs = ((horizontalScrollState.value + centerXPx) / pxPerUs).toLong().coerceAtMost(durationUs),
+                            popoverMarkerId = markerSession?.ref?.takeIf { it.layerId == null }?.id,
+                            popover = markerPopover,
                             onMarkerSelect = { tapMarker(null, it) },
                             onSeek = { onMarkerAction(EditorAction.SelectMarker(null)); onSeek(it, false) }
                         )
@@ -436,6 +443,8 @@ fun TimelineView(
                                         isSelected = layer.id == selectedLayerId,
                                         activeProperty = activeProperty,
                                         onMarkerSelect = { tapMarker(layer.id, it) },
+                                        popoverMarkerId = markerSession?.ref?.takeIf { it.layerId == layer.id && markerOnBar }?.id,
+                                        popover = markerPopover,
                                         onDragSelect = { onDragSelect(layer.id) },
                                         pxPerUs = pxPerUs,
                                         playheadUs = playheadUs,
@@ -481,6 +490,7 @@ fun TimelineView(
                 playheadUs = Math.addExact(comp.startTimecodeUs, playheadUs),
                 frameRate = comp.frameRate,
                 marker = Markers.active(project, selectedLayer, playheadUs),
+                playheadPopover = if (markerOnBar) null else markerPopover,
                 onTap = { playheadMarker(false) },
                 onHold = { playheadMarker(true) },
                 modifier = Modifier
@@ -589,6 +599,8 @@ private fun TimelineRuler(
     visibleStartUs: Long,
     visibleEndUs: Long,
     onMarkerSelect: (Marker) -> Unit,
+    popoverMarkerId: Long?,
+    popover: @Composable () -> Unit,
     onSeek: (Long) -> Unit
 ) {
     val selectMarker by rememberUpdatedState(onMarkerSelect)
@@ -603,7 +615,7 @@ private fun TimelineRuler(
         timelineTickSteps(frameRate, pxPerUs, with(density) { 6.dp.toPx().toDouble() },
             with(density) { 48.dp.toPx().toDouble() })
     }
-    ExactTimelineTargets {
+    ExactTimelineTargets { Box(Modifier.fillMaxWidth().height(RULER_HEIGHT_DP.dp)) {
         Canvas(Modifier.fillMaxWidth().height(RULER_HEIGHT_DP.dp).background(Background)
             .pointerInput(durationUs, pxPerUs, markers) {
                 detectTapGestures { offset ->
@@ -657,7 +669,13 @@ private fun TimelineRuler(
                 }
             }
         }
-    }
+        // The marker popover is anchored to the pentagon itself (16..28dp of the ruler).
+        markers.firstOrNull { it.id == popoverMarkerId }?.let { edited ->
+            val x = with(density) { (edited.timeUs * pxPerUs).toFloat().toDp() }
+            Box(Modifier.offset(x = x - 4.5.dp, y = MARKER_PENTAGON_TOP_DP.dp).size(9.dp, (MARKER_PENTAGON_BOTTOM_DP - MARKER_PENTAGON_TOP_DP).dp)
+                .testTag("composition-marker-anchor")) { popover() }
+        }
+    } }
 }
 /**
  * Individual Timeline Clip Row: reproduces the layer structure from the reference screenshot
@@ -670,6 +688,8 @@ private fun TimelineClipRow(
     isSelected: Boolean,
     activeProperty: AnimPropertyType?,
     onMarkerSelect: (Marker) -> Unit,
+    popoverMarkerId: Long?,
+    popover: @Composable () -> Unit,
     onDragSelect: () -> Unit,
     scrollOffsetPx: Int,
     onMoveEdge: (Float?) -> Unit,
@@ -860,6 +880,7 @@ private fun TimelineClipRow(
         }
         val diamondPath = remember { Path() }
         val markerStroke = remember(density) { Stroke(width = with(density) { 1.5.dp.toPx() }) }
+        val knockoutStroke = remember(density) { Stroke(width = with(density) { LayerKeyMarkers.KNOCKOUT_STROKE_DP.dp.toPx() }) }
         // Keep pointer nodes stable while the transient document moves/reorders the markers.
         var dragTimes by remember(layer.id) { mutableStateOf<List<Long>?>(null) }
         var movingFrom by remember(layer.id) { mutableStateOf<Long?>(null) }
@@ -890,8 +911,8 @@ private fun TimelineClipRow(
                         Box(
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
-                                .offset(x = kfOffsetDp - 24.dp)
-                                .size(width = 48.dp, height = TRACK_ROW_HEIGHT_DP.dp)
+                                .offset(x = kfOffsetDp - (LayerKeyMarkers.HIT_WIDTH_DP / 2).dp)
+                                .size(width = LayerKeyMarkers.HIT_WIDTH_DP.dp, height = TRACK_ROW_HEIGHT_DP.dp)
                                 .then(if (editable) Modifier.pointerInput(kfTimeUs, startUs, anchorOffsetUs, activeProperty) {
                                     detectTapGestures(
                                         onTap = {
@@ -935,12 +956,14 @@ private fun TimelineClipRow(
                                         }
                                     )
                                 } else Modifier),
-                            contentAlignment = Alignment.BottomCenter
+                            contentAlignment = Alignment.Center
                         ) {
                             // Focused-property keys: full ink, normal size. Other properties: quiet (dimmed, smaller), display only.
+                            // Centred on the bar midline, above the layer name, with a knock-out ring in the bar colour.
                             val marker = LayerKeyMarkers.Marker(kfTimeUs, editable)
-                            Canvas(modifier = Modifier.padding(bottom = LayerKeyMarkers.BOTTOM_INSET_DP.dp).size(marker.sizeDp.dp).alpha(marker.alpha)) {
+                            Canvas(modifier = Modifier.size(marker.sizeDp.dp).alpha(marker.alpha)) {
                                 LayerKeyMarkers.diamond(diamondPath, size)
+                                drawPath(path = diamondPath, color = clipBgColor, style = knockoutStroke)
                                 if (isAtPlayhead) {
                                     drawPath(
                                         path = diamondPath,
@@ -988,7 +1011,7 @@ private fun TimelineClipRow(
                             contentDescription = "Layer marker: ${marker.description}"
                             onClick { selectMarker(marker); true }
                         }) {
-                        Canvas(Modifier.offset(x = x - left - 4.dp).size(8.dp, 7.dp)) {
+                        Box(Modifier.offset(x = x - left - 4.dp).size(8.dp, 7.dp)) { Canvas(Modifier.matchParentSize()) {
                             val flag = Path().apply {
                                 moveTo(0f, 0f); lineTo(size.width, 0f)
                                 lineTo(size.width / 2, size.height); close()
@@ -996,6 +1019,9 @@ private fun TimelineClipRow(
                             drawPath(flag, Color(marker.colorArgb))
                             val outline = if (Color(marker.colorArgb).luminance() > .179f) Color.Black else Color.White
                             drawPath(flag, outline, style = Stroke(.75.dp.toPx()))
+                        }
+                            // The marker popover is anchored to this triangle above the layer bar.
+                            if (marker.id == popoverMarkerId) popover()
                         }
                     }
                     if (marker.description.isNotBlank()) {
@@ -1024,6 +1050,7 @@ private fun StationaryTimelinePlayhead(
     marker: Marker?,
     onTap: () -> Unit,
     onHold: () -> Unit,
+    playheadPopover: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val tint = marker?.let { Color(it.colorArgb) } ?: Highlight
@@ -1071,7 +1098,7 @@ private fun StationaryTimelinePlayhead(
                     contentDescription = "Playhead marker"
                     onClick("Add or remove marker") { tap(); true }
                     onLongClick("Configure marker") { hold(); true }
-                })
+                }) { playheadPopover?.invoke() }
         }
     }
 }

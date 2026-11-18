@@ -46,49 +46,93 @@ class RailAndRulerLayoutTest {
             assertTrue("rail fits at $height/$scale",2*RailBudget.TILE+2*d+3*RailBudget.GAP<=h+1e-3f)
         }
     }
-    @Test fun scaleRulerUsesTheFreedHeightAndAlwaysFits() {
-        // Defaults unchanged for callers without a budget.
-        assertEquals(48f,ScaleRulerMath.STRIP_DP,0f);assertEquals(76f,ScaleRulerMath.rulerHeight(1f),0f)
-        val content=InspectorChromeBudget.contentHeight(268f,1f)
-        // 268, linked: larger readout and the tallest strip; unlinked Width + Height both at 64dp too (204 ≤ 208).
-        assertEquals(SectionLayout.Ruler(32f,64f,4f,1f),SectionLayout.ruler(content,true,1f))
-        assertEquals(SectionLayout.Ruler(32f,64f,4f,1f),SectionLayout.ruler(content,false,1f))
-        assertEquals(204f,SectionLayout.scaleController(content,false,1f),1e-3f)
-        for((_,scale,height) in sheets) for(linked in listOf(true,false)) {
-            val h=InspectorChromeBudget.contentHeight(height,scale)
-            val r=SectionLayout.ruler(h,linked,scale)
-            assertTrue("strip never shrinks below 48 at $height/$scale",r.strip>=SectionLayout.STRIP_MIN)
-            assertTrue("strip larger than TEXT UI 6 at $height/$scale",r.strip>=ScaleRulerMath.STRIP_DP)
-            assertTrue("ruler fits at $height/$scale linked=$linked",SectionLayout.scaleController(h,linked,scale)<=h+1e-3f)
-        }
+    // ---- TEXT UI 8: fixed, moderate, consistent control sizes + vertical centring ------------------------------
+    private val scales=listOf(1f,1.3f,2f)
+    private val picker=com.fluxx.android.ui.common.colorpicker.ColourPickerLayout
+    private fun src(path: String)=java.io.File("src/main/kotlin/com/fluxx/android/$path").readText()
+    private fun groups(scale: Float)=mapOf(
+        "position" to SectionLayout.positionGroup(scale),"rotation" to SectionLayout.dialGroup(),
+        "scale-linked" to SectionLayout.scaleGroup(true,scale),"scale-unlinked" to SectionLayout.scaleGroup(false,scale),
+        "opacity" to SectionLayout.sliderGroup(1,1,scale),"timing" to SectionLayout.sliderGroup(2,0,scale),
+        "timing-video" to SectionLayout.sliderGroup(3,0,scale))
+
+    @Test fun targetSizesAtFontScaleOne() {
+        assertEquals(128f,SectionLayout.PAD,0f);assertEquals(40f,SectionLayout.valueBox(1f),0f)
+        assertEquals(144f,SectionLayout.DIAL,0f)
+        assertEquals(SectionLayout.Ruler(28f,48f,4f),SectionLayout.ruler(1f))
+        assertEquals(80f,SectionLayout.scaleGroup(true,1f),0f);assertEquals(2*80f+4f,SectionLayout.scaleGroup(false,1f),0f)
+        assertEquals(40f,SectionLayout.text(SectionLayout.BLEND_ROW,1f),0f)
+        assertEquals(SectionLayout.SliderRow(20f,6f,20f,48f,72f,40f),SectionLayout.sliderRow(1f))
+        assertEquals(40f,SectionLayout.MODE_TILE,0f);assertEquals(40f,SectionLayout.MODE_COLUMN,0f)
+        // The readout is titleMedium (never titleLarge) and the ruler takes the final readout height.
+        val ruler=src("ui/inspector/ScaleRuler.kt")
+        assertTrue(ruler.contains("style = MaterialTheme.typography.titleMedium") && !ruler.contains("titleLarge"))
     }
-    @Test fun positionPadAndDialAreLargerAndFit() {
-        val content=InspectorChromeBudget.contentHeight(268f,1f)
-        val col=column(width)
-        // Pad below a 40dp value row and an 8dp gap: 160dp at 268 (was about 118); dial 208dp (was 158).
-        assertEquals(160f,SectionLayout.padSide(content,col,true),1e-3f)
-        assertEquals(minOf(col,208f),SectionLayout.dialSide(content,col),1e-3f)
-        for((_,scale,height) in sheets) {
-            val h=InspectorChromeBudget.contentHeight(height,scale);val compact=InspectorSheetBudget.compact(height)
-            val pad=SectionLayout.padSide(h,col,compact)
-            assertTrue(pad>0f && SectionLayout.valueRow(compact)+SectionLayout.GAP+pad<=h+1e-3f && pad<=col)
-            assertTrue(SectionLayout.dialSide(h,col)<=minOf(h,col)+1e-3f)
-            // The mode column (3 x value row + gaps) is top-aligned and fits beside the content.
-            assertTrue(3*SectionLayout.valueRow(compact)+2*SectionLayout.MODE_GAP<=h)
+    @Test fun sizesDoNotDependOnTheSheetHeightOrPreviewState() {
+        // No size function takes a content or sheet height: identical at 268 and 328, preview expanded or not.
+        for((expanded,scale,height) in sheets) {
+            val other=sheets.single {it.first!=expanded && it.second==scale}
+            assertNotEquals(height,other.third,0f)
+            assertEquals(groups(scale),groups(other.second))
         }
+        // Only text-bearing rows grow with font scale; the pad, dial and ruler strip are constant.
+        assertEquals(SectionLayout.PAD,SectionLayout.positionGroup(2f)-SectionLayout.valueBox(2f)-SectionLayout.GAP,0f)
+        assertEquals(SectionLayout.STRIP,SectionLayout.ruler(2f).strip,0f)
+        assertTrue(SectionLayout.ruler(2f).readout>SectionLayout.ruler(1f).readout)
+        assertTrue(SectionLayout.sliderRow(2f).label>SectionLayout.sliderRow(1f).label)
+        assertEquals(SectionLayout.TRACK,SectionLayout.sliderRow(2f).track,0f);assertEquals(SectionLayout.THUMB,SectionLayout.sliderRow(2f).thumb,0f)
+        // The old fill-the-area arithmetic is gone from the pages.
+        val sheet=src("ui/inspector/ElementInspectorSheet.kt")
+        for(gone in listOf("FittedSquare","maxHeight.value, rows","SectionLayout.ruler(content","valueRow(compact)")) assertFalse(gone,sheet.contains(gone))
     }
-    @Test fun sliderRowsAreLargerAndNeverOverflow() {
-        val content=InspectorChromeBudget.contentHeight(268f,1f)
-        val opacity=SectionLayout.sliderRow(content,1,1,true,1f)
-        assertEquals(SectionLayout.TOUCH_MAX,opacity.touch,0f)
-        assertEquals(SectionLayout.TRACK_THICK,opacity.track,0f);assertEquals(SectionLayout.THUMB_LARGE,opacity.thumb,0f)
+    @Test fun groupsAreCentredWithEqualMargins() {
         for((_,scale,height) in sheets) {
-            val h=InspectorChromeBudget.contentHeight(height,scale);val compact=InspectorSheetBudget.compact(height)
-            for((rows,fixed) in listOf(1 to 1,2 to 0,3 to 0)) {
-                val r=SectionLayout.sliderRow(h,rows,fixed,compact,scale)
-                assertTrue("touch row ≥ 40 at $height/$scale",r.touch>=SectionLayout.MIN_TARGET)
-                assertTrue("rows fit at $height/$scale ($rows+$fixed)",SectionLayout.sliderRowsHeight(r,rows,fixed,compact)<=h+1e-3f)
+            val content=InspectorChromeBudget.contentHeight(height,scale)
+            for((name,group) in groups(scale)) {
+                val p=SectionLayout.centre(content,group)
+                assertTrue("$name fits at $height/$scale",p.fits)
+                assertEquals("$name centred at $height/$scale",p.top,p.bottom,1f)
+                assertEquals(content,p.top+group+p.bottom,1e-3f)
             }
+        }
+        // A group taller than its area falls back to top-aligned (scrollable, never clipped, no overlap).
+        assertEquals(SectionLayout.Placement(0f,0f,false),SectionLayout.centre(100f,164f))
+        // Every Transform mode, Opacity, Timing and Audio go through the centred group.
+        val sheet=src("ui/inspector/ElementInspectorSheet.kt")
+        for(tag in listOf("transform-group-position","transform-group-rotation","transform-group-scale","opacity-group","timing-group","audio-group"))
+            assertTrue(tag,sheet.contains("\"$tag\""))
+    }
+    @Test fun everythingFitsAtEveryFontScaleAndHorizontally() {
+        val col=column(width)
+        assertEquals(248f,col,1e-3f)
+        for((_,scale,height) in sheets) {
+            val content=InspectorChromeBudget.contentHeight(height,scale)
+            for((name,group) in groups(scale)) assertTrue("$name fits at $height/$scale",group<=content+1e-3f)
+            // The mode column (3 tiles + gaps) fits beside the content.
+            assertTrue(3*SectionLayout.MODE_TILE+2*SectionLayout.MODE_GAP<=content)
+        }
+        // Pad and dial fit between the rail and the mode column on a 360dp window.
+        assertTrue(SectionLayout.PAD<=col && SectionLayout.DIAL<=col)
+        // The tightest case: video Timing (3 rows) in the 208dp content of a 268dp sheet at font scale 1.
+        assertEquals(204f,SectionLayout.sliderGroup(3,0,1f),1e-3f)
+    }
+    @Test fun touchTargetsAreAtLeast40() {
+        for(scale in scales) {
+            val row=SectionLayout.sliderRow(scale)
+            assertTrue(row.touch>=SectionLayout.MIN_TARGET && row.valueHeight>=SectionLayout.MIN_TARGET && row.valueHeight<=row.touch)
+            assertTrue(SectionLayout.valueBox(scale)>=40f && SectionLayout.text(SectionLayout.BLEND_ROW,scale)>=40f)
+            assertTrue(SectionLayout.STRIP>=40f && SectionLayout.MODE_TILE>=40f && SectionLayout.PAD>=40f && SectionLayout.DIAL>=40f)
+        }
+    }
+    @Test fun editSolidPickerIsNotStretched() {
+        for((_,scale,height) in sheets) {
+            val h=InspectorChromeBudget.contentHeight(height,scale)
+            val m=picker.full(320f,h)
+            // The controls row is the square (capped by SQUARE_MAX), not the page; leftover height centres the picker.
+            assertTrue(m.square<=picker.SQUARE_MAX)
+            assertEquals(maxOf(m.square,picker.ROWS*picker.ROW_MIN),m.controls,0f)
+            assertTrue(m.height<=h+1e-3f)
+            assertEquals(h-m.height,2*m.top(h),1e-3f)
         }
     }
     @Test fun dragRightDecreasesAndDragLeftIncreases() {

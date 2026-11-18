@@ -63,4 +63,37 @@ class LayerKeyMarkersTest {
         assertEquals(1,drawn.count {it.focused});assertEquals(2,drawn.size)
         assertTrue(LayerKeyMarkers.focusedClipTimes(layer,null,offset).isEmpty())
     }
+    @Test fun markersSitOnTheBarsVerticalCentreForAnyBarHeight() {
+        // TEXT UI 8: centred, not bottom-aligned. Holds for any bar height and both marker sizes.
+        for(height in listOf(20f,26f,28f,40f,57.5f)) for(top in listOf(0f,1f,13.5f)) for(focused in listOf(true,false)) {
+            val m=LayerKeyMarkers.Marker(0,focused)
+            assertEquals("bar $height@$top",top+height/2f,LayerKeyMarkers.markerCentreY(top,height,m.sizeDp),1e-4f)
+            val y=LayerKeyMarkers.markerTop(top,height,m.sizeDp)
+            assertEquals((top+height-(y+m.sizeDp)),y-top,1e-4f)
+        }
+        // Sizes / quiet styling and collapse rules are unchanged.
+        assertEquals(10f,LayerKeyMarkers.FOCUSED_DP,0f);assertEquals(7f,LayerKeyMarkers.QUIET_DP,0f);assertEquals(.45f,LayerKeyMarkers.QUIET_ALPHA,0f)
+        assertEquals(listOf(LayerKeyMarkers.Marker(5,true)),LayerKeyMarkers.markers(listOf(5L,5L),setOf(5L)))
+        // The timeline centres the marker in a full-row box (no bottom inset left anywhere).
+        val timeline=java.io.File("src/main/kotlin/com/fluxx/android/ui/timeline/TimelineView.kt").readText()
+        assertFalse(timeline.contains("BOTTOM_INSET_DP") || timeline.contains("contentAlignment = Alignment.BottomCenter"))
+    }
+    @Test fun hitRegionFollowsTheCentredMarker() {
+        for(row in listOf(28f,40f)) for(x in listOf(0f,100f,333.3f)) {
+            val (l,t,r,b)=LayerKeyMarkers.hitRegion(x,row).toList()
+            assertEquals(x,(l+r)/2f,1e-3f);assertEquals(LayerKeyMarkers.markerCentreY(0f,row,LayerKeyMarkers.FOCUSED_DP),(t+b)/2f,1e-3f)
+            assertTrue(r-l>=40f && b-t>=row)
+        }
+    }
+    @Test fun markersDrawAboveTheNameWithAKnockOutRing() {
+        // About 1.5dp ring in the bar colour; drawn always (an overlap test per glyph would cost more than the stroke).
+        assertEquals(1.5f,LayerKeyMarkers.KNOCKOUT_DP,0f);assertEquals(3f,LayerKeyMarkers.KNOCKOUT_STROKE_DP,0f)
+        assertTrue(LayerKeyMarkers.KNOCKOUT_ALWAYS)
+        val timeline=java.io.File("src/main/kotlin/com/fluxx/android/ui/timeline/TimelineView.kt").readText()
+        assertTrue(timeline.contains("drawPath(path = diamondPath, color = clipBgColor, style = knockoutStroke)"))
+        // Markers are composed after the clip body (which holds the name), so they draw above the text; the name is untouched.
+        assertTrue(timeline.indexOf("text = label,")<timeline.indexOf("LayerKeyMarkers.diamond(diamondPath, size)"))
+        // Allocation-free: one remembered Path and Strokes, rebuilt in place.
+        assertTrue(timeline.contains("val diamondPath = remember { Path() }") && timeline.contains("val knockoutStroke = remember(density)"))
+    }
 }

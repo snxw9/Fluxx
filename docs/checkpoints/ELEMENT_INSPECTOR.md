@@ -1,5 +1,16 @@
 # Element Inspector & Layer Actions
 
+> **TEXT UI 8 (2026-11-18):** section-page controls no longer fill the height. They are fixed `SectionLayout` constants that do not depend on the sheet height:
+>
+> - pad 128;
+> - dial 144;
+> - ruler 28 + 4 + 48;
+> - value boxes 40;
+> - slider rows 20 + 48;
+> - mode tiles 40.
+>
+> They grow only in text rows with font scale. Each control group is centred vertically. See `TEXT_UI_OVERHAUL.md`, section TEXT UI 8.
+
 > **TEXT UI 7 (2026-11-18):** section pages now have one header row (← | tabs; no name/duplicate/delete, which stay on the landing grid), controls are sized from `SectionLayout`, tiles show keyframe badges and Edit Solid uses the FULL shared colour picker. See `TEXT_UI_OVERHAUL.md`, section TEXT UI 7.
 
 **Edit Text rework (2026-11-18):** Implemented in source, device-unverified. Edit Text is a fixed, non-scrolling sheet: every common control sits on the Character (4 rows) or Paragraph (3 rows) face; the only overlays are Case / Justify / Box width choice rows, exact numeric entry, Fonts and the colour picker, all inside the sheet, which is docked below the preview, so none hides the edited layer. While Edit Text is open the sheet uses one fixed height (344dp at font scale 1; labelled 3-column reflow at larger scales) and ignores Preview Expansion. **Back:** the editor's top-left arrow dispatches system Back while Edit Text is open; Back first leaves the innermost transient state (Explode dialog, numeric/source/colour draft, confirmation, base-alignment row, choice row, Fonts) and otherwise returns directly to this inspector's landing grid, clearing any text selection. The check mark keeps its Done behaviour. The header ⋮ holds exactly Explode Text, Reset {tab} style, Manual kerning and Relative size; the status line and Hold label are gone (the rail diamond carries key state). [Final inventory](../architecture/TEXT_UI_OVERHAUL_PLAN.md#11-rework-2026-11-18-final-surface-and-inventory), [gate and A16 user-run list](TEXT_UI_OVERHAUL.md#rework-commit-2-menu-back-status-and-icons).

@@ -1,5 +1,7 @@
 # Composition and Layer Markers
 
+> **TEXT UI 8 (2026-11-18):** the centred marker dialog is gone. Adding a marker (tap or hold on the playhead) places it immediately (one undo) and opens ONE popover anchored to the marker: a description field plus the COMPACT picker with marker swatches. Description and colour apply live, with one undo per session. Tapping outside or pressing Back closes it without discarding. There are no Add/Save/Delete/X buttons and no staged-until-Save state. Removal is unchanged (tap the playhead on a marker). Statements below about the dialog, its staging, X and Delete are superseded. See `TEXT_UI_OVERHAUL.md`, section TEXT UI 8.
+
 > **TEXT UI 7 (2026-11-18):** the marker colour is now edited with the COMPACT shared picker in a popover anchored to the colour control of the marker editor (never centred; marker swatches). Staging until Add/Save, persistence and undo are unchanged. See `TEXT_UI_OVERHAUL.md`, section TEXT UI 7.
 
 Implemented in source for Phase 2 C/D, September 29, 2026. Android debug Kotlin compilation subsequently passed during E1b/E1c; marker-specific JVM tests, allocation profiling and phone acceptance remain pending. No build, packaging, installation, or device launch was performed for this change.

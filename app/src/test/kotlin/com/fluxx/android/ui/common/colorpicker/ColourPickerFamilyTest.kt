@@ -22,7 +22,7 @@ class ColourPickerFamilyTest {
             "ui/inspector/TextInspectorPanel.kt" to "ColourPickerVariant.COMPACT",
             "ui/inspector/ElementInspectorSheet.kt" to "ColourPickerVariant.FULL",
             "ui/browser/AddContentSheet.kt" to "ColourPickerVariant.FULL",
-            "ui/timeline/MarkerDialog.kt" to "ColourPickerVariant.COMPACT",
+            "ui/timeline/MarkerPopover.kt" to "ColourPickerVariant.COMPACT",
             "ui/common/colorpicker/PaletteBrowser.kt" to "ColourPickerVariant.COMPACT")
         for((file,variant) in surfaces) {
             val text=src(file)
@@ -111,8 +111,8 @@ class ColourPickerFamilyTest {
         assertFalse(ColourPickerLayout.full(360f,208f).recents)
     }
     @Test fun markerColourIsAnAnchoredPopoverNotACentredPicker() {
-        val marker=src("ui/timeline/MarkerDialog.kt")
-        assertTrue(marker.contains("AnchoredPopover(open") && marker.contains("MARKER_SWATCHES"))
+        val marker=src("ui/timeline/MarkerPopover.kt")+src("ui/timeline/TimelineView.kt")
+        assertTrue(marker.contains("AnchoredPopover(markerPopoverOpen") && marker.contains("MARKER_SWATCHES"))
         assertFalse(marker.contains("Modifier.height(208.dp)"))
         assertEquals(0xFFF44336.toInt(),MARKER_SWATCHES[0]);assertEquals(0xFFFF9800.toInt(),MARKER_SWATCHES[1])
         // Anchored above its control and clamped to the window with 8dp margins (never centred).

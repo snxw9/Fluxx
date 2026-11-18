@@ -431,7 +431,7 @@ private fun PositionTrackpad(
 private fun RotationDialController(
     rotationDegrees: Float,
     onBegin: () -> Unit, onPreview: (Float) -> Unit,
-    onCommit: () -> Unit, onCancel: () -> Unit, onEdit: (Float) -> Unit
+    onCommit: () -> Unit, onCancel: () -> Unit, onEdit: (Float) -> Unit, valueHeight: Dp = SectionLayout.VALUE_BOX.dp
 ) {
     var previousAngle by remember { mutableFloatStateOf(0f) }
     var accumulated by remember { mutableFloatStateOf(0f) }
@@ -461,7 +461,7 @@ private fun RotationDialController(
         }
         CompactValueBox("", formatRotation(rotationDegrees), "\u00b0", onEdit,
             modifier = Modifier.fillMaxWidth(.7f), keyboardType = KeyboardType.Text,
-            parse = ::parseRotation)
+            parse = ::parseRotation, height = valueHeight, large = true)
     }
 }
 
@@ -517,14 +517,6 @@ private fun ScaleController(
     }
 }
 
-/** Fit the entire square control into the remaining sheet height, with a sensible size cap. */
-@Composable
-private fun FittedSquare(modifier: Modifier, maxSize: Dp, content: @Composable () -> Unit) {
-    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
-        val side = minOf(maxWidth, maxHeight, maxSize)
-        Box(Modifier.size(side), contentAlignment = Alignment.Center) { content() }
-    }
-}
 private data class AnchorSource(val width: Int, val height: Int, val rotation: Int = 0, val pixelAspect: Float = 1f,
     val text: TextLayoutMetrics? = null)
 
@@ -739,12 +731,11 @@ private fun OverhauledTransformSectionContent(
             TransformSubMode.SCALE -> AnimPropertyType.SCALE
         }, localTimeUs) }
     }
-    // Sizes come from the content height the single header freed (SectionLayout arithmetic), not from guesses.
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-    val content = maxHeight.value
-    val compact = LocalMinimumInteractiveComponentSize.current.let { it != Dp.Unspecified && it < 48.dp }
+    // TEXT UI 8: fixed control sizes (SectionLayout), independent of the sheet height; the group is centred.
+    Box(Modifier.fillMaxSize()) {
     val fontScale = LocalDensity.current.fontScale
-    val valueRow = SectionLayout.valueRow(compact).dp
+    val valueBox = SectionLayout.valueBox(fontScale).dp
+    val ruler = SectionLayout.ruler(fontScale)
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(TextInspectorBudget.RAIL_GAP.dp)) {
         InspectorUtilityRail(
             resetLabel = if (isAnchorMode) "Reset anchor point" else "Reset ${mode.name.lowercase()}",
@@ -785,7 +776,9 @@ private fun OverhauledTransformSectionContent(
               }
             }
         )
-        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)) {
+        // The active mode's control group is centred vertically in the content area and horizontally between the
+        // rail and the mode column (CentredSectionGroup); sizes are SectionLayout constants, never the sheet height.
+        Box(Modifier.weight(1f).fillMaxHeight()) {
             when (mode) {
                 TransformSubMode.POSITION -> {
                   if (isAnchorMode) {
@@ -795,50 +788,51 @@ private fun OverhauledTransformSectionContent(
                         onBegin = { anchorGestureLayer = layer; anchorGestureTransform = transform; onBeginGesture() },
                         onPreview = { x, y -> anchorAction(x, y, true)?.let(onAnchorPreview) },
                         onCommit = onCommitGesture, onCancel = onCancelGesture)
-                  } else {
+                  } else CentredSectionGroup(SectionLayout.positionGroup(fontScale), "transform-group-position") {
                     val limitX = PropertyLimits.position(compositionWidth); val limitY = PropertyLimits.position(compositionHeight)
-                    Row(horizontalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)) {
                         CompactValueBox("X", number(pixelX), onCommitValue = {
                             val newPosX = (limitX.typed(it) - compositionWidth / 2f) / halfReferenceW
                             onEdit(transform.copy(positionX = newPosX))
-                        }, modifier = Modifier.weight(1f), height = valueRow, large = !compact)
+                        }, modifier = Modifier.weight(1f), height = valueBox, large = true)
                         CompactValueBox("Y", number(pixelY), onCommitValue = {
                             val newPosY = (limitY.typed(it) - compositionHeight / 2f) / halfReferenceH
                             onEdit(transform.copy(positionY = newPosY))
-                        }, modifier = Modifier.weight(1f), height = valueRow, large = !compact)
+                        }, modifier = Modifier.weight(1f), height = valueBox, large = true)
                     }
+                    Spacer(Modifier.height(SectionLayout.GAP.dp))
                     // Planned: Z position requires a 3D layer model. The pad never clamps inside ±10× the composition.
-                    FittedSquare(Modifier.weight(1f).fillMaxWidth(), SectionLayout.PAD_MAX.dp) { PositionTrackpad(pixelX / compositionWidth, pixelY / compositionHeight, begin, { x, y ->
+                    Box(Modifier.size(SectionLayout.PAD.dp).testTag("position-pad")) { PositionTrackpad(pixelX / compositionWidth, pixelY / compositionHeight, begin, { x, y ->
                         val newPosX = (limitX.hard(x * compositionWidth) - compositionWidth / 2f) / halfReferenceW
                         val newPosY = (limitY.hard(y * compositionHeight) - compositionHeight / 2f) / halfReferenceH
                         onPreviewGesture(gestureBase.copy(positionX = newPosX, positionY = newPosY))
                     }, onCommitGesture, onCancelGesture) }
                   }
                 }
-                TransformSubMode.ROTATION -> {
+                TransformSubMode.ROTATION -> CentredSectionGroup(SectionLayout.dialGroup(), "transform-group-rotation") {
                     // Planned: XYZ rotation requires 3D support. Keep the existing single-angle model.
-                    FittedSquare(Modifier.weight(1f).fillMaxWidth(), SectionLayout.DIAL_MAX.dp) { RotationDialController(transform.rotationDegrees, begin,
+                    Box(Modifier.size(SectionLayout.DIAL.dp).testTag("rotation-dial")) { RotationDialController(transform.rotationDegrees, begin,
                         {
                             // The dial never wraps; it only stops at the ±100-turn hard cap.
                             onPreviewGesture(gestureBase.copy(rotationDegrees = PropertyLimits.ROTATION.hard(it)))
                         }, onCommitGesture, onCancelGesture,
                         {
                             onEdit(transform.copy(rotationDegrees = PropertyLimits.ROTATION.typed(it)))
-                        }) }
+                        }, valueBox) }
                 }
-                TransformSubMode.SCALE -> {
+                TransformSubMode.SCALE -> CentredSectionGroup(SectionLayout.scaleGroup(linked, fontScale), "transform-group-scale") {
                     // Typed values (±50000%) come from each ruler's readout; Flip H/V stays in the layer menu.
-                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) { ScaleController(transform.scaleX, transform.scaleY, linked, begin,
+                    ScaleController(transform.scaleX, transform.scaleY, linked, begin,
                         { x, y ->
                             onPreviewGesture(gestureBase.copy(scaleX = x, scaleY = y))
                         }, onCommitGesture, onCancelGesture,
                         { x, y -> val cap = PropertyLimits.LAYER_SCALE.hardMax / 100f
-                            onEdit(transform.copy(scaleX = x.coerceIn(-cap, cap), scaleY = y.coerceIn(-cap, cap))) }, SectionLayout.ruler(content, linked, fontScale)) {
-                        Box(Modifier.size(40.dp, (SectionLayout.ruler(content, linked, fontScale).readout * fontScale.coerceAtLeast(1f)).dp).toggleable(linked, role = Role.Switch) { focusManager.clearFocus(); linked = it }
+                            onEdit(transform.copy(scaleX = x.coerceIn(-cap, cap), scaleY = y.coerceIn(-cap, cap))) }, ruler) {
+                        Box(Modifier.size(SectionLayout.MIN_TARGET.dp, maxOf(ruler.readout, SectionLayout.MIN_TARGET).dp).toggleable(linked, role = Role.Switch) { focusManager.clearFocus(); linked = it }
                             .semantics { contentDescription = "Link width and height scale" }.testTag("scale-link"), contentAlignment = Alignment.Center) {
                             Icon(InspectorIcons.icon(if (linked) "LINK" else "LINK_OFF"), null, Modifier.size(InspectorIcons.INLINE), tint = if (linked) Highlight else TextSecondary)
                         }
-                    } }
+                    }
                 }
             }
         }
@@ -847,7 +841,7 @@ private fun OverhauledTransformSectionContent(
             TransformSubMode.entries.forEach { item ->
                 val active = mode == item
                 val badge = if (item == TransformSubMode.POSITION && isAnchorMode) KeyBadge.NONE else modeBadges.getValue(item)
-                Box(Modifier.size(SectionLayout.MODE_COLUMN.dp, valueRow).testTag("transform-mode-${item.name}")) {
+                Box(Modifier.size(SectionLayout.MODE_TILE.dp).testTag("transform-mode-${item.name}")) {
                 IconToggleButton(checked = active, onCheckedChange = {
                     focusManager.clearFocus()
                     isAnchorMode = item == TransformSubMode.POSITION && active && !isAnchorMode
@@ -920,19 +914,20 @@ private fun CompactOpacitySectionContent(
                 }
             }
         )
-        // Sizes from the freed content height: a 40/48dp blend-mode row and one large slider row (SectionLayout).
-        BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
-            val compact = LocalMinimumInteractiveComponentSize.current.let { it != Dp.Unspecified && it < 48.dp }
-            val row = SectionLayout.sliderRow(maxHeight.value, rows = 1, fixedRows = 1, compact = compact, fontScale = LocalDensity.current.fontScale)
+        // Fixed sizes (SectionLayout): a 40dp blend-mode row and one slider row (20 label + 48 touch), centred.
+        Box(Modifier.weight(1f).fillMaxHeight()) {
+            val fontScale = LocalDensity.current.fontScale
+            val row = SectionLayout.sliderRow(fontScale)
             val badge = remember(layer.animTransform.opacity, localTimeUs) { KeyBadges.of(layer, AnimPropertyType.OPACITY, localTimeUs) }
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)) {
-                Row(Modifier.fillMaxWidth().height(SectionLayout.valueRow(compact).dp).background(SurfaceHigh, RoundedCornerShape(8.dp))
+            CentredSectionGroup(SectionLayout.sliderGroup(1, 1, fontScale), "opacity-group") {
+                Row(Modifier.fillMaxWidth().height(SectionLayout.text(SectionLayout.BLEND_ROW, fontScale).dp).background(SurfaceHigh, RoundedCornerShape(8.dp))
                     .border(.5.dp, Border, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp)
                     .semantics { contentDescription = "Blend Mode: Normal, not yet available"; disabled() },
                     horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Blend Mode", color = TextDisabled, fontSize = 13.sp)
                     Text("Normal", color = TextDisabled, fontSize = 13.sp)
                 }
+                Spacer(Modifier.height(SectionLayout.GAP.dp))
                 Column(Modifier.fillMaxWidth().testTag("opacity-row")) {
                     SliderRowLabel("Opacity", row, badge)
                     Row(Modifier.fillMaxWidth().height(row.touch.dp), verticalAlignment = Alignment.CenterVertically,
@@ -946,8 +941,8 @@ private fun CompactOpacitySectionContent(
                         CompactValueBox("", number(opacity * 100f), "%", {
                             val newOp = PropertyLimits.OPACITY.typed(it) / 100f
                             onEdit(newOp)
-                        }, modifier = Modifier.width(88.dp).semantics { contentDescription = "Opacity percentage" },
-                            height = minOf(row.touch, 48f).dp, large = !compact)
+                        }, modifier = Modifier.width(row.valueWidth.dp).semantics { contentDescription = "Opacity percentage" },
+                            height = row.valueHeight.dp, large = true)
                     }
                 }
             }
@@ -965,14 +960,11 @@ private fun CompactTimingSectionContent(
     val durationSec = (timing.durationUs ?: 5_000_000L) / 1_000_000f
     val sourceInSec = timing.sourceInUs / 1_000_000f
 
-    // Rows share the content height the single header freed (SectionLayout): larger tracks, thumbs and readouts.
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-    val compact = LocalMinimumInteractiveComponentSize.current.let { it != Dp.Unspecified && it < 48.dp }
-    val row = SectionLayout.sliderRow(maxHeight.value, rows = if (isLayerVideo) 3 else 2, fixedRows = 0, compact = compact, fontScale = LocalDensity.current.fontScale)
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)
-    ) {
+    // Fixed slider rows (SectionLayout: 20 label + 48 touch, 6dp track, 20dp thumb, 72 x 40 value), centred as a group.
+    Box(Modifier.fillMaxSize()) {
+    val fontScale = LocalDensity.current.fontScale
+    val row = SectionLayout.sliderRow(fontScale)
+    CentredSectionGroup(SectionLayout.sliderGroup(if (isLayerVideo) 3 else 2, 0, fontScale), "timing-group") {
         CompactSliderItem(
             modifier = Modifier.fillMaxWidth(), row = row,
             label = "Start",
@@ -1039,9 +1031,11 @@ private fun CompactAudioSectionContent(
     gain: Float,
     onAudioChange: (Boolean, Float) -> Unit
 ) {
-    Column(
+    // Same sizing discipline as Timing: fixed rows (SectionLayout), the measured group centred in the content area.
+    val fontScale = LocalDensity.current.fontScale
+    CentredSectionGroup(null, "audio-group") { Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)
     ) {
         Column(Modifier.semantics { disabled() }) {
             Text("Extract Audio", color = TextDisabled, style = MaterialTheme.typography.labelLarge)
@@ -1052,7 +1046,7 @@ private fun CompactAudioSectionContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(38.dp)
+                .height(SectionLayout.text(SectionLayout.MIN_TARGET, fontScale).dp)
                 .clip(RoundedCornerShape(6.dp))
                 .background(SurfaceHigh)
                 .border(0.5.dp, Border, RoundedCornerShape(6.dp))
@@ -1090,7 +1084,7 @@ private fun CompactAudioSectionContent(
             },
             dialogTitle = "Set Volume Gain (%)"
         )
-    }
+    } }
 }
 
 /**
@@ -1104,7 +1098,7 @@ private fun CompactSliderItem(
     valueRange: ClosedFloatingPointRange<Float>,
     displayValue: String,
     modifier: Modifier = Modifier,
-    row: SectionLayout.SliderRow = SectionLayout.SliderRow(SectionLayout.LABEL_ROW, SectionLayout.TRACK_THIN, SectionLayout.THUMB_SMALL, SectionLayout.MIN_TARGET),
+    row: SectionLayout.SliderRow = SectionLayout.sliderRow(LocalDensity.current.fontScale),
     enabled: Boolean = true,
     onBegin: () -> Unit,
     onValueChange: (Float) -> Unit,
@@ -1124,8 +1118,8 @@ private fun CompactSliderItem(
                 onFinish = onCommit, onCancel = onCommit, modifier = Modifier.weight(1f), enabled = enabled)
             Box(
                 modifier = Modifier
-                    .height(minOf(row.touch, 48f).dp)
-                    .widthIn(min = 72.dp)
+                    .height(row.valueHeight.dp)
+                    .widthIn(min = row.valueWidth.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(SurfaceHigh)
                     .border(0.5.dp, Border, RoundedCornerShape(8.dp))
@@ -1136,7 +1130,7 @@ private fun CompactSliderItem(
                 Text(
                     text = displayValue,
                     color = if (enabled) TextPrimary else TextDisabled,
-                    style = if (row.touch >= 48f) MaterialTheme.typography.titleSmall else MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1
                 )

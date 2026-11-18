@@ -447,60 +447,68 @@ internal object InspectorChromeBudget {
 }
 
 /**
- * Section-page control sizes, all computed from the content height ([InspectorChromeBudget.contentHeight]) and the
- * content width, so the controls USE the height the single header freed. Pure arithmetic (JVM tested at 268/328 x
- * font scale 1/1.3/2). Touch rows never go below [MIN_TARGET].
+ * Section-page control sizes (TEXT UI 8). Every size is a fixed constant that does NOT depend on the sheet height
+ * (268 / 328, preview expanded or not): the leftover content height becomes equal margins above and below the
+ * control group, which is centred in the content area ([centre]). Only rows that contain text grow, and only with
+ * font scale ([text]: +[TEXT_GROWTH]dp per +1.0 of scale). Pure arithmetic, JVM tested at 268/328 x 1/1.3/2.
  */
 internal object SectionLayout {
     const val MIN_TARGET=40f
     const val GAP=8f
-    /** Mode column on Transform (Position / Rotation / Scale), top-aligned with the first content row. */
-    const val MODE_COLUMN=48f
-    const val MODE_GAP=4f
+    /** Text-bearing rows grow by this much per +1.0 of font scale (one text line at 2x). */
+    const val TEXT_GROWTH=20f
     // ---- Transform ------------------------------------------------------------------------------------------
-    fun valueRow(compact: Boolean)=if(compact) 40f else 48f
-    const val PAD_MAX=240f
-    const val DIAL_MAX=240f
-    const val READOUT_MIN=24f
-    const val READOUT_MAX=32f
-    const val STRIP_MIN=48f
-    const val STRIP_MAX=64f
-    data class Ruler(val readout: Float,val strip: Float,val gap: Float,val fontScale: Float) {
-        val height get()=readout*fontScale+gap+strip
+    /** Mode column (Position / Rotation / Scale): 40dp tiles, top-aligned. */
+    const val MODE_TILE=40f
+    const val MODE_COLUMN=MODE_TILE
+    const val MODE_GAP=4f
+    const val VALUE_BOX=40f
+    const val PAD=128f
+    const val DIAL=144f
+    const val READOUT=28f
+    const val STRIP=48f
+    const val RULER_GAP=4f
+    // ---- Opacity / Blending, Timing, Audio --------------------------------------------------------------------
+    const val BLEND_ROW=40f
+    const val LABEL_LINE=20f
+    const val TOUCH_ROW=48f
+    const val TRACK=6f
+    const val THUMB=20f
+    const val VALUE_W=72f
+    /** Slider rows stack without an extra gap: the label line already separates them. */
+    const val SLIDER_GAP=0f
+
+    fun text(base: Float,fontScale: Float)=base+TEXT_GROWTH*(fontScale.coerceAtLeast(1f)-1f)
+    fun valueBox(fontScale: Float)=text(VALUE_BOX,fontScale)
+
+    data class Ruler(val readout: Float,val strip: Float,val gap: Float) {
+        val height get()=readout+gap+strip
     }
-    /** Ruler sizes: the larger readout when the ruler(s) still fit, then the tallest strip up to [STRIP_MAX]. */
-    fun ruler(content: Float,linked: Boolean,fontScale: Float): Ruler {
-        val fs=fontScale.coerceAtLeast(1f);val n=if(linked) 1 else 2;val g=ScaleRulerMath.GAP_DP
-        val readout=if(n*(READOUT_MAX*fs+g+STRIP_MIN)+(n-1)*g<=content) READOUT_MAX else READOUT_MIN
-        val strip=((content-n*(readout*fs+g)-(n-1)*g)/n).coerceIn(STRIP_MIN,STRIP_MAX)
-        return Ruler(readout,strip,g,fs)
-    }
-    fun scaleController(content: Float,linked: Boolean,fontScale: Float)=ruler(content,linked,fontScale).let {if(linked) it.height else 2*it.height+it.gap}
-    /** Position pad side: below the X/Y value row, as large as the column allows. */
-    fun padSide(content: Float,width: Float,compact: Boolean)=minOf(width,content-valueRow(compact)-GAP,PAD_MAX).coerceAtLeast(0f)
-    fun dialSide(content: Float,width: Float)=minOf(width,content,DIAL_MAX).coerceAtLeast(0f)
-    // ---- Opacity / Blending and Timing ----------------------------------------------------------------------
-    /** Slider rows: label + value on one line above a touch row holding a thick track. */
-    data class SliderRow(val label: Float,val track: Float,val thumb: Float,val touch: Float) {
+    /** 28 readout + 4 + 48 strip = 80 at font scale 1, whatever the sheet height. */
+    fun ruler(fontScale: Float)=Ruler(text(READOUT,fontScale),STRIP,RULER_GAP)
+    /** Linked: one ruler; unlinked: Width and Height with a [RULER_GAP] between them (2 x 80 + 4 = 164). */
+    fun scaleGroup(linked: Boolean,fontScale: Float)=ruler(fontScale).let {if(linked) it.height else 2*it.height+RULER_GAP}
+    /** X / Y value boxes, a gap, then the 128dp pad. */
+    fun positionGroup(fontScale: Float)=valueBox(fontScale)+GAP+PAD
+    /** The dial carries its value box inside. */
+    fun dialGroup()=DIAL
+
+    /** Slider rows: label line above a touch row with a 6dp track, 20dp thumb and a ~72 x 40 value box. */
+    data class SliderRow(val label: Float,val track: Float,val thumb: Float,val touch: Float,val valueWidth: Float,val valueHeight: Float) {
         val height get()=label+touch
     }
-    const val TRACK_THIN=6f
-    const val TRACK_THICK=8f
-    const val THUMB_SMALL=20f
-    const val THUMB_LARGE=24f
-    const val LABEL_ROW=24f
-    const val TOUCH_MAX=56f
-    /** [rows] slider rows plus [fixedRows] plain 40/48dp rows share the content height. */
-    fun sliderRow(content: Float,rows: Int,fixedRows: Int,compact: Boolean,fontScale: Float): SliderRow {
-        val fs=fontScale.coerceAtLeast(1f);val fixed=fixedRows*valueRow(compact)
-        val gaps=(rows+fixedRows-1).coerceAtLeast(0)*GAP
-        val label=LABEL_ROW*fs
-        val touch=((content-fixed-gaps)/rows.coerceAtLeast(1)-label).coerceIn(MIN_TARGET,TOUCH_MAX)
-        val large=touch>=48f
-        return SliderRow(label,if(large) TRACK_THICK else TRACK_THIN,if(large) THUMB_LARGE else THUMB_SMALL,touch)
+    fun sliderRow(fontScale: Float): SliderRow {
+        val value=valueBox(fontScale)
+        return SliderRow(text(LABEL_LINE,fontScale),TRACK,THUMB,maxOf(TOUCH_ROW,value),VALUE_W,value)
     }
-    fun sliderRowsHeight(row: SliderRow,rows: Int,fixedRows: Int,compact: Boolean)=
-        rows*row.height+fixedRows*valueRow(compact)+(rows+fixedRows-1).coerceAtLeast(0)*GAP
+    /** [rows] slider rows under [fixedRows] plain 40dp text rows (the blend-mode row). */
+    fun sliderGroup(rows: Int,fixedRows: Int,fontScale: Float)=
+        fixedRows*(text(BLEND_ROW,fontScale)+GAP)+rows*sliderRow(fontScale).height+(rows-1).coerceAtLeast(0)*SLIDER_GAP
+
+    /** Where a group sits: equal top/bottom margins when it fits, otherwise top-aligned (and scrollable, never clipped). */
+    data class Placement(val top: Float,val bottom: Float,val fits: Boolean)
+    fun centre(content: Float,group: Float): Placement =
+        if(group<=content) ((content-group)/2f).let {Placement(it,content-group-it,true)} else Placement(0f,0f,false)
 }
 
 /** Rail stack: 40dp tiles with a 6dp gap, top-aligned; disabled placeholders shrink first when space is short. */

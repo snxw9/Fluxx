@@ -5,6 +5,8 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -74,5 +76,22 @@ import kotlinx.coroutines.CancellationException
         Text(label, color = if (enabled) TextSecondary else TextDisabled, style = MaterialTheme.typography.labelMedium,
             fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         KeyBadgeGlyph(badge, if (enabled) TextSecondary else TextDisabled, Modifier.testTag("slider-badge-$label"))
+    }
+}
+
+/**
+ * A section page's control group (TEXT UI 8): [group] dp tall from [SectionLayout], centred vertically in the content
+ * area (equal margins above and below, [SectionLayout.centre]) and horizontally in its column. A group taller than the
+ * content (large font scales) falls back to top-aligned and scrollable: no overlap, never clipped. With [group] null
+ * the group is measured (pages whose text rows have no fixed height) and centred the same way.
+ */
+@Composable internal fun CentredSectionGroup(group: Float?, testTag: String, content: @Composable ColumnScope.() -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize().testTag("$testTag-area")) {
+        val place = group?.let { SectionLayout.centre(maxHeight.value, it) }
+        if (place != null && place.fits) Column(Modifier.fillMaxWidth().padding(top = place.top.dp).height(group.dp).testTag(testTag),
+            horizontalAlignment = Alignment.CenterHorizontally, content = content)
+        else Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = if (group == null) maxHeight else 0.dp).testTag(testTag),
+            verticalArrangement = if (group == null) Arrangement.Center else Arrangement.Top,
+            horizontalAlignment = Alignment.CenterHorizontally, content = content)
     }
 }

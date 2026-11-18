@@ -1,5 +1,13 @@
 # Edit Text consolidation — approved plan
 
+**TEXT UI 8 (2026-11-18):** device feedback on TEXT UI 7. Changes:
+
+- The marker editor is one popover anchored to the marker: a description field plus the COMPACT picker. Edits apply live, with one undo per session. Tapping outside closes it and keeps the edits. There are no Add/Save/Delete/X buttons, and removal is unchanged (tap the playhead on the marker).
+- Layer-bar keyframes sit on the bar's vertical centre, drawn above the name with a knock-out ring.
+- Section-page controls have fixed, moderate sizes that don't depend on the sheet height. The control group is centred vertically, and the Edit Solid picker is no longer stretched.
+
+See [TEXT_UI_OVERHAUL.md](../checkpoints/TEXT_UI_OVERHAUL.md#text-ui-8-marker-popover-centred-layer-keyframes-consistent-control-sizing). Device-unverified.
+
 **TEXT UI 7 (2026-11-18):** TEXT UI 6 was accepted on the A16 (Edit Text layout unchanged). Changes:
 
 - Section pages (Transform, Timing, Blending & Opacity, Edit Solid) have one header row (← | tabs) like Edit Text, and their controls are resized to use the freed height. The landing grid is unchanged.

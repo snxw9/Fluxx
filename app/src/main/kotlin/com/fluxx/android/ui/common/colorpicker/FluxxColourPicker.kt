@@ -128,7 +128,7 @@ internal class ColourTransaction(private val begin: () -> Unit, private val prev
     targets: List<ColourPickerTarget> = emptyList(), target: Int = 0, onTarget: (Int) -> Unit = {},
     swatches: List<Int> = DEFAULT_SWATCHES, palette: PaletteRepository? = null,
     onEyedropper: (() -> Unit)? = null, onInherit: (() -> Unit)? = null, onReset: (() -> Unit)? = null,
-    showAlpha: Boolean = true, onSwatch: ((Int) -> Unit)? = null) {
+    showAlpha: Boolean = true, onSwatch: ((Int) -> Unit)? = null, header: Boolean = true) {
     val b by rememberUpdatedState(onBegin); val p by rememberUpdatedState(onPreview)
     val f by rememberUpdatedState(onFinish); val c by rememberUpdatedState(onCancel)
     val tx = remember { ColourTransaction({ b() }, { p(it) }, { f() }, { c() }, ColourRecents::add) }
@@ -174,7 +174,7 @@ internal class ColourTransaction(private val begin: () -> Unit, private val prev
     when (variant) {
         // ---- COMPACT: exactly the TEXT UI 6 text colour popover layout (288dp wide) -------------------------------
         ColourPickerVariant.COMPACT -> Column(modifier.width(288.dp).then(root).testTag("colour-picker-compact")) {
-            Header(40.dp)
+            if (header) Header(40.dp)
             Row(Modifier.fillMaxWidth().height(96.dp).padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 SaturationValueBox(sv.hue, sv.saturation, sv.value, sv.onSv,
                     Modifier.size(96.dp).clip(RoundedCornerShape(8.dp)).border(1.dp, Border, RoundedCornerShape(8.dp)), sv.begin, sv.commit, sv.cancel)
@@ -197,8 +197,9 @@ internal class ColourTransaction(private val begin: () -> Unit, private val prev
         }
         // ---- FULL: the same design language and order, scaled up, plus R/G/B and the palette area -----------------
         ColourPickerVariant.FULL -> BoxWithConstraints(modifier.then(root).testTag("colour-picker-full")) {
-            val m = ColourPickerLayout.full(maxWidth.value, maxHeight.value.takeIf { it.isFinite() } ?: 260f)
-            Column(Modifier.fillMaxSize()) {
+            val page = maxHeight.value.takeIf { it.isFinite() } ?: 260f
+            val m = ColourPickerLayout.full(maxWidth.value, page)
+            Column(Modifier.fillMaxWidth().padding(top = m.top(page).dp).height(m.height.dp)) {
                 Header(m.header.dp)
                 Row(Modifier.fillMaxWidth().height(m.controls.dp).padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SaturationValueBox(sv.hue, sv.saturation, sv.value, sv.onSv,
@@ -232,7 +233,11 @@ private class SvControls(val hue: Float, val saturation: Float, val value: Float
     val cancel: () -> Unit, val onSv: (Float, Float) -> Unit, val onHue: (Float) -> Unit)
 
 /** FULL variant geometry (dp), computed from the available box: never scrolls, never overflows. */
-internal data class FullPickerMetrics(val header: Float, val controls: Float, val square: Float, val row: Float, val palette: Float, val recents: Boolean)
+internal data class FullPickerMetrics(val header: Float, val controls: Float, val square: Float, val row: Float, val palette: Float, val recents: Boolean) {
+    /** The picker's own height; page height beyond it becomes equal margins above and below (TEXT UI 8). */
+    val height get() = header + controls + ColourPickerLayout.GAP + palette
+    fun top(page: Float) = ((page - height) / 2f).coerceAtLeast(0f)
+}
 
 internal object ColourPickerLayout {
     const val HEADER = 40f
@@ -248,8 +253,10 @@ internal object ColourPickerLayout {
         // Recents get their own row only when the controls keep at least 36dp value rows.
         val recents = height - HEADER - GAP - 2 * PALETTE_ROW >= ROWS * 36f
         val palette = if (recents) 2 * PALETTE_ROW else PALETTE_ROW
-        val controls = (height - HEADER - GAP - palette).coerceAtLeast(ROWS * ROW_MIN)
-        val square = minOf(controls, SQUARE_MAX, (width - 8f - HUE_FULL - 16f - RIGHT_MIN).coerceAtLeast(64f))
+        val available = (height - HEADER - GAP - palette).coerceAtLeast(ROWS * ROW_MIN)
+        val square = minOf(available, SQUARE_MAX, (width - 8f - HUE_FULL - 16f - RIGHT_MIN).coerceAtLeast(64f))
+        // TEXT UI 8: the controls row is exactly the square (never stretched to the page); leftover height centres the picker.
+        val controls = maxOf(square, ROWS * ROW_MIN)
         return FullPickerMetrics(HEADER, controls, square, (square / ROWS).coerceAtLeast(ROW_MIN), palette, recents)
     }
 }

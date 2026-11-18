@@ -1,5 +1,7 @@
 # Timeline, preview and editor workspace
 
+> **TEXT UI 8 (2026-11-18):** layer-bar keyframe diamonds are centred on the bar's vertical midline: 10dp for focused keys, 7dp at 45% for quiet keys. They are drawn above the layer name with a ~1.5dp knock-out ring in the bar colour. The 48dp × row hit area is centred on the key. The marker editor is an anchored popover (see `MARKERS.md`).
+
 Implemented in source, consolidating the September 2026 workspace follow-ups. Android debug Kotlin/native compilation later passed during E1b/E1c, and the user confirmed A16 E1a render/playback/export smoke. The detailed gesture, resize and UI checks below remain pending unless individually confirmed. Current geometry supersedes the earlier 22dp ruler / 54dp inspector anchor.
 
 ## Vertical regions

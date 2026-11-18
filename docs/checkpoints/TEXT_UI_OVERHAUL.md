@@ -752,3 +752,256 @@ Tick labels fade with a smoothstep of the gap between the label's nearest edge a
     - Edit Text layout, Fonts page, rail menu, Explode, colour eyedropper;
     - keyboard overlay on Edit Text; scale 10000% reach and ±50000% typing; anchor mode;
     - Timing dialogs, Audio mute/gain; save and reopen.
+
+## TEXT UI 8: marker popover, centred layer keyframes, consistent control sizing
+
+TEXT UI 7 was device-tested on the A16 (user screenshots) and left three issues, all addressed here:
+
+- The marker editor was a centred dialog that opened a second popover.
+- Layer keyframes sat on the bottom edge of the bar.
+- Section-page controls grew to fill the sheet and were too big.
+
+Status: implemented in source in one commit, **device-unverified**.
+
+Scope rules held:
+
+- No change to `PreviewController`, the gesture protocol, the `EditorAction` contract, the batch/draw contract or the document schema.
+- Sheet heights stay 268 / 328dp.
+- Unchanged: the Edit Text layout, the Fonts page, the compact picker's look, the single-row section headers, the keyframe badges and the rail.
+
+### 1. Marker editor: one anchored popover
+
+**What it is.** There is one `AnchoredPopover` (test tag `marker-popover`) and nothing else.
+
+**Anchor.** It is hosted inside the marker glyph:
+
+- **Composition markers:** a 9×12dp box over the ruler pentagon (`composition-marker-anchor`, y = 16–28dp of the ruler).
+- **Layer markers:** the 8×7dp box of the orange pennant above the layer bar.
+- **Fallback:** a retained layer marker outside its trimmed clip has no pennant. Holding the playhead on it anchors the popover to the playhead target (`MarkerEditing.drawnOnBar`), which is where that marker sits.
+
+**Placement.** Placement is the shared `PopoverPlacer`:
+
+- above the anchor when it fits, otherwise below;
+- clamped to the window with 8dp margins;
+- never centred;
+- scales out from the anchor.
+
+**IME.** The popover's bottom stays above the keyboard. Only the popover lifts and nothing else resizes. This is the same IME rule as the other popovers.
+
+**Contents, top to bottom.** There are no Add, Save, Delete, X or close buttons.
+
+1. **Description.** A single-line in-place field (40dp), 128 characters at most, with newlines stripped (the schema rule). Its placeholder reads "Composition marker description" or "Layer marker description".
+2. **`FluxxColourPicker(variant = COMPACT)`.** It has the in-place hex and alpha fields, the SV square, the hue strip, the alpha slider and the `MARKER_SWATCHES` strip. There is no target toggle, because there is a single target.
+
+**Closing.**
+
+- Tapping outside closes the popover. Back also closes it, but hides the keyboard first.
+- Closing **never discards**: `MarkerEditSession.close()` commits whatever session is in flight.
+
+**Live apply and undo.**
+
+- Each description keystroke and each colour move previews live. Each preview is `Batch([Edit{Composition|Layer}Marker])`, sent through the existing transient-gesture protocol (`beginGesture` / `previewGesture` / `commitGesture`, the same `Batch` wrapper that text edits already use).
+- **One undo entry per session:**
+  - A description session runs from focus to blur, IME Done or close.
+  - A colour session is one picker interaction: one drag, one swatch, or one hex/alpha entry.
+- Starting one kind of session commits the other.
+- A cancelled pointer interaction reverts only that interaction. Closing the popover is not a cancel.
+
+**Creating a marker.**
+
+- Tapping the playhead where there is no marker dispatches the existing add action at the snapped playhead. That is one undo entry.
+- The marker is then selected (as before), playback pauses, and the popover opens on it.
+- The marker stays whether or not anything is entered; an empty description is allowed.
+- Default colours are unchanged:
+  - composition red `F44336`;
+  - layer orange `FF9800`;
+  - the solid-layer ink/amber rule.
+- Holding the playhead where there is no marker does the same.
+
+**Editing an existing marker.** Hold the playhead on it, the same gesture that opened the old dialog. This now opens the popover.
+
+**Removal (unchanged).**
+
+- Tapping the playhead while it is on a marker removes it.
+- Tapping an already-parked ruler or layer flag removes it.
+- No delete button was added.
+- If the popover's marker disappears for any reason (removal, undo, layer deletion), the timeline closes the popover. The session is detached without committing, because the delete already cancelled its gesture.
+
+**Removed:**
+
+- `MarkerDialog.kt`: the centred `Dialog` with its title, X, Add/Save/Delete buttons and outlined text field.
+- `MarkerColourControl`: the swatch-and-hex chip with its nested anchored picker.
+- The staged-until-Save colour and description logic (`MarkerDraft`).
+
+**Kept:** marker persistence, ordering, frame snapping, ID rules, the reducer actions and undo semantics.
+
+**Code:** `ui/timeline/MarkerPopover.kt`:
+
+- `MarkerRef`
+- `MarkerEditing`: playhead tap/hold rules, `find`, `drawnOnBar`, `edit`, `sanitize`
+- `MarkerGestureSink`
+- `MarkerEditSession`
+- `MarkerPopoverContent`
+
+The timeline wiring is in `TimelineView` (`markerSession`, `markerPopover`).
+
+### 2. Layer-bar keyframes: vertically centred
+
+**Position.** Markers sit on the bar's vertical midline:
+
+- `LayerKeyMarkers.markerTop` / `markerCentreY` equal the bar centre for any bar height.
+- In the timeline, the 48dp × row-height key box uses `Alignment.Center`. The bottom inset is gone.
+
+**Unchanged:**
+
+- Focused-property keys draw full ink at 10dp.
+- Other keys draw at 45% alpha and 7dp.
+- Keys at the same time collapse into one marker, full ink if the focused property is among them.
+
+**Hit-testing.** It moves with the marker: the focused-property target is 48dp wide and the full row tall, centred on the key (`LayerKeyMarkers.hitRegion`). The trim and move handles are unchanged.
+
+**Readability over the name.**
+
+- Markers are composed after the clip body, which holds the name, so they draw above the text.
+- Each diamond first gets a **knock-out ring** in the bar's own background colour (`clipBgColor`). The ring is a 3dp stroke centred on the path, which leaves about 1.5dp outside the diamond.
+- The ring is drawn always (`KNOCKOUT_ALWAYS`): measuring glyph overlap per frame would cost more than one stroke.
+- The name is never hidden or shortened, and markers are never hidden.
+
+**Coverage and cost.** This works for every layer type, selected or not. Drawing stays allocation-free: one remembered `Path`, plus remembered `Stroke`s for the outline and the knock-out ring.
+
+### 3. Consistent control sizing on the section pages
+
+**Rule.** Every control size is a constant in `SectionLayout`:
+
+- It does not depend on the sheet height (268 vs 328) or on whether the preview is expanded.
+- Rows that contain text grow with font scale only, by `SectionLayout.text(base, fs) = base + 20 × (fs − 1)`.
+- The pad, the dial, the ruler strip, the tracks and the thumbs never grow.
+- The leftover height becomes equal margins above and below the control group. The group is centred vertically in the content area, and horizontally between the rail and the mode column (`CentredSectionGroup`, `SectionLayout.centre`).
+
+**Final control sizes** (dp, at font scale 1):
+
+| Control | Size | Grows with font scale |
+| --- | --- | --- |
+| Position pad | 128 × 128 | no |
+| X / Y value boxes | 40 high (two boxes, full column width, 8 gap) | yes (`valueBox`) |
+| Position group | 40 + 8 + 128 = **176** | value row only |
+| Rotation dial | 144 circle, value box inside 40 high (70% width) | value box only |
+| Scale ruler, linked | readout 28 + gap 4 + strip 48 = **80** | readout only |
+| Scale rulers, unlinked | 2 × 80 + 4 = **164** | readouts only |
+| Ruler readout style | `titleMedium` (was `titleLarge` at 32dp) | — |
+| Scale link toggle | 40 × 40 | — |
+| Blend-mode row | 40 high | yes |
+| Slider row (Opacity / Timing / Audio gain) | label line 20 + touch row 48; 6dp track, 20dp thumb, value box 72 × 40 | label and value box |
+| Opacity group | 40 + 8 + 68 = **116** | text rows |
+| Timing group | 2 × 68 = 136; video 3 × 68 = **204** (no extra gap between slider rows) | text rows |
+| Audio mute row | 40 high (was 38) | yes |
+| Transform mode tiles | 40 × 40, column 40 wide (was 48 × 40/48) | — |
+
+Every touch target is at least 40dp.
+
+**Centring.**
+
+- **Transform:** the active mode's group is centred. The groups are:
+  - readout + ruler;
+  - both rulers as one unlinked group;
+  - X/Y boxes + pad;
+  - dial.
+
+  On a 268 sheet at fs 1 the content is 208dp, so:
+
+  | Group | Margin above and below |
+  | --- | --- |
+  | Linked ruler | 64dp |
+  | Unlinked rulers | 22dp |
+  | Position | 16dp |
+  | Dial | 32dp |
+- **Opacity, Timing and Audio:** centred the same way. Audio's group is measured rather than computed, because its info text has no fixed height.
+- **Mode column:** stays top-aligned.
+- **Fallback:** a group taller than its area is top-aligned and scrolls. It never overlaps and is never clipped. Because sheet heights scale with font scale, every group fits at 1, 1.3 and 2.
+
+**Edit Solid FULL picker.**
+
+- `ColourPickerLayout.full` keeps its square cap: `SQUARE_MAX` 200, or less when the width is narrow.
+- The controls row is now exactly the square, instead of being stretched to the page.
+- The picker (`FullPickerMetrics.height`) is centred vertically in any leftover height.
+- The COMPACT variant is untouched. Its header row is only skipped when a caller passes `header = false` (the marker popover).
+
+### Deviations
+
+1. **The marker popover's compact picker has no header row** (new `header = false` parameter on `FluxxColourPicker`). With a single target, no eyedropper, no reset and no inherit, the header would be an empty 40dp row. Every other compact picker keeps its header, so the compact look is unchanged.
+2. **No eyedropper in the marker popover.** Sampling needs the preview surface, which the timeline popover does not own, and "where it applies" allowed leaving it out.
+3. **Tapping the playhead to add now also pauses playback** (`onMarkerConfigure`), because it opens the popover. Before, only hold paused.
+4. **Holding the playhead on an empty frame creates the marker immediately**, the same as tap. There is no longer a staged, unsaved draft.
+5. **Off-bar layer markers anchor to the playhead target.** A retained layer marker outside its trimmed clip has no glyph on the bar, so this is the only anchor available.
+6. **The layer-marker popover lives inside the lazy timeline row.** If that row scrolls out of composition while the popover is open, the popover leaves with it; the session stays and closes on the next open or removal. In practice an outside tap, including the start of a scroll, closes the popover first.
+7. **Description placeholder** is plain secondary text in the field, not a floating label (monochrome, single row).
+8. **Slider rows stack with no extra gap** (`SLIDER_GAP = 0`): the 20dp label line separates them. With an 8dp gap, video Timing (3 × 68 + 16 = 220) would not fit the 208dp content of a 268 sheet at font scale 1.
+9. **Text rows grow by 20dp per +1.0 font scale**, rather than by multiplying the whole height. That is one extra text line at 2×, enough for the 13–16sp text in these rows without doubling the boxes.
+10. **The mode column is 40dp wide**, matching the 40dp tiles (was 48). The column freed 8dp, which goes to the centred content.
+11. **Audio uses measured centring.** Its info text has no fixed height, so `CentredSectionGroup(null, …)` measures the group instead of using arithmetic.
+12. **`LogScaleRuler(readoutDp)` is now the final readout height** (already font-scaled by `SectionLayout`). `null` keeps the legacy 24 × fs default.
+13. **The anchor-point controls are unchanged** (not centred). They are a 3×3 grid that already fills the column, and the spec named only the Position, Rotation and Scale groups.
+
+### Updated existing tests (structure legitimately changed)
+
+- **`RailAndRulerLayoutTest`.**
+  - Replaced (the fill-the-area arithmetic was removed): `scaleRulerUsesTheFreedHeightAndAlwaysFits`, `positionPadAndDialAreLargerAndFit`, `sliderRowsAreLargerAndNeverOverflow`.
+  - Added:
+    - `targetSizesAtFontScaleOne`
+    - `sizesDoNotDependOnTheSheetHeightOrPreviewState`
+    - `groupsAreCentredWithEqualMargins`
+    - `everythingFitsAtEveryFontScaleAndHorizontally`
+    - `touchTargetsAreAtLeast40`
+    - `editSolidPickerIsNotStretched`
+  - The suite went from 7 to 10 tests.
+- **`ColourPickerFamilyTest`.** The marker surface moved from `MarkerDialog.kt` to `MarkerPopover.kt`. The anchored-popover assertion now reads `AnchoredPopover(markerPopoverOpen` in `TimelineView`.
+
+### Gate
+
+- **Compiles:** `:app:compileDebugKotlin`, `:app:compileReleaseKotlin` and `:app:compileDebugAndroidTestKotlin`. Native code was not touched.
+- **JVM:** `:app:testDebugUnitTest` ran **357 tests (343 previous + 14 new)**, with 0 failures, errors or skips.
+  - New suite: `MarkerPopoverTest` (8).
+  - `LayerKeyMarkersTest` went from 5 to 8.
+  - `RailAndRulerLayoutTest` went from 7 to 10 (3 replaced, 6 added).
+- No APK packaging and no device run.
+
+### Exact A16 test list
+
+1. **Add opens the popover.**
+   - With no layer selected, tap the playhead on an empty frame. A red marker appears at the playhead immediately.
+   - One popover opens, anchored to the ruler pentagon (below it when there is no room above) and never centred.
+   - It shows a description field, then the compact picker: hex/alpha, SV square, hue strip, alpha slider and marker swatches.
+   - Select a layer and repeat. The orange pennant gets the popover, above or below the layer bar.
+   - Try markers near the left and right screen edges: the popover stays 8dp inside the screen.
+2. **Live apply.**
+   - Type a description: the label beside the flag updates as you type.
+   - Drag SV/hue, tap a swatch, type hex `00FF00` and alpha `50`: the flag and the playhead tint change live.
+   - The keyboard never covers the field: only the popover lifts and the preview/timeline do not resize.
+3. **Closing keeps edits.**
+   - Tap outside: the popover closes and the description and colour stay.
+   - Reopen by holding the playhead on the marker; edit; press Back (the keyboard hides first, then the popover closes). The edits stay.
+   - Undo steps back once per description session and once per colour interaction, not per keystroke. A further undo removes the added marker.
+4. **Removal unchanged.**
+   - With the playhead on a marker, tap the playhead: the marker is removed (one undo restores it).
+   - Tapping a parked ruler/layer flag also removes it.
+   - If the popover was open on a marker that undo removes, the popover closes.
+5. **No Add/Save/Delete/X anywhere** in the marker UI, and no centred dialog.
+6. **Layer keyframes centred.**
+   - Key several properties on video, image, solid and text layers. The diamonds sit on the vertical middle of the bar.
+   - Where they cross the layer name, each diamond keeps a thin ring in the bar colour and stays readable, and the name is not hidden or shortened.
+   - The focused property's keys are full-size and tappable/draggable at the new height. The others are small and dim.
+   - Check with the preview normal and expanded, with the layer selected and not.
+   - Trim and move handles behave as before.
+7. **Same control sizes everywhere.**
+   - Open Transform (Position, Rotation, Scale linked/unlinked), Opacity and Timing (including a video layer) with the preview normal (328) and expanded (268).
+   - The pad (128), dial (144), ruler (80 / 164), X/Y boxes (40) and slider rows (20 + 48) are identical in both.
+   - Each group is vertically centred, with equal space above and below.
+8. **Scale ruler centred:** linked and unlinked, the readout + ruler group is in the middle of the content, between the rail and the mode column. The readout is medium-sized (not the large TEXT UI 7 readout).
+9. **Edit Solid picker not oversized:** the SV square stays at most 200dp and the picker sits centred with the palette below, at 268 and 328.
+10. **Font scale 1.3 and 2:** nothing overlaps or clips on Transform, Opacity, Timing, Audio or Edit Solid. Text rows are taller; pads, dials and strips are not.
+11. **Regression:**
+    - Edit Text layout, Fonts page, rail, badges, single-row headers;
+    - text colour popover;
+    - keyframe tap-to-seek and hold-drag snapping to markers;
+    - marker navigation (Prev/Next);
+    - save and reopen (marker colours and descriptions persist).

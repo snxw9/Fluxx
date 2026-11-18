@@ -12,14 +12,28 @@ import com.fluxx.android.model.CompositionLayer
  * properties (every transform property; for text every text property, Source Text style/paragraph keys and animator
  * tracks). Keys of the selected/focused property draw at full ink and normal size; the others are quiet (dimmed,
  * smaller). Keys at the same time collapse into one marker, full ink if any of them is the focused property's.
+ * Markers sit on the bar's vertical midline, drawn above the layer name with a knock-out ring in the bar colour.
  * Times are aggregated once per layer change (the caller remembers the result), never per frame.
  */
 internal object LayerKeyMarkers {
     const val FOCUSED_DP = 10f
     const val QUIET_DP = 7f
     const val QUIET_ALPHA = .45f
-    /** Markers sit along the lower part of the bar, clear of the centred layer name. */
-    const val BOTTOM_INSET_DP = 2f
+    /** Knock-out ring in the bar colour around every marker, so a marker over the layer name stays readable. */
+    const val KNOCKOUT_DP = 1.5f
+    /** Horizontal hit target of a focused-property key (the vertical target is the whole row). */
+    const val HIT_WIDTH_DP = 48f
+
+    /** Top of a marker of [sizeDp] centred on the vertical midline of a bar [barHeightDp] tall starting at [barTopDp]. */
+    fun markerTop(barTopDp: Float, barHeightDp: Float, sizeDp: Float) = barTopDp + (barHeightDp - sizeDp) / 2f
+    /** Centre of the marker: always the bar centre, whatever the bar height or marker size. */
+    fun markerCentreY(barTopDp: Float, barHeightDp: Float, sizeDp: Float) = markerTop(barTopDp, barHeightDp, sizeDp) + sizeDp / 2f
+    /** Hit region of a key at [xDp]: [HIT_WIDTH_DP] wide, the full row tall, so it is centred on the marker. */
+    fun hitRegion(xDp: Float, rowHeightDp: Float) = floatArrayOf(xDp - HIT_WIDTH_DP / 2f, 0f, xDp + HIT_WIDTH_DP / 2f, rowHeightDp)
+    /** The knock-out is always drawn: checking glyph overlap per frame would cost more than the extra stroke. */
+    const val KNOCKOUT_ALWAYS = true
+    /** Stroke width that leaves a [KNOCKOUT_DP] ring outside the diamond (strokes are centred on the path). */
+    const val KNOCKOUT_STROKE_DP = 2 * KNOCKOUT_DP
 
     data class Marker(val clipTimeUs: Long, val focused: Boolean) {
         val sizeDp get() = if (focused) FOCUSED_DP else QUIET_DP

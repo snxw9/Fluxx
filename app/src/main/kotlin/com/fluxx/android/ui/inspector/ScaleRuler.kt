@@ -144,7 +144,7 @@ internal object ScaleRulerMath {
  */
 @Composable internal fun LogScaleRuler(label: String, value: Float, onBegin: () -> Unit, onPreview: (Float) -> Unit,
     onCommit: () -> Unit, onCancel: () -> Unit, onTyped: (Float) -> Unit, onReset: () -> Unit, modifier: Modifier = Modifier,
-    readoutDp: Float = ScaleRulerMath.READOUT_DP, stripDp: Float = ScaleRulerMath.STRIP_DP) {
+    readoutDp: Float? = null, stripDp: Float = ScaleRulerMath.STRIP_DP) {
     val view = LocalView.current
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
@@ -166,14 +166,15 @@ internal object ScaleRulerMath {
     }
     val fontScale = density.fontScale.coerceAtLeast(1f)
     Column(modifier.testTag("scale-ruler-$label"), verticalArrangement = Arrangement.spacedBy(ScaleRulerMath.GAP_DP.dp)) {
-        Box(Modifier.fillMaxWidth().height((readoutDp * fontScale).dp), contentAlignment = Alignment.Center) {
+        // [readoutDp] is the final (already font-scaled) readout height from SectionLayout; null = the legacy default.
+        Box(Modifier.fillMaxWidth().height((readoutDp ?: (ScaleRulerMath.READOUT_DP * fontScale)).dp), contentAlignment = Alignment.Center) {
             Row(Modifier.pointerInput(Unit) { detectTapGestures(onTap = { editing = true }, onDoubleTap = { onReset() }) }
                 .semantics(mergeDescendants = true) {
                     contentDescription = "$label ${ScaleRulerMath.readout(shown)}. Tap to type, double-tap to reset to 100 percent"
                     onClick("Type $label") { editing = true; true }
                 }, verticalAlignment = Alignment.CenterVertically) {
                 Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 6.dp))
-                Text(ScaleRulerMath.readout(shown), color = TextPrimary, fontFamily = FontFamily.Monospace, style = if (readoutDp >= SectionLayout.READOUT_MAX) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium, lineHeight = if (readoutDp >= SectionLayout.READOUT_MAX) 28.sp else 22.sp, maxLines = 1)
+                Text(ScaleRulerMath.readout(shown), color = TextPrimary, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.titleMedium, lineHeight = 22.sp, maxLines = 1)
                 AnchoredPopover(editing, { editing = false }, "scale-readout-entry") {
                     InspectorValueField(PropertyLimits.format(PropertyLimits.LAYER_SCALE, shown * 100f), label, "%",
                         { text -> editing = false; PropertyLimits.parseTyped(PropertyLimits.LAYER_SCALE, text)?.let { onTyped(it / 100f) } }, { editing = false })
@@ -261,11 +262,11 @@ internal object ScaleRulerMath {
     LogScaleRuler("Scale", v, {}, { v = it }, {}, {}, { v = it }, { v = 1f }, Modifier.padding(8.dp).fillMaxWidth())
 }
 
-/** Unlinked Width + Height rulers inside the Transform content height of a 268dp sheet (208dp since TEXT UI 7). */
+/** Unlinked Width + Height rulers (TEXT UI 8: fixed 2 x 80dp + 4, centred) in the 208dp content of a 268dp sheet. */
 @Preview(widthDp = 260, heightDp = 208, backgroundColor = 0xFF1C1C1C, showBackground = true)
 @Composable private fun LogScaleRulerCompactPreview() {
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(ScaleRulerMath.GAP_DP.dp)) {
-        LogScaleRuler("Width", 1f, {}, {}, {}, {}, {}, {}, Modifier.fillMaxWidth(), SectionLayout.READOUT_MAX, SectionLayout.STRIP_MAX)
-        LogScaleRuler("Height", 2.5f, {}, {}, {}, {}, {}, {}, Modifier.fillMaxWidth(), SectionLayout.READOUT_MAX, SectionLayout.STRIP_MAX)
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(ScaleRulerMath.GAP_DP.dp, Alignment.CenterVertically)) {
+        LogScaleRuler("Width", 1f, {}, {}, {}, {}, {}, {}, Modifier.fillMaxWidth(), SectionLayout.ruler(1f).readout, SectionLayout.STRIP)
+        LogScaleRuler("Height", 2.5f, {}, {}, {}, {}, {}, {}, Modifier.fillMaxWidth(), SectionLayout.ruler(1f).readout, SectionLayout.STRIP)
     }
 }
