@@ -1,5 +1,16 @@
 # Edit Text consolidation — approved plan
 
+**TEXT UI 6 (2026-11-18):** device feedback on TEXT UI 5. Changes:
+
+- Shared heights are back to the original 268/328dp on every page; Edit Text fits with smaller tiles (top row, two 3×3 blocks, bottom bar).
+- One rounded icon family (`InspectorIcons`) across the inspector and action bar.
+- The utility rail is a compact top-aligned stack, and its ⋮ is the only Edit Text overflow menu.
+- The colour picker lives inside the colour popover.
+- The scale ruler is visible again and follows the finger.
+- SDF atlas tiers (48/96/192/384 ppem) keep large text sharp.
+
+See [TEXT_UI_OVERHAUL.md](../checkpoints/TEXT_UI_OVERHAUL.md#text-ui-6-fit-layout-icon-family-compact-rail-colour-popover-picker-ruler-fix-sdf-tiers). The TEXT UI 5 note below is historical.
+
 **TEXT UI 5 (2026-11-18):** the pass-2 rework was rejected on the A16 and is superseded by a single-header inspector page with anchored slider popovers, a shared limits table, keyboard-overlay handling and a log-scale Transform ruler. Shared inspector heights rose to 308/344dp. The current surface, limits, ruler spec, deviations and A16 list are in [TEXT_UI_OVERHAUL.md](../checkpoints/TEXT_UI_OVERHAUL.md#text-ui-5-single-header-page-slider-popovers-limits-log-scale-ruler); §11 below is historical.
 
 **Rework status (2026-11-18):** After the user's A16 review ("too cluttered and confusing"), the follow-up rework is implemented in source, device-unverified, in two commits (tab faces; menu/Back/status/icons). It supersedes the surface sketches in §1, the popover/launcher model in §1–§3, the status header in §2 and the mapping in §4. The current surface and the **final old-to-new inventory** are in [§11](#11-rework-2026-11-18-final-surface-and-inventory). Gate results, deviations and the exact A16 user-run list are in [TEXT_UI_OVERHAUL.md](../checkpoints/TEXT_UI_OVERHAUL.md#rework-commit-2-menu-back-status-and-icons).

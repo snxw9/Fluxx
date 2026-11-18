@@ -41,6 +41,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private var preparedFontRevision= -1L
     private val textLayouts = LinkedHashMap<Triple<String, TextSourceDocument, Boolean>, ProductLayout>(64, .75f, true)
     private class PreparedText(val layer: CompositionLayer, val sources: Array<TextSourceDocument>, val layouts: Array<ProductLayout>,
+        val catalogueHandles: LongArray,
         val animations: Array<PreparedTextAnimation>) {
         private val sourceIndices=java.util.IdentityHashMap<TextSourceDocument,Int>().also { map ->
             for(document in listOf(layer.text.source.sourceDocument)+layer.text.source.keyframes.map { it.sourceDocument })
@@ -95,7 +96,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 RenderBridge.bindTextCharacters(session,layouts[i].handle,handles,characters.catalogue.codepoints,characters.fontIndices,
                     sources[i/2].text,animations[i].modifiers,characters.codes)
             }
-            PreparedText(layer,sources,layouts,animations)
+            PreparedText(layer,sources,layouts,handles ?: LongArray(0),animations)
         }.toTypedArray()
         require(characterBytes+textLayouts.values.sumOf { it.packetBytes.toLong() }<=64L*1024*1024) { "Prepared text/character packets exceed 64 MiB; reduce fonts or alternatives" }
         preparedHandles = (preparedText.flatMap { it.layouts.map { layout -> layout.handle } }+characterHandles).distinct().toLongArray()
@@ -144,6 +145,53 @@ class CompositionRenderer(private val context: Context, private val repository: 
         check(RenderBridge.finish(session)); staged = 0
         if(interactive && TextEditTimings.waitingFor(project)) TextEditTimings.frameReady(project,RenderBridge.textStats(session))
     }
+    // ---- SDF atlas tiers -------------------------------------------------------------------------------------
+    private val textTierByLayer = HashMap<Long, Int>()
+    private var lastPreviewCall = 0L
+    private var lastPreviewTime = -1L
+    /**
+     * Picks each text layer's SDF tier from its on-screen pixels per em (with hysteresis) and hands the result to the
+     * native renderer before preparation. Inactive layers drop to the base tier. Export generates inline (synchronous);
+     * preview generates off-thread and uses the previous tier until the sharper glyphs are ready.
+     */
+    private fun applyTextTiers(project: ProjectDocument, timeUs: Long, outputScale: Float) {
+        if (preparedText.isEmpty()) return
+        val comp = project.composition
+        val byHandle = HashMap<Long, Int>()
+        val requests = ArrayList<SdfAtlasTiers.Request>()
+        for (entry in preparedText) {
+            val layer = entry.layer
+            val active = layer.visible && layer.timing.isActive(timeUs) && (comp.durationUs == null || timeUs < comp.durationUs)
+            val local = timeUs - layer.resolvedKeyframeAnchorUs
+            val source = layer.text.source.evaluateDocument(local)
+            val tier = if (!active) SdfAtlasTiers.BASE else {
+                layer.evaluatedTransformInto(timeUs, evaluatedTransform)
+                val size = layer.text.size.evaluate(local)
+                val runScale = source.runs.maxOfOrNull { it.style.sizeFactor * maxOf(it.style.horizontalScale, it.style.verticalScale) / 100f } ?: 1f
+                val animation = entry.animations[entry.index(source, layer.text.effectiveLigatures(local))]
+                animation.evaluate(local)
+                val referenceWidth = layer.referenceWidth.takeIf { it > 0 } ?: comp.width
+                val referenceHeight = layer.referenceHeight.takeIf { it > 0 } ?: comp.height
+                val projection = maxOf(comp.width.toFloat() / referenceWidth, comp.height.toFloat() / referenceHeight)
+                val layerScale = maxOf(kotlin.math.abs(evaluatedTransform[2]), kotlin.math.abs(evaluatedTransform[3])) * projection
+                val px = SdfAtlasTiers.pixelsPerEm(size, runScale, SdfAtlasTiers.maxGlyphScale(animation.modifiers), layerScale, outputScale)
+                val distance = SdfAtlasTiers.distanceEm(layer.text.strokeWidth.evaluate(local), size, source.runs.any { it.style.fauxBold },
+                    SdfAtlasTiers.maxModifierDistanceEm(animation.modifiers))
+                SdfAtlasTiers.select(px, textTierByLayer[layer.id], distance)
+            }
+            textTierByLayer[layer.id] = tier
+            requests += SdfAtlasTiers.Request(layer.id, tier, source.text.filterNot { it.isWhitespace() }.toSet().size.coerceAtLeast(1))
+        }
+        // Stay inside the shared atlas cap: highest tiers step down first (native packing degrades further if needed).
+        val granted = SdfAtlasTiers.degrade(requests, SdfAtlasTiers.capBytes(lowRam))
+        for (entry in preparedText) {
+            val tier = granted[entry.layer.id] ?: SdfAtlasTiers.BASE
+            for (handle in entry.layouts.map { it.handle } + entry.catalogueHandles.toList()) byHandle[handle] = maxOf(byHandle[handle] ?: SdfAtlasTiers.BASE, tier)
+        }
+        val handles = byHandle.keys.toLongArray()
+        RenderBridge.textTiers(session, handles, IntArray(handles.size) { byHandle.getValue(handles[it]) }, !interactive)
+    }
+
     private var previewQuality: PreviewResolution? = null
     private var previewCompWidth = 0
     private var previewCompHeight = 0
@@ -167,7 +215,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 TextIdlePrewarm.partner(context,font,StyledTextPreparation.shapingDocument(source),!ligatures)} }
         catch (error: Exception) { RenderBridge.releaseText(session, handle); throw error }
     }
-    init { KeyframeEvaluator.easeProgress(0f, EasingPreset.EASY_EASE); RenderBridge.configureText(session, if(lowRam) 2 else 4) }
+    init { KeyframeEvaluator.easeProgress(0f, EasingPreset.EASY_EASE); RenderBridge.configureText(session, SdfAtlasTiers.pages(lowRam)) }
 
     private fun flush() {
         if (staged == 0) return
@@ -223,6 +271,20 @@ class CompositionRenderer(private val context: Context, private val repository: 
             previewCompWidth = comp.width; previewCompHeight = comp.height; previewQuality = resolution
         }
         renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled)
+        // Sharper SDF tiers are generated off-thread; this frame used the previous tier. Unless frames are already
+        // streaming (playback), wait (cancellably) for the glyphs and redraw once so a settled frame becomes sharp.
+        val now = System.nanoTime()
+        val frame = comp.frameRate.let { it.frameTimeUs(3) - it.frameTimeUs(0) }
+        val streaming = lastPreviewTime >= 0 && timeUs > lastPreviewTime && timeUs - lastPreviewTime <= frame && now - lastPreviewCall < 100_000_000L
+        lastPreviewCall = now; lastPreviewTime = timeUs
+        if (streaming || RenderBridge.awaitTextTiers(session, 0) == 0) return
+        val deadline = now + 1_500_000_000L
+        while (!cancelled() && System.nanoTime() < deadline) {
+            if (RenderBridge.awaitTextTiers(session, 8) == 0) {
+                if (!cancelled()) renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled)
+                return
+            }
+        }
     }
 
     private fun renderTarget(project: ProjectDocument, timeUs: Long, targetWidth: Int, targetHeight: Int,
@@ -247,6 +309,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
         val comp=project.composition
         check(RenderBridge.begin(session,targetWidth,targetHeight,comp.width,comp.height)) { "Could not start composition frame" }
         staged=0
+        val outputScale=if(comp.width>0) targetWidth.toFloat()/comp.width else 1f
+        applyTextTiers(project,timeUs,outputScale)
         if (onlyText && TextFixtureProvider.entries().isEmpty()) { renderPreparedText(project,timeUs,cancelled); return }
         val fixtures = if (com.fluxx.android.BuildConfig.DEBUG) TextFixtureProvider.entries() else emptyList()
         val fixtureIds = fixtures.mapTo(mutableSetOf()) { it.id }

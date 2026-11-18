@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -177,18 +178,9 @@ fun ElementInspectorSheet(
                         }.semantics { contentDescription = "Swipe down to dismiss inspector" }, contentAlignment = Alignment.Center) {
                             Box(Modifier.size(36.dp, 4.dp).background(Border, CircleShape))
                         }
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            if (section != null) IconButton(onClick = { focusManager.clearFocus(); section = null },
-                                modifier = Modifier.semantics { contentDescription = "Back to layer tools" }) {
-                                Canvas(Modifier.size(22.dp)) {
-                                    val path = Path().apply {
-                                        moveTo(size.width * .65f, size.height * .2f)
-                                        lineTo(size.width * .35f, size.height * .5f)
-                                        lineTo(size.width * .65f, size.height * .8f)
-                                    }
-                                    drawPath(path, TextPrimary, style = Stroke(1.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-                                }
-                            }
+                        Row(Modifier.fillMaxWidth().height(InspectorChromeBudget.nameRow(compactHeight).dp), verticalAlignment = Alignment.CenterVertically) {
+                            val hit = InspectorChromeBudget.nameRow(compactHeight).dp
+                            if (section != null) InspectorIconButton(InspectorIcons.icon("BACK"), "Back to layer tools") { focusManager.clearFocus(); section = null }
                             BasicTextField(
                                 value = layer.name,
                                 onValueChange = onRename,
@@ -200,7 +192,7 @@ fun ElementInspectorSheet(
                             )
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(hit)
                                     .combinedClickable(
                                         role = Role.Button,
                                         onClickLabel = "Duplicate layer",
@@ -211,16 +203,17 @@ fun ElementInspectorSheet(
                                     .semantics { contentDescription = "Tap to duplicate, hold to copy" },
                                 contentAlignment = Alignment.Center
                             ) {
-                                DuplicateVectorIcon(TextPrimary)
+                                Icon(InspectorIcons.icon("DUPLICATE"), null, Modifier.size(InspectorIcons.SIZE), tint = TextPrimary)
                             }
-                            IconButton(onClick = onDelete, modifier = Modifier.semantics { contentDescription = "Delete layer" }) {
-                                DeleteVectorIcon(TextPrimary)
+                            Box(Modifier.size(hit).clickable(role = Role.Button, onClick = onDelete).semantics { contentDescription = "Delete layer" },
+                                contentAlignment = Alignment.Center) {
+                                Icon(InspectorIcons.icon("DELETE_LAYER"), null, Modifier.size(InspectorIcons.SIZE), tint = TextPrimary)
                             }
                             if (layer.type == LayerType.VIDEO) {
                                 IconToggleButton(checked = section == InspectorSection.AUDIO,
                                     onCheckedChange = { focusManager.clearFocus(); section = if (it) InspectorSection.AUDIO else InspectorSection.TRANSFORM },
-                                    modifier = Modifier.semantics { contentDescription = "Audio controls" }) {
-                                    AudioVectorIcon(if (section == InspectorSection.AUDIO) Highlight else TextSecondary)
+                                    modifier = Modifier.size(hit).semantics { contentDescription = "Audio controls" }) {
+                                    Icon(InspectorIcons.icon("AUDIO"), null, Modifier.size(InspectorIcons.SIZE), tint = if (section == InspectorSection.AUDIO) Highlight else TextSecondary)
                                 }
                             }
                         }
@@ -467,15 +460,15 @@ private fun ScaleController(
     linkToggle: @Composable () -> Unit
 ) {
     var initial by remember { mutableStateOf(Offset(1f, 1f)) }
-    Column(Modifier.fillMaxWidth().fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxWidth().testTag("scale-controller"), verticalArrangement = Arrangement.spacedBy(ScaleRulerMath.GAP_DP.dp)) {
         key(linked) {
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+            Box(Modifier.fillMaxWidth()) {
                 LogScaleRuler(if (linked) "Scale" else "Width", scaleX,
                     onBegin = { initial = Offset(scaleX, scaleY); onBegin() },
                     onPreview = { value -> onPreview(value, if (linked) ScaleRulerMath.linkedY(initial.x, initial.y, value) else initial.y) },
                     onCommit = onCommit, onCancel = onCancel,
                     onTyped = { value -> onTyped(value, if (linked) ScaleRulerMath.linkedY(scaleX, scaleY, value) else scaleY) },
-                    onReset = { onTyped(1f, if (linked) 1f else scaleY) }, modifier = Modifier.fillMaxSize())
+                    onReset = { onTyped(1f, if (linked) 1f else scaleY) }, modifier = Modifier.fillMaxWidth())
                 Box(Modifier.align(Alignment.TopEnd)) { linkToggle() }
             }
             if (!linked) {
@@ -484,7 +477,7 @@ private fun ScaleController(
                     onPreview = { onPreview(initial.x, it) },
                     onCommit = onCommit, onCancel = onCancel,
                     onTyped = { onTyped(scaleX, it) }, onReset = { onTyped(scaleX, 1f) },
-                    modifier = Modifier.weight(1f).fillMaxWidth())
+                    modifier = Modifier.fillMaxWidth())
             }
         }
     }
@@ -501,13 +494,11 @@ private fun FittedSquare(modifier: Modifier, maxSize: Dp, content: @Composable (
 private data class AnchorSource(val width: Int, val height: Int, val rotation: Int = 0, val pixelAspect: Float = 1f,
     val text: TextLayoutMetrics? = null)
 
+/** Anchor cell marker: a rounded frame with a dot at the anchor's relative position (Box shapes, no Canvas). */
 @Composable
-private fun AnchorSubModeIcon(color: Color) {
-    Canvas(Modifier.size(22.dp)) {
-        drawCircle(color, size.minDimension * .28f, style = Stroke(1.3.dp.toPx()))
-        drawCircle(color, 2.dp.toPx())
-        drawLine(color, Offset(size.width * .5f, 0f), Offset(size.width * .5f, size.height), 1.3.dp.toPx(), StrokeCap.Round)
-        drawLine(color, Offset(0f, size.height * .5f), Offset(size.width, size.height * .5f), 1.3.dp.toPx(), StrokeCap.Round)
+private fun AnchorCellMarker(ax: Float, ay: Float, tint: Color) {
+    Box(Modifier.size(18.dp).padding(1.dp).border(1.5.dp, tint, RoundedCornerShape(4.dp))) {
+        Box(Modifier.align(androidx.compose.ui.BiasAlignment(ax * 2f - 1f, ay * 2f - 1f)).padding(3.dp).size(4.dp).background(tint, CircleShape))
     }
 }
 
@@ -552,13 +543,7 @@ private fun AnchorPointControls(x: Float, y: Float, positionAnimated: Boolean, r
                             if (!ready) disabled()
                             if (ready && row == 1 && col == 1) onClick("Centre anchor") { onEdit(.5f, .5f); true }
                         }, contentAlignment = Alignment.Center) {
-                            Canvas(Modifier.size(18.dp)) {
-                                val tint = if (!ready) TextDisabled else if (selected) Highlight else TextSecondary
-                                drawRoundRect(tint, topLeft = Offset(2.dp.toPx(), 2.dp.toPx()),
-                                    size = Size(size.width - 4.dp.toPx(), size.height - 4.dp.toPx()),
-                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()), style = Stroke(1.dp.toPx()))
-                                drawCircle(tint, 2.5.dp.toPx(), Offset((.15f + ax * .7f) * size.width, (.15f + ay * .7f) * size.height))
-                            }
+                            AnchorCellMarker(ax, ay, if (!ready) TextDisabled else if (selected) Highlight else TextSecondary)
                         }
                     }
                 }
@@ -576,9 +561,11 @@ private fun number(value: Float) = String.format(java.util.Locale.ROOT, "%.1f", 
 internal data class RailMenuItem(val label: String, val enabled: Boolean = true, val action: () -> Unit)
 
 /**
- * The shared left utility rail (Transform, Opacity, Edit Text): keyframe diamond, Graph (disabled), optional 3D
- * (disabled; dropped for text) and the property-options ⋮ with reset items. [keyIcon]/[keyState] let a page show
- * richer diamond states (between keys, Hold squares); [confirm] shows a small anchored confirmation on the ⋮.
+ * The shared left utility rail (Transform, Opacity, Edit Text): a tight top-aligned stack of 40dp tiles with a 6dp
+ * gap, in this order: keyframe diamond, Graph (disabled), optional 3D (disabled; dropped for text), property-options ⋮.
+ * When a short sheet cannot hold the full stack, only the disabled placeholders shrink. [keyIcon]/[keyState] let a page
+ * show richer diamond states (between keys, Hold squares); [confirm] shows a small anchored confirmation on the ⋮,
+ * and [menuAnchor] hosts popovers opened from a ⋮ item (anchored on the ⋮).
  */
 @Composable
 internal fun InspectorUtilityRail(resetLabel: String, onReset: () -> Unit,
@@ -586,33 +573,38 @@ internal fun InspectorUtilityRail(resetLabel: String, onReset: () -> Unit,
     hasKeyframeAtPlayhead: Boolean = false, onToggleKeyframe: (() -> Unit)? = null,
     show3D: Boolean = true, keyIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     keyLabel: String? = null, keyState: String? = null, extraItems: List<RailMenuItem> = emptyList(),
-    confirm: Pair<String, () -> Unit>? = null, onConfirmDismiss: () -> Unit = {}) {
+    confirm: Pair<String, () -> Unit>? = null, onConfirmDismiss: () -> Unit = {}, menuAnchor: @Composable () -> Unit = {}) {
     var menu by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
-    Column(Modifier.width(40.dp).fillMaxHeight().testTag("inspector-rail"), verticalArrangement = Arrangement.SpaceBetween) {
-        IconButton(onClick={ focus.clearFocus(); onToggleKeyframe?.invoke() }, enabled=onToggleKeyframe!=null,
-            modifier=Modifier.size(36.dp).testTag("inspector-key-diamond").semantics {
-                contentDescription=keyLabel ?: if(hasKeyframeAtPlayhead) "Remove keyframe at playhead" else "Add keyframe at playhead"
-                if(keyState!=null) { stateDescription=keyState; liveRegion=androidx.compose.ui.semantics.LiveRegionMode.Polite }
-            }) {
-            val tint = if(onToggleKeyframe == null) TextDisabled else if(isAnimated) Highlight else TextSecondary
-            if(keyIcon!=null) Icon(keyIcon,null,Modifier.size(18.dp),tint=tint) else KeyframeVectorIcon(tint,hasKeyframeAtPlayhead)
-        }
-        IconButton(onClick={},enabled=false,modifier=Modifier.size(36.dp).semantics { contentDescription="Graph editor (not yet available)" }) { GraphVectorIcon(TextDisabled) }
-        if(show3D) IconButton(onClick={},enabled=false,modifier=Modifier.size(36.dp).semantics { contentDescription="3D layer controls (not yet available)" }) { InspectorCategoryIcon(InspectorSection.MOTION_BLUR,TextDisabled,cube=true) }
-        Box {
-            IconButton(onClick={ focus.clearFocus(); menu=true },modifier=Modifier.size(36.dp).semantics { contentDescription="Property options" }) { OverflowDotsVectorIcon(TextPrimary) }
-            DropdownMenu(menu,{menu=false}) {
-                DropdownMenuItem(text={Text(resetLabel)},onClick={menu=false;onReset()})
-                if(onResetAll!=null) DropdownMenuItem(text={Text("Reset all transforms")},onClick={menu=false;onResetAll()})
-                extraItems.forEach { item -> DropdownMenuItem(text={Text(item.label)},enabled=item.enabled,onClick={menu=false;item.action()}) }
-            }
-            AnchoredPopover(confirm!=null, onConfirmDismiss, "inspector-rail-confirm") {
-                Text(confirm?.first.orEmpty(), Modifier.widthIn(max=240.dp).padding(8.dp), color=TextPrimary, style=MaterialTheme.typography.labelMedium)
-                Row(Modifier.align(Alignment.End)) {
-                    TextButton(onClick=onConfirmDismiss) { Text("Cancel", color=TextSecondary) }
-                    TextButton(onClick={ confirm?.second?.invoke(); onConfirmDismiss() }) { Text("Reset", color=TextPrimary) }
+    BoxWithConstraints(Modifier.width(RailBudget.TILE.dp).fillMaxHeight().testTag("inspector-rail")) {
+        val disabledCount = if (show3D) 2 else 1
+        val placeholder = RailBudget.disabledHeight(maxHeight.value, 2, disabledCount).dp
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(RailBudget.GAP.dp)) {
+            val tint = if (onToggleKeyframe == null) TextDisabled else if (isAnimated) Highlight else TextSecondary
+            InspectorIconButton(keyIcon ?: InspectorIcons.icon(if (hasKeyframeAtPlayhead) "KEY_ON" else if (isAnimated) "KEY_ANIM" else "KEY"),
+                keyLabel ?: if (hasKeyframeAtPlayhead) "Remove keyframe at playhead" else "Add keyframe at playhead",
+                Modifier.testTag("inspector-key-diamond").semantics {
+                    if (keyState != null) { stateDescription = keyState; liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }
+                }, enabled = onToggleKeyframe != null, tint = tint) { focus.clearFocus(); onToggleKeyframe?.invoke() }
+            Box(Modifier.size(RailBudget.TILE.dp, placeholder).semantics { contentDescription = "Graph editor (not yet available)"; disabled() }.testTag("inspector-rail-graph"),
+                contentAlignment = Alignment.Center) { Icon(InspectorIcons.icon("GRAPH"), null, Modifier.size(minOf(InspectorIcons.SIZE, placeholder)), tint = TextDisabled) }
+            if (show3D) Box(Modifier.size(RailBudget.TILE.dp, placeholder).semantics { contentDescription = "3D layer controls (not yet available)"; disabled() }.testTag("inspector-rail-3d"),
+                contentAlignment = Alignment.Center) { Icon(InspectorIcons.icon("CUBE"), null, Modifier.size(minOf(InspectorIcons.SIZE, placeholder)), tint = TextDisabled) }
+            Box {
+                InspectorIconButton(InspectorIcons.icon("OVERFLOW"), "Property options", Modifier.testTag("inspector-rail-menu"), tint = TextPrimary) { focus.clearFocus(); menu = true }
+                DropdownMenu(menu, { menu = false }) {
+                    DropdownMenuItem(text = { Text(resetLabel) }, onClick = { menu = false; onReset() })
+                    if (onResetAll != null) DropdownMenuItem(text = { Text("Reset all transforms") }, onClick = { menu = false; onResetAll() })
+                    extraItems.forEach { item -> DropdownMenuItem(text = { Text(item.label) }, enabled = item.enabled, onClick = { menu = false; item.action() }) }
                 }
+                AnchoredPopover(confirm != null, onConfirmDismiss, "inspector-rail-confirm") {
+                    Text(confirm?.first.orEmpty(), Modifier.widthIn(max = 240.dp).padding(8.dp), color = TextPrimary, style = MaterialTheme.typography.labelMedium)
+                    Row(Modifier.align(Alignment.End)) {
+                        TextButton(onClick = onConfirmDismiss) { Text("Cancel", color = TextSecondary) }
+                        TextButton(onClick = { confirm?.second?.invoke(); onConfirmDismiss() }) { Text("Reset", color = TextPrimary) }
+                    }
+                }
+                menuAnchor()
             }
         }
     }
@@ -706,7 +698,7 @@ private fun OverhauledTransformSectionContent(
         TransformSubMode.ROTATION -> layer.animTransform.rotation.keyframes.any { it.timeUs == localTimeUs }
     }
 
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(TextInspectorBudget.RAIL_GAP.dp)) {
         InspectorUtilityRail(
             resetLabel = if (isAnchorMode) "Reset anchor point" else "Reset ${mode.name.lowercase()}",
             onReset = {
@@ -789,15 +781,15 @@ private fun OverhauledTransformSectionContent(
                 }
                 TransformSubMode.SCALE -> {
                     // Typed values (±50000%) come from each ruler's readout; Flip H/V stays in the layer menu.
-                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { ScaleController(transform.scaleX, transform.scaleY, linked, begin,
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) { ScaleController(transform.scaleX, transform.scaleY, linked, begin,
                         { x, y ->
                             onPreviewGesture(gestureBase.copy(scaleX = x, scaleY = y))
                         }, onCommitGesture, onCancelGesture,
                         { x, y -> val cap = PropertyLimits.LAYER_SCALE.hardMax / 100f
                             onEdit(transform.copy(scaleX = x.coerceIn(-cap, cap), scaleY = y.coerceIn(-cap, cap))) }) {
-                        IconToggleButton(checked = linked, onCheckedChange = { focusManager.clearFocus(); linked = it },
-                            modifier = Modifier.size(32.dp).semantics { contentDescription = "Link width and height scale" }) {
-                            LinkVectorIcon(linked, if (linked) Highlight else TextSecondary)
+                        Box(Modifier.size(40.dp, ScaleRulerMath.READOUT_DP.dp).toggleable(linked, role = Role.Switch) { focusManager.clearFocus(); linked = it }
+                            .semantics { contentDescription = "Link width and height scale" }.testTag("scale-link"), contentAlignment = Alignment.Center) {
+                            Icon(InspectorIcons.icon(if (linked) "LINK" else "LINK_OFF"), null, Modifier.size(InspectorIcons.INLINE), tint = if (linked) Highlight else TextSecondary)
                         }
                     } }
                 }
@@ -814,11 +806,11 @@ private fun OverhauledTransformSectionContent(
                     (if (isAnchorMode) "Anchor point; tap for Position" else "Position; tap again for Anchor point")
                     else item.name.lowercase().replaceFirstChar { it.uppercase() } }) {
                     val color = if (active) Highlight else TextSecondary
-                    when (item) {
-                        TransformSubMode.POSITION -> if (isAnchorMode) AnchorSubModeIcon(color) else PositionSubModeIcon(color, active = active)
-                        TransformSubMode.ROTATION -> RotationSubModeIcon(color, active = active)
-                        TransformSubMode.SCALE -> ScaleSubModeIcon(color, active = active)
-                    }
+                    Icon(InspectorIcons.icon(when (item) {
+                        TransformSubMode.POSITION -> if (isAnchorMode) "ANCHOR" else "POSITION"
+                        TransformSubMode.ROTATION -> "ROTATION"
+                        TransformSubMode.SCALE -> "SCALE"
+                    }), null, Modifier.size(InspectorIcons.SIZE), tint = color)
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -855,7 +847,7 @@ private fun CompactOpacitySectionContent(
             }
         }
     }
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(TextInspectorBudget.RAIL_GAP.dp)) {
         InspectorUtilityRail(
             resetLabel = "Reset opacity",
             onReset = {
@@ -1181,360 +1173,3 @@ private fun NumericInputDialog(
     )
 }
 
-// Vector Icons drawn cleanly with Canvas (no emoji)
-
-@Composable
-private fun BackChevronVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(18.dp)) {
-        val stroke = 2.dp.toPx()
-        val path = Path().apply {
-            moveTo(size.width * 0.65f, size.height * 0.15f)
-            lineTo(size.width * 0.3f, size.height * 0.5f)
-            lineTo(size.width * 0.65f, size.height * 0.85f)
-        }
-        drawPath(
-            path = path,
-            color = color,
-            style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        )
-    }
-}
-
-@Composable
-private fun CloseVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(14.dp)) {
-        val stroke = 1.6.dp.toPx()
-        drawLine(color, Offset(0f, 0f), Offset(size.width, size.height), stroke, StrokeCap.Round)
-        drawLine(color, Offset(size.width, 0f), Offset(0f, size.height), stroke, StrokeCap.Round)
-    }
-}
-
-@Composable
-private fun LinkVectorIcon(linked: Boolean, color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(16.dp)) {
-        val stroke = 1.5.dp.toPx()
-        val w = size.width
-        val h = size.height
-        // Left loop
-        drawRoundRect(
-            color = color,
-            topLeft = Offset(w * 0.1f, h * 0.25f),
-            size = Size(w * 0.45f, h * 0.5f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.2f),
-            style = Stroke(width = stroke)
-        )
-        // Right loop
-        drawRoundRect(
-            color = color,
-            topLeft = Offset(w * 0.45f, h * 0.25f),
-            size = Size(w * 0.45f, h * 0.5f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.2f),
-            style = Stroke(width = stroke)
-        )
-        if (linked) {
-            // Connecting bar in center
-            drawLine(
-                color = color,
-                start = Offset(w * 0.35f, h * 0.5f),
-                end = Offset(w * 0.65f, h * 0.5f),
-                strokeWidth = stroke,
-                cap = StrokeCap.Round
-            )
-        }
-    }
-}
-
-@Composable
-private fun TimingVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(22.dp)) {
-        val stroke = 1.6.dp.toPx()
-        val r = size.minDimension * 0.42f
-        val center = Offset(size.width / 2f, size.height / 2f)
-        // Clock circle
-        drawCircle(color = color, radius = r, center = center, style = Stroke(width = stroke))
-        // Clock hands
-        drawLine(
-            color = color,
-            start = center,
-            end = Offset(center.x, center.y - r * 0.6f),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
-        )
-        drawLine(
-            color = color,
-            start = center,
-            end = Offset(center.x + r * 0.45f, center.y),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
-        )
-    }
-}
-
-@Composable
-private fun DuplicateVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(20.dp)) {
-        val stroke = 1.6.dp.toPx()
-        // Back card
-        drawRoundRect(
-            color = color.copy(alpha = 0.6f),
-            topLeft = Offset(size.width * 0.28f, size.height * 0.08f),
-            size = Size(size.width * 0.62f, size.height * 0.62f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
-            style = Stroke(width = stroke)
-        )
-        // Front card
-        drawRoundRect(
-            color = color,
-            topLeft = Offset(size.width * 0.08f, size.height * 0.28f),
-            size = Size(size.width * 0.62f, size.height * 0.62f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
-            style = Stroke(width = stroke)
-        )
-        // Plus inside front card
-        val cx = size.width * 0.39f
-        val cy = size.height * 0.59f
-        val arm = size.width * 0.12f
-        drawLine(color, Offset(cx - arm, cy), Offset(cx + arm, cy), stroke, StrokeCap.Round)
-        drawLine(color, Offset(cx, cy - arm), Offset(cx, cy + arm), stroke, StrokeCap.Round)
-    }
-}
-
-@Composable
-private fun DeleteVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(20.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.6.dp.toPx()
-        // Lid
-        drawLine(color, Offset(w * 0.18f, h * 0.25f), Offset(w * 0.82f, h * 0.25f), stroke, StrokeCap.Round)
-        // Handle
-        val handle = Path().apply {
-            moveTo(w * 0.38f, h * 0.25f)
-            lineTo(w * 0.38f, h * 0.14f)
-            lineTo(w * 0.62f, h * 0.14f)
-            lineTo(w * 0.62f, h * 0.25f)
-        }
-        drawPath(handle, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        // Can body
-        val can = Path().apply {
-            moveTo(w * 0.26f, h * 0.25f)
-            lineTo(w * 0.30f, h * 0.86f)
-            lineTo(w * 0.70f, h * 0.86f)
-            lineTo(w * 0.74f, h * 0.25f)
-        }
-        drawPath(can, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        // Inner vertical rib lines
-        drawLine(color, Offset(w * 0.43f, h * 0.38f), Offset(w * 0.43f, h * 0.74f), stroke * 0.8f, StrokeCap.Round)
-        drawLine(color, Offset(w * 0.57f, h * 0.38f), Offset(w * 0.57f, h * 0.74f), stroke * 0.8f, StrokeCap.Round)
-    }
-}
-
-@Composable
-private fun TransformVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(22.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.6.dp.toPx()
-        // Center cross
-        drawLine(color, Offset(w * 0.2f, h * 0.5f), Offset(w * 0.8f, h * 0.5f), stroke, StrokeCap.Round)
-        drawLine(color, Offset(w * 0.5f, h * 0.2f), Offset(w * 0.5f, h * 0.8f), stroke, StrokeCap.Round)
-        // Arrowheads
-        // Left
-        val left = Path().apply { moveTo(w * 0.32f, h * 0.36f); lineTo(w * 0.18f, h * 0.5f); lineTo(w * 0.32f, h * 0.64f) }
-        drawPath(left, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        // Right
-        val right = Path().apply { moveTo(w * 0.68f, h * 0.36f); lineTo(w * 0.82f, h * 0.5f); lineTo(w * 0.68f, h * 0.64f) }
-        drawPath(right, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        // Top
-        val top = Path().apply { moveTo(w * 0.36f, h * 0.32f); lineTo(w * 0.5f, h * 0.18f); lineTo(w * 0.64f, h * 0.32f) }
-        drawPath(top, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        // Bottom
-        val bottom = Path().apply { moveTo(w * 0.36f, h * 0.68f); lineTo(w * 0.5f, h * 0.82f); lineTo(w * 0.64f, h * 0.68f) }
-        drawPath(bottom, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-    }
-}
-
-@Composable
-private fun AudioVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(22.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.6.dp.toPx()
-        // Speaker horn
-        val horn = Path().apply {
-            moveTo(w * 0.18f, h * 0.38f)
-            lineTo(w * 0.35f, h * 0.38f)
-            lineTo(w * 0.55f, h * 0.20f)
-            lineTo(w * 0.55f, h * 0.80f)
-            lineTo(w * 0.35f, h * 0.62f)
-            lineTo(w * 0.18f, h * 0.62f)
-            close()
-        }
-        drawPath(horn, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        // Sound wave
-        val wave = Path().apply {
-            moveTo(w * 0.70f, h * 0.35f)
-            quadraticTo(w * 0.82f, h * 0.50f, w * 0.70f, h * 0.65f)
-        }
-        drawPath(wave, color, style = Stroke(width = stroke, cap = StrokeCap.Round))
-    }
-}
-
-@Composable
-private fun ColorPaletteVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(22.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.3.dp.toPx()
-        // Palette circle outline
-        drawCircle(color, radius = w * 0.40f, style = Stroke(width = stroke))
-        // Droplets inside
-        drawCircle(color, radius = w * 0.07f, center = Offset(w * 0.38f, h * 0.38f))
-        drawCircle(color, radius = w * 0.07f, center = Offset(w * 0.62f, h * 0.38f))
-        drawCircle(color, radius = w * 0.07f, center = Offset(w * 0.50f, h * 0.65f))
-    }
-}
-
-@Composable
-private fun OpacityVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(22.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.3.dp.toPx()
-        val r = size.minDimension * 0.28f
-        // Left circle (outline)
-        drawCircle(
-            color = color,
-            radius = r,
-            center = Offset(w * 0.40f, h * 0.50f),
-            style = Stroke(stroke, cap = StrokeCap.Round)
-        )
-        // Right circle (semi-transparent fill + outline)
-        drawCircle(
-            color = color.copy(alpha = 0.35f),
-            radius = r,
-            center = Offset(w * 0.60f, h * 0.50f)
-        )
-        drawCircle(
-            color = color,
-            radius = r,
-            center = Offset(w * 0.60f, h * 0.50f),
-            style = Stroke(stroke, cap = StrokeCap.Round)
-        )
-    }
-}
-
-@Composable
-private fun KeyframeVectorIcon(color: Color, filled: Boolean = false, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(18.dp)) {
-        val w = size.width
-        val h = size.height
-        val path = Path().apply {
-            moveTo(w * 0.5f, h * 0.12f)
-            lineTo(w * 0.88f, h * 0.5f)
-            lineTo(w * 0.5f, h * 0.88f)
-            lineTo(w * 0.12f, h * 0.5f)
-            close()
-        }
-        if (filled) {
-            drawPath(path, color)
-        } else {
-            val stroke = 1.3.dp.toPx()
-            drawPath(path, color, style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        }
-    }
-}
-
-@Composable
-private fun GraphVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(18.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.3.dp.toPx()
-        // Axes
-        drawLine(color, Offset(w * 0.18f, h * 0.15f), Offset(w * 0.18f, h * 0.85f), stroke, StrokeCap.Round)
-        drawLine(color, Offset(w * 0.18f, h * 0.85f), Offset(w * 0.85f, h * 0.85f), stroke, StrokeCap.Round)
-        // Bezier curve
-        val curve = Path().apply {
-            moveTo(w * 0.22f, h * 0.80f)
-            cubicTo(w * 0.50f, h * 0.80f, w * 0.50f, h * 0.25f, w * 0.82f, h * 0.25f)
-        }
-        drawPath(curve, color, style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-    }
-}
-
-@Composable
-private fun OverflowDotsVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(18.dp)) {
-        val w = size.width
-        val h = size.height
-        val r = 1.4.dp.toPx()
-        drawCircle(color, r, Offset(w * 0.25f, h * 0.5f))
-        drawCircle(color, r, Offset(w * 0.50f, h * 0.5f))
-        drawCircle(color, r, Offset(w * 0.75f, h * 0.5f))
-    }
-}
-
-@Composable
-private fun PositionSubModeIcon(color: Color, modifier: Modifier = Modifier, active: Boolean = false) {
-    Canvas(modifier = modifier.size(20.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.3.dp.toPx()
-        drawLine(color, Offset(w * 0.22f, h * 0.5f), Offset(w * 0.78f, h * 0.5f), stroke, StrokeCap.Round)
-        drawLine(color, Offset(w * 0.5f, h * 0.22f), Offset(w * 0.5f, h * 0.78f), stroke, StrokeCap.Round)
-        // Arrowheads
-        val left = Path().apply { moveTo(w * 0.35f, h * 0.36f); lineTo(w * 0.20f, h * 0.5f); lineTo(w * 0.35f, h * 0.64f) }
-        drawPath(left, color, style = if (active) Fill else Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        val right = Path().apply { moveTo(w * 0.65f, h * 0.36f); lineTo(w * 0.80f, h * 0.5f); lineTo(w * 0.65f, h * 0.64f) }
-        drawPath(right, color, style = if (active) Fill else Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        val top = Path().apply { moveTo(w * 0.36f, h * 0.35f); lineTo(w * 0.5f, h * 0.20f); lineTo(w * 0.64f, h * 0.35f) }
-        drawPath(top, color, style = if (active) Fill else Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        val bottom = Path().apply { moveTo(w * 0.36f, h * 0.65f); lineTo(w * 0.5f, h * 0.80f); lineTo(w * 0.64f, h * 0.65f) }
-        drawPath(bottom, color, style = if (active) Fill else Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-    }
-}
-
-@Composable
-private fun RotationSubModeIcon(color: Color, modifier: Modifier = Modifier, active: Boolean = false) {
-    Canvas(modifier = modifier.size(20.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.3.dp.toPx()
-        val r = size.minDimension * 0.36f
-        val center = Offset(w * 0.5f, h * 0.5f)
-        drawArc(
-            color = color,
-            startAngle = 45f,
-            sweepAngle = 270f,
-            useCenter = false,
-            topLeft = Offset(center.x - r, center.y - r),
-            size = Size(r * 2f, r * 2f),
-            style = Stroke(stroke, cap = StrokeCap.Round)
-        )
-        val arrow = Path().apply {
-            moveTo(w * 0.76f, h * 0.20f)
-            lineTo(w * 0.82f, h * 0.36f)
-            lineTo(w * 0.64f, h * 0.38f)
-        }
-        drawPath(arrow, color, style = if (active) Fill else Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-    }
-}
-
-@Composable
-private fun ScaleSubModeIcon(color: Color, modifier: Modifier = Modifier, active: Boolean = false) {
-    Canvas(modifier.size(20.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.3.dp.toPx()
-        drawLine(color, Offset(w * .23f, h * .77f), Offset(w * .77f, h * .23f), stroke, StrokeCap.Round)
-        val upper = Path().apply {
-            moveTo(w * .49f, h * .2f); lineTo(w * .8f, h * .2f); lineTo(w * .8f, h * .51f)
-        }
-        val lower = Path().apply {
-            moveTo(w * .2f, h * .49f); lineTo(w * .2f, h * .8f); lineTo(w * .51f, h * .8f)
-        }
-        drawPath(upper, color, style = if (active) Fill else Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        drawPath(lower, color, style = if (active) Fill else Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-    }
-}

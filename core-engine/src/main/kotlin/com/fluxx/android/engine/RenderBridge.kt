@@ -15,7 +15,12 @@ object RenderBridge {
     external fun prepareText(session: Long, handles: LongArray, proofOnly: Boolean = false): Boolean
     /** Reuse the native handle set without JNI array-copy allocation on warmed text frames. */
     external fun reusePreparedText(session: Long): Boolean
+    /** Atlas page cap shared by every SDF tier (4 MiB per 2048² R8 page). */
     external fun configureText(session: Long, pages: Int)
+    /** SDF atlas tier (ppem 48/96/192/384) per prepared layout handle; synchronous for export. True when any tier changed. */
+    external fun textTiers(session: Long, handles: LongArray, ppems: IntArray, synchronous: Boolean): Boolean
+    /** Waits up to [timeoutMs] for off-thread tier glyphs; returns how many are still pending. */
+    external fun awaitTextTiers(session: Long, timeoutMs: Int): Int
     external fun textLayer(session: Long, handle: Long, matrix: FloatArray, size: Float,
         alignment: Int, argb: Int, opacity: Float, tracking: Float = 0f, leading: Float = 0f,
         baselineShift: Float = 0f, stroke: Int = 0xff000000.toInt(), strokeWidth: Float = 0f, paintOrder: Int = 0, softness: Float = 0f,

@@ -1,6 +1,6 @@
 package com.fluxx.android.ui.inspector
 
-import androidx.compose.foundation.Canvas
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -50,46 +50,8 @@ internal fun ClipQuickActionBar(layer: CompositionLayer, playheadUs: Long, compo
     }
 }
 
-/** Seven glyphs share the same rounded 1.3dp stroke; mirroring retains distinct move/extend marks. */
+/** Seven glyphs from the shared [InspectorIcons] family; OUT variants are exact mirrors of IN. */
 @Composable
 private fun ClipQuickVectorIcon(kind: ClipQuickAction, color: Color) {
-    Canvas(Modifier.size(24.dp)) {
-        val mirror = kind == ClipQuickAction.MOVE_OUT || kind == ClipQuickAction.EXTEND_OUT || kind == ClipQuickAction.TRIM_OUT
-        fun point(x: Float, y: Float) = Offset((if (mirror) 24f - x else x) * size.width / 24f, y * size.height / 24f)
-        fun line(x1: Float, y1: Float, x2: Float, y2: Float) =
-            drawLine(color, point(x1, y1), point(x2, y2), 1.3.dp.toPx(), StrokeCap.Round)
-        fun clipBar(left: Float, right: Float) {
-            val path = Path().apply {
-                val a = point(left + 1f, 7f); moveTo(a.x, a.y)
-                val b = point(right - 1f, 7f); lineTo(b.x, b.y)
-                val c = point(right, 7f); val d = point(right, 8f); quadraticTo(c.x, c.y, d.x, d.y)
-                val e = point(right, 16f); lineTo(e.x, e.y)
-                val f = point(right, 17f); val g = point(right - 1f, 17f); quadraticTo(f.x, f.y, g.x, g.y)
-                val h = point(left + 1f, 17f); lineTo(h.x, h.y)
-                val i = point(left, 17f); val j = point(left, 16f); quadraticTo(i.x, i.y, j.x, j.y)
-                val k = point(left, 8f); lineTo(k.x, k.y)
-                val l = point(left, 7f); quadraticTo(l.x, l.y, a.x, a.y); close()
-            }
-            drawPath(path, color, style = Stroke(1.3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-        }
-        when (kind) {
-            ClipQuickAction.MOVE_IN, ClipQuickAction.MOVE_OUT -> {
-                clipBar(15f, 21f)
-                line(3f, 12f, 13f, 12f); line(10f, 9f, 13f, 12f); line(10f, 15f, 13f, 12f)
-            }
-            ClipQuickAction.EXTEND_IN, ClipQuickAction.EXTEND_OUT -> {
-                clipBar(12f, 21f); line(12f, 4f, 12f, 20f)
-                line(3f, 12f, 11f, 12f); line(3f, 12f, 6f, 9f); line(3f, 12f, 6f, 15f)
-            }
-            ClipQuickAction.TRIM_IN, ClipQuickAction.TRIM_OUT -> {
-                clipBar(4f, 21f); line(9f, 3f, 9f, 21f)
-                line(5f, 10f, 7f, 12f); line(5f, 14f, 7f, 16f)
-            }
-            ClipQuickAction.SPLIT -> {
-                drawCircle(color, 2.5.dp.toPx(), point(6f, 7f), style = Stroke(1.3.dp.toPx()))
-                drawCircle(color, 2.5.dp.toPx(), point(6f, 17f), style = Stroke(1.3.dp.toPx()))
-                line(8f, 9f, 19f, 19f); line(8f, 15f, 19f, 5f)
-            }
-        }
-    }
+    Icon(InspectorIcons.icon(kind.name), null, Modifier.size(InspectorIcons.SIZE), tint = color)
 }

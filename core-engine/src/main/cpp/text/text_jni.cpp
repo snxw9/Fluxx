@@ -1,5 +1,6 @@
 #include "font_manager.h"
 #include "font_catalog.h"
+#include "sdf_tiers.h"
 #include "prepared_text_packet.h"
 #include "font_inspection.h"
 #ifdef FLUXX_TEXT_DIAGNOSTICS
@@ -148,24 +149,41 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_IsolatedFo
 extern "C" JNIEXPORT jlongArray JNICALL Java_com_fluxx_android_engine_IsolatedFontNative_timings(JNIEnv* env,jobject) {
     const auto result=env->NewLongArray(3);if(result) env->SetLongArrayRegion(result,0,3,isolatedTimings);return result;
 }
+namespace {
+std::weak_ptr<FontManager> tierCatalog;
+std::vector<fluxx::text::FontInput> bundledFonts(AAssetManager* source) {
+    std::vector<fluxx::text::FontInput> fonts;
+    fonts.push_back({"fluxx.sans", asset(source, "fonts/Inter-Regular.ttf")});
+    fonts.push_back({"fluxx.serif", asset(source, "fonts/NotoSerif-Regular.ttf")});
+    fonts.push_back({"fluxx.mono", asset(source, "fonts/JetBrainsMono-Regular.ttf")});
+    const char* families[] = {"fluxx.sans", "fluxx.serif", "fluxx.mono"};
+    const char* files[] = {"Inter", "NotoSerif", "JetBrainsMono"};
+    const char* styles[] = {"Bold", "Italic", "BoldItalic"};
+    const char* suffixes[] = {".bold", ".italic", ".bold-italic"};
+    for (unsigned family=0; family<3; ++family) for (unsigned style=0; style<3; ++style)
+        fonts.push_back({std::string(families[family])+suffixes[style],
+            asset(source, (std::string("fonts/")+files[family]+"-"+styles[style]+".ttf").c_str())});
+    return fonts;
+}
+}
 std::shared_ptr<FontManager> fluxx::text::acquireFontCatalog(AAssetManager* source) {
     std::lock_guard<std::mutex> lock(registryMutex);
     if (!source) throw std::invalid_argument("AssetManager is null");
     auto manager = catalog.lock();
     if (!manager) {
-        std::vector<FontInput> fonts;
-        fonts.push_back({"fluxx.sans", asset(source, "fonts/Inter-Regular.ttf")});
-        fonts.push_back({"fluxx.serif", asset(source, "fonts/NotoSerif-Regular.ttf")});
-        fonts.push_back({"fluxx.mono", asset(source, "fonts/JetBrainsMono-Regular.ttf")});
-        const char* families[] = {"fluxx.sans", "fluxx.serif", "fluxx.mono"};
-        const char* files[] = {"Inter", "NotoSerif", "JetBrainsMono"};
-        const char* styles[] = {"Bold", "Italic", "BoldItalic"};
-        const char* suffixes[] = {".bold", ".italic", ".bold-italic"};
-        for (unsigned family=0; family<3; ++family) for (unsigned style=0; style<3; ++style)
-            fonts.push_back({std::string(families[family])+suffixes[style],
-                asset(source, (std::string("fonts/")+files[family]+"-"+styles[style]+".ttf").c_str())});
-        manager = std::make_shared<FontManager>(std::move(fonts));
+        manager = std::make_shared<FontManager>(bundledFonts(source));
         catalog = manager;
+    }
+    return manager;
+}
+std::shared_ptr<FontManager> fluxx::text::acquireTierCatalog(AAssetManager* source,size_t budget) {
+    std::lock_guard<std::mutex> lock(registryMutex);
+    if (!source) throw std::invalid_argument("AssetManager is null");
+    auto manager = tierCatalog.lock();
+    if (!manager) {
+        // Separate FreeType library and mutex: tier rasterisation never blocks the base (48 ppem) catalog.
+        manager = std::make_shared<FontManager>(bundledFonts(source), budget, fluxx::text::tiers::Ppem[1], fluxx::text::tiers::spread(fluxx::text::tiers::Ppem[1]));
+        tierCatalog = manager;
     }
     return manager;
 }

@@ -65,6 +65,8 @@ struct SdfGlyph {
     int width = 0, height = 0, left = 0, top = 0;
     // Immutable owned R8 pixels, top-to-bottom; bearings include SDF spread.
     std::vector<uint8_t> pixels;
+    // Atlas tier this bitmap was rasterised at (see sdf_tiers.h); the mesh scales quads and distances by it.
+    unsigned ppem = 48, spread = 8;
 };
 struct FontStats {
     uint64_t rasterizations, cacheHits, lockWaitNs;
@@ -93,7 +95,8 @@ public:
     // Preparation-only standalone cmap/metrics lookup: deliberately no HarfBuzz shaping.
     std::shared_ptr<const Layout> nominal(const std::string& fontId,const std::string& utf8);
     bool hasFeature(const std::string& fontId,uint32_t tag);
-    std::shared_ptr<const SdfGlyph> sdf(const std::string& fontId, uint32_t glyphId, bool overlaps = true);
+    // ppem 0 = this manager's tier; otherwise a tier from sdf_tiers.h with its own spread (cached separately).
+    std::shared_ptr<const SdfGlyph> sdf(const std::string& fontId, uint32_t glyphId, bool overlaps = true, unsigned ppem = 0);
     void seedSdfs(const std::vector<std::shared_ptr<const SdfGlyph>>& images);
     std::vector<uint32_t> latinGlyphs(const std::string& fontId);
     uint32_t glyphForCodepoint(const std::string& fontId, uint32_t codepoint);

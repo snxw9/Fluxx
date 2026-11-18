@@ -80,16 +80,16 @@ internal object TextFontsModel {
     Column(modifier.testTag("text-fonts")) {
         Row(Modifier.fillMaxWidth().height(hit),verticalAlignment=Alignment.CenterVertically) {
             Row(Modifier.weight(1f).height(36.dp).clip(RoundedCornerShape(10.dp)).background(SurfaceHigh).padding(horizontal=8.dp),verticalAlignment=Alignment.CenterVertically) {
-                Icon(TextInspectorIcons.icon("SEARCH"),null,Modifier.size(16.dp),tint=TextSecondary)
+                Icon(InspectorIcons.icon("SEARCH"),null,Modifier.size(16.dp),tint=TextSecondary)
                 BasicTextField(search,{search=it},singleLine=true,textStyle=MaterialTheme.typography.bodySmall.copy(color=TextPrimary),
                     cursorBrush=SolidColor(TextPrimary),modifier=Modifier.weight(1f).padding(start=6.dp).semantics {contentDescription="Find font, $scopeLabel"},
                     decorationBox={inner->Box(contentAlignment=Alignment.CenterStart) {
                         if(search.isEmpty()) Text("Find font",style=MaterialTheme.typography.bodySmall,color=TextSecondary,maxLines=1)
                         inner()}})
             }
-            InspectorIconButton(TextInspectorIcons.icon("IMPORT"),if(importing) "Importing font" else "Import font",enabled=!importing) {importer.launch(arrayOf("*/*"))}
+            InspectorIconButton(InspectorIcons.icon("IMPORT"),if(importing) "Importing font" else "Import font",enabled=!importing) {importer.launch(arrayOf("*/*"))}
             val imported=family as? FontFamilyItem.Imported
-            InspectorIconButton(TextInspectorIcons.icon("DELETE"),"Delete imported font file",enabled=imported!=null && !importing) {deletion=imported?.faces?.map {it.first}?.distinctBy {it.sha256}}
+            InspectorIconButton(InspectorIcons.icon("DELETE"),"Delete imported font file",enabled=imported!=null && !importing) {deletion=imported?.faces?.map {it.first}?.distinctBy {it.sha256}}
         }
         when {
             deletion!=null -> Row(Modifier.fillMaxWidth().height(hit),verticalAlignment=Alignment.CenterVertically) {
@@ -160,7 +160,7 @@ internal object TextFontsModel {
                         axis.default.coerceIn(axis.minimum,axis.maximum),detentStep=(axis.maximum-axis.minimum)/10f,step=PropertyLimits.AXIS_STEP)}
                     fun ref(v: Float): TextFontRef {val requested=reference.axes.associate {it.tag to it.value.staticValue}.toMutableMap();requested[axis.tag]=v
                         return selectedFace.reference(requireNotNull(reference.sha256),reference.namedInstance,requested)}
-                    InspectorTile(TextInspectorIcons.icon("AXIS"),"${axis.name} (${axis.tag})",Modifier.width(76.dp),hit=hit,active=axisOpen==axis.tag,enabled=!busy,
+                    InspectorTile(InspectorIcons.icon("AXIS"),"${axis.name} (${axis.tag})",Modifier.width(76.dp),hit=hit,active=axisOpen==axis.tag,enabled=!busy,
                         text=axis.tag,caption=PropertyLimits.format(limit,value),popover={
                             AnchoredPopover(axisOpen==axis.tag,{axisOpen=null},"text-axis-popover") {
                                 SliderPopoverContent(limit,value,false,"${axis.name} (${axis.tag})",onReset={apply(ref(limit.default))},

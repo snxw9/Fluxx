@@ -5,6 +5,14 @@
 #include <android/asset_manager.h>
 #include <array>
 #include <map>
+#include <atomic>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <set>
+#include <thread>
+#include <tuple>
+#include "sdf_tiers.h"
 #include <stdexcept>
 
 namespace fluxx::text {
@@ -28,6 +36,7 @@ struct TextGpuStats {
     uint64_t pools=0, sets=0, layouts=0, pipelines=0, pipelineLayouts=0;
     uint64_t meshBuildNs=0;
     uint64_t atlasUploadCpuNs=0;
+    uint64_t tierGlyphs=0, tierPending=0, tierBytes=0, tierDegrades=0, tierEvictions=0;
 };
 
 // Device-owned state. Preparation finishes before any composition render pass.
@@ -54,7 +63,15 @@ public:
     void upload(VkCommandBuffer command);
     void draw(VkCommandBuffer command, const TextMesh& mesh, const TextPush& push);
     void begin();
-    void forget(const Layout* layout) { preparedLayouts_.erase(layout); }
+    void forget(const Layout* layout) { preparedLayouts_.erase(layout); wantedTier_.erase(layout); tierCap_.erase(layout); resolvedTier_.erase(layout); }
+    // Atlas tier (ppem from sdf_tiers.h) wanted for a layout; returns true when it changed (forces re-collection).
+    bool setTier(const Layout* layout, unsigned ppem);
+    // Export: generate missing tier glyphs inline (deterministic). Preview: generate off-thread, fall back meanwhile.
+    void setSynchronousTiers(bool synchronous) { synchronousTiers_=synchronous; }
+    bool needsCollect() const { return tierRevision_.load()!=collectedRevision_; }
+    // Waits up to timeoutMs for queued tier glyphs; returns how many are still pending.
+    size_t awaitTiers(int timeoutMs);
+    unsigned resolvedTier(const Layout* layout) const { auto f=resolvedTier_.find(layout); return f==resolvedTier_.end()?tiers::BasePpem:f->second; }
     void retireBatch();
     void repackRetained();
     TextGpuStats stats() const { return stats_; }
@@ -62,7 +79,16 @@ public:
 private:
     struct Buffer { VkBuffer buffer=VK_NULL_HANDLE; VkDeviceMemory memory=VK_NULL_HANDLE;
         void* mapped=nullptr; VkDeviceSize capacity=0, allocated=0; bool coherent=false; };
-    using Key=std::pair<std::string,uint32_t>;
+    // Font, glyph and atlas tier: one texture array holds every tier, each glyph keyed by its ppem.
+    using Key=std::tuple<std::string,uint32_t,unsigned>;
+    void collectOne(const std::shared_ptr<const Layout>& layout);
+    unsigned tierFor(const Layout* layout) const;
+    bool tierReady(const Layout& layout, unsigned ppem);
+    void ensureTier(const Layout& layout, unsigned ppem, bool synchronous);
+    bool degradeOnce();
+    void tierWorker();
+    void trimReady();
+    std::shared_ptr<FontManager> tierFonts();
     uint32_t memoryType(uint32_t bits, VkMemoryPropertyFlags required, VkMemoryPropertyFlags preferred=0);
     void buffer(Buffer& target, VkDeviceSize bytes, VkBufferUsageFlags usage);
     void release(Buffer& target);
@@ -86,7 +112,7 @@ private:
         std::vector<Character> characters;
         const int32_t* codes=nullptr;std::shared_ptr<void> pin;size_t maximumGlyphs=0;
     };
-    struct PreparedLayout { std::shared_ptr<const Layout> owner; uint64_t generation=UINT64_MAX; std::vector<PreparedGlyph> glyphs;
+    struct PreparedLayout { std::shared_ptr<const Layout> owner; uint64_t generation=UINT64_MAX; unsigned tier=0; std::vector<PreparedGlyph> glyphs;
         std::map<const GlyphModifier*,CharacterBinding> characters; };
     std::map<const Layout*,PreparedLayout> preparedLayouts_;
     Buffer staging_, vertex_, index_;
@@ -98,5 +124,24 @@ private:
     VkPipelineLayout pipelineLayout_=VK_NULL_HANDLE; VkPipeline pipeline_=VK_NULL_HANDLE;
     bool dirty_=false, initialized_=false;
     TextGpuStats stats_{};
+    AAssetManager* assets_=nullptr;
+    // Tier state. wanted/cap/resolved and lastUse_ are render-thread only; ready_/queue_ are guarded by tierMutex_.
+    std::map<const Layout*,unsigned> wantedTier_, tierCap_, resolvedTier_;
+    std::vector<std::shared_ptr<const Layout>> collected_;
+    std::map<Key,uint64_t> lastUse_;
+    std::atomic<uint64_t> frame_{0};
+    bool synchronousTiers_=false;
+    std::shared_ptr<FontManager> tierFonts_;
+    std::mutex tierMutex_;
+    std::condition_variable tierWake_, tierIdle_;
+    std::deque<Key> queue_;
+    std::set<Key> queued_, failed_;
+    std::map<Key,std::shared_ptr<const SdfGlyph>> ready_;
+    std::map<Key,uint64_t> readyUse_;
+    size_t readyBytes_=0, cpuBudget_=tiers::CpuBudget;
+    bool busy_=false, stopWorker_=false;
+    std::thread worker_;
+    std::atomic<uint64_t> tierRevision_{1};
+    uint64_t collectedRevision_=0;
 };
 }

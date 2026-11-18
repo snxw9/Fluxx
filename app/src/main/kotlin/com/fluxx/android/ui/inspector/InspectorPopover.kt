@@ -207,7 +207,7 @@ internal val LocalHostImeBottom = compositionLocalOf { -1 }
     LaunchedEffect(dragging) { while (dragging) { withFrameNanos { }; pending?.let { pending = null; preview(it) } } }
     DisposableEffect(Unit) { onDispose { if (dragging) cancel() } }
     Row(Modifier.height(48.dp).widthIn(min = 280.dp), verticalAlignment = Alignment.CenterVertically) {
-        InspectorIconButton(TextInspectorIcons.icon("RESET"), "Reset $label to default", enabled = enabled) { onReset() }
+        InspectorIconButton(InspectorIcons.icon("RESET"), "Reset $label to default", enabled = enabled) { onReset() }
         Slider(value = limit.fraction(live), enabled = enabled,
             onValueChange = { f ->
                 val next = limit.valueAt(f)
@@ -237,46 +237,49 @@ internal val LocalHostImeBottom = compositionLocalOf { -1 }
 /** Small monochrome icon button used inside popovers and the rail. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable internal fun InspectorIconButton(vector: ImageVector, label: String, modifier: Modifier = Modifier, enabled: Boolean = true,
-    selected: Boolean = false, click: () -> Unit) {
+    selected: Boolean = false, tint: Color? = null, click: () -> Unit) {
     var tooltip by remember { mutableStateOf(false) }
     Box(modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(if (selected) Surface else Color.Transparent)
         .combinedClickable(enabled = enabled, onClick = click, onLongClick = { tooltip = true }, role = Role.Button)
         .semantics { contentDescription = label; if (selected) stateDescription = "Selected" }, contentAlignment = Alignment.Center) {
-        Icon(vector, null, Modifier.size(20.dp), tint = if (!enabled) TextDisabled else if (selected) TextPrimary else TextSecondary)
+        Icon(vector, null, Modifier.size(InspectorIcons.SIZE), tint = tint ?: if (!enabled) TextDisabled else if (selected) TextPrimary else TextSecondary)
         DropdownMenu(tooltip, { tooltip = false }) { DropdownMenuItem(text = { Text(label) }, onClick = { tooltip = false }) }
     }
 }
 
 /**
  * Filled tile from the inspector landing grid: SurfaceHigh, 10dp radius, 1dp bright border when active, pressed
- * overlay, icon plus an optional tiny value caption in the corner. [hit] is the tap target (40 compact / 48dp);
- * the drawn tile is always 40dp and centred inside it.
+ * overlay, icon plus an optional tiny value caption in the corner. With [fill] the tile is a grid cell: the whole
+ * cell (tile + gap) is the touch target and the drawn tile fills it inset by [fill]. Without it, [hit] is the
+ * tap target (40 compact / 48dp) and the drawn tile is 40dp, centred.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable internal fun InspectorTile(vector: ImageVector?, label: String, modifier: Modifier = Modifier, hit: Dp = 40.dp, active: Boolean = false,
     enabled: Boolean = true, caption: String? = null, text: String? = null, state: String? = null, testTag: String? = null,
-    onLongClick: (() -> Unit)? = null, iconContent: (@Composable () -> Unit)? = null, popover: @Composable () -> Unit = {}, click: () -> Unit) {
+    onLongClick: (() -> Unit)? = null, iconContent: (@Composable () -> Unit)? = null, fill: PaddingValues? = null,
+    popover: @Composable () -> Unit = {}, click: () -> Unit) {
     var tooltip by remember { mutableStateOf(false) }
     val interactions = remember { MutableInteractionSource() }
     val pressed by interactions.collectIsPressedAsState()
     val ink = if (!enabled) TextDisabled else if (active) TextPrimary else TextSecondary
-    val shape = RoundedCornerShape(10.dp)
-    Box(modifier.heightIn(min = hit).widthIn(min = hit).then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+    val shape = RoundedCornerShape(if (fill != null) 8.dp else 10.dp)
+    Box((if (fill != null) modifier else modifier.heightIn(min = hit).widthIn(min = hit)).then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
         .combinedClickable(interactionSource = interactions, indication = null, enabled = enabled, role = Role.Button, onClick = click,
             onLongClick = { onLongClick?.invoke() ?: run { tooltip = true } })
         .semantics(mergeDescendants = true) {
             contentDescription = label + (caption?.let { ", $it" } ?: "")
             stateDescription = state ?: if (!enabled) "Unavailable" else if (active) "On" else "Off"
         }, contentAlignment = Alignment.Center) {
-        Box(Modifier.then(if (text != null) Modifier.fillMaxWidth().padding(horizontal = (hit - 40.dp).coerceAtLeast(0.dp) / 2) else Modifier.size(40.dp)).height(40.dp)
-            .clip(shape).background(if (pressed) Surface else SurfaceHigh)
+        val visual = if (fill != null) Modifier.fillMaxSize().padding(fill)
+            else Modifier.then(if (text != null) Modifier.fillMaxWidth().padding(horizontal = (hit - 40.dp).coerceAtLeast(0.dp) / 2) else Modifier.size(40.dp)).height(40.dp)
+        Box(visual.clip(shape).background(if (pressed) Surface else SurfaceHigh)
             .border(1.dp, if (active) TextPrimary else if (pressed) Border else Color.Transparent, shape), contentAlignment = Alignment.Center) {
             if (text != null) Row(Modifier.fillMaxSize().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                vector?.let { Icon(it, null, Modifier.size(18.dp), tint = ink) } ?: iconContent?.invoke()
+                vector?.let { Icon(it, null, Modifier.size(InspectorIcons.INLINE), tint = ink) } ?: iconContent?.invoke()
                 Text(text, Modifier.weight(1f).padding(start = 4.dp), color = ink, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 caption?.let { Text(it, color = TextSecondary, fontSize = 9.sp, maxLines = 1) }
             } else {
-                vector?.let { Icon(it, null, Modifier.size(20.dp), tint = ink) } ?: iconContent?.invoke()
+                vector?.let { Icon(it, null, Modifier.size(InspectorIcons.SIZE), tint = ink) } ?: iconContent?.invoke()
                 caption?.let { Text(it, Modifier.align(Alignment.BottomEnd).padding(end = 3.dp, bottom = 1.dp), color = TextSecondary,
                     fontSize = 8.sp, lineHeight = 9.sp, maxLines = 1, overflow = TextOverflow.Clip) }
             }

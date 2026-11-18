@@ -1322,7 +1322,7 @@ bool VulkanRenderer::prepareText(const int64_t* handles, size_t count, bool proo
     if(!count) return true;
     if(!mText || !beginWork()) return false;
     if(mPreparedProofOnly==proofOnly && count==mPreparedTextHandles.size() &&
-        std::equal(handles,handles+count,mPreparedTextHandles.begin())) mText->retireBatch();
+        std::equal(handles,handles+count,mPreparedTextHandles.begin()) && !mText->needsCollect()) mText->retireBatch();
     else {
         mText->begin();
         for(size_t i=0;i<count;++i) mText->collect(mTextLayouts.at(handles[i]));
@@ -1368,6 +1368,8 @@ std::string VulkanRenderer::textStatsJson() const {
         << ",\"shapingCpuNs\":" << font.shapingNs << ",\"rasterCpuNs\":" << font.rasterNs; }
     json << ",\"meshBuildNs\":" << stats.meshBuildNs;
     json << ",\"atlasUploadCpuNs\":" << stats.atlasUploadCpuNs;
+    json << ",\"tierGlyphs\":" << stats.tierGlyphs << ",\"tierBytes\":" << stats.tierBytes << ",\"tierPending\":" << stats.tierPending
+        << ",\"tierDegrades\":" << stats.tierDegrades << ",\"tierEvictions\":" << stats.tierEvictions;
     json << "}"; return json.str();
 }
 bool VulkanRenderer::setFrameLayer(int64_t id, AHardwareBuffer* buffer, const float* matrix, float opacity) {
@@ -1596,4 +1598,15 @@ bool VulkanRenderer::copyYuv(uint8_t* y, uint8_t* u, uint8_t* v, int yr, int ur,
         v[(row/2)*vr+(col/2)*vp]=clamp(128+((28784*r-26145*g-2639*b+32768)>>16));
     }
     return true;
+}
+bool VulkanRenderer::setTextTiers(const int64_t* handles,const int32_t* ppems,size_t count,bool synchronous) {
+    if(!mText) return false;
+    mText->setSynchronousTiers(synchronous);
+    bool changed=false;
+    for(size_t i=0;i<count;++i) {
+        const auto found=mTextLayouts.find(handles[i]);
+        if(found==mTextLayouts.end()) continue;
+        changed=mText->setTier(found->second.get(),static_cast<unsigned>(ppems[i])) || changed;
+    }
+    return changed;
 }

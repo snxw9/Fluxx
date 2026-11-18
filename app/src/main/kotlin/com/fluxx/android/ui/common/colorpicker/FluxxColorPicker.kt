@@ -60,11 +60,8 @@ import com.fluxx.android.model.PaletteRepository
                     if(config.showHexInput) HexColorInput(color,onColorChange,Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
                     if(config.showEyedropper && onEyedropperRequest!=null) {
                         val ink=MaterialTheme.colorScheme.onSurface
-                        Canvas(Modifier.size(28.dp).clickable(onClick=onEyedropperRequest).semantics { contentDescription="Sample preview colour" }) {
-                            val path=Path().apply { moveTo(size.width*.25f,size.height*.75f); lineTo(size.width*.35f,size.height*.5f)
-                                lineTo(size.width*.7f,size.height*.15f); lineTo(size.width*.85f,size.height*.3f)
-                                lineTo(size.width*.5f,size.height*.65f); close() }
-                            drawPath(path,ink,style=Stroke(1.3.dp.toPx(),cap=StrokeCap.Round,join=StrokeJoin.Round))
+                        Box(Modifier.size(28.dp).clickable(onClick=onEyedropperRequest).semantics { contentDescription="Sample preview colour" },contentAlignment=Alignment.Center) {
+                            Icon(com.fluxx.android.ui.inspector.InspectorIcons.icon("EYEDROPPER"),null,Modifier.size(com.fluxx.android.ui.inspector.InspectorIcons.SIZE),tint=ink)
                         }
                     }
                 }

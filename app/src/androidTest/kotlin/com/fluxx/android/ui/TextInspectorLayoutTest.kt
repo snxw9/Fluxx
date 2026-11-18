@@ -45,17 +45,24 @@ class TextInspectorLayoutTest {
         compose.setContent {pixelsPerDp=LocalDensity.current.density;CompositionLocalProvider(LocalDensity provides Density(pixelsPerDp,1f)) {Frame(expanded.value,1f)}}
         for(e in listOf(true,false)) {
             compose.runOnIdle {expanded.value=e};compose.waitForIdle()
-            val body=compose.onNodeWithTag("text-inspector-body").fetchSemanticsNode().boundsInRoot
-            val header=compose.onNodeWithTag("text-inspector-header").fetchSemanticsNode().boundsInRoot
-            val bar=compose.onNodeWithTag("text-bottom-bar").fetchSemanticsNode().boundsInRoot
+            fun bounds(tag: String)=compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+            val body=bounds("text-inspector-body");val header=bounds("text-inspector-header");val bar=bounds("text-bottom-bar")
             assertEquals(40f,header.height/pixelsPerDp,1f)
+            // 268 → body 212, 328 → body 272 (frame 16 + header 40).
+            assertEquals(if(e) 212f else 272f,body.height/pixelsPerDp,1f)
             assertTrue(header.bottom<=body.top+1f && bar.bottom<=body.bottom+1f)
-            val pitch=if(e) 42f else 48f
-            val rows=(0 until 5).map {i->compose.onNodeWithTag("text-row-$i").fetchSemanticsNode().boundsInRoot}
-            rows.forEach {r->assertEquals(pitch,r.height/pixelsPerDp,1f);assertTrue(r.top>=body.top-1f && r.bottom<=bar.top+1f)}
+            val tile=if(e) 36f else 44f
+            for(block in listOf("text-left-block","text-right-block")) {
+                val rows=(0 until 3).map {i->bounds("$block-row-$i")}
+                rows.forEach {r->assertTrue("$block row is a full touch target",r.height/pixelsPerDp>=40f-1f);assertTrue(r.top>=body.top-1f && r.bottom<=bar.top+1f)}
+                assertEquals(3*tile+2*4f+8f,(rows.last().bottom-rows.first().top)/pixelsPerDp,1.5f)
+            }
+            assertTrue(compose.onAllNodesWithTag("text-explode-pill").fetchSemanticsNodes().isNotEmpty())
+            assertTrue(compose.onAllNodesWithTag("text-order-switch").fetchSemanticsNodes().isNotEmpty())
             assertTrue(compose.onAllNodesWithTag("inspector-rail").fetchSemanticsNodes().isNotEmpty())
-            // No Done/✓ and no − / + anywhere on the page.
+            // No Done/✓, no − / +, no header ⋮ text menu anywhere on the page.
             for(gone in listOf("Done","−","+","Layer tools")) assertTrue(gone,compose.onAllNodesWithText(gone).fetchSemanticsNodes().isEmpty())
+            assertTrue(compose.onAllNodesWithTag("text-menu").fetchSemanticsNodes().isEmpty())
         }
     }
     @Test fun largeFontScalesUseTheLabelledGridAndPageWholeRows() {

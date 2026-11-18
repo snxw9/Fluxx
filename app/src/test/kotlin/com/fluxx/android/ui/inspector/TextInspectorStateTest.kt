@@ -58,9 +58,11 @@ class TextInspectorStateTest {
         assertEquals(0f,TextNumericDraft(l,500_000,FrameRate(),TextEditScope(TextSelectionRange(0,2)),TextControl.TRACKING).default,0f)
         assertEquals(100f,TextNumericDraft(l,500_000,FrameRate(),TextEditScope(null),TextControl.H_SCALE).default,0f)
     }
-    @Test fun savedColourPageAndSourceDraftRestoreWithoutDocumentMutation() {
-        val c=TextInspectorMode.Colour(TextControl.STROKE,layer(),500_000,TextEditScope(TextSelectionRange(0,2)))
-        assertEquals(c,TextInspectorModeCodec.restore(TextInspectorModeCodec.save(c)))
+    @Test fun savedSourceDraftAndFontsPageRestoreWithoutDocumentMutation() {
+        // Colour has no page any more (it is edited entirely inside its popover): only Source, Fonts and Browse persist.
+        // Exhaustive without an else branch: adding a mode back (e.g. a colour page) breaks this test's compilation.
+        fun name(m: TextInspectorMode)=when(m) {TextInspectorMode.Browse->"browse";TextInspectorMode.Source->"source";TextInspectorMode.Fonts->"fonts"}
+        assertEquals(listOf("browse","source","fonts"),listOf(TextInspectorMode.Browse,TextInspectorMode.Source,TextInspectorMode.Fonts).map(::name))
         assertEquals(TextInspectorMode.Source,TextInspectorModeCodec.restore(TextInspectorModeCodec.save(TextInspectorMode.Source)))
         assertEquals(TextInspectorMode.Fonts,TextInspectorModeCodec.restore(TextInspectorModeCodec.save(TextInspectorMode.Fonts)))
         assertEquals(TextInspectorMode.Browse,TextInspectorModeCodec.restore(listOf("draft",-1L)))

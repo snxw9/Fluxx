@@ -23,8 +23,10 @@ class ScaleRulerMathTest {
     @Test fun dragIsRelativeToTheValueAtDragStart() {
         // scale = base · 2^(dx / 96dp)
         assertEquals(.6f,m.drag(.3f,1f),1e-5f);assertEquals(1.5f,m.drag(3f,-1f),1e-5f)
-        assertEquals(1f,m.travel(m.DP_PER_DOUBLING,0f),1e-6f)
-        assertEquals(4f,m.drag(1f,m.travel(2*m.DP_PER_DOUBLING,0f)),1e-4f)
+        // The tape follows the finger: dragging LEFT (negative dx) moves ticks left and increases the value.
+        assertEquals(1f,m.travel(-m.DP_PER_DOUBLING,0f),1e-6f);assertEquals(-1f,m.travel(m.DP_PER_DOUBLING,0f),1e-6f)
+        assertEquals(4f,m.drag(1f,m.travel(-2*m.DP_PER_DOUBLING,0f)),1e-4f)
+        assertEquals(.25f,m.drag(1f,m.travel(2*m.DP_PER_DOUBLING,0f)),1e-5f)
         // Negative (typed) scale keeps its sign; the ruler moves its magnitude.
         assertEquals(-2f,m.drag(-1f,1f),1e-5f)
     }
@@ -45,12 +47,14 @@ class ScaleRulerMathTest {
     }
     @Test fun tenThousandPercentIsReachableInOneOrTwoDrags() {
         // A 290dp strip: one slow full-width drag from 100% gives ~3 doublings; two quick drags reach 10000%.
-        val slow=m.travel(290f,0f);assertTrue(slow>2.9f && slow<3.1f)
-        val fast=m.travel(290f,m.GAIN_FULL)
+        val slow=m.travel(-290f,0f);assertTrue(slow>2.9f && slow<3.1f)
+        val fast=m.travel(-290f,m.GAIN_FULL)
         assertEquals(m.MAX,m.drag(m.drag(1f,fast),fast),1e-3f)
     }
     @Test fun inertiaDecaysAndEnds() {
-        val v=2000f
+        // A leftward fling (negative velocity) keeps moving the value up; a rightward fling moves it down.
+        val v=-2000f
+        assertTrue(m.inertiaStep(2000f,100f)<0f)
         val a=m.inertiaStep(v,100f);val b=m.inertiaStep(v,300f);val c=m.inertiaStep(v,1200f);val d=m.inertiaStep(v,1e6f)
         assertTrue(a in 0f..b && b<c && c<=d);assertEquals(d,c,d*.03f)
         assertEquals(0f,m.inertiaStep(v,0f),0f);assertEquals(-a,m.inertiaStep(-v,100f),1e-6f)

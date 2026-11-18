@@ -1,7 +1,8 @@
 package com.fluxx.android.ui.editor
 
 import android.content.res.Configuration
-import androidx.compose.foundation.Canvas
+import androidx.compose.material3.Icon
+import com.fluxx.android.ui.inspector.InspectorIcons
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.HorizontalDivider
@@ -275,220 +276,15 @@ private fun ToolbarButton(
     }
 }
 
+// Action bar glyphs come from the shared inspector icon family (one stroke, round caps/joins, open chevrons).
 @Composable
-private fun UndoVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(20.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.5.dp.toPx()
-        val arrow = Path().apply {
-            moveTo(w * 0.16f, h * 0.28f)
-            lineTo(w * 0.38f, h * 0.12f)
-            moveTo(w * 0.16f, h * 0.28f)
-            lineTo(w * 0.38f, h * 0.46f)
-        }
-        drawPath(arrow, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        val curve = Path().apply {
-            moveTo(w * 0.22f, h * 0.28f)
-            cubicTo(w * 0.65f, h * 0.15f, w * 0.85f, h * 0.45f, w * 0.80f, h * 0.82f)
-        }
-        drawPath(curve, color, style = Stroke(width = stroke, cap = StrokeCap.Round))
-    }
-}
-
-@Composable
-private fun RedoVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(20.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.5.dp.toPx()
-        val arrow = Path().apply {
-            moveTo(w * 0.84f, h * 0.28f)
-            lineTo(w * 0.62f, h * 0.12f)
-            moveTo(w * 0.84f, h * 0.28f)
-            lineTo(w * 0.62f, h * 0.46f)
-        }
-        drawPath(arrow, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        val curve = Path().apply {
-            moveTo(w * 0.78f, h * 0.28f)
-            cubicTo(w * 0.35f, h * 0.15f, w * 0.15f, h * 0.45f, w * 0.20f, h * 0.82f)
-        }
-        drawPath(curve, color, style = Stroke(width = stroke, cap = StrokeCap.Round))
-    }
-}
-
-@Composable
-private fun PrevBoundaryVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(20.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.5.dp.toPx()
-        drawLine(
-            color = color,
-            start = Offset(w * 0.18f, h * 0.20f),
-            end = Offset(w * 0.18f, h * 0.80f),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
-        )
-        val tri = Path().apply {
-            moveTo(w * 0.28f, h * 0.50f)
-            lineTo(w * 0.82f, h * 0.20f)
-            lineTo(w * 0.82f, h * 0.80f)
-            close()
-        }
-        drawPath(tri, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-    }
-}
-
-@Composable
-private fun NextBoundaryVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(20.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.5.dp.toPx()
-        val tri = Path().apply {
-            moveTo(w * 0.72f, h * 0.50f)
-            lineTo(w * 0.18f, h * 0.20f)
-            lineTo(w * 0.18f, h * 0.80f)
-            close()
-        }
-        drawPath(tri, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        drawLine(
-            color = color,
-            start = Offset(w * 0.82f, h * 0.20f),
-            end = Offset(w * 0.82f, h * 0.80f),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
-        )
-    }
-}
-
-@Composable
-private fun PlayPauseVectorIcon(isPlaying: Boolean, color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(20.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.5.dp.toPx()
-        if (isPlaying) {
-            val barW = w * 0.20f
-            drawRoundRect(
-                color = color,
-                topLeft = Offset(w * 0.22f, h * 0.20f),
-                size = Size(barW, h * 0.60f),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
-                style = Stroke(width = stroke)
-            )
-            drawRoundRect(
-                color = color,
-                topLeft = Offset(w * 0.58f, h * 0.20f),
-                size = Size(barW, h * 0.60f),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
-                style = Stroke(width = stroke)
-            )
-        } else {
-            val tri = Path().apply {
-                moveTo(w * 0.24f, h * 0.18f)
-                lineTo(w * 0.84f, h * 0.50f)
-                lineTo(w * 0.24f, h * 0.82f)
-                close()
-            }
-            drawPath(tri, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        }
-    }
-}
-
-@Composable
-private fun LayerActionVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(20.dp)) {
-        val stroke = 1.6.dp.toPx()
-        drawRoundRect(
-            color = color.copy(alpha = 0.6f),
-            topLeft = Offset(size.width * 0.30f, size.height * 0.10f),
-            size = Size(size.width * 0.60f, size.height * 0.60f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
-            style = Stroke(width = stroke)
-        )
-        drawRoundRect(
-            color = color,
-            topLeft = Offset(size.width * 0.10f, size.height * 0.30f),
-            size = Size(size.width * 0.60f, size.height * 0.60f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
-            style = Stroke(width = stroke)
-        )
-    }
-}
-
-/** Paste clipboard icon: clipboard shape with a plus sign */
-@Composable
-private fun PasteVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(20.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.3.dp.toPx()
-        // Clipboard body
-        drawRoundRect(
-            color = color,
-            topLeft = Offset(w * 0.15f, h * 0.20f),
-            size = Size(w * 0.70f, h * 0.72f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
-            style = Stroke(width = stroke)
-        )
-        // Clipboard clip tab at top
-        drawRoundRect(
-            color = color,
-            topLeft = Offset(w * 0.32f, h * 0.08f),
-            size = Size(w * 0.36f, h * 0.20f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5.dp.toPx()),
-            style = Stroke(width = stroke)
-        )
-        // Plus horizontal
-        drawLine(
-            color = color,
-            start = Offset(w * 0.35f, h * 0.58f),
-            end = Offset(w * 0.65f, h * 0.58f),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
-        )
-        // Plus vertical
-        drawLine(
-            color = color,
-            start = Offset(w * 0.50f, h * 0.43f),
-            end = Offset(w * 0.50f, h * 0.73f),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
-        )
-    }
-}
-
-/** Select all icon: stacked checkboxes */
-@Composable
-private fun SelectAllVectorIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(20.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.3.dp.toPx()
-        // Back rect (offset top-right)
-        drawRoundRect(
-            color = color.copy(alpha = 0.5f),
-            topLeft = Offset(w * 0.25f, h * 0.10f),
-            size = Size(w * 0.60f, h * 0.55f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
-            style = Stroke(width = stroke)
-        )
-        // Front rect (offset bottom-left)
-        drawRoundRect(
-            color = color,
-            topLeft = Offset(w * 0.12f, h * 0.30f),
-            size = Size(w * 0.60f, h * 0.55f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
-            style = Stroke(width = stroke)
-        )
-        // Checkmark inside front rect
-        val check = Path().apply {
-            moveTo(w * 0.25f, h * 0.58f)
-            lineTo(w * 0.38f, h * 0.70f)
-            lineTo(w * 0.58f, h * 0.45f)
-        }
-        drawPath(check, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-    }
-}
+private fun BarIcon(name: String, color: Color, modifier: Modifier) =
+    Icon(InspectorIcons.icon(name), null, modifier.size(InspectorIcons.SIZE), tint = color)
+@Composable private fun UndoVectorIcon(color: Color, modifier: Modifier = Modifier) = BarIcon("UNDO", color, modifier)
+@Composable private fun RedoVectorIcon(color: Color, modifier: Modifier = Modifier) = BarIcon("REDO", color, modifier)
+@Composable private fun PrevBoundaryVectorIcon(color: Color, modifier: Modifier = Modifier) = BarIcon("PREV_KEY", color, modifier)
+@Composable private fun NextBoundaryVectorIcon(color: Color, modifier: Modifier = Modifier) = BarIcon("NEXT_KEY", color, modifier)
+@Composable private fun PlayPauseVectorIcon(isPlaying: Boolean, color: Color, modifier: Modifier = Modifier) = BarIcon(if (isPlaying) "PAUSE" else "PLAY", color, modifier)
+@Composable private fun LayerActionVectorIcon(color: Color, modifier: Modifier = Modifier) = BarIcon("LAYER", color, modifier)
+@Composable private fun PasteVectorIcon(color: Color, modifier: Modifier = Modifier) = BarIcon("PASTE", color, modifier)
+@Composable private fun SelectAllVectorIcon(color: Color, modifier: Modifier = Modifier) = BarIcon("SELECT_ALL", color, modifier)

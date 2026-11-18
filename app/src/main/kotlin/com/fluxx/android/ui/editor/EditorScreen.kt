@@ -322,10 +322,10 @@ fun EditorScreen(
             // Reserve ruler + track gap + one row + inspector separation in BOTH preview modes.
             // Expansion trades inspector height for canvas height; opening the inspector never moves the preview.
             val available = (maxHeight - EditorActionBarHeight - TimelineInspectorAnchorHeight).coerceAtLeast(0.dp)
-            // One shared height for every inspector page (Edit Text included), sized for Edit Text's 6-row Character tab.
+            // One shared height for every inspector page (Edit Text included): the original 268 / 328dp, font-scaled.
             val targetInspectorHeight = InspectorSheetBudget.height(isExpandedPreview, density.fontScale).dp
             val minimumPreview=if(available>=264.dp) 96.dp else 48.dp
-            val desiredInspectorHeight=if(isInspectorOpen)
+            val desiredInspectorHeight=if(isInspectorOpen && selectedLayer?.type==LayerType.TEXT)
                 targetInspectorHeight.coerceAtMost((available-minimumPreview).coerceAtLeast(0.dp)) else targetInspectorHeight
             val previewHeight = (available - desiredInspectorHeight).coerceAtLeast(0.dp)
             val inspectorHeight = available - previewHeight

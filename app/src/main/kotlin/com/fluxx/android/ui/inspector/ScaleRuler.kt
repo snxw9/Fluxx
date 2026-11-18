@@ -21,6 +21,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.drawText
@@ -55,6 +56,13 @@ internal object ScaleRulerMath {
     const val INERTIA_TAU_MS = 300f
     const val INERTIA_MIN_VELOCITY = 600f
     val RANGE_DOUBLINGS = log2(MAX / MIN)
+    /** Fixed layout (dp): readout row (scales with font), gap, ruler strip. No weights: the strip never measures 0. */
+    const val READOUT_DP = 24f
+    const val GAP_DP = 4f
+    const val STRIP_DP = 48f
+    fun rulerHeight(fontScale: Float) = READOUT_DP * fontScale.coerceAtLeast(1f) + GAP_DP + STRIP_DP
+    /** Linked: one ruler; unlinked: Width and Height rulers with a gap. */
+    fun controllerHeight(linked: Boolean, fontScale: Float) = if (linked) rulerHeight(fontScale) else 2 * rulerHeight(fontScale) + GAP_DP
 
     fun gain(velocityDpPerSecond: Float): Float {
         val t = ((abs(velocityDpPerSecond) - GAIN_START) / (GAIN_FULL - GAIN_START)).coerceIn(0f, 1f)
@@ -73,7 +81,8 @@ internal object ScaleRulerMath {
         val snapped = if (abs(raw) <= SNAP_DOUBLINGS) 0f else raw
         return sign * valueAt(snapped)
     }
-    fun travel(dxDp: Float, velocityDpPerSecond: Float): Float = dxDp * gain(velocityDpPerSecond) / DP_PER_DOUBLING
+    /** The tape follows the finger: dragging right moves the ticks right, so the value under the needle decreases. */
+    fun travel(dxDp: Float, velocityDpPerSecond: Float): Float = -dxDp * gain(velocityDpPerSecond) / DP_PER_DOUBLING
     /** Haptic detents at 100%·2^k (…25, 50, 100, 200, 400…). Returns 0 none, 1 light, 2 strong (crossing/landing on 100%). */
     fun detent(old: Float, new: Float): Int {
         val a = position(old); val b = position(new)
@@ -81,9 +90,9 @@ internal object ScaleRulerMath {
         if ((a < 0f && b >= 0f) || (a > 0f && b <= 0f)) return 2
         return if (floor(a) != floor(b)) 1 else 0
     }
-    /** Inertia travel after a fling, in doublings; decays to zero, so it always ends. */
+    /** Inertia travel after a fling, in doublings (same direction rule as [travel]); decays, so it always ends. */
     fun inertiaStep(velocityDpPerSecond: Float, elapsedMs: Float): Float =
-        velocityDpPerSecond * gain(velocityDpPerSecond) / DP_PER_DOUBLING * (INERTIA_TAU_MS / 1000f) * (1f - exp(-elapsedMs / INERTIA_TAU_MS))
+        -velocityDpPerSecond * gain(velocityDpPerSecond) / DP_PER_DOUBLING * (INERTIA_TAU_MS / 1000f) * (1f - exp(-elapsedMs / INERTIA_TAU_MS))
 
     /** Linked (uniform) scaling keeps the X:Y ratio captured at drag start; result within the layer scale hard cap. */
     fun linkedY(initialX: Float, initialY: Float, x: Float): Float {
@@ -147,22 +156,23 @@ internal object ScaleRulerMath {
         when (ScaleRulerMath.detent(shown, next)) { 2 -> InspectorHaptics.strong(view); 1 -> InspectorHaptics.tick(view) }
         shown = next; preview(next)
     }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(Modifier.fillMaxWidth().height(28.dp), contentAlignment = Alignment.Center) {
+    val fontScale = density.fontScale.coerceAtLeast(1f)
+    Column(modifier.testTag("scale-ruler-$label"), verticalArrangement = Arrangement.spacedBy(ScaleRulerMath.GAP_DP.dp)) {
+        Box(Modifier.fillMaxWidth().height((ScaleRulerMath.READOUT_DP * fontScale).dp), contentAlignment = Alignment.Center) {
             Row(Modifier.pointerInput(Unit) { detectTapGestures(onTap = { editing = true }, onDoubleTap = { onReset() }) }
                 .semantics(mergeDescendants = true) {
                     contentDescription = "$label ${ScaleRulerMath.readout(shown)}. Tap to type, double-tap to reset to 100 percent"
                     onClick("Type $label") { editing = true; true }
                 }, verticalAlignment = Alignment.CenterVertically) {
                 Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 6.dp))
-                Text(ScaleRulerMath.readout(shown), color = TextPrimary, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                Text(ScaleRulerMath.readout(shown), color = TextPrimary, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.titleMedium, lineHeight = 22.sp, maxLines = 1)
                 AnchoredPopover(editing, { editing = false }, "scale-readout-entry") {
                     InspectorValueField(PropertyLimits.format(PropertyLimits.LAYER_SCALE, shown * 100f), label, "%",
                         { text -> editing = false; PropertyLimits.parseTyped(PropertyLimits.LAYER_SCALE, text)?.let { onTyped(it / 100f) } }, { editing = false })
                 }
             }
         }
-        Canvas(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(min = 40.dp, max = 56.dp).clip(RoundedCornerShape(10.dp)).background(SurfaceHigh)
+        Canvas(Modifier.fillMaxWidth().height(ScaleRulerMath.STRIP_DP.dp).testTag("scale-ruler-strip").clip(RoundedCornerShape(10.dp)).background(SurfaceHigh)
             .border(1.dp, Border, RoundedCornerShape(10.dp))
             .semantics {
                 contentDescription = "$label ruler, ${ScaleRulerMath.readout(shown)}"
@@ -236,4 +246,13 @@ internal object ScaleRulerMath {
 @Composable private fun LogScaleRulerPreview() {
     var v by remember { mutableFloatStateOf(1.75f) }
     LogScaleRuler("Scale", v, {}, { v = it }, {}, {}, { v = it }, { v = 1f }, Modifier.padding(8.dp).fillMaxWidth())
+}
+
+/** Unlinked Width + Height rulers inside the Transform content height of a 268dp sheet (158dp): both strips visible. */
+@Preview(widthDp = 260, heightDp = 158, backgroundColor = 0xFF1C1C1C, showBackground = true)
+@Composable private fun LogScaleRulerCompactPreview() {
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(ScaleRulerMath.GAP_DP.dp)) {
+        LogScaleRuler("Width", 1f, {}, {}, {}, {}, {}, {}, Modifier.fillMaxWidth())
+        LogScaleRuler("Height", 2.5f, {}, {}, {}, {}, {}, {}, Modifier.fillMaxWidth())
+    }
 }

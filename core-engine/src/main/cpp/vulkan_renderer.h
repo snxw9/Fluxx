@@ -54,6 +54,9 @@ public:
         return !mPreparedTextHandles.empty() && prepareText(mPreparedTextHandles.data(),mPreparedTextHandles.size(),mPreparedProofOnly);
     }
     void configureText(unsigned pages) { mTextMaxPages=pages; }
+    // SDF atlas tier per layout handle (ppem from text/sdf_tiers.h). Returns true when any tier changed.
+    bool setTextTiers(const int64_t* handles,const int32_t* ppems,size_t count,bool synchronous);
+    size_t awaitTextTiers(int timeoutMs) { return mText?mText->awaitTiers(timeoutMs):0; }
     bool setTextLayer(int64_t handle, const float* matrix, float size, int alignment, uint32_t argb, float opacity, float tracking=0, float leading=0, float baselineShift=0,
                       uint32_t stroke=0xff000000, float strokeWidth=0, int paintOrder=0, float softness=0,
                       const fluxx::text::GlyphModifier* modifiers=nullptr,size_t modifierBytes=0);

@@ -141,7 +141,22 @@ JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_prepareTex
     } catch(const std::exception& error) { textFailure(env,error); return false; }
 }
 JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_configureText(JNIEnv*,jobject,jlong session,jint pages) {
-    reinterpret_cast<VulkanRenderer*>(session)->configureText(pages==2?2:4);
+    // Atlas page cap (2048x2048 R8 = 4 MiB each), shared by every SDF tier: 3 pages on low-RAM devices, 6 otherwise.
+    reinterpret_cast<VulkanRenderer*>(session)->configureText(static_cast<unsigned>(std::clamp<jint>(pages,1,8)));
+}
+JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_textTiers(JNIEnv* env,jobject,jlong session,jlongArray handles,jintArray ppems,jboolean synchronous) {
+    try {
+        const auto count=env->GetArrayLength(handles);
+        if(count!=env->GetArrayLength(ppems)) throw std::invalid_argument("Tier arrays differ in length");
+        std::vector<jlong> h(static_cast<size_t>(count));std::vector<jint> p(static_cast<size_t>(count));
+        env->GetLongArrayRegion(handles,0,count,h.data());env->GetIntArrayRegion(ppems,0,count,p.data());
+        if(env->ExceptionCheck()) return false;
+        std::vector<int64_t> handleValues(h.begin(),h.end());std::vector<int32_t> ppemValues(p.begin(),p.end());
+        return reinterpret_cast<VulkanRenderer*>(session)->setTextTiers(handleValues.data(),ppemValues.data(),handleValues.size(),synchronous);
+    } catch(const std::exception& error) { textFailure(env,error); return false; }
+}
+JNIEXPORT jint JNICALL Java_com_fluxx_android_engine_RenderBridge_awaitTextTiers(JNIEnv*,jobject,jlong session,jint timeoutMs) {
+    return static_cast<jint>(reinterpret_cast<VulkanRenderer*>(session)->awaitTextTiers(timeoutMs));
 }
 JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_RenderBridge_upsertStyledText(JNIEnv* env,jobject,jlong session,jstring font,jbyteArray bytes,jboolean ligatures) {
     try {

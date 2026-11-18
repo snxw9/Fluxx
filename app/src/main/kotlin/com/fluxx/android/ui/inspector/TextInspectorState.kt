@@ -13,43 +13,56 @@ internal enum class TextControl(val label: String,val unit: String="") {
     H_SCALE("Horizontal glyph scale","%"),V_SCALE("Vertical glyph scale","%"),SCALE_LINK("Link horizontal and vertical glyph scale"),KERNING("Kerning mode"),
     MANUAL_KERNING("Manual spacing after selected characters","1/1000 em"),BOLD("Faux bold"),ITALIC("Faux italic"),
     UNDERLINE("Underline"),STRIKE("Strikethrough"),
-    CASE("Case"),ALL_CAPS("All caps"),LOWERCASE("Lowercase"),SMALL_CAPS("Small caps"),SUPER("Superscript"),SUB("Subscript"),LIGATURES("Optional ligatures"),ALIGNMENT("Alignment"),
+    CASE("Case"),ALL_CAPS("All caps"),LOWERCASE("Lowercase"),SUPER("Superscript"),SUB("Subscript"),LIGATURES("Optional ligatures"),ALIGNMENT("Alignment"),
     ALIGN_LEFT("Align left"),ALIGN_CENTRE("Align centre"),ALIGN_RIGHT("Align right"),JUSTIFY("Justify choices"),
     INDENT_LEFT("Left indent","px"),INDENT_RIGHT("Right indent","px"),INDENT_FIRST("First-line indent","px"),
     BEFORE("Space before paragraph","px"),AFTER("Space after paragraph","px"),BOX_MODE("Point or box text"),BOX("Box width","px"),DIRECTION("Paragraph direction"),
-    PAINT("Fill and stroke colour"),BASE_FONT("Layer base font"),BASE_ALIGNMENT("Layer base alignment")
+    PAINT("Fill and stroke colour"),EXPLODE("Explode Text"),BASE_FONT("Layer base font"),BASE_ALIGNMENT("Layer base alignment")
 }
 
 /** One grid cell; [control] null is an empty slot that keeps columns aligned. */
 internal data class TextGridCell(val control: TextControl?,val weight: Float=1f)
 
+/** One tab face: a top row, two 3-column blocks (left, right) and, below them, the shared bottom bar. */
+internal data class TextFace(val top: List<TextControl>,val left: List<List<TextControl>>,val right: List<List<TextControl>>) {
+    val rows get()=maxOf(left.size,right.size)
+    val controls get()=top+left.flatten()+right.flatten()
+}
+
 /**
- * Data-only tab faces (icon-first, After Effects Character/Paragraph style). Character, top to bottom:
- * row 1 paint, row 2 spacing/scale, a 3×3 style grid (plus two extra tiles beside it), and the bottom bar.
+ * Data-only tab faces (icon-first). Character, top to bottom: the top row (Explode Text pill left; Fill/Stroke
+ * tile with the Fill-over-stroke switch under it, right), two 3×3 blocks (spacing/scale left, style right) and
+ * the bottom bar (font chip, size, inline text). Paragraph uses the same skeleton with alignment on top.
  */
 internal object TextInspectorLayout {
-    val characterRow1=listOf(TextControl.PAINT,TextControl.STROKE_WIDTH,TextControl.ORDER)
-    val characterRow2=listOf(TextControl.TRACKING,TextControl.LEADING,TextControl.H_SCALE,TextControl.SCALE_LINK,TextControl.V_SCALE,TextControl.BASELINE)
-    val styleGrid=listOf(listOf(TextControl.BOLD,TextControl.ITALIC,TextControl.UNDERLINE),
+    const val COLUMNS=3
+    val characterTop=listOf(TextControl.EXPLODE,TextControl.PAINT,TextControl.ORDER)
+    val characterLeft=listOf(listOf(TextControl.STROKE_WIDTH,TextControl.TRACKING,TextControl.LEADING),
+        listOf(TextControl.H_SCALE,TextControl.SCALE_LINK,TextControl.V_SCALE),listOf(TextControl.BASELINE,TextControl.KERNING))
+    val characterRight=listOf(listOf(TextControl.BOLD,TextControl.ITALIC,TextControl.UNDERLINE),
         listOf(TextControl.STRIKE,TextControl.SUPER,TextControl.SUB),listOf(TextControl.ALL_CAPS,TextControl.LOWERCASE,TextControl.LIGATURES))
-    /** Existing capabilities with no slot in the 3×3 grid; they sit beside it, behind a hairline. */
-    val styleExtras=listOf(TextControl.SMALL_CAPS,TextControl.KERNING)
+    val paragraphTop=listOf(TextControl.ALIGN_LEFT,TextControl.ALIGN_CENTRE,TextControl.ALIGN_RIGHT,TextControl.JUSTIFY)
+    val paragraphLeft=listOf(listOf(TextControl.INDENT_LEFT,TextControl.INDENT_RIGHT,TextControl.INDENT_FIRST),listOf(TextControl.BEFORE,TextControl.AFTER))
+    val paragraphRight=listOf(listOf(TextControl.BOX_MODE,TextControl.BOX,TextControl.DIRECTION))
     val bottomBar=listOf(TextControl.FONT,TextControl.SIZE,TextControl.SOURCE)
-    val paragraphRows=listOf(listOf(TextControl.ALIGN_LEFT,TextControl.ALIGN_CENTRE,TextControl.ALIGN_RIGHT,TextControl.JUSTIFY),
-        listOf(TextControl.INDENT_LEFT,TextControl.INDENT_RIGHT,TextControl.INDENT_FIRST,TextControl.BEFORE,TextControl.AFTER),
-        listOf(TextControl.BOX_MODE,TextControl.BOX,TextControl.DIRECTION))
-    /** Standard-scale tile rows above the bottom bar. */
-    fun faceRows(tab: TextTab): List<List<TextControl>> = when(tab) {
-        TextTab.CHARACTER->listOf(characterRow1,characterRow2)+styleGrid.mapIndexed {i,r->if(i==0) r+styleExtras else r}
-        TextTab.PARAGRAPH->paragraphRows
-        TextTab.ANIMATE->emptyList()
+    fun face(tab: TextTab): TextFace? = when(tab) {
+        TextTab.CHARACTER->TextFace(characterTop,characterLeft,characterRight)
+        TextTab.PARAGRAPH->TextFace(paragraphTop,paragraphLeft,paragraphRight)
+        TextTab.ANIMATE->null
+    }
+    /** Top row then block rows (left block row i followed by right block row i): the visual reading order. */
+    fun faceRows(tab: TextTab): List<List<TextControl>> {
+        val f=face(tab) ?: return emptyList()
+        return listOf(f.top)+(0 until f.rows).map {i->f.left.getOrElse(i) {emptyList()}+f.right.getOrElse(i) {emptyList()}}
     }
     fun hasBottomBar(tab: TextTab)=tab!=TextTab.ANIMATE
     /** Every control reachable from the tab face, bottom bar included. */
-    fun inventory(tab: TextTab): List<TextControl> = faceRows(tab).flatten()+if(hasBottomBar(tab)) bottomBar else emptyList()
+    fun inventory(tab: TextTab): List<TextControl> = (face(tab)?.controls ?: emptyList())+if(hasBottomBar(tab)) bottomBar else emptyList()
     fun columns(fontScale: Float)=if(TextInspectorBudget.large(fontScale)) 3 else 6
+    /** A short last row (2 of 3) is centred: offset in columns from the block's left edge. */
+    fun rowOffset(rowSize: Int)=(COLUMNS-rowSize).coerceAtLeast(0)/2f
     /** Large font scales: the labelled 3-column fallback reflows the same face controls in the same order. */
-    fun labelledRows(tab: TextTab): List<List<TextGridCell>> = flow(faceRows(tab).flatten().map {TextGridCell(it)},3)
+    fun labelledRows(tab: TextTab): List<List<TextGridCell>> = flow((face(tab)?.controls ?: emptyList()).map {TextGridCell(it)},3)
     fun flow(cells: List<TextGridCell>,columns: Int): List<List<TextGridCell>> {
         val rows=mutableListOf<MutableList<TextGridCell>>();var used=0f
         for(cell in cells) {
@@ -123,7 +136,7 @@ internal object TextFocus {
         if(tab==TextTab.ANIMATE) null else scope.owner(control(lastTouched,popover))
 }
 
-/** One Back transition, innermost first: popover, then sub-page (Fonts/Colour) to its tab, then the landing grid. */
+/** One Back transition, innermost first: popover, then the Fonts sub-page to its tab, then the landing grid. */
 internal enum class TextBackStep { CLOSE_EXPLODE, CLOSE_CONFIRM, PARENT_CHOICE, CLOSE_POPOVER, FINISH_SOURCE, CLOSE_PAGE, RETURN_TO_GRID }
 internal object TextInspectorBack {
     fun step(mode: TextInspectorMode,popover: TextControl?,explode: Boolean,confirming: Boolean): TextBackStep=when {
@@ -132,24 +145,37 @@ internal object TextInspectorBack {
         popover==TextControl.BASE_ALIGNMENT->TextBackStep.PARENT_CHOICE
         popover!=null->TextBackStep.CLOSE_POPOVER
         mode==TextInspectorMode.Source->TextBackStep.FINISH_SOURCE
-        mode==TextInspectorMode.Fonts || mode is TextInspectorMode.Colour->TextBackStep.CLOSE_PAGE
+        mode==TextInspectorMode.Fonts->TextBackStep.CLOSE_PAGE
         // Nothing transient: return straight to the layer inspector grid, clearing any selection.
         else->TextBackStep.RETURN_TO_GRID
     }
 }
 
-/** The single header ⋮ menu: exactly these four items. */
-internal enum class TextMenuItem { EXPLODE, RESET_STYLE, MANUAL_KERNING, RELATIVE_SIZE }
-internal object TextHeaderMenu {
-    val items=TextMenuItem.entries.toList()
-    fun label(item: TextMenuItem,tab: TextTab,scopeLabel: String)=when(item) {
-        TextMenuItem.EXPLODE->"Explode Text"
-        TextMenuItem.RESET_STYLE->if(tab==TextTab.ANIMATE) "Reset text style (no Animate formatting)"
-            else "Reset ${tab.name.lowercase().replaceFirstChar {it.uppercase()}} style · $scopeLabel"
-        TextMenuItem.MANUAL_KERNING->"Manual kerning"
-        TextMenuItem.RELATIVE_SIZE->"Relative size"
+/**
+ * The rail's property-options ⋮ is the single overflow menu of the Edit Text page (the header has none).
+ * Order: Reset {property} value, Enable/Freeze, Reset animation…, Hold/easing, Reset {tab} style · scope,
+ * Manual spacing. Relative size is not listed: with a selection the Size tile already edits relative run size.
+ */
+internal enum class TextRailItem { RESET_VALUE, ANIMATION, RESET_ANIMATION, EASING, RESET_STYLE, MANUAL_SPACING }
+internal object TextRailMenu {
+    fun items(owner: AnimPropertyType?,animated: Boolean,onKey: Boolean,tab: TextTab): List<TextRailItem> = buildList {
+        add(TextRailItem.RESET_VALUE)
+        if(owner!=null) {
+            add(TextRailItem.ANIMATION)
+            if(animated) add(TextRailItem.RESET_ANIMATION)
+            if(owner in TextKeyState.HOLD_OWNERS || (animated && onKey)) add(TextRailItem.EASING)
+        }
+        if(tab!=TextTab.ANIMATE) add(TextRailItem.RESET_STYLE)
+        if(tab==TextTab.CHARACTER) add(TextRailItem.MANUAL_SPACING)
     }
-    fun enabled(item: TextMenuItem,tab: TextTab)=item!=TextMenuItem.RESET_STYLE || tab!=TextTab.ANIMATE
+    fun label(item: TextRailItem,tab: TextTab,scopeLabel: String,property: String,animated: Boolean)=when(item) {
+        TextRailItem.RESET_VALUE->"Reset $property value"
+        TextRailItem.ANIMATION->if(animated) "Freeze at playhead" else "Enable animation"
+        TextRailItem.RESET_ANIMATION->"Reset animation…"
+        TextRailItem.EASING->"Hold / easing"
+        TextRailItem.RESET_STYLE->"Reset ${tab.name.lowercase().replaceFirstChar {it.uppercase()}} style · $scopeLabel"
+        TextRailItem.MANUAL_SPACING->"Manual spacing…"
+    }
 }
 
 /** Rail diamond: key/animation state. Hold owners use square glyphs. */
@@ -172,8 +198,38 @@ internal sealed interface TextInspectorMode {
     data object Browse: TextInspectorMode
     data object Source: TextInspectorMode
     data object Fonts: TextInspectorMode
-    /** Global colour picker page (from the colour popover's Custom…). Edits apply live; leaving commits once. */
-    data class Colour(val control: TextControl,val layer: CompositionLayer,val time: Long,val scope: TextEditScope): TextInspectorMode
+}
+
+/** Receives one colour interaction: begin once, live previews, then finish (one undo entry) or cancel. */
+internal interface TextDraftSink { fun begin(); fun preview(payload: TextProperties); fun finish(); fun cancel() }
+
+/**
+ * Colour popover state. Every interaction (an SV/hue/alpha drag, a swatch, a typed hex or alpha, an eyedropper
+ * sample) is one transaction: begin → live previews on the captured layer/time/scope → finish. No Done.
+ */
+internal class TextColourSession(private val sink: TextDraftSink) {
+    var target=TextControl.FILL; private set
+    private var captured: Triple<CompositionLayer,Long,TextEditScope>?=null
+    val active get()=captured!=null
+    fun target(c: TextControl) {target=if(c==TextControl.STROKE) TextControl.STROKE else TextControl.FILL}
+    fun begin(layer: CompositionLayer,time: Long,scope: TextEditScope) {if(captured==null) {captured=Triple(layer,time,scope);sink.begin()}}
+    fun preview(argb: Int) {captured?.let {(l,t,s)->sink.preview(textColourPayload(l,t,s,target,argb))}}
+    fun finish() {if(captured!=null) {captured=null;sink.finish()}}
+    fun cancel() {if(captured!=null) {captured=null;sink.cancel()}}
+    /** A one-shot edit: exactly one begin/preview/finish. */
+    fun set(layer: CompositionLayer,time: Long,scope: TextEditScope,argb: Int) {cancel();begin(layer,time,scope);preview(argb);finish()}
+}
+
+/** Pure colour arithmetic for the popover: typed hex/alpha, swatches keep the current alpha. */
+internal object TextColourEdit {
+    fun alphaPercent(argb: Int)=(argb ushr 24)*100f/255f
+    fun withAlphaPercent(argb: Int,percent: Float)=withAlpha(argb,kotlin.math.round(percent.coerceIn(0f,100f)/100f*255f).toInt())
+    /** RRGGBB keeps the current alpha; AARRGGBB replaces it. Invalid text returns null (nothing applied). */
+    fun hex(text: String,current: Int): Int? = FluxxColor.parseHex(text.trim().removePrefix("#"),(current ushr 24)/255f)?.toArgb()
+    fun hexText(argb: Int)=FluxxColor.fromArgb(argb).toHexString(true)
+    /** A swatch sets the colour and keeps the current alpha (a fully transparent colour becomes opaque). */
+    fun swatch(current: Int,argb: Int)=withAlpha(argb,(current ushr 24).takeIf {it>0} ?: 255)
+    fun hsv(hue: Float,saturation: Float,value: Float,current: Int)=FluxxColor.fromHsv(hue,saturation,value,(current ushr 24)/255f).toArgb()
 }
 
 /** Captures signed origin, scope and snapped playhead once; later preview never retargets a key. */
@@ -275,7 +331,7 @@ internal object TextInspectorModeCodec {
         val id=++serial;snapshot=id to mode;return id
     }
     fun save(mode: TextInspectorMode): List<Any> = when(mode) {
-        is TextInspectorMode.Colour,TextInspectorMode.Source->listOf("draft",retain(mode))
+        TextInspectorMode.Source->listOf("draft",retain(mode))
         TextInspectorMode.Fonts->listOf("fonts");else->listOf("browse")
     }
     fun restore(values: List<Any>): TextInspectorMode = when(values[0]) {
@@ -289,14 +345,12 @@ internal object TextInspectorModeCodec {
 }
 
 /**
- * Shared inspector sheet heights (every page, Edit Text included). Edit Text's Character tab needs 6 tile rows
- * (row 1, row 2, 3 style rows, bottom bar): frame 16 + header 40 + 6 × 42 = 308dp with 40dp tiles in compact
- * mode, and 16 + 40 + 6 × 48 = 344dp with 48dp targets otherwise. The old 268/328 budgets cannot hold six
- * rows (268 − 56 = 212 < 252; 328 − 56 = 272 < 288), so both shared heights rise by the minimum: 308 / 344.
+ * Shared inspector sheet heights for EVERY page (Edit Text included): the original 268dp (expanded preview) and
+ * 328dp (standard), scaled by font scale exactly as before TEXT UI 5. Edit Text fits by using smaller tiles.
  */
 internal object InspectorSheetBudget {
-    const val EXPANDED=308f
-    const val STANDARD=344f
+    const val EXPANDED=268f
+    const val STANDARD=328f
     /** Below this sheet height the inspector uses 40dp touch targets (LocalMinimumInteractiveComponentSize). */
     const val COMPACT_BELOW=320f
     const val FRAME_V=16f
@@ -305,21 +359,95 @@ internal object InspectorSheetBudget {
     fun compact(sheetHeight: Float)=sheetHeight<COMPACT_BELOW
 }
 
+/**
+ * Exact Edit Text face geometry (dp) for one sheet height and window width. Vertically:
+ * body = top + groupGap + middle (3 tiles + 2 gaps) + groupGap + bottom (1 tile). Every touch target is a full cell
+ * pitch (tile + gap, the group gap split between neighbouring bands); drawn tiles are inset by half a gap.
+ * Horizontally the content is 6 equal cells (two 3-column blocks) plus one [TextInspectorBudget.BLOCK_SPACER].
+ */
+internal data class TextFaceMetrics(val compact: Boolean,val body: Float,val tile: Float,val top: Float,val middle: Float,val bottom: Float,
+    val cell: Float,val paintTile: Float,val switchHeight: Float,val switchGap: Float,val switchBeside: Boolean) {
+    val gap get()=TextInspectorBudget.GRID_GAP
+    val groupGap get()=TextInspectorBudget.GROUP_GAP
+    /** Band heights as laid out (each group gap is split between the bands on either side of its hairline). */
+    val topBand get()=top+groupGap/2
+    val middleBand get()=middle+groupGap
+    val bottomBand get()=bottom+groupGap/2
+    /** Middle block row heights: the outer rows take half a group gap each, so all three are touch-sized. */
+    val middleRows get()=listOf(tile+gap/2+groupGap/2,tile+gap,tile+gap/2+groupGap/2)
+    val pitchV get()=tile+gap
+    val pitchH get()=cell
+    val visualTileWidth get()=cell-gap
+    val blockWidth get()=3*cell-gap
+    val fits get()=top>=TextInspectorBudget.PAINT_MIN && minOf(pitchV,pitchH,bottomBand,middleRows.min())>=TextInspectorBudget.MIN_TARGET && topBand+middleBand+bottomBand<=body+1e-3f
+}
+
 /** Edit Text page budget inside the shared frame. The page never scrolls; large fonts page whole rows. */
 internal object TextInspectorBudget {
     const val HEADER=40f
-    const val TILE=40f
     const val RAIL=40f
     const val RAIL_GAP=4f
     const val MIN_TARGET=40f
-    const val STANDARD_TARGET=48f
+    const val TILE_COMPACT=36f
+    const val TILE_STANDARD=44f
+    const val GRID_GAP=4f
+    const val GROUP_GAP=8f
+    /** Spacer between the two blocks' cells; the visual gap between their tiles is spacer + one grid gap = 8dp. */
+    const val BLOCK_SPACER=4f
+    const val PAINT_MIN=28f
+    const val SWITCH_COMPACT=16f
+    const val SWITCH_STANDARD=24f
+    const val PILL=28f
+    /** Labelled large-font fallback: one row = a 44dp tile plus its gap. */
+    const val LABELLED_PITCH=48f
     fun large(fontScale: Float)=fontScale>1.2f
-    /** Row pitch: a 40dp tile plus its gap; the whole pitch is the tap target (40dp compact, 48dp otherwise). */
-    fun pitch(compact: Boolean)=if(compact) 42f else STANDARD_TARGET
-    fun characterRows()=TextInspectorLayout.faceRows(TextTab.CHARACTER).size+1
-    /** Height the Character tab needs at standard font scale. */
-    fun pageHeight(compact: Boolean)=InspectorSheetBudget.FRAME_V+HEADER+characterRows()*pitch(compact)
-    fun bodyHeight(sheetHeight: Float,fontScale: Float)=(sheetHeight-InspectorSheetBudget.FRAME_V-HEADER*fontScale.coerceAtLeast(1f)).coerceAtLeast(0f)
-    fun bodyRows(sheetHeight: Float,fontScale: Float,compact: Boolean)=kotlin.math.floor(bodyHeight(sheetHeight,fontScale)/pitch(compact)+1e-3f).toInt()
+    fun header(fontScale: Float)=HEADER*fontScale.coerceAtLeast(1f)
+    fun bodyHeight(sheetHeight: Float,fontScale: Float)=(sheetHeight-InspectorSheetBudget.FRAME_V-header(fontScale)).coerceAtLeast(0f)
     fun contentWidth(windowWidth: Float)=windowWidth-InspectorSheetBudget.FRAME_H-RAIL-RAIL_GAP
+    fun metrics(sheetHeight: Float,contentWidth: Float,fontScale: Float=1f): TextFaceMetrics =
+        forBody(bodyHeight(sheetHeight,fontScale),contentWidth,InspectorSheetBudget.compact(sheetHeight))
+    /** Same arithmetic from the measured body (what the page actually receives). */
+    fun forBody(body: Float,contentWidth: Float,compact: Boolean): TextFaceMetrics {
+        val tile=if(compact) TILE_COMPACT else TILE_STANDARD
+        val middle=3*tile+2*GRID_GAP
+        val top=body-middle-tile-2*GROUP_GAP
+        val switch=if(compact) SWITCH_COMPACT else SWITCH_STANDARD
+        val switchGap=if(top>=tile+GRID_GAP+switch) GRID_GAP else 0f
+        val stacked=top>=PAINT_MIN+switch+switchGap
+        val paint=if(stacked) minOf(tile,top-switch-switchGap) else minOf(tile,top)
+        return TextFaceMetrics(compact,body,tile,top,middle,tile,(contentWidth-BLOCK_SPACER)/6f,paint,switch,if(stacked) switchGap else 0f,!stacked)
+    }
+    /** Labelled fallback: whole rows that fit above the bottom bar. */
+    fun labelledCapacity(sheetHeight: Float,fontScale: Float)=
+        kotlin.math.floor((bodyHeight(sheetHeight,fontScale)-LABELLED_PITCH)/LABELLED_PITCH+1e-3f).toInt().coerceAtLeast(1)
+}
+
+/**
+ * Parent chrome above Transform/Opacity/Timing content (drag handle, name row, section tabs). The sheet lays
+ * these out with exactly these values, so page content height is arithmetic, not a guess.
+ */
+internal object InspectorChromeBudget {
+    const val HANDLE=20f
+    const val CONTENT_TOP=4f
+    const val LABEL_LINE=16f
+    fun nameRow(compact: Boolean)=if(compact) 40f else 48f
+    fun tabRow(compact: Boolean,fontScale: Float)=(if(compact) 6f+6f else 12f+10f)+2f+LABEL_LINE*fontScale.coerceAtLeast(1f)
+    fun contentHeight(sheetHeight: Float,fontScale: Float): Float {
+        val compact=InspectorSheetBudget.compact(sheetHeight)
+        return sheetHeight-InspectorSheetBudget.FRAME_V-HANDLE-nameRow(compact)-tabRow(compact,fontScale)-CONTENT_TOP
+    }
+}
+
+/** Rail stack: 40dp tiles with a 6dp gap, top-aligned; disabled placeholders shrink first when space is short. */
+internal object RailBudget {
+    const val TILE=40f
+    const val GAP=6f
+    const val DISABLED_MIN=24f
+    fun full(items: Int)=items*TILE+(items-1).coerceAtLeast(0)*GAP
+    /** Height of each disabled (non-interactive) item so the whole stack fits [available]. */
+    fun disabledHeight(available: Float,interactive: Int,disabled: Int): Float {
+        if(disabled==0 || available>=full(interactive+disabled)) return TILE
+        val free=available-interactive*TILE-(interactive+disabled-1)*GAP
+        return (free/disabled).coerceIn(DISABLED_MIN,TILE)
+    }
 }

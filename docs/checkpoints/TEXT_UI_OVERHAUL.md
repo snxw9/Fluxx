@@ -322,3 +322,250 @@ The instrumented `TextInspectorLayoutTest` was rewritten for the shared frame (i
     - Touch Tracking, then press the action bar's Next keyframe: it goes to the next Tracking key. Open the Size popover: Prev/Next follow Size.
 14. **Large font scale (1.3 and 2.0):** labelled 3-column grid, all tiles present, `n/m` paging of whole rows, nothing scrolls or overlaps, popovers stay on screen.
 15. **Regression:** the selection scope chip in the text field (× clears), Reset {tab} style is one undo, Explode, the Direction RTL message, preview move/box handle, save/reopen, the Transform position pad and anchor mode, Opacity, Timing.
+
+## TEXT UI 6: fit layout, icon family, compact rail, colour popover picker, ruler fix, SDF tiers
+
+Device feedback on TEXT UI 5 (A16): the keyboard, popovers, 10000% scale reach, rotation and the Fonts page are good; everything below still needed work. Implemented in source in one commit, **device-unverified**. Scope rules held: no change to `PreviewController`, the gesture protocol, the `EditorAction` contract, the batch/draw contract (`textLayer`/`flush`/`finish` arguments are unchanged; two tier calls were added before preparation) or the document schema. Renderer/atlas internals changed only for §8. The Fonts page is untouched apart from its three icons now coming from the shared family.
+
+### 1. Sheet height: back to 268 / 328dp
+
+- `InspectorSheetBudget` is 268dp (expanded preview) / 328dp (standard) for **every** page, font-scaled exactly as before TEXT UI 5. The `EditorScreen` clamp is again applied only to text layers, as originally, so preview and timeline sizing match pre-TEXT UI 5 behaviour.
+- Edit Text budget: frame 16 + header 40 = 56, so the body is **212dp at 268** and **272dp at 328**. It fits by using smaller tiles, not by raising the height.
+
+### 2. Edit Text layout (positions and heights)
+
+Geometry comes from `TextInspectorBudget.forBody` (`TextFaceMetrics`), which is the same arithmetic the composable lays out.
+
+**Vertical layout:** body = top + 8 + middle (3 tiles + 2 × 4) + 8 + bottom (1 tile). Each 8dp group gap holds a 1dp hairline at its centre. Half of each gap belongs to each neighbouring band, so every row is a full touch target.
+
+**Horizontal layout:** the content is 6 equal cells: two 3-column blocks plus a 4dp spacer. Every touch target is a full cell (tile + gap). Tiles are drawn inset by 2dp, so the visual gap is 4dp inside a block and 8dp between blocks. Block edges, bottom-bar edges and the top row share the same columns.
+
+| | Compact 268 | Standard 328 |
+|---|---|---|
+| Body | 212 | 272 |
+| Tile height / in-grid gap / group gap | 36 / 4 / 8 | 44 / 4 / 8 |
+| Top row | 44: Fill/Stroke tile 28 + switch 16 stacked, no gap; Explode pill 28, vertically centred | 72: tile 44 + 4 + switch 24 |
+| Middle (two 3×3 blocks) | 3 × 36 + 2 × 4 = 116 (row touch targets 42 / 40 / 42) | 3 × 44 + 2 × 4 = 140 (50 / 48 / 50) |
+| Bottom bar | 36 (touch 40) | 44 (touch 48) |
+| Cell width at 360dp (content 292) | 48 (tile 44) | 48 (tile 44) |
+
+If the top row cannot hold a 28dp tile with a 16dp switch under it, the switch moves to the right of the tile (`switchBeside`). That never happens at 268 or 328 with font scale 1. Above font scale 1.2 the page uses the labelled 3-column reflow: 48dp rows, whole rows paged by an `n/m` button above the same bottom bar, all inside the font-scaled 268/328 sheet.
+
+**Character tab**
+
+| Position | Content |
+|---|---|
+| Top, left block | **Explode Text pill** (rounded, `SurfaceHigh`, icon + "Explode Text", 28dp; opens the existing Explode dialog) |
+| Top, right block | **Fill/Stroke dual-colour tile** (block width × 28/44dp) with the **Fill over stroke** switch directly under it (custom 28×16dp, `Role.Switch`, full contentDescription and state) |
+| Left block | Stroke width · Tracking · Leading / Horizontal scale · Link (uniform H/V) · Vertical scale / Baseline shift · Kerning (Metrics/Off). The last row is centred, and the spare slot stays empty. |
+| Right block | Bold · Italic · Underline / Strikethrough · Superscript · Subscript / All caps · Lowercase · Ligatures |
+| Bottom bar | Font chip (2 cells; icon + truncated family; opens Fonts) · Size (ladder popover) · inline **text content** field (3 cells, the right block's edges; selection chip inside) |
+
+**Paragraph tab** (same skeleton)
+
+| Position | Content |
+|---|---|
+| Top row (full width, 4 cells) | Align left · centre · right · Justify (choice popover as before) |
+| Left block | Left indent · Right indent · First-line indent / Space before · Space after (last row centred) |
+| Right block | Point/Box toggle · Box width · Direction |
+| Bottom bar | Same as Character |
+
+**Removed:** the Small caps tile and control (`TextControl.SMALL_CAPS` is gone; the model and renderer keep `TextCaps.SMALL`), the header ⋮, the Colour page, the "Custom…" entry, and the Canvas dual-colour icon (it is now a Box swatch with real colours). The field above the preview is still the **layer name** and is not merged with the text field.
+
+### 4. Colour popover (picker inside the popover)
+
+- The footprint stays a ~288dp-wide anchored popover from the Fill/Stroke tile (placement clamps to the window with 8dp margins). It has no second page.
+- **Row 1 (40dp):** Fill / Stroke target toggle (left) · eyedropper · Inherit (only with a selection) · Reset.
+- **Row 2 (96dp):** the saturation/value square (96dp) and hue bar (16dp) are the global picker's own `SaturationValueBox` and `HueStrip` with the `FluxxColor` model. The colour maths is not forked, and hue/saturation survive greys and black. On the right:
+  - preview swatch + **hex value** (tap to type in an anchored `InspectorValueField`; RRGGBB keeps the alpha, AARRGGBB replaces it, invalid text applies nothing);
+  - **alpha slider** + tappable **%** value (same entry and IME-overlay rules).
+- **Row 3 (40dp):** one strip of swatches (active palette or the 12 defaults; a swatch keeps the current alpha). It scrolls horizontally.
+- R/G/B sliders are not in the popover (they stay in the global picker).
+- Edits apply live, with **one undo per interaction** (`TextColourSession`): one SV/hue/alpha drag, one swatch, one typed hex/alpha, one eyedropper sample, or one reset. There is no Done; Back or an outside tap closes the popover, and an open drag is cancelled.
+
+### 5–6. Rail and menus
+
+- **`InspectorUtilityRail`** (every page) is a tight top-aligned stack of 40dp tiles with 6dp gaps: Keyframe diamond, Graph (disabled), 3D (disabled; only on pages that already showed it, now after Graph), property-options ⋮. Its top edge lines up with the first content row.
+  - On Transform/Opacity at 268 the 4-item stack (178dp) does not fit the 158dp content area. Only the two disabled placeholders shrink (to 30dp); the diamond and ⋮ stay 40dp targets.
+- **Header:** `←` | Character | Paragraph | Animate, plus ⚠ only when there is an error or message. There is no ⋮.
+- **Rail ⋮ is the page's only overflow menu**, in this order:
+  1. Reset {property} value
+  2. Enable animation / Freeze at playhead
+  3. Reset animation… (anchored confirmation)
+  4. Hold (discrete) or easing presets
+  5. Reset {Character|Paragraph} style · scope (one undo)
+  6. Manual spacing… (slider popover anchored on the ⋮; Character tab)
+- Relative size is **omitted**: with a selection the Size tile already edits relative run size, and resetting run factors is covered by Reset style.
+- **Back** (`TextInspectorBack`): Explode → confirmation → popover (Layer base row → Justify first) → Source commit → Fonts page → landing grid.
+
+### 7. Icon family (`InspectorIcons`)
+
+**Spec:**
+- Path-based `ImageVector`s on a 24×24 grid, built once and cached.
+- **One stroke of 1.5 units** (it scales with the icon), `StrokeCap.Round` and `StrokeJoin.Round` everywhere.
+- Boxes are rounded rectangles (radius ≥ 2 units, built with arcs), and polygons (diamonds, triangles, the cube, play) have rounded vertices.
+- Arrowheads are open chevrons (polylines). Letters are simple geometric strokes.
+- Only state glyphs are filled: `FILL`/`PAINT` swatch, `KEY_ON`, `HOLD_ON`.
+- Drawn size is 22dp in tiles and buttons, 18dp beside text.
+- `IconPath` builds the data; OUT/Redo/right/RTL variants are exact x-mirrors.
+
+**Enforced by `InspectorIconFamilyTest`:**
+- stroke width, cap and join on every path;
+- hollow-unless-state;
+- no Canvas-drawn `*Icon` function in `ui/inspector` or `EditorActionBar.kt`;
+- no Z-closed shape without curves;
+- pairwise distinct glyphs except the declared aliases;
+- every face control, category, clip action and rail item resolves to a family icon.
+
+| Icons | Old source | New |
+|---|---|---|
+| Text controls: FONT, AXIS, SIZE, FILL/PAINT, STROKE, STROKE_WIDTH, TRACKING, KERNING, LEADING, BASELINE, H_SCALE, V_SCALE, BOLD, ITALIC, UNDERLINE, STRIKE, SUPER, SUB, ALL_CAPS, LOWERCASE, LIGATURES, ORDER, SCALE_LINK/LINK_OFF, EXPLODE, SOURCE | `TextInspectorIcons` path strings: angular letterforms, sharp Z-closed boxes, filled A/B, 1.4 stroke | `InspectorIcons` (rounded letters and boxes, hollow; FILL is the only filled one) |
+| Paragraph: alignment ×7, INDENT_LEFT/RIGHT/FIRST, BEFORE, AFTER, POINT, AREA, BOX, LTR/RTL | `TextInspectorIcons` (no round caps on alignments, sharp boxes) | `InspectorIcons` + `alignmentPath` |
+| Popover and page chrome: BACK, NEXT, CLOSE/CANCEL, RESET, INHERIT, SEARCH, IMPORT, DELETE, WARNING/MISSING, EYEDROPPER (new) | `TextInspectorIcons` (sharp warning triangle and trash) and the global picker's Canvas pipette | `InspectorIcons` |
+| Rail: KEY, KEY_ANIM, KEY_ON, HOLD_ANIM, HOLD_ON, GRAPH, CUBE (3D), OVERFLOW (⋮) | `KeyframeVectorIcon`/`GraphVectorIcon`/`OverflowDotsVectorIcon` (Canvas, horizontal dots), `InspectorCategoryIcon(cube=true)` (Canvas, sharp hexagon), `TextInspectorIcons` diamonds | `InspectorIcons` (rounded diamond/hexagon, vertical ⋮) |
+| Landing grid: TRANSFORM, TIMING, BLENDING_OPACITY, EDIT_TEXT, EDIT_SOLID, EDIT_FOOTAGE (new), EFFECTS, LAYER_STYLES, TRACK_MATTES (sharp rect), MOTION_BLUR | `InspectorCategoryIcon` Canvas, 1.3dp | `InspectorCategoryIcon` → `Icon(InspectorIcons…)` |
+| Transform: POSITION, ROTATION, SCALE (filled arrowheads when active), ANCHOR, LINK/LINK_OFF | `Position/Rotation/ScaleSubModeIcon`, `AnchorSubModeIcon`, `LinkVectorIcon` (Canvas) | `InspectorIcons`; active is shown by tint only. The anchor-cell marker is a Box frame + dot. |
+| Sheet header: back chevron, DUPLICATE, DELETE_LAYER, AUDIO | Inline Canvas chevron, `DuplicateVectorIcon`, `DeleteVectorIcon`, `AudioVectorIcon` (Canvas) | `InspectorIcons` |
+| Clip quick actions: MOVE_IN/OUT, EXTEND_IN/OUT, TRIM_IN/OUT, SPLIT | `ClipQuickVectorIcon` (Canvas, 1.3dp) | `InspectorIcons` (OUT = mirror) |
+| Editor action bar: UNDO, REDO, PREV_KEY, NEXT_KEY, PLAY, PAUSE, LAYER, PASTE, SELECT_ALL | Canvas, 1.3–1.6dp, sharp triangles, alpha-faded back cards | `InspectorIcons` (open chevrons, rounded play) |
+| Deleted (unused) | `CloseVectorIcon`, `TimingVectorIcon`, `TransformVectorIcon`, `ColorPaletteVectorIcon`, `OpacityVectorIcon`, `BackChevronVectorIcon`; glyphs DONE, MINUS, PLUS, SMALL, ACTIONS, PREV, RELATIVE_SIZE, MANUAL_KERNING | removed |
+
+Deliberate aliases: FILL = PAINT, CANCEL = CLOSE, DIRECTION = LTR, MISSING = WARNING, LINK = SCALE_LINK, DELETE = DELETE_LAYER. Meanings are unchanged.
+
+### 8. SDF atlas tiers
+
+**Tiers and spread**
+
+| Tier (ppem) | Spread | Encodable distance | Sharp up to (≤ 1.5× magnification) |
+|---|---|---|---|
+| 48 | 8 | 0.167 em | 72 px/em |
+| 96 | 16 | 0.167 em | 144 px/em |
+| 192 | 32 | 0.167 em | 288 px/em |
+| 384 | 32 (FreeType's limit) | 0.083 em | 576 px/em |
+
+The shader is unchanged and its `fwidth` smoothing adapts per texel. Base-encoded distances (half stroke, softness, faux bold, animator stroke and blur) are multiplied by `tiers::distanceScale(ppem)`: 1 for tiers up to 192, 2 for 384. Edges therefore look identical across tiers.
+
+**Selection** (`SdfAtlasTiers.select`, per text layer, every frame):
+- Input: pixels per em = font size × max run scale (relative size × max(H, V) scale) × largest per-glyph animator scale (from the modifier buffer) × layer scale (× canvas projection) × output scale.
+- Preview uses the preview target/composition ratio; export uses 1, since it renders at composition size.
+- **Hysteresis is 15%:** move up only above a tier's limit × 1.15, move down only below the lower tier's limit × 0.85.
+- A tier is skipped if its spread cannot encode the layer's stroke + softness + bold + 0.01 em. For example, a 0.1 em half stroke caps the layer at 192.
+- Inactive layers use 48.
+
+**Generation:**
+- One R8 texture array holds every tier, keyed by (font, glyph, ppem). Each `SdfGlyph` carries its ppem and spread, and the mesh sizes quads from them.
+- Tier glyphs are rasterised by a second bundled-font `FontManager` (`acquireTierCatalog`) with its own FreeType library and lock, on a worker thread. The render thread never waits on them.
+- **Preview fallback:** the highest tier whose glyphs are all ready is used (`tiers::resolve`; 48 is always available), so nothing flickers. When the sharper tier is ready, the next preparation re-collects (`needsCollect`).
+- After a settled preview frame (not streaming playback), `renderPreview` waits up to 1.5s (cancellable by any new request) and redraws once.
+- **Export** generates tier glyphs inline (deterministic).
+
+**Memory cap (all tiers combined):**
+- Device atlas: 6 × 4 MiB pages = **24 MiB** (low-RAM: 3 pages = 12 MiB).
+- Host staging buffer: the same size, during uploads.
+- CPU tier-glyph cache: **16 MiB** (8 MiB low-RAM).
+- **When the atlas cannot pack:**
+  1. Glyphs not needed this frame are evicted, highest tier first, then least recently used.
+  2. If that is not enough, the layouts on the highest tier step down one tier until they fit (the cap holds until their wanted tier changes).
+  3. Only a base-tier overflow raises the existing capacity error.
+- Kotlin pre-degrades with the same order using a byte estimate.
+- The CPU cache evicts in the same order and never drops a glyph touched this frame.
+
+**Limits (documented, not hidden):**
+- Above 576 px/em the 384 tier is magnified. Corner rounding is about em/384: 2.6 px at 1000 px, 13 px for 100 px text at 50× (5000 px/em). That is 0.26% of the em, versus 2% at 48 ppem. No MSDF in this pass.
+- Imported-font text and per-character animation catalogue glyphs stay at 48 ppem, because the isolated font worker produces their bitmaps at the base tier.
+- Tier choice is per layer (its largest glyph scale), not per glyph.
+
+### 9. Scale ruler
+
+- **Invisible ruler fixed:** the strip used `weight(1f, fill = false).heightIn(40, 56)` inside a column with no remaining height and measured to zero. Each ruler is now a fixed readout row (24dp × font scale), a 4dp gap and a fixed **48dp strip**, with no weights.
+  - Linked: 76dp. Unlinked Width + Height: 156dp.
+  - That fits the Transform content area: 158dp at 268, 200 at 328, 215.6 at 328 × 1.3, 392 at × 2.
+  - `RailAndRulerLayoutTest` checks every combination; there are two `@Preview`s, including the unlinked pair in a 158dp box.
+- The link toggle sits in the readout row (40 × 24dp).
+- **Direction:** the tape follows the finger. `travel = −dx · gain / 96dp`, and inertia uses the same sign, so dragging right decreases the value and dragging left increases it.
+- Unchanged: log mapping, gain, inertia, the 100% snap and detents, ±50000% typed, the 10000% ruler maximum, and Flip in the layer menu.
+
+### 10. Other inspector pages
+
+- Name row: 40dp in compact sheets, 48dp otherwise; duplicate/delete targets follow it (they were fixed at 48dp). This gives Transform/Opacity 158dp of content at 268.
+- Section tab padding is now the `InspectorChromeBudget` constants, so content heights are arithmetic rather than estimates.
+- Rail-to-content gap is 4dp on Transform, Opacity and Edit Text (Opacity used 8).
+- The scale ruler fix above.
+- Shared icons on Transform, the landing grid, the quick action bar, the action bar and the Edit Solid picker's eyedropper.
+- Timing and Audio needed no change (no rail; 2–3 slider rows fit 158dp).
+
+### Deviations
+
+1. **One shared texture array for all tiers** instead of one lazily created array set per tier. It keeps a single descriptor, pipeline and draw call per layer, so the batch/draw contract is unchanged, and makes the combined memory cap a single number. Per-tier LRU is the eviction order (tier, then last use).
+2. **384 ppem keeps spread 32** (FreeType's maximum), so its relative distance range is half that of the other tiers. Distances are rescaled ×2, and layers whose stroke/bold needs more range stay at 192.
+3. **Imported fonts and per-character catalogue glyphs stay at 48 ppem**, and **tier selection is per layer**, using the largest animated glyph scale. See Limits.
+4. **Preview upgrade without touching `PreviewController`:** a settled frame waits up to 1.5s (cancellable) and redraws once. During streaming playback the sharper glyphs appear in later frames instead of stalling playback.
+5. Atlas pages rose from 4 to 6 (2 to 3 on low-RAM) so tiers have room. The cap is stated above.
+6. **Paragraph middle:** both blocks have at most 2 rows, so the rows are centred vertically in the middle band rather than leaving an empty third row.
+7. **Rail on Transform/Opacity at 268:** the disabled Graph/3D placeholders shrink to 30dp, because 4 × 40 + 18 = 178 > 158. Interactive items stay 40dp.
+8. **Relative size** is not in the rail menu (see §5–6).
+9. **Swatch strip:** 28dp swatches in a horizontally scrolling strip. Twelve swatches at a 40dp pitch do not fit 288dp, and the popover footprint was kept.
+10. The **Fill over stroke** switch and the scale **link** toggle have a 16–24dp tall touch area (the spec allows a small switch). Everything else is ≥ 40dp.
+11. Icons are drawn at 22dp in tiles and buttons and 18dp inline beside text (chips, pill, text field).
+12. The colour **eyedropper closes the popover** first so the preview can be tapped. The sample applies as one undo.
+13. `TextFontsPopup.kt`: only the icon object changed (`TextInspectorIcons` → `InspectorIcons`); its layout and behaviour are untouched.
+14. Tests whose structure changed:
+    - `TextInspectorChromeTest`: no Colour page; header menu → rail menu; Explode pill; heights 268/328.
+    - `TextInspectorFaceTest`: new face structure and arithmetic.
+    - `TextInspectorStateTest`: the Colour-mode codec case was removed.
+    - `ScaleRulerMathTest`: drag/inertia sign.
+    - androidTest `TextInspectorLayoutTest`: new tags, body 212/272.
+
+### Gate
+
+- Compiles: `:app:compileDebugKotlin`, `:app:compileReleaseKotlin`, `:app:compileDebugAndroidTestKotlin`, `:core-engine:compileDebugKotlin`, and the native `:core-engine:externalNativeBuildDebug` and `externalNativeBuildRelease`.
+- JVM: `:app:testDebugUnitTest` ran **316 tests (291 previous + 25 new)**, with 0 failures, errors or skips.
+  - New suites: `InspectorIconFamilyTest` 5, `SdfAtlasTiersTest` 8, `TextColourPopoverTest` 6, `RailAndRulerLayoutTest` 4. `TextInspectorFaceTest` went from 8 to 10.
+- No APK packaging and no device run. One pre-existing safe-call warning in `CompositionRenderer` remains.
+
+### Exact A16 test list
+
+1. **Sheet height identical to the original on every page.** Compare against TEXT UI 4 screenshots or measurements: the sheet top is the same on the landing grid, Transform, Timing, Blending & Opacity, Edit Text and Edit Solid. The preview and timeline match pre-TEXT UI 5 sizing in both preview sizes (268 / 328dp) and after toggling Preview Expansion.
+2. **Character tab:**
+   - The top row shows the Explode Text pill (left) and the Fill/Stroke tile with the Fill-over-stroke switch directly under it (right).
+   - Two 3×3 blocks: Baseline and Kerning are centred in the last left row, and there is no filler tile.
+   - The bottom bar has the font chip, Size and the text field on the same column edges.
+   - There are no empty or crowded areas at 268 and 328, and every tile responds to a tap anywhere in its cell.
+3. **Paragraph tab:** alignment row on top, indents/spacing (left) and Point/Box · Box width · Direction (right) centred in the middle band, then the same bottom bar. There is no Explode pill. Small caps appears on neither tab.
+4. **Rail is compact on every page:**
+   - Diamond, Graph, (3D), ⋮ are stacked at the top with 6dp gaps, and the top lines up with the first row of content.
+   - At 268 on Transform/Opacity the Graph/3D placeholders are shorter but the diamond and ⋮ are full size.
+5. **Rail ⋮ on Edit Text:**
+   - Items: Reset {property} value, Enable/Freeze, Reset animation…, Hold/easing, Reset {tab} style · scope, Manual spacing…
+   - Manual spacing opens a slider popover anchored on the ⋮.
+   - There is no ⋮ in the header; ⚠ appears only with an error.
+6. **Explode pill** opens the Explode dialog. Back closes it first.
+7. **Colour popover, everything without leaving the popover:**
+   - Switch Fill/Stroke.
+   - Drag the SV square and the hue bar (hue survives dragging to grey or black).
+   - Drag alpha, and tap the % to type a value.
+   - Tap the hex to type RRGGBB and AARRGGBB; invalid text changes nothing.
+   - Eyedropper: the popover closes, tap the preview, and the colour applies.
+   - Tap swatches (scroll the strip), use Inherit with a selection, and Reset.
+   - Each interaction is exactly one undo, there is no Done, and Back or an outside tap closes it.
+   - At both screen edges it stays on screen with ~8dp margins.
+8. **Scale ruler is visible at both heights** (268 and 328, font scale 1, 1.3 and 2), linked and unlinked: the strip has ticks, labels and the needle.
+   - Dragging **right decreases** the value and dragging **left increases** it; flings continue in the same direction.
+   - Unchanged: 100% snap and detents, 10000% reach, typed ±50000%, link toggle in the readout row.
+9. **Icons are consistent** across Transform (Position, Rotation, Scale, Anchor, link), Opacity, Timing, the landing grid, Edit Text (both tabs, popovers, Fonts page chrome), the rail, the sheet header (back, duplicate, delete, audio), the clip quick action bar and the editor action bar:
+   - same stroke weight, rounded ends and corners, open chevrons;
+   - filled only for the active key/hold and the fill swatch;
+   - every icon still recognisable at 22dp.
+10. **Text sharp at 300, 500 and 1000px** (Inter and Noto Serif, bold, with and without stroke), in preview at Full and Half quality and in an exported video. Corners should be crisp up to about 576 px/em on screen and only slightly soft at 1000px.
+    - Watch the moment the sharper tier arrives: there must be no flicker, only a sharpening.
+11. **Scale 5× and 50×** on 100px text, in preview and export: sharp at 5×. At 50×, corners are rounded by about em/384 (expected, see Limits).
+    - With a stroke ≥ 0.15 × size the layer stays on the 192 tier, and the stroke must not clip.
+12. **Hysteresis:** slowly scale a text layer through 72/144/288 px per em and back. Tiers change once per crossing; nothing pumps or flickers while scrubbing near a threshold.
+13. **Memory and frame time while scrubbing large text:** open several 1000px text layers. Check with `textStats` (`tierGlyphs`, `tierBytes`, `tierPending`, `tierDegrades`, `atlasPages` ≤ 6) and the Android Studio profiler.
+    - Atlas ≤ 24 MiB; no capacity error until even the base tier overflows; scrubbing stays smooth (tier generation is off the render thread).
+14. **Imported font and per-character animation text** still render; they stay on the 48 tier by design.
+15. **Regression:**
+    - keyboard overlay (preview never shrinks), popover typing (Done, outside tap, Back, Escape), Size ladder haptics;
+    - Fonts page unchanged; Back chain; Prev/Next following the focused property;
+    - large-font labelled reflow paging; selection chip; save/reopen;
+    - Transform position pad and anchor mode, rotation dial, Opacity slider, Timing dialogs.

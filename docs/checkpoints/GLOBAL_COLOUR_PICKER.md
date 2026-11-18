@@ -34,7 +34,7 @@ The user confirmed the previous picker works and prefers the expanded preview's 
 ## Grid and shorter sheet
 
 - All supported layer types show eight categories. Video/Image have **three functional and five inert** cells; Solid has four functional and four inert cells. This corrects the plan's inconsistent count for Edit Footage, which is inert.
-- Expanded preview (308dp inspector budget since TEXT UI 5, adjusted for font scale and available workspace) is now the default. The preview toggle remains available. Both preview sizes use 4-4: top row Timing / Mattes & Masks / Layer Styles / Blending & Opacity; bottom row Transform / contextual Edit / Motion Blur / Effects.
+- Expanded preview (268dp inspector budget, restored in TEXT UI 6 after TEXT UI 5 briefly used 308dp; adjusted for font scale and available workspace) is now the default. The preview toggle remains available. Both preview sizes use 4-4: top row Timing / Mattes & Masks / Layer Styles / Blending & Opacity; bottom row Transform / contextual Edit / Motion Blur / Effects.
 - Trim controls appear exactly once, on landing only. Property pages retain Back and functional quick tabs. Audio stays video-only in the header. Timing is the current label for every layer type.
 - Blending & Opacity keeps functional opacity controls with disabled Normal blend-mode text. Graph and 3D remain inert in the shared Transform/Opacity rail. No backend blend, effect, mask, 3D or footage-editing capability is implied.
 

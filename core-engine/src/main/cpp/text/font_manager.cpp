@@ -1,4 +1,5 @@
 #include "font_manager.h"
+#include "sdf_tiers.h"
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_MODULE_H
@@ -454,12 +455,16 @@ std::shared_ptr<const Layout> FontManager::shapeStyled(const std::string& id,con
     return out;
 }
 
-std::shared_ptr<const SdfGlyph> FontManager::sdf(const std::string& id, uint32_t glyphId, bool overlaps) {
+std::shared_ptr<const SdfGlyph> FontManager::sdf(const std::string& id, uint32_t glyphId, bool overlaps, unsigned tierPpem) {
     auto guard = impl_->lock();
     auto& face = impl_->resolve(id);
     if (glyphId >= static_cast<uint32_t>(face.ft->num_glyphs)) throw std::out_of_range("Invalid glyph ID");
-    // Font catalog is immutable for this manager; resolved ID identifies the exact owned bytes.
-    const std::string key = face.input.id + ':' + std::to_string(glyphId) + (overlaps ? ":1" : ":0");
+    if (tierPpem && !tiers::valid(tierPpem)) throw std::invalid_argument("Invalid SDF atlas tier");
+    const unsigned ppem = tierPpem ? tierPpem : impl_->ppem;
+    const unsigned spread = tierPpem ? tiers::spread(tierPpem) : impl_->spread;
+    // Font catalog is immutable for this manager; resolved ID identifies the exact owned bytes. Tiers cache apart.
+    const std::string key = face.input.id + ':' + std::to_string(glyphId) + (overlaps ? ":1" : ":0") +
+        (ppem == impl_->ppem && spread == impl_->spread ? "" : "@" + std::to_string(ppem));
     impl_->evict();
     auto found = impl_->index.find(key);
     if (found != impl_->index.end()) {
@@ -470,14 +475,18 @@ std::shared_ptr<const SdfGlyph> FontManager::sdf(const std::string& id, uint32_t
     const auto rasterStart=std::chrono::steady_clock::now();
     FT_Bool enabled = overlaps ? 1 : 0;
     ftCheck(FT_Property_Set(impl_->library, "sdf", "overlaps", &enabled), "Set SDF overlaps");
-    ftCheck(FT_Set_Pixel_Sizes(face.ft, 0, impl_->ppem), "FT_Set_Pixel_Sizes");
+    // The spread is a library property: set it for every raster so tiers sharing a manager never mix spreads.
+    FT_Int spreadValue = static_cast<FT_Int>(spread);
+    ftCheck(FT_Property_Set(impl_->library, "sdf", "spread", &spreadValue), "Set SDF spread");
+    ftCheck(FT_Set_Pixel_Sizes(face.ft, 0, ppem), "FT_Set_Pixel_Sizes");
     ftCheck(FT_Load_Glyph(face.ft, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP), "FT_Load_Glyph");
     auto result = std::make_shared<SdfGlyph>();
     result->fontId = face.input.id; result->glyphId = glyphId; result->overlaps = overlaps;
+    result->ppem = ppem; result->spread = spread;
     if (face.ft->glyph->outline.n_contours != 0) {
         FT_BBox bounds{};FT_Outline_Get_CBox(&face.ft->glyph->outline,&bounds);
-        const double pixelWidth=std::ceil((double(bounds.xMax)-double(bounds.xMin))/64)+2*impl_->spread;
-        const double pixelHeight=std::ceil((double(bounds.yMax)-double(bounds.yMin))/64)+2*impl_->spread;
+        const double pixelWidth=std::ceil((double(bounds.xMax)-double(bounds.xMin))/64)+2*spread;
+        const double pixelHeight=std::ceil((double(bounds.yMax)-double(bounds.yMin))/64)+2*spread;
         if(pixelWidth>2048 || pixelHeight>2048 || pixelWidth<0 || pixelHeight<0)
             throw std::invalid_argument("Font glyph exceeds the 2048-pixel SDF dimension limit; choose another font");
         ftCheck(FT_Render_Glyph(face.ft->glyph, FT_RENDER_MODE_SDF), "FT_Render_Glyph SDF");
