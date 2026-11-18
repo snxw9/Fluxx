@@ -126,6 +126,13 @@ internal object ScaleRulerMath {
             else -> "${String.format(java.util.Locale.ROOT, "%.2f", p).trimEnd('0').trimEnd('.')}%"
         }
     }
+    /** Tick labels clear the needle: fully faded when a label touches it, fully shown from [NEEDLE_CLEAR_DP] away. */
+    const val NEEDLE_CLEAR_DP = 12f
+    /** Smooth (smoothstep) label fade from the gap between the label's nearest edge and the needle, in dp. */
+    fun needleFade(edgeGapDp: Float): Float {
+        val t = (edgeGapDp / NEEDLE_CLEAR_DP).coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
+    }
     /** Edge fade: 1 at the needle, 0 at the strip ends. */
     fun fade(offsetFraction: Float): Float = (1f - offsetFraction.coerceIn(0f, 1f).pow(2)).coerceIn(0f, 1f)
 }
@@ -136,7 +143,8 @@ internal object ScaleRulerMath {
  * tick geometry and labels prepared once; nothing is allocated per frame.
  */
 @Composable internal fun LogScaleRuler(label: String, value: Float, onBegin: () -> Unit, onPreview: (Float) -> Unit,
-    onCommit: () -> Unit, onCancel: () -> Unit, onTyped: (Float) -> Unit, onReset: () -> Unit, modifier: Modifier = Modifier) {
+    onCommit: () -> Unit, onCancel: () -> Unit, onTyped: (Float) -> Unit, onReset: () -> Unit, modifier: Modifier = Modifier,
+    readoutDp: Float = ScaleRulerMath.READOUT_DP, stripDp: Float = ScaleRulerMath.STRIP_DP) {
     val view = LocalView.current
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
@@ -158,21 +166,21 @@ internal object ScaleRulerMath {
     }
     val fontScale = density.fontScale.coerceAtLeast(1f)
     Column(modifier.testTag("scale-ruler-$label"), verticalArrangement = Arrangement.spacedBy(ScaleRulerMath.GAP_DP.dp)) {
-        Box(Modifier.fillMaxWidth().height((ScaleRulerMath.READOUT_DP * fontScale).dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().height((readoutDp * fontScale).dp), contentAlignment = Alignment.Center) {
             Row(Modifier.pointerInput(Unit) { detectTapGestures(onTap = { editing = true }, onDoubleTap = { onReset() }) }
                 .semantics(mergeDescendants = true) {
                     contentDescription = "$label ${ScaleRulerMath.readout(shown)}. Tap to type, double-tap to reset to 100 percent"
                     onClick("Type $label") { editing = true; true }
                 }, verticalAlignment = Alignment.CenterVertically) {
                 Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 6.dp))
-                Text(ScaleRulerMath.readout(shown), color = TextPrimary, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.titleMedium, lineHeight = 22.sp, maxLines = 1)
+                Text(ScaleRulerMath.readout(shown), color = TextPrimary, fontFamily = FontFamily.Monospace, style = if (readoutDp >= SectionLayout.READOUT_MAX) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium, lineHeight = if (readoutDp >= SectionLayout.READOUT_MAX) 28.sp else 22.sp, maxLines = 1)
                 AnchoredPopover(editing, { editing = false }, "scale-readout-entry") {
                     InspectorValueField(PropertyLimits.format(PropertyLimits.LAYER_SCALE, shown * 100f), label, "%",
                         { text -> editing = false; PropertyLimits.parseTyped(PropertyLimits.LAYER_SCALE, text)?.let { onTyped(it / 100f) } }, { editing = false })
                 }
             }
         }
-        Canvas(Modifier.fillMaxWidth().height(ScaleRulerMath.STRIP_DP.dp).testTag("scale-ruler-strip").clip(RoundedCornerShape(10.dp)).background(SurfaceHigh)
+        Canvas(Modifier.fillMaxWidth().height(stripDp.dp).testTag("scale-ruler-strip").clip(RoundedCornerShape(10.dp)).background(SurfaceHigh)
             .border(1.dp, Border, RoundedCornerShape(10.dp))
             .semantics {
                 contentDescription = "$label ruler, ${ScaleRulerMath.readout(shown)}"
@@ -233,7 +241,12 @@ internal object ScaleRulerMath {
                 val length = (if (hundred) 22.dp else if (t.major) 14.dp else 7.dp).toPx() * (.55f + .45f * fade)
                 val ink = if (hundred) TextPrimary else if (t.major) TextPrimary.copy(alpha = .75f) else TextSecondary
                 drawLine(ink.copy(alpha = ink.alpha * fade), Offset(x, baseY - length), Offset(x, baseY), (if (hundred) 1.6.dp else 1.dp).toPx(), StrokeCap.Round)
-                labels[i]?.let { l -> if (fade > .25f) drawText(l, topLeft = Offset(x - l.size.width / 2f, labelTop), alpha = fade) }
+                labels[i]?.let { l ->
+                    // Labels never collide with the needle: fade smoothly as the label nears it.
+                    val clear = ScaleRulerMath.needleFade((abs(x - half) - l.size.width / 2f) / this.density)
+                    val alpha = fade * clear
+                    if (fade > .25f && alpha > .01f) drawText(l, topLeft = Offset(x - l.size.width / 2f, labelTop), alpha = alpha)
+                }
             }
             // Fixed needle: brighter than any tick, with a notch at the top edge.
             drawLine(TextPrimary, Offset(half, 2.dp.toPx()), Offset(half, size.height - 2.dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
@@ -248,11 +261,11 @@ internal object ScaleRulerMath {
     LogScaleRuler("Scale", v, {}, { v = it }, {}, {}, { v = it }, { v = 1f }, Modifier.padding(8.dp).fillMaxWidth())
 }
 
-/** Unlinked Width + Height rulers inside the Transform content height of a 268dp sheet (158dp): both strips visible. */
-@Preview(widthDp = 260, heightDp = 158, backgroundColor = 0xFF1C1C1C, showBackground = true)
+/** Unlinked Width + Height rulers inside the Transform content height of a 268dp sheet (208dp since TEXT UI 7). */
+@Preview(widthDp = 260, heightDp = 208, backgroundColor = 0xFF1C1C1C, showBackground = true)
 @Composable private fun LogScaleRulerCompactPreview() {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(ScaleRulerMath.GAP_DP.dp)) {
-        LogScaleRuler("Width", 1f, {}, {}, {}, {}, {}, {}, Modifier.fillMaxWidth())
-        LogScaleRuler("Height", 2.5f, {}, {}, {}, {}, {}, {}, Modifier.fillMaxWidth())
+        LogScaleRuler("Width", 1f, {}, {}, {}, {}, {}, {}, Modifier.fillMaxWidth(), SectionLayout.READOUT_MAX, SectionLayout.STRIP_MAX)
+        LogScaleRuler("Height", 2.5f, {}, {}, {}, {}, {}, {}, Modifier.fillMaxWidth(), SectionLayout.READOUT_MAX, SectionLayout.STRIP_MAX)
     }
 }

@@ -157,17 +157,31 @@ fun ElementInspectorSheet(
         val dismiss by rememberUpdatedState(onDismiss)
         var swipeOffset by remember { mutableFloatStateOf(0f) }
         val sections = listOf(InspectorSection.TRANSFORM, InspectorSection.TIMING, InspectorSection.BLENDING_OPACITY) +
-            if (layer.type == LayerType.SOLID || layer.type == LayerType.TEXT) listOf(InspectorSection.CONTEXTUAL_EDIT) else emptyList()
+            (if (layer.type == LayerType.SOLID || layer.type == LayerType.TEXT) listOf(InspectorSection.CONTEXTUAL_EDIT) else emptyList()) +
+            // The audio toggle lives in the landing name row; on section pages Audio is one more tab for video layers.
+            (if (layer.type == LayerType.VIDEO) listOf(InspectorSection.AUDIO) else emptyList())
+        // In-place value fields on a page (e.g. the FULL colour picker's hex) lift the sheet above the keyboard.
+        val imeLift = remember { com.fluxx.android.ui.common.ImeLiftHost() }
         Surface(color = Surface, shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-            modifier = modifier.fillMaxWidth().offset { IntOffset(0, swipeOffset.toInt()) }) {
+            modifier = modifier.fillMaxWidth().offset { IntOffset(0, (swipeOffset - imeLift.lift).toInt()) }) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val compactHeight = maxHeight < 320.dp
-                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides if (compactHeight) 40.dp else 48.dp) {
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides if (compactHeight) 40.dp else 48.dp,
+                    com.fluxx.android.ui.common.LocalImeLift provides imeLift) {
                     val textSection = layer.type == LayerType.TEXT && section == InspectorSection.CONTEXTUAL_EDIT
                     // Edit Text is an ordinary inspector page: same frame, padding and height as Transform. It draws its
                     // own single header row (back, Character / Paragraph / Animate, menu) in place of the parent chrome.
                     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
-                        if (!textTyping && !textSection) {
+                        // Section pages: ONE header row (← | page tabs), exactly like Edit Text. Swipe it down to dismiss.
+                        if (!textTyping && section != null && !textSection) SectionHeader(sections, section!!, layer.type,
+                            onBack = { focusManager.clearFocus(); section = null },
+                            onSelect = { focusManager.clearFocus(); section = it },
+                            onSwipeStart = { focusManager.clearFocus(); swipeOffset = 0f },
+                            onSwipe = { swipeOffset = (swipeOffset + it).coerceAtLeast(0f) },
+                            onSwipeEnd = { threshold -> if (swipeOffset >= threshold) dismiss() else swipeOffset = 0f },
+                            onSwipeCancel = { swipeOffset = 0f })
+                        // The landing grid keeps its arrangement: handle, layer name with duplicate / delete, quick actions.
+                        if (!textTyping && section == null) {
                         Box(Modifier.fillMaxWidth().height(20.dp).pointerInput(Unit) {
                             detectVerticalDragGestures(
                                 onDragStart = { focusManager.clearFocus(); swipeOffset = 0f },
@@ -180,7 +194,6 @@ fun ElementInspectorSheet(
                         }
                         Row(Modifier.fillMaxWidth().height(InspectorChromeBudget.nameRow(compactHeight).dp), verticalAlignment = Alignment.CenterVertically) {
                             val hit = InspectorChromeBudget.nameRow(compactHeight).dp
-                            if (section != null) InspectorIconButton(InspectorIcons.icon("BACK"), "Back to layer tools") { focusManager.clearFocus(); section = null }
                             BasicTextField(
                                 value = layer.name,
                                 onValueChange = onRename,
@@ -217,34 +230,12 @@ fun ElementInspectorSheet(
                                 }
                             }
                         }
-                        if (section == null) ClipQuickActionBar(layer, playheadUs, compositionDurationUs) { action ->
+                        ClipQuickActionBar(layer, playheadUs, compositionDurationUs) { action ->
                             focusManager.clearFocus()
                             onAction(action)
                         }
-                        if (section != null) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            sections.forEach { tab ->
-                                val active = section == tab
-                                val title = when (tab) {
-                                    InspectorSection.TRANSFORM -> "Transform"
-                                    InspectorSection.TIMING -> "Timing"
-                                    InspectorSection.BLENDING_OPACITY -> "Blending & Opacity"
-                                    InspectorSection.CONTEXTUAL_EDIT -> if (layer.type == LayerType.TEXT) "Edit Text" else "Edit Solid"
-                                    InspectorSection.AUDIO -> "Audio"
-                                    else -> ""
-                                }
-                                Column(Modifier.weight(1f).selectable(active, role = Role.Tab, onClick = {
-                                    focusManager.clearFocus()
-                                    section = tab
-                                }).padding(top = if (compactHeight) 6.dp else 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(title, color = if (active) Highlight else TextSecondary,
-                                        style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                    Spacer(Modifier.height(if (compactHeight) 6.dp else 10.dp))
-                                    Box(Modifier.fillMaxWidth().height(2.dp).background(if (active) Highlight else Color.Transparent))
-                                }
-                            }
                         }
-                        }
-                        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = if(textSection) 0.dp else 4.dp)) {
+                        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = if(textSection) 0.dp else InspectorChromeBudget.CONTENT_TOP.dp)) {
                             when (section) {
                                 null -> InspectorLandingGrid(layer.type) { section=it }
                                 InspectorSection.TRANSFORM -> OverhauledTransformSectionContent(
@@ -263,16 +254,56 @@ fun ElementInspectorSheet(
                                     layer,playheadUs,textFrameRate,onAction,onPropertyFocus,onTextBegin,onTextDraftSelection,onTextFinish,onTextCancel,
                                     onTextSizeBegin,onTextPayloadPreview,onTextCharacter,onTextParagraph,onTextBoxWidth,compositionWidth,textSelection,onTextSelection,textError,
                                     {section=null},onExplodePrepare,onExplodeCommit,paletteRepository,onEyedropperRequest,onTextBeginDraft,textFinishing,textStrokeClamp,onTextSampleColour,onTextCancelSample,onTextSourceSelection)
-                                else FluxxColorPicker(FluxxColor.fromArgb(if (layer.type == LayerType.TEXT)
-                                    layer.text.colour(textColourProperty).evaluate(playheadUs - layer.resolvedKeyframeAnchorUs) else layer.solidColorArgb),
-                                    { if (layer.type == LayerType.TEXT) onTextColourChange(textColourProperty, it.toArgb()) else onColorChange(it.toArgb()) }, ColorPickerConfig(),
-                                    onEyedropperRequest, Modifier.fillMaxSize(), onTransformBegin, onTransformCommit,
-                                    onTransformCancel, { if (layer.type == LayerType.TEXT) onTextColourPreview(textColourProperty, it.toArgb()) else onColorPreview(it.toArgb()) }, paletteRepository=paletteRepository)
+                                // Edit Solid: the FULL variant of the shared colour picker (one undo per interaction).
+                                else FluxxColourPicker(ColourPickerVariant.FULL, layer.solidColorArgb,
+                                    onBegin = onTransformBegin, onPreview = { onColorPreview(it) }, onFinish = onTransformCommit,
+                                    onCancel = onTransformCancel, modifier = Modifier.fillMaxSize(), name = "solid colour",
+                                    palette = paletteRepository, onEyedropper = onEyedropperRequest)
                                 else -> Unit // Disabled categories cannot be opened.
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+internal fun sectionTitle(tab: InspectorSection, type: LayerType) = when (tab) {
+    InspectorSection.TRANSFORM -> "Transform"
+    InspectorSection.TIMING -> "Timing"
+    InspectorSection.BLENDING_OPACITY -> "Blending & Opacity"
+    InspectorSection.CONTEXTUAL_EDIT -> when (type) { LayerType.TEXT -> "Edit Text"; LayerType.SOLID -> "Edit Solid"; else -> "Edit Footage" }
+    InspectorSection.AUDIO -> "Audio"
+    else -> ""
+}
+
+/**
+ * The single section-page header row, the same as Edit Text's: ← | page tabs, [InspectorChromeBudget.header] tall.
+ * No layer name, duplicate or delete here (they stay on the landing grid). ← returns to the landing grid exactly as
+ * before; a vertical swipe on the row dismisses the sheet (the drag handle lives on the landing grid only).
+ */
+@Composable
+private fun SectionHeader(sections: List<InspectorSection>, section: InspectorSection, type: LayerType,
+    onBack: () -> Unit, onSelect: (InspectorSection) -> Unit,
+    onSwipeStart: () -> Unit, onSwipe: (Float) -> Unit, onSwipeEnd: (Float) -> Unit, onSwipeCancel: () -> Unit) {
+    val fontScale = LocalDensity.current.fontScale
+    val swipeStart by rememberUpdatedState(onSwipeStart); val swipe by rememberUpdatedState(onSwipe)
+    val swipeEnd by rememberUpdatedState(onSwipeEnd); val swipeCancel by rememberUpdatedState(onSwipeCancel)
+    Row(Modifier.fillMaxWidth().height(InspectorChromeBudget.header(fontScale).dp).testTag("inspector-section-header")
+        .pointerInput(Unit) {
+            detectVerticalDragGestures(onDragStart = { swipeStart() },
+                onVerticalDrag = { change, amount -> change.consume(); swipe(amount) },
+                onDragEnd = { swipeEnd(48.dp.toPx()) }, onDragCancel = { swipeCancel() })
+        }, verticalAlignment = Alignment.CenterVertically) {
+        InspectorIconButton(InspectorIcons.icon("BACK"), "Back to layer tools", Modifier.testTag("inspector-section-back")) { onBack() }
+        sections.forEach { tab ->
+            val active = tab == section
+            Box(Modifier.weight(1f).fillMaxHeight().selectable(active, role = Role.Tab) { onSelect(tab) }
+                .testTag("inspector-tab-${tab.name}"), contentAlignment = Alignment.Center) {
+                Text(sectionTitle(tab, type), color = if (active) TextPrimary else TextSecondary,
+                    style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                if (active) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp).size(24.dp, 2.dp).background(TextPrimary, RoundedCornerShape(1.dp)))
             }
         }
     }
@@ -290,19 +321,21 @@ private fun CompactValueBox(
     onCommitValue: (Float) -> Unit,
     modifier: Modifier = Modifier,
     keyboardType: KeyboardType = KeyboardType.Decimal,
-    parse: (String) -> Float? = { it.replace(',', '.').toFloatOrNull() }
+    parse: (String) -> Float? = { it.replace(',', '.').toFloatOrNull() },
+    height: Dp? = null,
+    large: Boolean = false
 ) {
     var editing by remember { mutableStateOf(false) }
     val name = label.ifEmpty { "Rotation degrees" }
-    Row(modifier.clip(RoundedCornerShape(4.dp)).background(SurfaceHigh)
-        .border(0.5.dp, Border, RoundedCornerShape(4.dp))
+    Row((if (height != null) modifier.height(height) else modifier).clip(RoundedCornerShape(if (height != null) 8.dp else 4.dp)).background(SurfaceHigh)
+        .border(0.5.dp, Border, RoundedCornerShape(if (height != null) 8.dp else 4.dp))
         .clickable(role = Role.Button, onClickLabel = "Type $name") { editing = true }
         .semantics(mergeDescendants = true) { contentDescription = "$name $valueText $suffix" }
-        .padding(horizontal = 6.dp, vertical = 8.dp),
+        .padding(horizontal = if (height != null) 10.dp else 6.dp, vertical = if (height != null) 0.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         if (label.isNotEmpty()) Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall)
         Text(valueText, Modifier.weight(1f), color = TextPrimary, maxLines = 1,
-            style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace))
+            style = (if (large) MaterialTheme.typography.titleSmall else MaterialTheme.typography.labelMedium).copy(fontFamily = FontFamily.Monospace))
         if (suffix.isNotEmpty()) Text(suffix, color = TextSecondary, style = MaterialTheme.typography.labelSmall)
         AnchoredPopover(editing, { editing = false }, "value-entry") {
             InspectorValueField(valueText, name, suffix, { text ->
@@ -457,6 +490,7 @@ private fun ScaleController(
     scaleX: Float, scaleY: Float, linked: Boolean,
     onBegin: () -> Unit, onPreview: (Float, Float) -> Unit,
     onCommit: () -> Unit, onCancel: () -> Unit, onTyped: (Float, Float) -> Unit,
+    ruler: SectionLayout.Ruler,
     linkToggle: @Composable () -> Unit
 ) {
     var initial by remember { mutableStateOf(Offset(1f, 1f)) }
@@ -468,7 +502,7 @@ private fun ScaleController(
                     onPreview = { value -> onPreview(value, if (linked) ScaleRulerMath.linkedY(initial.x, initial.y, value) else initial.y) },
                     onCommit = onCommit, onCancel = onCancel,
                     onTyped = { value -> onTyped(value, if (linked) ScaleRulerMath.linkedY(scaleX, scaleY, value) else scaleY) },
-                    onReset = { onTyped(1f, if (linked) 1f else scaleY) }, modifier = Modifier.fillMaxWidth())
+                    onReset = { onTyped(1f, if (linked) 1f else scaleY) }, modifier = Modifier.fillMaxWidth(), readoutDp = ruler.readout, stripDp = ruler.strip)
                 Box(Modifier.align(Alignment.TopEnd)) { linkToggle() }
             }
             if (!linked) {
@@ -477,7 +511,7 @@ private fun ScaleController(
                     onPreview = { onPreview(initial.x, it) },
                     onCommit = onCommit, onCancel = onCancel,
                     onTyped = { onTyped(scaleX, it) }, onReset = { onTyped(scaleX, 1f) },
-                    modifier = Modifier.fillMaxWidth())
+                    modifier = Modifier.fillMaxWidth(), readoutDp = ruler.readout, stripDp = ruler.strip)
             }
         }
     }
@@ -697,7 +731,20 @@ private fun OverhauledTransformSectionContent(
         TransformSubMode.SCALE -> layer.animTransform.scale.keyframes.any { it.timeUs == localTimeUs }
         TransformSubMode.ROTATION -> layer.animTransform.rotation.keyframes.any { it.timeUs == localTimeUs }
     }
-
+    // Keyframe badges on the mode column: same key model as the rail diamond, per property at the playhead.
+    val modeBadges = remember(layer.animTransform, localTimeUs) {
+        TransformSubMode.entries.associateWith { m -> KeyBadges.of(layer, when (m) {
+            TransformSubMode.POSITION -> AnimPropertyType.POSITION
+            TransformSubMode.ROTATION -> AnimPropertyType.ROTATION
+            TransformSubMode.SCALE -> AnimPropertyType.SCALE
+        }, localTimeUs) }
+    }
+    // Sizes come from the content height the single header freed (SectionLayout arithmetic), not from guesses.
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val content = maxHeight.value
+    val compact = LocalMinimumInteractiveComponentSize.current.let { it != Dp.Unspecified && it < 48.dp }
+    val fontScale = LocalDensity.current.fontScale
+    val valueRow = SectionLayout.valueRow(compact).dp
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(TextInspectorBudget.RAIL_GAP.dp)) {
         InspectorUtilityRail(
             resetLabel = if (isAnchorMode) "Reset anchor point" else "Reset ${mode.name.lowercase()}",
@@ -738,7 +785,7 @@ private fun OverhauledTransformSectionContent(
               }
             }
         )
-        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)) {
             when (mode) {
                 TransformSubMode.POSITION -> {
                   if (isAnchorMode) {
@@ -750,18 +797,18 @@ private fun OverhauledTransformSectionContent(
                         onCommit = onCommitGesture, onCancel = onCancelGesture)
                   } else {
                     val limitX = PropertyLimits.position(compositionWidth); val limitY = PropertyLimits.position(compositionHeight)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)) {
                         CompactValueBox("X", number(pixelX), onCommitValue = {
                             val newPosX = (limitX.typed(it) - compositionWidth / 2f) / halfReferenceW
                             onEdit(transform.copy(positionX = newPosX))
-                        }, modifier = Modifier.weight(1f))
+                        }, modifier = Modifier.weight(1f), height = valueRow, large = !compact)
                         CompactValueBox("Y", number(pixelY), onCommitValue = {
                             val newPosY = (limitY.typed(it) - compositionHeight / 2f) / halfReferenceH
                             onEdit(transform.copy(positionY = newPosY))
-                        }, modifier = Modifier.weight(1f))
+                        }, modifier = Modifier.weight(1f), height = valueRow, large = !compact)
                     }
                     // Planned: Z position requires a 3D layer model. The pad never clamps inside ±10× the composition.
-                    FittedSquare(Modifier.weight(1f).fillMaxWidth(), 200.dp) { PositionTrackpad(pixelX / compositionWidth, pixelY / compositionHeight, begin, { x, y ->
+                    FittedSquare(Modifier.weight(1f).fillMaxWidth(), SectionLayout.PAD_MAX.dp) { PositionTrackpad(pixelX / compositionWidth, pixelY / compositionHeight, begin, { x, y ->
                         val newPosX = (limitX.hard(x * compositionWidth) - compositionWidth / 2f) / halfReferenceW
                         val newPosY = (limitY.hard(y * compositionHeight) - compositionHeight / 2f) / halfReferenceH
                         onPreviewGesture(gestureBase.copy(positionX = newPosX, positionY = newPosY))
@@ -770,7 +817,7 @@ private fun OverhauledTransformSectionContent(
                 }
                 TransformSubMode.ROTATION -> {
                     // Planned: XYZ rotation requires 3D support. Keep the existing single-angle model.
-                    FittedSquare(Modifier.weight(1f).fillMaxWidth(), 184.dp) { RotationDialController(transform.rotationDegrees, begin,
+                    FittedSquare(Modifier.weight(1f).fillMaxWidth(), SectionLayout.DIAL_MAX.dp) { RotationDialController(transform.rotationDegrees, begin,
                         {
                             // The dial never wraps; it only stops at the ±100-turn hard cap.
                             onPreviewGesture(gestureBase.copy(rotationDegrees = PropertyLimits.ROTATION.hard(it)))
@@ -786,8 +833,8 @@ private fun OverhauledTransformSectionContent(
                             onPreviewGesture(gestureBase.copy(scaleX = x, scaleY = y))
                         }, onCommitGesture, onCancelGesture,
                         { x, y -> val cap = PropertyLimits.LAYER_SCALE.hardMax / 100f
-                            onEdit(transform.copy(scaleX = x.coerceIn(-cap, cap), scaleY = y.coerceIn(-cap, cap))) }) {
-                        Box(Modifier.size(40.dp, ScaleRulerMath.READOUT_DP.dp).toggleable(linked, role = Role.Switch) { focusManager.clearFocus(); linked = it }
+                            onEdit(transform.copy(scaleX = x.coerceIn(-cap, cap), scaleY = y.coerceIn(-cap, cap))) }, SectionLayout.ruler(content, linked, fontScale)) {
+                        Box(Modifier.size(40.dp, (SectionLayout.ruler(content, linked, fontScale).readout * fontScale.coerceAtLeast(1f)).dp).toggleable(linked, role = Role.Switch) { focusManager.clearFocus(); linked = it }
                             .semantics { contentDescription = "Link width and height scale" }.testTag("scale-link"), contentAlignment = Alignment.Center) {
                             Icon(InspectorIcons.icon(if (linked) "LINK" else "LINK_OFF"), null, Modifier.size(InspectorIcons.INLINE), tint = if (linked) Highlight else TextSecondary)
                         }
@@ -795,16 +842,20 @@ private fun OverhauledTransformSectionContent(
                 }
             }
         }
-        Column(Modifier.width(48.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Mode column: top-aligned with the first content row; each mode shows its keyframe badge (hollow / filled).
+        Column(Modifier.width(SectionLayout.MODE_COLUMN.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(SectionLayout.MODE_GAP.dp)) {
             TransformSubMode.entries.forEach { item ->
                 val active = mode == item
+                val badge = if (item == TransformSubMode.POSITION && isAnchorMode) KeyBadge.NONE else modeBadges.getValue(item)
+                Box(Modifier.size(SectionLayout.MODE_COLUMN.dp, valueRow).testTag("transform-mode-${item.name}")) {
                 IconToggleButton(checked = active, onCheckedChange = {
                     focusManager.clearFocus()
                     isAnchorMode = item == TransformSubMode.POSITION && active && !isAnchorMode
                     mode = item
-                }, modifier = Modifier.semantics { contentDescription = if (item == TransformSubMode.POSITION)
+                }, modifier = Modifier.fillMaxSize().semantics { contentDescription = if (item == TransformSubMode.POSITION)
                     (if (isAnchorMode) "Anchor point; tap for Position" else "Position; tap again for Anchor point")
-                    else item.name.lowercase().replaceFirstChar { it.uppercase() } }) {
+                    else item.name.lowercase().replaceFirstChar { it.uppercase() }
+                    KeyBadges.description(badge)?.let { stateDescription = it } }) {
                     val color = if (active) Highlight else TextSecondary
                     Icon(InspectorIcons.icon(when (item) {
                         TransformSubMode.POSITION -> if (isAnchorMode) "ANCHOR" else "POSITION"
@@ -812,9 +863,12 @@ private fun OverhauledTransformSectionContent(
                         TransformSubMode.SCALE -> "SCALE"
                     }), null, Modifier.size(InspectorIcons.SIZE), tint = color)
                 }
+                KeyBadgeGlyph(badge, if (active) Highlight else TextSecondary, Modifier.align(Alignment.TopEnd))
+                }
             }
             Spacer(Modifier.weight(1f))
         }
+    }
     }
 }
 
@@ -866,27 +920,37 @@ private fun CompactOpacitySectionContent(
                 }
             }
         )
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth().background(SurfaceHigh,RoundedCornerShape(6.dp))
-                .border(.5.dp,Border,RoundedCornerShape(6.dp)).padding(horizontal=8.dp,vertical=6.dp)
-                .semantics { contentDescription="Blend Mode: Normal, not yet available"; disabled() },
-                horizontalArrangement=Arrangement.SpaceBetween) {
-                Text("Blend Mode",color=TextDisabled,fontSize=11.sp)
-                Text("Normal",color=TextDisabled,fontSize=11.sp)
+        // Sizes from the freed content height: a 40/48dp blend-mode row and one large slider row (SectionLayout).
+        BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+            val compact = LocalMinimumInteractiveComponentSize.current.let { it != Dp.Unspecified && it < 48.dp }
+            val row = SectionLayout.sliderRow(maxHeight.value, rows = 1, fixedRows = 1, compact = compact, fontScale = LocalDensity.current.fontScale)
+            val badge = remember(layer.animTransform.opacity, localTimeUs) { KeyBadges.of(layer, AnimPropertyType.OPACITY, localTimeUs) }
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)) {
+                Row(Modifier.fillMaxWidth().height(SectionLayout.valueRow(compact).dp).background(SurfaceHigh, RoundedCornerShape(8.dp))
+                    .border(.5.dp, Border, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp)
+                    .semantics { contentDescription = "Blend Mode: Normal, not yet available"; disabled() },
+                    horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Blend Mode", color = TextDisabled, fontSize = 13.sp)
+                    Text("Normal", color = TextDisabled, fontSize = 13.sp)
+                }
+                Column(Modifier.fillMaxWidth().testTag("opacity-row")) {
+                    SliderRowLabel("Opacity", row, badge)
+                    Row(Modifier.fillMaxWidth().height(row.touch.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)) {
+                        SectionSlider(opacity, row, "Opacity",
+                            onBegin = { if (!dragging) { onBeginGesture(); dragging = true } },
+                            onChange = { onPreviewGesture(it) },
+                            onFinish = { if (dragging) { dragging = false; onCommitGesture() } },
+                            onCancel = { if (dragging) { dragging = false; onCancelGesture() } },
+                            modifier = Modifier.weight(1f))
+                        CompactValueBox("", number(opacity * 100f), "%", {
+                            val newOp = PropertyLimits.OPACITY.typed(it) / 100f
+                            onEdit(newOp)
+                        }, modifier = Modifier.width(88.dp).semantics { contentDescription = "Opacity percentage" },
+                            height = minOf(row.touch, 48f).dp, large = !compact)
+                    }
+                }
             }
-            CompactValueBox("Opacity", number(opacity * 100f), "%", {
-                val newOp = PropertyLimits.OPACITY.typed(it) / 100f
-                onEdit(newOp)
-            })
-            Slider(value = opacity, valueRange = 0f..1f,
-                onValueChange = {
-                    if (!dragging) { focusManager.clearFocus(); onBeginGesture(); dragging = true }
-                    onPreviewGesture(it)
-                },
-                onValueChangeFinished = { if (dragging) { dragging = false; onCommitGesture() } },
-                interactionSource = interactions,
-                colors = SliderDefaults.colors(thumbColor = Highlight, activeTrackColor = Highlight, inactiveTrackColor = Border),
-                modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -901,12 +965,16 @@ private fun CompactTimingSectionContent(
     val durationSec = (timing.durationUs ?: 5_000_000L) / 1_000_000f
     val sourceInSec = timing.sourceInUs / 1_000_000f
 
+    // Rows share the content height the single header freed (SectionLayout): larger tracks, thumbs and readouts.
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val compact = LocalMinimumInteractiveComponentSize.current.let { it != Dp.Unspecified && it < 48.dp }
+    val row = SectionLayout.sliderRow(maxHeight.value, rows = if (isLayerVideo) 3 else 2, fixedRows = 0, compact = compact, fontScale = LocalDensity.current.fontScale)
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)
     ) {
         CompactSliderItem(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(), row = row,
             label = "Start",
             value = startSec,
             valueRange = 0f..60f,
@@ -923,7 +991,7 @@ private fun CompactTimingSectionContent(
         )
 
         CompactSliderItem(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(), row = row,
             label = "Duration",
             value = durationSec,
             valueRange = 0.5f..60f,
@@ -941,7 +1009,7 @@ private fun CompactTimingSectionContent(
 
         if (isLayerVideo) {
             CompactSliderItem(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(), row = row,
                 label = "Source In",
                 value = sourceInSec,
                 valueRange = 0f..60f,
@@ -957,6 +1025,7 @@ private fun CompactTimingSectionContent(
                 dialogTitle = "Set Source In (seconds)"
             )
         }
+    }
     }
 }
 
@@ -1025,7 +1094,8 @@ private fun CompactAudioSectionContent(
 }
 
 /**
- * Reusable compact slider row with label, thin slider, and tappable numeric box.
+ * Section slider row (Timing, Audio): a label line above a touch row holding a thick-track slider and a tappable value
+ * box, sized by [SectionLayout.sliderRow] so rows use the height the single header freed.
  */
 @Composable
 private fun CompactSliderItem(
@@ -1034,76 +1104,43 @@ private fun CompactSliderItem(
     valueRange: ClosedFloatingPointRange<Float>,
     displayValue: String,
     modifier: Modifier = Modifier,
+    row: SectionLayout.SliderRow = SectionLayout.SliderRow(SectionLayout.LABEL_ROW, SectionLayout.TRACK_THIN, SectionLayout.THUMB_SMALL, SectionLayout.MIN_TARGET),
     enabled: Boolean = true,
     onBegin: () -> Unit,
     onValueChange: (Float) -> Unit,
     onCommit: () -> Unit,
     onDirectEdit: (Float) -> Unit,
     dialogTitle: String = "Set $label",
-    dialogSuffix: String = "",
-    rowHeight: Dp = 34.dp
+    dialogSuffix: String = ""
 ) {
     var showDialog by remember { mutableStateOf(false) }
-    var isDragging by remember { mutableStateOf(false) }
-
-    Row(
-        modifier = modifier.height(rowHeight),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Text(
-            text = label,
-            color = if (enabled) TextSecondary else TextDisabled,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.widthIn(min = 14.dp)
-        )
-
-        Slider(
-            value = value.coerceIn(valueRange.start, valueRange.endInclusive),
-            onValueChange = {
-                if (enabled) {
-                    if (!isDragging) {
-                        isDragging = true
-                        onBegin()
-                    }
-                    onValueChange(it)
-                }
-            },
-            onValueChangeFinished = {
-                if (enabled) {
-                    isDragging = false
-                    onCommit()
-                }
-            },
-            valueRange = valueRange,
-            enabled = enabled,
-            colors = SliderDefaults.colors(
-                thumbColor = if (enabled) Highlight else TextDisabled,
-                activeTrackColor = if (enabled) Highlight else TextDisabled,
-                inactiveTrackColor = SurfaceHigh
-            ),
-            modifier = Modifier.weight(1f)
-        )
-
-        Box(
-            modifier = Modifier
-                .heightIn(min = rowHeight)
-                .widthIn(min = if (rowHeight >= 48.dp) 48.dp else 0.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(SurfaceHigh)
-                .border(0.5.dp, Border, RoundedCornerShape(4.dp))
-                .clickable(enabled = enabled) { showDialog = true }
-                .padding(horizontal = 6.dp, vertical = 3.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = displayValue,
-                color = if (enabled) TextPrimary else TextDisabled,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.SansSerif,
-                fontWeight = FontWeight.Medium
-            )
+    val span = (valueRange.endInclusive - valueRange.start).takeIf { it > 0f } ?: 1f
+    Column(modifier.testTag("slider-row-$label")) {
+        SliderRowLabel(label, row, enabled = enabled)
+        Row(Modifier.fillMaxWidth().height(row.touch.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)) {
+            SectionSlider(((value - valueRange.start) / span).coerceIn(0f, 1f), row, label,
+                onBegin = onBegin, onChange = { f -> onValueChange(valueRange.start + f * span) },
+                onFinish = onCommit, onCancel = onCommit, modifier = Modifier.weight(1f), enabled = enabled)
+            Box(
+                modifier = Modifier
+                    .height(minOf(row.touch, 48f).dp)
+                    .widthIn(min = 72.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(SurfaceHigh)
+                    .border(0.5.dp, Border, RoundedCornerShape(8.dp))
+                    .clickable(enabled = enabled, role = Role.Button, onClickLabel = dialogTitle) { showDialog = true }
+                    .padding(horizontal = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = displayValue,
+                    color = if (enabled) TextPrimary else TextDisabled,
+                    style = if (row.touch >= 48f) MaterialTheme.typography.titleSmall else MaterialTheme.typography.labelMedium,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1
+                )
+            }
         }
     }
 

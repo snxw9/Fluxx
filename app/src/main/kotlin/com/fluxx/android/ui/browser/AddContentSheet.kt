@@ -321,7 +321,10 @@ private fun SolidTabContent(onAddSolid: (Int) -> Unit,paletteRepository: Palette
             }
             Button(onClick = { onAddSolid(color.toArgb()) }) { Text("Add") }
         }
-        FluxxColorPicker(color, { color=it }, ColorPickerConfig(showEyedropper=false),
-            modifier=Modifier.fillMaxWidth().weight(1f),paletteRepository=paletteRepository)
+        // The FULL variant of the shared colour picker (no eyedropper while creating).
+        var before by remember { mutableStateOf(color) }
+        FluxxColourPicker(ColourPickerVariant.FULL, color.toArgb(), onBegin = { before = color },
+            onPreview = { color = FluxxColor.fromArgb(it) }, onFinish = {}, onCancel = { color = before },
+            modifier = Modifier.fillMaxWidth().weight(1f), name = "solid colour", palette = paletteRepository)
     }
 }

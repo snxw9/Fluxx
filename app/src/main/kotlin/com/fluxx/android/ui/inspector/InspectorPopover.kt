@@ -123,7 +123,7 @@ internal object InspectorHaptics {
         }
     }
     Popup(popupPositionProvider = provider, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
-      CompositionLocalProvider(LocalHostImeBottom provides hostIme) {
+      CompositionLocalProvider(LocalHostImeBottom provides hostIme, com.fluxx.android.ui.common.LocalImeLift provides null) {
         AnimatedVisibility(state, enter = scaleIn(tween(140), .8f, origin) + fadeIn(tween(110)),
             exit = scaleOut(tween(110), .8f, origin) + fadeOut(tween(90))) {
             Surface(Modifier.testTag(testTag).widthIn(max = 344.dp), shape = RoundedCornerShape(10.dp), color = SurfaceHigh,
@@ -257,7 +257,7 @@ internal val LocalHostImeBottom = compositionLocalOf { -1 }
 @Composable internal fun InspectorTile(vector: ImageVector?, label: String, modifier: Modifier = Modifier, hit: Dp = 40.dp, active: Boolean = false,
     enabled: Boolean = true, caption: String? = null, text: String? = null, state: String? = null, testTag: String? = null,
     onLongClick: (() -> Unit)? = null, iconContent: (@Composable () -> Unit)? = null, fill: PaddingValues? = null,
-    popover: @Composable () -> Unit = {}, click: () -> Unit) {
+    badge: KeyBadge = KeyBadge.NONE, popover: @Composable () -> Unit = {}, click: () -> Unit) {
     var tooltip by remember { mutableStateOf(false) }
     val interactions = remember { MutableInteractionSource() }
     val pressed by interactions.collectIsPressedAsState()
@@ -268,7 +268,7 @@ internal val LocalHostImeBottom = compositionLocalOf { -1 }
             onLongClick = { onLongClick?.invoke() ?: run { tooltip = true } })
         .semantics(mergeDescendants = true) {
             contentDescription = label + (caption?.let { ", $it" } ?: "")
-            stateDescription = state ?: if (!enabled) "Unavailable" else if (active) "On" else "Off"
+            stateDescription = KeyBadges.withState(state ?: if (!enabled) "Unavailable" else if (active) "On" else "Off", badge).orEmpty()
         }, contentAlignment = Alignment.Center) {
         val visual = if (fill != null) Modifier.fillMaxSize().padding(fill)
             else Modifier.then(if (text != null) Modifier.fillMaxWidth().padding(horizontal = (hit - 40.dp).coerceAtLeast(0.dp) / 2) else Modifier.size(40.dp)).height(40.dp)
@@ -280,9 +280,12 @@ internal val LocalHostImeBottom = compositionLocalOf { -1 }
                 caption?.let { Text(it, color = TextSecondary, fontSize = 9.sp, maxLines = 1) }
             } else {
                 vector?.let { Icon(it, null, Modifier.size(InspectorIcons.SIZE), tint = ink) } ?: iconContent?.invoke()
+                // Keyframe badge: top-right corner, above the icon, below (and never overlapping) the bottom caption.
+                KeyBadgeGlyph(badge, ink, Modifier.align(Alignment.TopEnd))
                 caption?.let { Text(it, Modifier.align(Alignment.BottomEnd).padding(end = 3.dp, bottom = 1.dp), color = TextSecondary,
                     fontSize = 8.sp, lineHeight = 9.sp, maxLines = 1, overflow = TextOverflow.Clip) }
             }
+            if (text != null) KeyBadgeGlyph(badge, ink, Modifier.align(Alignment.TopEnd))
         }
         DropdownMenu(tooltip, { tooltip = false }) { DropdownMenuItem(text = { Text(if (state != null) "$label · $state" else label) }, onClick = { tooltip = false }) }
         popover()

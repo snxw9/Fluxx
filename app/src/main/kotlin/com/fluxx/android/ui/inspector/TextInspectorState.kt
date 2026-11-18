@@ -423,19 +423,84 @@ internal object TextInspectorBudget {
 }
 
 /**
- * Parent chrome above Transform/Opacity/Timing content (drag handle, name row, section tabs). The sheet lays
- * these out with exactly these values, so page content height is arithmetic, not a guess.
+ * Inspector chrome. The landing grid keeps its drag handle and layer-name row (name, duplicate, delete) above the
+ * quick actions. Every section page (Transform, Timing, Blending & Opacity, Edit Solid, Audio; Edit Text draws its
+ * own) has ONE header row, exactly like Edit Text: ← | page tabs. Content height is arithmetic, not a guess.
  */
 internal object InspectorChromeBudget {
+    /** Landing grid only. */
     const val HANDLE=20f
     const val CONTENT_TOP=4f
     const val LABEL_LINE=16f
+    /** Landing grid only: layer name, duplicate, delete. */
     fun nameRow(compact: Boolean)=if(compact) 40f else 48f
-    fun tabRow(compact: Boolean,fontScale: Float)=(if(compact) 6f+6f else 12f+10f)+2f+LABEL_LINE*fontScale.coerceAtLeast(1f)
-    fun contentHeight(sheetHeight: Float,fontScale: Float): Float {
+    /** The single section-page header row (same as Edit Text's: 40dp, grows with font scale). */
+    fun header(fontScale: Float)=TextInspectorBudget.header(fontScale)
+    fun contentHeight(sheetHeight: Float,fontScale: Float)=
+        (sheetHeight-InspectorSheetBudget.FRAME_V-header(fontScale)-CONTENT_TOP).coerceAtLeast(0f)
+    /** TEXT UI 6 section chrome (handle + name row + tab row), kept only to state how much height TEXT UI 7 freed. */
+    fun legacyTabRow(compact: Boolean,fontScale: Float)=(if(compact) 6f+6f else 12f+10f)+2f+LABEL_LINE*fontScale.coerceAtLeast(1f)
+    fun legacyContentHeight(sheetHeight: Float,fontScale: Float): Float {
         val compact=InspectorSheetBudget.compact(sheetHeight)
-        return sheetHeight-InspectorSheetBudget.FRAME_V-HANDLE-nameRow(compact)-tabRow(compact,fontScale)-CONTENT_TOP
+        return sheetHeight-InspectorSheetBudget.FRAME_V-HANDLE-nameRow(compact)-legacyTabRow(compact,fontScale)-CONTENT_TOP
     }
+}
+
+/**
+ * Section-page control sizes, all computed from the content height ([InspectorChromeBudget.contentHeight]) and the
+ * content width, so the controls USE the height the single header freed. Pure arithmetic (JVM tested at 268/328 x
+ * font scale 1/1.3/2). Touch rows never go below [MIN_TARGET].
+ */
+internal object SectionLayout {
+    const val MIN_TARGET=40f
+    const val GAP=8f
+    /** Mode column on Transform (Position / Rotation / Scale), top-aligned with the first content row. */
+    const val MODE_COLUMN=48f
+    const val MODE_GAP=4f
+    // ---- Transform ------------------------------------------------------------------------------------------
+    fun valueRow(compact: Boolean)=if(compact) 40f else 48f
+    const val PAD_MAX=240f
+    const val DIAL_MAX=240f
+    const val READOUT_MIN=24f
+    const val READOUT_MAX=32f
+    const val STRIP_MIN=48f
+    const val STRIP_MAX=64f
+    data class Ruler(val readout: Float,val strip: Float,val gap: Float,val fontScale: Float) {
+        val height get()=readout*fontScale+gap+strip
+    }
+    /** Ruler sizes: the larger readout when the ruler(s) still fit, then the tallest strip up to [STRIP_MAX]. */
+    fun ruler(content: Float,linked: Boolean,fontScale: Float): Ruler {
+        val fs=fontScale.coerceAtLeast(1f);val n=if(linked) 1 else 2;val g=ScaleRulerMath.GAP_DP
+        val readout=if(n*(READOUT_MAX*fs+g+STRIP_MIN)+(n-1)*g<=content) READOUT_MAX else READOUT_MIN
+        val strip=((content-n*(readout*fs+g)-(n-1)*g)/n).coerceIn(STRIP_MIN,STRIP_MAX)
+        return Ruler(readout,strip,g,fs)
+    }
+    fun scaleController(content: Float,linked: Boolean,fontScale: Float)=ruler(content,linked,fontScale).let {if(linked) it.height else 2*it.height+it.gap}
+    /** Position pad side: below the X/Y value row, as large as the column allows. */
+    fun padSide(content: Float,width: Float,compact: Boolean)=minOf(width,content-valueRow(compact)-GAP,PAD_MAX).coerceAtLeast(0f)
+    fun dialSide(content: Float,width: Float)=minOf(width,content,DIAL_MAX).coerceAtLeast(0f)
+    // ---- Opacity / Blending and Timing ----------------------------------------------------------------------
+    /** Slider rows: label + value on one line above a touch row holding a thick track. */
+    data class SliderRow(val label: Float,val track: Float,val thumb: Float,val touch: Float) {
+        val height get()=label+touch
+    }
+    const val TRACK_THIN=6f
+    const val TRACK_THICK=8f
+    const val THUMB_SMALL=20f
+    const val THUMB_LARGE=24f
+    const val LABEL_ROW=24f
+    const val TOUCH_MAX=56f
+    /** [rows] slider rows plus [fixedRows] plain 40/48dp rows share the content height. */
+    fun sliderRow(content: Float,rows: Int,fixedRows: Int,compact: Boolean,fontScale: Float): SliderRow {
+        val fs=fontScale.coerceAtLeast(1f);val fixed=fixedRows*valueRow(compact)
+        val gaps=(rows+fixedRows-1).coerceAtLeast(0)*GAP
+        val label=LABEL_ROW*fs
+        val touch=((content-fixed-gaps)/rows.coerceAtLeast(1)-label).coerceIn(MIN_TARGET,TOUCH_MAX)
+        val large=touch>=48f
+        return SliderRow(label,if(large) TRACK_THICK else TRACK_THIN,if(large) THUMB_LARGE else THUMB_SMALL,touch)
+    }
+    fun sliderRowsHeight(row: SliderRow,rows: Int,fixedRows: Int,compact: Boolean)=
+        rows*row.height+fixedRows*valueRow(compact)+(rows+fixedRows-1).coerceAtLeast(0)*GAP
 }
 
 /** Rail stack: 40dp tiles with a 6dp gap, top-aligned; disabled placeholders shrink first when space is short. */

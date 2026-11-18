@@ -1,5 +1,7 @@
 # Global colour picker and inspector grid
 
+> **TEXT UI 7 (2026-11-18):** `FluxxColorPicker` was replaced by the shared `FluxxColourPicker` family (COMPACT popover / FULL page; in-place hex, alpha and RGB entry, one undo per interaction). See `TEXT_UI_OVERHAUL.md`, section TEXT UI 7. The palette repository, eyedropper and hex rules below are unchanged; the layout notes describe the pre-TEXT UI 7 picker.
+
 ## Status — 2026-09-22
 
 The user confirmed the previous picker works and prefers the expanded preview's 4-4 grid. The SV/hue controls, persisted palettes and draggable eyedropper below are newly implemented in source and await verification. No Gradle build, emulator creation, app launch, screenshots or phone tests were performed. **Galaxy A16 measured width remains unverified.** Device settings, insets and sheet padding must be measured on the user's build.

@@ -1,5 +1,16 @@
 # Edit Text consolidation — approved plan
 
+**TEXT UI 7 (2026-11-18):** TEXT UI 6 was accepted on the A16 (Edit Text layout unchanged). Changes:
+
+- Section pages (Transform, Timing, Blending & Opacity, Edit Solid) have one header row (← | tabs) like Edit Text, and their controls are resized to use the freed height. The landing grid is unchanged.
+- Keyframe badges (hollow / filled diamond) on animatable property tiles.
+- Every keyed property, all text properties included, now shows on the timeline layer bar. Unselected properties are drawn quiet.
+- One shared colour picker family (COMPACT popover / FULL page). The marker colour is an anchored popover.
+- Hex, alpha and RGB values are edited in place (fixes the hex popup closing).
+- Ruler labels fade near the needle.
+
+See [TEXT_UI_OVERHAUL.md](../checkpoints/TEXT_UI_OVERHAUL.md#text-ui-7-single-row-section-headers-keyframe-badges-and-layer-markers-colour-picker-family-inline-hex-entry). Device-unverified.
+
 **TEXT UI 6 (2026-11-18):** device feedback on TEXT UI 5. Changes:
 
 - Shared heights are back to the original 268/328dp on every page; Edit Text fits with smaller tiles (top row, two 3×3 blocks, bottom bar).

@@ -130,6 +130,9 @@ internal object InspectorIcons {
         put("AUDIO", p().poly(1.5f, 4f, 9.5f, 8f, 9.5f, 13f, 5f, 13f, 19f, 8f, 14.5f, 4f, 14.5f).arc(16.5f, 9f, 4.5f, 4.5f, 0, 1, 16.5f, 15f)
             .arc(19f, 6.5f, 8f, 8f, 0, 1, 19f, 17.5f).build())
         put("WARNING", p().poly(2.2f, 12f, 3.5f, 21f, 19.5f, 3f, 19.5f).line(12f, 9.5f, 12f, 13.5f).circle(12f, 16.5f, .6f).build()); put("MISSING", getValue("WARNING"))
+        // ---- Colour picker family (palette browser, save current colour to the active palette) ----------------
+        put("PALETTES", p().rect(4f, 4f, 7f, 7f, 2f).rect(13f, 4f, 7f, 7f, 2f).rect(4f, 13f, 7f, 7f, 2f).rect(13f, 13f, 7f, 7f, 2f).build())
+        put("SAVE_SWATCH", p().rect(3f, 9f, 12f, 12f, 3f).line(18.5f, 3f, 18.5f, 11f).line(16f, 8.5f, 18.5f, 11f, 21f, 8.5f).build())
         put("EYEDROPPER", p().circle(17f, 7f, 2.6f).line(12.5f, 7.5f, 16.5f, 11.5f).line(14.5f, 9.5f, 6.5f, 17.5f, 5f, 19f).build())
         // ---- Rail ---------------------------------------------------------------------------------------
         put("KEY", keyDiamond(p()).build())

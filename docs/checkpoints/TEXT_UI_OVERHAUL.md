@@ -569,3 +569,186 @@ The shader is unchanged and its `fwidth` smoothing adapts per texel. Base-encode
     - Fonts page unchanged; Back chain; Prev/Next following the focused property;
     - large-font labelled reflow paging; selection chip; save/reopen;
     - Transform position pad and anchor mode, rotation dial, Opacity slider, Timing dialogs.
+
+## TEXT UI 7: single-row section headers, keyframe badges and layer markers, colour picker family, inline hex entry
+
+TEXT UI 6 was device-tested on the A16; the Edit Text layout was accepted ("perfect") and is unchanged here. Implemented in source in one commit, **device-unverified**. Scope rules held: no change to `PreviewController`, the gesture protocol, the `EditorAction` contract, the batch/draw contract or the document schema. Sheet heights stay 268 / 328dp. Edit Text's layout, the Fonts page and the compact colour popover's look are unchanged (apart from the hex/alpha entry fix, §4e).
+
+### 1. Section-page header: one row
+
+- Transform, Timing, Blending & Opacity and Edit Solid (and Audio for video layers) now have **one header row, exactly like Edit Text**: `←` | page tabs, `InspectorChromeBudget.header` = `TextInspectorBudget.header` = 40dp × font scale. The layer-name row, duplicate and delete are gone from these pages (`SectionHeader` in `ElementInspectorSheet.kt`).
+- The **landing grid is unchanged**: drag handle, layer name with duplicate (hold: copy) and delete, audio toggle for video, quick actions, 4×2 tiles.
+- `←` returns to the landing grid exactly as before. System Back is unchanged, because the sheet's back-stack code was not touched.
+- Content height is now `sheet − 16 frame − header − 4`:
+
+| Sheet × font scale | TEXT UI 6 content | TEXT UI 7 content | Grew by |
+|---|---|---|---|
+| 268 × 1 | 158 | **208** | 50 |
+| 328 × 1 | 200 | **268** | 68 |
+| 348.4 (268 × 1.3) | 215.6 | **276.4** | 60.8 |
+| 426.4 (328 × 1.3) | 293.6 | **354.4** | 60.8 |
+| 536 (268 × 2) | 392 | **436** | 44 |
+| 656 (328 × 2) | 512 | **556** | 44 |
+
+Every control size comes from `SectionLayout` arithmetic (in `TextInspectorState.kt`), not guesses. Touch rows are always ≥ 40dp.
+
+- **Transform:**
+  - X/Y value boxes are 40 / 48dp rows, with a larger monospace readout in standard sheets.
+  - The position pad is `min(column, content − row − 8, 240)`: **160dp** at 268 (was about 118) and **212dp** at 328.
+  - The rotation dial is `min(column, content, 240)`: **208dp** at 268 and **240dp** at 328.
+  - The scale ruler uses a **32dp readout** (titleLarge) and a **64dp strip**, both linked and unlinked. Unlinked Width + Height takes 204 ≤ 208dp at 268.
+  - The mode column is 48dp wide with 40 / 48dp tiles, top-aligned with the first content row. The rail is unchanged and now fits at full size at 268, so the Graph/3D placeholders no longer shrink.
+- **Blending & Opacity:**
+  - The blend-mode row is 40 / 48dp with 13sp text.
+  - The opacity slider row is a 24dp label line (with the badge), then a **56dp touch row** holding an 8dp-thick track, a 24dp thumb and an 88 × 48dp value box.
+  - The slider is `SectionSlider`: one undo per drag, as before.
+- **Timing (and Audio):** each slider row is a label line plus a touch row of `(content − gaps) / rows − label`, clamped to 40–56dp.
+  - Two rows give 56dp touch rows at both heights.
+  - Video (three rows) gives 40dp at 268 and 56dp at 328.
+  - Large rows get the thick track and a titleSmall value box.
+  - Typed timing values still use their numeric dialog.
+- **Edit Text:** it already had a single header, so it is unchanged (body 212 / 272dp).
+- **Edit Solid:** the FULL colour picker (§4) gets the whole content area.
+
+### 2. Keyframe badge on property tiles
+
+- **Look:** about a 10dp drawn diamond with a 3dp inset in the top-right corner (`KeyBadgeGlyph`).
+  - It uses the shared `InspectorIcons` key glyphs: **hollow `KEY` means the property has keyframes; filled `KEY_ON` means there is a key exactly at the playhead.**
+  - There is no badge without keys. It is drawn above the icon and below the caption, and never overlaps the caption (the caption is bottom-right).
+  - It is monochrome, in the tile's ink.
+- **Accessibility:** the tile's state gains "keyframes active" / "keyframe at playhead".
+- **Source of truth:** `KeyBadges.of(layer, property, local)`, which reads `propertyKeyTimes`, the same model the rail diamond uses. No state is stored. It is derived per property at the snapped playhead (`remember(track, playhead)` on Transform/Opacity).
+- **Edit Text:** the badge appears on:
+  - Size;
+  - Fill · Stroke (the stronger of the two states);
+  - Stroke width, Tracking, Leading, Baseline, Fill-over-stroke order and Ligatures (each keys its own layer property);
+  - the bottom-bar text field (Source Text, which carries keyed run and paragraph styles).
+- **Transform:** on the Position / Rotation / Scale mode icons. There is none in Anchor mode, because the anchor is not animatable.
+- **Opacity:** beside the slider label.
+- **Timing:** no badge, because clip timing is not animatable.
+
+### 3. Keyframes on the layer (timeline)
+
+- **Bug cause:** the timeline bar built its own key set from position/scale/rotation/opacity plus Source Text/Size/Fill only. Tracking, Leading, Baseline, Stroke colour, Stroke width, Fill-over-stroke, Ligatures and animator tracks never reached it.
+- **Fix:** the bar now uses `LayerKeyMarkers.clipTimes` → `aggregateKeyTimes()`, which already covered every text property, Source Text (style-run and paragraph keys) and animators. All layer types and properties are covered.
+- **Marker spec:**
+  - Keys of the focused property on the selected layer are **full ink, 10dp**, and keep their existing tap / hold-drag behaviour.
+  - Keys of every other property are **45% alpha, 7dp** and display only. Hit-testing is unchanged.
+  - Keys at the same time collapse into one marker; if any belongs to the focused property it draws at full ink.
+  - Markers sit along the bottom of the bar (2dp inset), below the centred layer name. The trim and move targets are unchanged.
+- **Performance:** times are aggregated once per layer/keyframe/undo change (`remember(anim, text, offset)`). The draw reuses one `Path` and one `Stroke` per layer, so nothing is allocated per frame.
+
+### 4. Colour picker family
+
+- **Shared component:** `FluxxColourPicker(variant = COMPACT | FULL, …)` in `ui/common/colorpicker/FluxxColourPicker.kt`.
+  - It is built on `SaturationValueBox`, `HueStrip` and `FluxxColor`; the colour maths is not forked.
+  - Shared by both variants: rounded 10dp containers; a target toggle that shows only when there are several targets; eyedropper, inherit and reset from `InspectorIcons`; SV square and hue bar; alpha; the swatch/palette area below the controls; live apply.
+  - Each interaction (a drag, a typed-value session, a swatch) is **one `ColourTransaction`**, which means one undo.
+  - The old `FluxxColorPicker`, `HexColorInput`, `ColorChannelSlider` and `PaletteRow` were deleted.
+- **COMPACT:** exactly the TEXT UI 6 text popover: 288dp wide; a 40dp header; a 96dp SV square, 16dp hue bar, hex row and alpha row; a 40dp strip of 28dp swatches.
+- **FULL:** the same order and language, scaled up.
+  - Header (40), then an SV square up to 200dp, a 20dp hue bar, and a right column of five rows: hex, then A / R / G / B gradient sliders with in-place values.
+  - The palette area is below:
+    - the palette browser, with all existing management (select, create, rename, delete, edit swatches);
+    - the active palette's swatches;
+    - save-to-palette (new `PALETTES` / `SAVE_SWATCH` icons);
+    - a "Recent" row when there is room.
+  - Sizes come from `ColourPickerLayout.full`. Edit Solid at 268: square 122 with 24dp rows. At 328: square 182 with 36dp rows.
+- **Surface → variant:**
+
+| Surface | Variant |
+|---|---|
+| Edit Text Fill / Stroke popover | COMPACT (targets Fill/Stroke, inherit with a selection, eyedropper) |
+| Marker colour (composition and layer markers) | COMPACT, anchored popover, marker swatches |
+| Palette browser swatch editor | COMPACT, no swatches or eyedropper (prevents recursion) |
+| Edit Solid page | FULL (palette, eyedropper) |
+| Add content → Solid tab (global picker page) | FULL (palette, no eyedropper while creating) |
+
+- **Marker colour:** the colour is now a swatch + hex control in the marker editor. It opens the COMPACT picker as an `AnchoredPopover` from that control: it opens from the trigger, is clamped to the window with 8dp margins, and is never centred. The colour is still staged until Add/Save (one undo, same persistence). The strip is the marker palette: red `F44336` (composition default), orange `FF9800` (layer default), then ten more.
+
+### 4e. In-place hex / alpha / RGB entry
+
+- **Cause:** tapping hex or alpha opened an `InspectorValueField` inside a second popup nested in the picker popover. The nested popup lost focus and closed at once.
+- **Fix:** `InlineValueField` (`ui/common/InlineValueField.kt`) edits the value **in place**, with no popup or dialog.
+  - Focusing it selects all. Hex uses an ASCII IME (caps); alpha and R/G/B use a number IME.
+  - When the field is cleared, the **previous value stays visible at 40% alpha** behind the empty input, and typing replaces it.
+  - Leaving it empty (focus loss, IME Done, tap outside, Back after the keyboard hides) changes nothing.
+  - Hex accepts `RRGGBB` (keeps alpha) or `AARRGGBB` (replaces alpha), with or without `#`, in any case. Alpha accepts 0–100 (an optional `%`); R/G/B accept 0–255.
+  - A **valid complete** value applies live (begin on the first valid value, one preview per distinct value). Invalid or incomplete text applies nothing and reverts on blur. Escape cancels.
+  - **One undo per edit session** (focus to blur), driven by `InlineEntrySession`.
+- **IME:** inside a popover, the popover lifts above the keyboard as before. On a page (the Edit Solid FULL picker), the inspector sheet is translated above the keyboard while a field is focused (`ImeLiftHost`); nothing resizes.
+
+### 5. Ruler label near the needle
+
+Tick labels fade with a smoothstep of the gap between the label's nearest edge and the needle: hidden when touching, fully shown from **12dp** away (`ScaleRulerMath.needleFade`). The ruler maths and behaviour are unchanged.
+
+### Deviations
+
+1. **Swipe-to-dismiss on section pages** moved from the removed drag handle to the single header row (a vertical drag; taps still select tabs). The landing grid keeps its handle.
+2. **Audio for video layers** is an extra tab in the section header, because its toggle lived in the removed name row. The toggle remains on the landing grid.
+3. **Edit Text style and paragraph tiles** (bold, italic, case, alignment, indents and others) show no badge of their own. Their keys are Source Text keys, badged on the text field. Repeating one Source Text state on about 20 tiles would be noise.
+4. Badges reflect the **layer property** (whole-layer owner) even while a selection is active, because run overrides are not separately keyed.
+5. **Timing has no badges**: clip timing is not animatable.
+6. **Recent colours are session-only** (in memory, newest first, 12), because there is no schema or persistence change. The Recent row appears only when FULL has ≥ 36dp value rows: yes on the Add Solid tab, no on Edit Solid at 268/328.
+7. **Marker palette** is a fixed marker swatch list; no persisted marker palette existed. The marker editor itself (description, Add/Save/Delete) stays a dialog. Only the colour moved to an anchored popover.
+8. The **Add content → Solid** page has no sheet-lift host. If the keyboard covers its hex field there, the field still edits in place. Only the inspector sheet lifts.
+9. **Timing typed values** keep their numeric dialog; only colour values were required in place.
+10. **FULL R/G/B/A tracks** draw real colours (the picker shows colours). All other picker chrome is monochrome.
+11. **FULL at 268** uses 24dp value rows; touch targets are the full-width slider rows and the in-place fields. This was the trade-off for keeping the palette below the controls in the same order as COMPACT.
+12. Opacity, Timing and Audio sliders are `SectionSlider` (thick track) instead of the M3 `Slider`. The begin / live preview / commit protocol and one undo per drag are unchanged.
+13. **Tests whose structure changed:** only `RailAndRulerLayoutTest`.
+    - Content 158/200 → 208/268.
+    - The 4-item rail no longer shrinks at 268.
+    - Ruler sizes now come from `SectionLayout`.
+    - It gained pad/dial, slider-row and label-fade tests.
+    - No other existing test was edited.
+
+### Gate
+
+- Compiles: `:app:compileDebugKotlin`, `:app:compileReleaseKotlin`, `:app:compileDebugAndroidTestKotlin`. Native code was not touched.
+- JVM: `:app:testDebugUnitTest` ran **343 tests (316 previous + 27 new)**, with 0 failures, errors or skips.
+  - New suites: `KeyframeBadgeTest` 4, `LayerKeyMarkersTest` 5, `ColourPickerFamilyTest` 8, `InlineValueFieldTest` 7. `RailAndRulerLayoutTest` went from 4 to 7.
+- No APK packaging and no device run.
+
+### Exact A16 test list
+
+1. **Header row:** on Transform, Timing, Blending & Opacity, Edit Text and Edit Solid the header is a single row: `<` plus tabs only. There is no layer name, duplicate or delete.
+   - `<` returns to the landing grid, and system Back behaves exactly as before.
+   - Swiping down on the header row dismisses the sheet.
+   - Video layers show an Audio tab.
+2. **Landing grid unchanged:** handle, layer name (rename), duplicate (tap) / copy (hold), delete, audio toggle for video, quick actions, and the 4×2 tiles in the same arrangement.
+3. **Freed height is used, at 268 and 328 and font scales 1 / 1.3 / 2:**
+   - Transform: the position pad is visibly bigger, the rotation dial is bigger, the scale ruler has a 64dp strip and a large readout (linked, and unlinked Width + Height both fully visible), and the X/Y boxes are taller. The rail and mode column line up with the first content row, and the rail's Graph/3D are full size at 268.
+   - Opacity: a large slider row (thick track, big thumb, big value box).
+   - Timing: larger rows with no overflow (video has three rows).
+   - Nothing is clipped.
+4. **Badges:**
+   - Add a keyframe to Size, Tracking, Leading, Baseline, Stroke width, Fill or Stroke, Fill-over-stroke, Ligatures and Source Text; and to Position, Rotation, Scale and Opacity.
+   - The tile, mode icon or label shows a hollow diamond top-right, which is filled when the playhead is exactly on a key.
+   - Move the playhead off and on a key: hollow ↔ filled. Remove the animation: the badge disappears.
+   - The caption is never covered. TalkBack reads "keyframes active" / "keyframe at playhead".
+5. **Timeline markers for Edit Text keys:** keying any Edit Text property (above, including Tracking / Leading / Stroke / Ligatures) shows a marker on that layer's timeline bar immediately. Undo removes it.
+6. **Quiet markers:**
+   - With several properties keyed, the focused property's keys are full size and bright and keep tap-to-seek and hold-drag.
+   - Other properties' keys are visible but dimmed and smaller, and don't react to touch.
+   - Shared times show one marker (bright if the focused property is among them).
+   - Markers sit low on the bar and never cover the name or the trim handles. The same holds on solids, video and images.
+7. **FULL picker matches the compact look:** on Edit Solid the header icons, rounded corners, SV + hue, hex row, A/R/G/B and the palette below match the compact picker's order and style.
+   - Palette browser management, save swatch and eyedropper all work.
+   - On Add content → Solid the Recent row shows recently applied colours.
+8. **In-place hex and alpha** (text popover, marker popover, Edit Solid, Add Solid):
+   - Tap hex: it edits in place and the popover does NOT close.
+   - Clear it: the faded previous value shows. Leave it empty (outside tap, Done, Back): nothing changes.
+   - Type `00FF00`: it applies live and keeps alpha. Type `80FF0000`: it replaces alpha. Invalid text reverts on blur.
+   - The same applies to alpha % (0–100) and Edit Solid R/G/B (0–255).
+   - Each edit session is exactly one undo.
+   - The keyboard never hides the field: the popover or sheet lifts and the preview does not resize.
+9. **Marker colour:** hold the playhead to add or edit a marker, then tap the colour control.
+   - The compact picker opens anchored to the control, never centred, within 8dp of the screen edges. Try a marker near the left and right edges.
+   - It shows the marker swatches. The colour is saved only with Add/Save, and undo/redo work as before.
+10. **Edit Solid uses the FULL picker.** Dragging SV, hue or a channel is one undo per drag, and the eyedropper still samples.
+11. **Ruler label fades near the needle:** drag the scale ruler slowly through 100%. The "100" label (and every other label) fades smoothly as it reaches the needle and reappears beyond about 12dp, with no pop. The value, detents and inertia are unchanged.
+12. **Regression:**
+    - Edit Text layout, Fonts page, rail menu, Explode, colour eyedropper;
+    - keyboard overlay on Edit Text; scale 10000% reach and ±50000% typing; anchor mode;
+    - Timing dialogs, Audio mute/gain; save and reopen.

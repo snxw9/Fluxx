@@ -853,34 +853,13 @@ private fun TimelineClipRow(
         // Keyframe Markers Container (unclipped, layered above clip body)
         val anim = layer.animTransform
         val anchorOffsetUs = layer.resolvedKeyframeAnchorUs - startUs
-        val observedTimes = remember(anim, layer.text, anchorOffsetUs) {
-            val times = sortedSetOf<Long>()
-            if (anim.position.isAnimated) anim.position.keyframes.forEach { times.add(it.timeUs) }
-            if (anim.scale.isAnimated) anim.scale.keyframes.forEach { times.add(it.timeUs) }
-            if (anim.rotation.isAnimated) anim.rotation.keyframes.forEach { times.add(it.timeUs) }
-            if (anim.opacity.isAnimated) anim.opacity.keyframes.forEach { times.add(it.timeUs) }
-            if (layer.type == LayerType.TEXT) {
-                if (layer.text.source.isAnimated) layer.text.source.keyframes.forEach { times.add(it.timeUs) }
-                if (layer.text.size.isAnimated) layer.text.size.keyframes.forEach { times.add(it.timeUs) }
-                if (layer.text.fill.isAnimated) layer.text.fill.keyframes.forEach { times.add(it.timeUs) }
-            }
-            // Drawing/snapping is clip-relative; stored keys are anchor-relative and may be negative.
-            times.map { Math.addExact(it, anchorOffsetUs) }
-        }
+        // Every keyed property of the layer (all text properties and animators included), aggregated once per change.
+        val observedTimes = remember(anim, layer.text, anchorOffsetUs) { LayerKeyMarkers.clipTimes(layer, anchorOffsetUs) }
         val focusedTimes = remember(anim, layer.text, activeProperty, anchorOffsetUs) {
-            val keys = when (activeProperty) {
-                AnimPropertyType.POSITION -> anim.position.keyframes.map { it.timeUs }
-                AnimPropertyType.SCALE -> anim.scale.keyframes.map { it.timeUs }
-                AnimPropertyType.ROTATION -> anim.rotation.keyframes.map { it.timeUs }
-                AnimPropertyType.OPACITY -> anim.opacity.keyframes.map { it.timeUs }
-                AnimPropertyType.FONT_SIZE -> layer.text.size.keyframes.map { it.timeUs }
-                AnimPropertyType.FILL_COLOUR -> layer.text.fill.keyframes.map { it.timeUs }
-                AnimPropertyType.SOURCE_TEXT -> layer.text.source.keyframes.map { it.timeUs }
-                null -> emptyList()
-                else -> layer.propertyKeyTimes(activeProperty)
-            }
-            keys.map { it + anchorOffsetUs }.toSet()
+            LayerKeyMarkers.focusedClipTimes(layer, activeProperty, anchorOffsetUs)
         }
+        val diamondPath = remember { Path() }
+        val markerStroke = remember(density) { Stroke(width = with(density) { 1.5.dp.toPx() }) }
         // Keep pointer nodes stable while the transient document moves/reorders the markers.
         var dragTimes by remember(layer.id) { mutableStateOf<List<Long>?>(null) }
         var movingFrom by remember(layer.id) { mutableStateOf<Long?>(null) }
@@ -956,16 +935,12 @@ private fun TimelineClipRow(
                                         }
                                     )
                                 } else Modifier),
-                            contentAlignment = Alignment.Center
+                            contentAlignment = Alignment.BottomCenter
                         ) {
-                            Canvas(modifier = Modifier.size(if (editable) 10.dp else 6.dp).alpha(if (editable) 1f else .32f)) {
-                                val diamondPath = Path().apply {
-                                    moveTo(size.width / 2f, 0f)
-                                    lineTo(size.width, size.height / 2f)
-                                    lineTo(size.width / 2f, size.height)
-                                    lineTo(0f, size.height / 2f)
-                                    close()
-                                }
+                            // Focused-property keys: full ink, normal size. Other properties: quiet (dimmed, smaller), display only.
+                            val marker = LayerKeyMarkers.Marker(kfTimeUs, editable)
+                            Canvas(modifier = Modifier.padding(bottom = LayerKeyMarkers.BOTTOM_INSET_DP.dp).size(marker.sizeDp.dp).alpha(marker.alpha)) {
+                                LayerKeyMarkers.diamond(diamondPath, size)
                                 if (isAtPlayhead) {
                                     drawPath(
                                         path = diamondPath,
@@ -974,7 +949,7 @@ private fun TimelineClipRow(
                                     drawPath(
                                         path = diamondPath,
                                         color = Color(0xFF1C1C1C),
-                                        style = Stroke(width = 1.5.dp.toPx())
+                                        style = markerStroke
                                     )
                                 } else {
                                     drawPath(
@@ -984,7 +959,7 @@ private fun TimelineClipRow(
                                     drawPath(
                                         path = diamondPath,
                                         color = Highlight.copy(alpha = 0.9f),
-                                        style = Stroke(width = 1.5.dp.toPx())
+                                        style = markerStroke
                                     )
                                 }
                             }

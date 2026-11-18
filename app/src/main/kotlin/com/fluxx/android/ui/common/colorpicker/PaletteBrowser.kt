@@ -30,54 +30,6 @@ import com.fluxx.android.model.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-@Composable internal fun PaletteRow(repository: PaletteRepository,color: FluxxColor,onColorChange: (FluxxColor)->Unit) {
-    val library by repository.state.collectAsState()
-    val active=library.activePalette
-    var expanded by remember { mutableStateOf(false) }
-    var busy by remember { mutableStateOf(false) }
-    val scope=rememberCoroutineScope()
-    val context=LocalContext.current
-    fun perform(action: suspend ()->Unit) {
-        if(busy) return
-        busy=true
-        scope.launch {
-            try { action() }
-            catch(e:CancellationException) { throw e }
-            catch(e:Exception) { Toast.makeText(context,e.message ?: "Could not save palettes",Toast.LENGTH_LONG).show() }
-            finally { busy=false }
-        }
-    }
-    Row(Modifier.fillMaxWidth().height(22.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-        Box {
-            PaletteGlyph("browser","Open palette browser",onClick={expanded=true})
-            PaletteBrowser(expanded,{expanded=false},library.palettes,library.activePaletteId,busy,
-                onSelectPalette={id -> perform { repository.setActivePalette(id); expanded=false }},
-                onCreatePalette={perform { repository.createPalette() }},
-                onDeletePalette={id -> perform { repository.deletePalette(id) }},
-                onRenamePalette={id,name ->
-                    // Rename is committed by the browser, never on a text keystroke.
-                    scope.launch {
-                        try { repository.renamePalette(id,name) }
-                        catch(e:CancellationException) { throw e }
-                        catch(e:Exception) { Toast.makeText(context,e.message ?: "Could not rename palette",Toast.LENGTH_LONG).show() }
-                    }
-                },
-                onAddSwatch={id,sw -> perform { repository.addSwatch(id,sw) }},
-                onRemoveSwatch={id,index -> perform { repository.removeSwatch(id,index) }},
-                onReplaceSwatch={id,index,sw -> perform { repository.replaceSwatch(id,index,sw) }})
-        }
-        LazyRow(Modifier.weight(1f).fillMaxHeight(),horizontalArrangement=Arrangement.spacedBy(3.dp),verticalAlignment=Alignment.CenterVertically) {
-            itemsIndexed(active?.swatches.orEmpty()) { _,swatch ->
-                ColorPreviewSwatch(swatch,Modifier.size(18.dp).clip(RoundedCornerShape(3.dp)).clickable { onColorChange(swatch) }
-                    .semantics { contentDescription="Colour ${swatch.toHexString(true)}" })
-            }
-        }
-        val full=active!=null && active.swatches.size>=ColorPalette.MAX_SWATCHES
-        PaletteGlyph("add",if(full) "Palette full (24/24)" else "Save colour to active palette",
-            enabled=active!=null && !full && !busy,onClick={active?.let { perform { repository.addSwatch(it.id,color) } }})
-    }
-}
-
 @Composable internal fun PaletteBrowser(expanded: Boolean,onDismiss: ()->Unit,palettes: List<ColorPalette>,
     activePaletteId: String?,busy: Boolean,onSelectPalette: (String)->Unit,onCreatePalette: ()->Unit,
     onDeletePalette: (String)->Unit,onRenamePalette: (String,String?)->Unit,
@@ -108,8 +60,11 @@ import kotlinx.coroutines.launch
                 Text(if(pickerIndex==null) "Add swatch" else "Edit swatch",style=MaterialTheme.typography.titleSmall,
                     modifier=Modifier.padding(horizontal=12.dp,vertical=6.dp))
                 // Explicit dimensions also bound intrinsic measurement inside DropdownMenu.
-                FluxxColorPicker(pickerColor,{pickerColor=it},ColorPickerConfig(showEyedropper=false,showPalette=false),
-                    modifier=Modifier.width(284.dp).height(170.dp).padding(horizontal=8.dp),paletteRepository=null)
+                // COMPACT shared picker, no eyedropper and no palette (prevents recursion); staged until Add/Save.
+                var before by remember { mutableStateOf(pickerColor) }
+                FluxxColourPicker(ColourPickerVariant.COMPACT,pickerColor.toArgb(),onBegin={before=pickerColor},
+                    onPreview={pickerColor=FluxxColor.fromArgb(it)},onFinish={},onCancel={pickerColor=before},
+                    modifier=Modifier.padding(horizontal=6.dp),name="swatch colour",swatches=emptyList())
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
                     TextButton(onClick={pickerId=null}) { Text("Cancel") }
                     TextButton(enabled=!busy && (pickerIndex!=null || picking.swatches.size<ColorPalette.MAX_SWATCHES),onClick={

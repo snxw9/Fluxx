@@ -204,6 +204,8 @@ import kotlinx.coroutines.delay
     val fillArgb=style.fill?.takeIf {editScope.selected} ?: layer.text.fill.evaluate(local)
     val strokeArgb=style.stroke?.takeIf {editScope.selected} ?: layer.text.strokeColour.evaluate(local)
     val strokeOver=layer.text.paintOrder(local)!=0
+    // Keyframe badges: derived from the same key model as the rail diamond, per property, at the snapped playhead.
+    fun badge(c: TextControl)=KeyBadges.text(layer,c,ownerLocal)
 
     // ---- Tiles ------------------------------------------------------------------------------------------------
     @Composable fun NumericTile(c: TextControl,modifier: Modifier,inset: PaddingValues,text: String?=null) {
@@ -212,7 +214,7 @@ import kotlinx.coroutines.delay
         val enabled=editScope.available(c) && !finishing
         val title=editScope.title(c)
         InspectorTile(InspectorIcons.control(c),"$title, ${editScope.unit(c)}",modifier,active=popover==c,enabled=enabled,
-            caption=if(d.mixed) "—" else tileCaption(limit,d.initial),text=text,testTag="text-tile-${c.name}",fill=inset,popover={
+            caption=if(d.mixed) "—" else tileCaption(limit,d.initial),text=text,testTag="text-tile-${c.name}",fill=inset,badge=badge(c),popover={
                 AnchoredPopover(popover==c,::closePopover,"text-popover-${c.name}") {
                     SliderPopoverContent(limit,d.initial,d.mixed,title,onReset={numericSet(c,d.default)},onBegin={numericBegin(c)},
                         onPreview=::numericPreview,onFinish=::numericFinish,onCancel=::numericCancel,onTyped={numericSet(c,it)},enabled=enabled,
@@ -231,12 +233,12 @@ import kotlinx.coroutines.delay
     }
     @Composable fun ToggleTile(c: TextControl,modifier: Modifier,inset: PaddingValues,on: Boolean,text: String?,enabled: Boolean=true,
         vector: androidx.compose.ui.graphics.vector.ImageVector=InspectorIcons.control(c),caption: String?=null,state: String?=null,click: ()->Unit) {
-        InspectorTile(vector,c.label,modifier,active=on,enabled=enabled && !finishing,caption=caption,text=text,state=state,testTag="text-tile-${c.name}",fill=inset) {click()}
+        InspectorTile(vector,c.label,modifier,active=on,enabled=enabled && !finishing,caption=caption,text=text,state=state,testTag="text-tile-${c.name}",fill=inset,badge=badge(c)) {click()}
     }
     @Composable fun PaintTile(modifier: Modifier,inset: PaddingValues,label: String?) {
         val description="Fill #${"%08X".format(fillArgb)}, stroke #${"%08X".format(strokeArgb)}, $scopeLabel"
         InspectorTile(null,"Fill and stroke colour",modifier,active=popover==TextControl.PAINT,enabled=!finishing,text=label ?: "Fill · Stroke",state=description,
-            testTag="text-tile-PAINT",fill=inset,iconContent={DualColourSwatch(fillArgb,strokeArgb)},popover={
+            testTag="text-tile-PAINT",fill=inset,iconContent={DualColourSwatch(fillArgb,strokeArgb)},badge=badge(TextControl.PAINT),popover={
                 AnchoredPopover(popover==TextControl.PAINT,::closePopover,"text-colour-popover") {
                     TextColourPopoverContent(target=colourTarget(),fill=fillArgb,stroke=strokeArgb,selected=editScope.selected,palette=palette,
                         onTarget={focus(it);colourSession.target(it)},
@@ -333,7 +335,7 @@ import kotlinx.coroutines.delay
                 active=mode==TextInspectorMode.Fonts,enabled=!finishing,text=fontName,testTag="text-font-chip",fill=inset) {closePopover();focus(TextControl.FONT);mode=TextInspectorMode.Fonts}
             NumericTile(TextControl.SIZE,Modifier.width(cell).fillMaxHeight(),inset)
             Spacer(Modifier.width(TextInspectorBudget.BLOCK_SPACER.dp))
-            SourceField(document,selection,editScope,mode==TextInspectorMode.Source,!finishing,Modifier.weight(1f).fillMaxHeight(),inset,
+            SourceField(document,selection,editScope,mode==TextInspectorMode.Source,!finishing,Modifier.weight(1f).fillMaxHeight(),inset,badge(TextControl.SOURCE),
                 {focus(TextControl.SOURCE);closePopover();onBeginDraft(true) {mode=TextInspectorMode.Source}},onSelection,onSourceSelection,onSourceDraft,onSourceBegin,::sourceDone,::sourceCancel)
         }
     }
@@ -559,99 +561,31 @@ internal val TEXT_DEFAULT_SWATCHES=listOf(0xFFFFFFFF,0xFFBDBDBD,0xFF757575,0xFF2
 @Composable private fun TextColourPopoverContent(target: TextControl,fill: Int,stroke: Int,selected: Boolean,palette: PaletteRepository?,
     onTarget: (TextControl)->Unit,onBegin: (TextControl)->Unit,onPreview: (Int)->Unit,onFinish: ()->Unit,onCancel: ()->Unit,
     onSet: (TextControl,Int)->Unit,onInherit: (TextControl)->Unit,onReset: (TextControl)->Unit,onEyedropper: ((TextControl)->Unit)?) {
-    val library=palette?.state?.collectAsState()?.value
-    val swatches=(library?.activePalette ?: library?.palettes?.firstOrNull())?.swatches?.map {it.toArgb()}?.takeIf {it.isNotEmpty()}?.take(12) ?: TEXT_DEFAULT_SWATCHES
+    // The shared picker family's COMPACT variant: same 288dp layout, icons and swatch strip as TEXT UI 6; hex and
+    // alpha are now edited in place (no nested popup), one undo per edit session.
     val current=if(target==TextControl.FILL) fill else stroke
     val name=if(target==TextControl.FILL) "fill" else "stroke"
-    // Hue/saturation survive greys and black while dragging (same rule as the global picker).
-    val hsv=FluxxColor.fromArgb(current).toHsv()
-    var hue by remember(target) {mutableFloatStateOf(hsv.hue)}
-    var saturation by remember(target) {mutableFloatStateOf(hsv.saturation)}
-    var value by remember(target) {mutableFloatStateOf(hsv.value)}
-    var dragging by remember {mutableStateOf(false)}
-    var before by remember {mutableStateOf(Triple(hue,saturation,value))}
-    LaunchedEffect(current,dragging) {
-        if(!dragging) {val next=FluxxColor.fromArgb(current).toHsv();value=next.value
-            if(next.value>.01f) {if(next.saturation>.01f && !(hue==360f && next.hue==0f)) hue=next.hue;saturation=next.saturation}}
-    }
-    val begin={before=Triple(hue,saturation,value);dragging=true;onBegin(target)}
-    val commit={dragging=false;onFinish()}
-    val cancel={hue=before.first;saturation=before.second;value=before.third;dragging=false;onCancel()}
-    var editingHex by remember {mutableStateOf(false)}
-    var editingAlpha by remember {mutableStateOf(false)}
-    var alphaDrag by remember {mutableStateOf(false)}
-    Column(Modifier.width(288.dp).testTag("text-colour-picker")) {
-        Row(Modifier.fillMaxWidth().height(40.dp),verticalAlignment=Alignment.CenterVertically) {
-            InspectorIconButton(InspectorIcons.icon("FILL"),"Edit fill colour",selected=target==TextControl.FILL) {onTarget(TextControl.FILL)}
-            InspectorIconButton(InspectorIcons.icon("STROKE"),"Edit stroke colour",selected=target==TextControl.STROKE) {onTarget(TextControl.STROKE)}
-            Spacer(Modifier.weight(1f))
-            if(onEyedropper!=null) InspectorIconButton(InspectorIcons.icon("EYEDROPPER"),"Sample $name colour from the preview") {onEyedropper(target)}
-            if(selected) InspectorIconButton(InspectorIcons.icon("INHERIT"),"Inherit $name from the layer") {onInherit(target)}
-            InspectorIconButton(InspectorIcons.icon("RESET"),"Reset $name colour") {onReset(target)}
-        }
-        Row(Modifier.fillMaxWidth().height(96.dp).padding(horizontal=4.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-            SaturationValueBox(hue,saturation,value,{s,v->saturation=s;value=v;onPreview(TextColourEdit.hsv(hue,s,v,current))},
-                Modifier.size(96.dp).clip(RoundedCornerShape(8.dp)).border(1.dp,Border,RoundedCornerShape(8.dp)),begin,commit,cancel)
-            HueStrip(hue,{h->hue=h;onPreview(TextColourEdit.hsv(h,saturation,value,current))},
-                Modifier.width(16.dp).fillMaxHeight().clip(RoundedCornerShape(8.dp)),begin,commit,cancel)
-            Column(Modifier.weight(1f).fillMaxHeight(),verticalArrangement=Arrangement.SpaceBetween) {
-                // Hex: tap to type (select-all, IME Done or focus loss commits, Escape/Back cancels).
-                Row(Modifier.fillMaxWidth().height(40.dp),verticalAlignment=Alignment.CenterVertically) {
-                    ColorPreviewSwatch(FluxxColor.fromArgb(current),Modifier.size(20.dp).clip(RoundedCornerShape(5.dp)).border(1.dp,Border,RoundedCornerShape(5.dp)))
-                    Box(Modifier.weight(1f).padding(start=6.dp)) {
-                        TextButton(onClick={editingHex=true},contentPadding=PaddingValues(horizontal=6.dp),modifier=Modifier.fillMaxWidth().heightIn(min=40.dp)
-                            .testTag("text-colour-hex").semantics {contentDescription="Hex ${TextColourEdit.hexText(current)}; tap to type"}) {
-                            Text("#"+TextColourEdit.hexText(current),color=TextPrimary,fontFamily=FontFamily.Monospace,style=MaterialTheme.typography.labelMedium,maxLines=1)
-                        }
-                        AnchoredPopover(editingHex,{editingHex=false},"text-colour-hex-entry") {
-                            InspectorValueField(TextColourEdit.hexText(current),"Hex $name colour","",{text->editingHex=false
-                                TextColourEdit.hex(text,current)?.let {onSet(target,it)}},{editingHex=false},keyboardType=KeyboardType.Ascii)
-                        }
-                    }
-                }
-                // Alpha: slider (one undo per drag) and a tappable percentage.
-                Row(Modifier.fillMaxWidth().height(40.dp),verticalAlignment=Alignment.CenterVertically) {
-                    Slider(TextColourEdit.alphaPercent(current)/100f,{f->if(!alphaDrag) {alphaDrag=true;onBegin(target)};onPreview(TextColourEdit.withAlphaPercent(current,f*100f))},
-                        Modifier.weight(1f).semantics {contentDescription="${name.replaceFirstChar {it.uppercase()}} alpha"},
-                        onValueChangeFinished={if(alphaDrag) {alphaDrag=false;onFinish()}},
-                        colors=SliderDefaults.colors(thumbColor=TextPrimary,activeTrackColor=TextPrimary,inactiveTrackColor=Border))
-                    Box {
-                        TextButton(onClick={editingAlpha=true},contentPadding=PaddingValues(horizontal=4.dp),modifier=Modifier.widthIn(min=44.dp).heightIn(min=40.dp)
-                            .testTag("text-colour-alpha").semantics {contentDescription="Alpha ${TextColourEdit.alphaPercent(current).toInt()} percent; tap to type"}) {
-                            Text("${kotlin.math.round(TextColourEdit.alphaPercent(current)).toInt()}%",color=TextPrimary,fontFamily=FontFamily.Monospace,style=MaterialTheme.typography.labelMedium,maxLines=1)
-                        }
-                        AnchoredPopover(editingAlpha,{editingAlpha=false},"text-colour-alpha-entry") {
-                            InspectorValueField(PropertyLimits.format(PropertyLimits.OPACITY,TextColourEdit.alphaPercent(current)),"${name.replaceFirstChar {it.uppercase()}} alpha","%",
-                                {text->editingAlpha=false;PropertyLimits.parseTyped(PropertyLimits.OPACITY,text)?.let {onSet(target,TextColourEdit.withAlphaPercent(current,it))}},{editingAlpha=false})
-                        }
-                    }
-                }
-            }
-        }
-        // Swatches: one row; scrolls horizontally when the palette is wider than the popover.
-        Row(Modifier.fillMaxWidth().height(40.dp).horizontalScroll(rememberScrollState()).padding(horizontal=4.dp).testTag("text-colour-swatches"),
-            horizontalArrangement=Arrangement.spacedBy(4.dp),verticalAlignment=Alignment.CenterVertically) {
-            val opaque=0xFF000000.toInt()
-            swatches.forEach {argb->Box(Modifier.size(28.dp).clip(RoundedCornerShape(7.dp)).background(Color(argb))
-                .border(1.dp,if((argb or opaque)==(current or opaque)) TextPrimary else Border,RoundedCornerShape(7.dp))
-                .clickable(role=Role.Button) {onSet(target,TextColourEdit.swatch(current,argb))}
-                .semantics {contentDescription="Colour #${"%06X".format(argb and 0xFFFFFF)}"})}
-        }
-    }
+    val targets=TEXT_COLOUR_TARGETS.map {ColourPickerTarget(if(it==TextControl.FILL) "FILL" else "STROKE","${it.label.lowercase()} colour")}
+    FluxxColourPicker(ColourPickerVariant.COMPACT,current,onBegin={onBegin(target)},onPreview=onPreview,onFinish=onFinish,onCancel=onCancel,
+        modifier=Modifier.testTag("text-colour-picker"),name="$name colour",targets=targets,target=TEXT_COLOUR_TARGETS.indexOf(target),
+        onTarget={onTarget(TEXT_COLOUR_TARGETS[it])},swatches=paletteSwatches(palette,TEXT_DEFAULT_SWATCHES),
+        onEyedropper=onEyedropper?.let {e->{e(target)}},onInherit=if(selected) ({onInherit(target)}) else null,onReset={onReset(target)},
+        onSwatch={argb->onSet(target,TextColourEdit.swatch(current,argb))})
 }
+internal val TEXT_COLOUR_TARGETS=listOf(TextControl.FILL,TextControl.STROKE)
 internal fun withAlpha(argb: Int,alpha: Int)=(argb and 0x00FFFFFF) or (alpha.coerceIn(0,255) shl 24)
 
 /**
  * Bottom-bar text field. Tap to edit: the editor lifts above the keyboard in an anchored popover (the window is
  * never resized). Tap outside or Back (after the keyboard hides) commits; hardware Escape cancels.
  */
-@Composable private fun SourceField(document: TextSourceDocument,selection: TextSelectionRange?,scope: TextEditScope,editing: Boolean,enabled: Boolean,modifier: Modifier,inset: PaddingValues,
+@Composable private fun SourceField(document: TextSourceDocument,selection: TextSelectionRange?,scope: TextEditScope,editing: Boolean,enabled: Boolean,modifier: Modifier,inset: PaddingValues,badge: KeyBadge,
     open: ()->Unit,onSelection: (TextSelectionRange?)->Unit,onSourceSelection: (String,TextSelectionRange)->Unit,draft: (String,Int,Int)->Unit,begin: ()->Unit,done: ()->Unit,cancel: ()->Unit) {
     Box(modifier.padding(inset),contentAlignment=Alignment.CenterStart) {
         Row(Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)).background(SurfaceHigh)
             .border(1.dp,if(editing) TextPrimary else Color.Transparent,RoundedCornerShape(10.dp))
             .clickable(enabled=enabled,role=Role.Button,onClickLabel="Edit text") {open()}
-            .semantics(mergeDescendants=true) {contentDescription="Text: ${document.text.take(80)}"}
+            .semantics(mergeDescendants=true) {contentDescription="Text: ${document.text.take(80)}";KeyBadges.description(badge)?.let {stateDescription=it}}
             .padding(horizontal=8.dp),verticalAlignment=Alignment.CenterVertically) {
             Icon(InspectorIcons.control(TextControl.SOURCE),null,Modifier.size(InspectorIcons.INLINE),tint=TextSecondary)
             Text(document.text.replace('\n',' ').ifEmpty {"Text"},Modifier.weight(1f).padding(start=6.dp),color=TextPrimary,
@@ -666,6 +600,7 @@ internal fun withAlpha(argb: Int,alpha: Int)=(argb and 0x00FFFFFF) or (alpha.coe
                 }
             }
         }
+        KeyBadgeGlyph(badge,TextSecondary,Modifier.align(Alignment.TopEnd))
         AnchoredPopover(editing,done,"text-source-editor") {
             var field by remember {mutableStateOf(TextFieldValue(document.text,TextRange(selection?.start ?: 0,selection?.end ?: 0)))}
             val requester=remember {FocusRequester()}
