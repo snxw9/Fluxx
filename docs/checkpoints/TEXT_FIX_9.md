@@ -192,3 +192,121 @@ The user checked variable Playfair (several weights via the axis and named insta
 ### Finding for 9c
 
 FreeType's SDF renderer is very slow at the large tiers: about 0.3 s per glyph at 192 ppem and 0.45–1.1 s at 384 ppem on the host (half of the measured time including the reference render). The coverage path costs a few ms for the same glyph.
+
+## 9c. Sharp tiers for imported fonts and animated glyphs (device-confirmed)
+
+### Symptom and cause
+
+Imported-font text was a little soft at large sizes, and high-contrast hairlines broke (e.g. the "@" ring in Playfair). The cause is the TEXT UI 6 limit: layouts whose base bitmaps came from the isolated worker (imported faces, and per-character catalogue packets used by Explode and animators) were pinned to the 48 ppem base tier, because the in-app tier catalog can only open bundled faces.
+
+### Spec
+
+**Tier selection.** One per-layer policy for every font. It is unchanged from TEXT UI 6 (`SdfAtlasTiers.select`: px/em with 15 % hysteresis, distance-encoding cap, `degrade` under the cap). `collectOne` no longer special-cases prepared bitmaps (`wanted = tierFor(layout)`).
+
+Catalogue handles (Explode, animators, character offset and value) already received the layer's tier in `applyTextTiers`, and now actually use it. The policy stays **per layer**, as documented; per-glyph selection was not added.
+
+**Who rasterises.** The key `(font, glyph, ppem)` is unchanged.
+
+- Bundled ids (`fluxx.*`) go to the existing off-thread tier catalog.
+- Imported ids (`user.<identity>`) are **external**. `TextRenderer::takeExternalRequests` returns the missing ones, at most 256 per call, and marks them in flight.
+
+**Protocol.** `RenderBridge.textTierRequests` → `ImportedTierFetcher` → `FontWorkerClient.tiers` → `FontWorkerService.TIERS` → `IsolatedFontNative.tiers` → `rasteriseTiers` → reply → `RenderBridge.supplyTextTierGlyphs` → `TextRenderer::supplyTierGlyphs`.
+
+- **Transfer.** The same file-descriptor scheme as PREPARE:
+  - the request packet goes into a temp file;
+  - the imported font files are passed as read-only descriptors with face, named instance and axis coordinates;
+  - the reply comes back in an output temp file.
+- **Wire format** (`prepared_text_packet.{h,cpp}`, mirrored by `TierWire` in Kotlin), big-endian:
+  - request `FTRQ` v1: keys;
+  - reply `FTTG` v1: glyph records with font, glyph, ppem, spread, w, h, left, top and pixels; then a `failed` list and a `deferred` list.
+- **Caps:**
+
+  | Limit | Value |
+  |---|---|
+  | Keys per call | ≤ 256 |
+  | Reply size | ≤ 8 MiB (`MaxTierReplyBytes`; checked in the worker, the client and the decoder) |
+  | Font files | ≤ 64 faces / 32 MiB |
+  | Request size | ≤ 1 MiB |
+  | Glyph bitmap | ≤ 2048 × 2048 |
+  | Worker time per call | 20 s; the rest is **deferred**, never dropped |
+  | Worker call timeout | 60 s (`WORKER_TIMEOUT_MS`) |
+- **Validation:**
+  - only tiers 96 / 192 / 384, with exactly the TEXT UI 6 spread table (16 / 32 / 32), are accepted;
+  - the base tier is never requested, since it ships in the prepared packet;
+  - unknown fonts fail, and never fall back to `fluxx.sans` (`FontManager::contains`);
+  - the renderer accepts only keys it has in flight.
+- **Never blocking the render thread.** The preview submits to one background thread (`fluxx-imported-tiers`) and keeps drawing the lower tier. `awaitTiers` counts in-flight external keys, so the existing settle-and-redraw (≤ 1.5 s, cancellable) shows the sharp frame when the glyphs land.
+- **Export.** Export fetches inline before preparing each frame (`EXPORT_TIER_ROUNDS = 8` for deferred keys), so it stays deterministic like bundled tiers.
+- **Failures:**
+  - A worker crash, timeout, malformed reply or deleted font file supplies a failure reply. Those keys stay on the lower tier, `lastError` and logcat (`FluxxText`) record why, and the app never crashes.
+  - Missing-font fallback, hash verification on `resolve` and isolated-process crash isolation are unchanged.
+
+**Sharing.** Supplied glyphs join the same CPU ready cache and atlas as bundled tiers:
+
+- key `(font, glyph, ppem)`;
+- eviction highest tier first, then LRU;
+- CPU tier budget 16 / 8 MiB;
+- atlas cap 24 / 12 MiB;
+- 15 % hysteresis;
+- degrade under the cap.
+
+**Tier generator.** Tiers above 48 ppem are generated from coverage on FreeType's grid (`coverageTier`, see 9b) instead of FreeType's SDF renderer. On the host that renderer costs about 0.3 s per glyph at 192 ppem and about 0.5–1 s at 384 ppem, which would make imported (and bundled) tiers impractically slow. The coverage path averages **66 ms per glyph across the 96/192/384 tiers** for variable Playfair. The base tier keeps FreeType's bytes plus the 9b self-check.
+
+**Disk cache.** `SdfDiskCache` still holds only base-tier imported glyphs: `v<generator>-48-8-…`. Tier glyphs are memory-only.
+
+### Memory impact
+
+Imported tiers spend the same budgets as bundled tiers (no new cap):
+
+| Budget | Normal | Low-RAM |
+|---|---|---|
+| Atlas | 24 MiB | 12 MiB |
+| CPU ready cache | 16 MiB | 8 MiB |
+
+Per call there is one transient reply of ≤ 8 MiB plus its file. The worker holds a ≤ 1 MiB coverage mask and ≤ 8 MiB of distance grids during a glyph.
+
+### Tests
+
+- **JVM** — `ImportedTierTest` (8 tests):
+  - tier selection for imported faces and catalogues;
+  - request wire round trip and caps (Kotlin/native constants agree);
+  - reply validation before native code;
+  - the preview never waits, while export fetches inline;
+  - worker death / timeout / `UnsatisfiedLinkError` / malformed reply fall back to the lower tier with an error;
+  - a deleted font file keeps the lower tier;
+  - eviction order, cap and hysteresis are shared;
+  - cache keys carry ppem and generator version.
+
+  JVM total: **373**.
+- **Host native** — `text-proof … tierproof [FONT]`:
+  - wire round trip, the 256-key cap and base-tier rejection;
+  - byte and time budgets both defer;
+  - unknown font fails;
+  - forged spread rejected;
+  - the spread table;
+  - variable Playfair `wght=700` at 96/192/384: 12 glyphs, 618 KiB reply.
+
+  `PASS`.
+
+### Device confirmation
+
+The user checked imported (variable Playfair) text at 300 / 500 / 1000 px, plus bundled text and animated / Explode text: "imported text looks sharp now". Logcat shows the font worker serving requests, with no tier failures and no crashes.
+
+### Device results (A16, `ImportedTierAcceptanceTest`, 3/3 pass)
+
+The test uses the committed OFL fixture `SourceSerif4Variable-Roman.otf`. The fixture is imported and deleted again; the user's fonts are untouched.
+
+| Test | Result | Time |
+|---|---|---|
+| `isolatedWorkerRasterisesImportedTiersWithinCaps` | 36 tier glyphs (96/192/384), 0 failed, 0 deferred, 1441 KiB; 5.5 s total, **153 ms/glyph including IPC** | 5.7 s |
+| `workerCrashDegradesToTheLowerTierWithAnError` | after `crashForTest`, a failure reply ("The isolated font parser stopped…") and no app crash; the next call succeeds | 1.8 s |
+| `exportUsesTheSharpImportedTierDeterministically` | 24 px needs no imported tier; 600 px export supplied **10 tier glyphs inline**, 0 failed, 0 pending; first frame 2833 ms, `tierBytes` 0.8 MiB (cap 16 MiB) | 6.4 s |
+
+### Host regression with coverage tiers
+
+`sdfregress` passes:
+
+- Bundled tiers 96 / 192 / 384 are on FreeType's grid with 0 holes, worst mean drift **0.53 / 255** wherever FreeType is correct.
+- At 384, 4 bundled glyphs had FreeType holes; the coverage tier has none.
+- The 48 ppem base is unchanged: 2206 glyphs identical, 58 rebuilt.
+- Playfair has 0 holes at every tier.

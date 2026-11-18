@@ -74,6 +74,7 @@ struct FontStats {
     uint64_t shapes=0;
     uint64_t shapingNs=0,rasterNs=0;
     uint64_t coverageRebuilds=0; // TEXT FIX 9b: SDFs rebuilt from a coverage mask after failing the sign self-check.
+    uint64_t coverageTiers=0; // TEXT FIX 9c: tier SDFs (> 48 ppem) generated from coverage on FreeType's grid.
 };
 
 /** CPU only. All face mutation is serialized; immutable results outlive the manager safely.
@@ -96,6 +97,8 @@ public:
     // Preparation-only standalone cmap/metrics lookup: deliberately no HarfBuzz shaping.
     std::shared_ptr<const Layout> nominal(const std::string& fontId,const std::string& utf8);
     bool hasFeature(const std::string& fontId,uint32_t tag);
+    // Exact identity check (resolve() falls back to fluxx.sans for missing fonts; tier rasterisation must not).
+    bool contains(const std::string& fontId);
     // ppem 0 = this manager's tier; otherwise a tier from sdf_tiers.h with its own spread (cached separately).
     std::shared_ptr<const SdfGlyph> sdf(const std::string& fontId, uint32_t glyphId, bool overlaps = true, unsigned ppem = 0);
     void seedSdfs(const std::vector<std::shared_ptr<const SdfGlyph>>& images);

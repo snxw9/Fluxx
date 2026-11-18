@@ -73,6 +73,7 @@ struct FontManager::Impl {
     size_t budget;
     uint64_t rasterizations = 0, hits = 0, waitNs = 0;
     uint64_t coverageRebuilds = 0; // TEXT FIX 9b: SDFs rebuilt from coverage after failing the self-check.
+    uint64_t coverageTiers = 0;    // TEXT FIX 9c: tier (> 48 ppem) SDFs generated from coverage.
     explicit Impl(size_t bytes) : budget(bytes) {}
     ~Impl() { faces.clear(); if (library) FT_Done_FreeType(library); }
     std::unique_lock<std::mutex> lock() {
@@ -462,11 +463,9 @@ namespace {
 // instances generated from them), even with "overlaps" on. Self-check the SDF against a supersampled non-zero-winding
 // coverage raster of the same outline, on the same grid; rebuild only glyphs that fail (coverage_sdf::fromMask).
 // Cost: one coverage raster per new SDF (mask <= 1 Mi pixels, k <= 4); the distance transform runs only on failure.
-template<class Impl> void verifyCoverage(Impl& impl, FT_Face face, uint32_t glyphId, SdfGlyph& image) {
-    if (image.width <= 0 || image.height <= 0) return;
+template<class Impl> std::vector<uint8_t> coverageMask(Impl& impl, FT_Face face, uint32_t glyphId, const SdfGlyph& image, unsigned k) {
     ftCheck(FT_Load_Glyph(face, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP), "FT_Load_Glyph coverage");
     auto& outline = face->glyph->outline;
-    const unsigned k = coverage_sdf::supersample(image.width, image.height);
     // SDF row 0 spans [top-1, top] px; move the grid's bottom-left to the origin, then scale by k.
     FT_Outline_Translate(&outline, -static_cast<FT_Pos>(image.left) * 64, -static_cast<FT_Pos>(image.top - image.height) * 64);
     FT_Matrix scale{static_cast<FT_Fixed>(k) << 16, 0, 0, static_cast<FT_Fixed>(k) << 16};
@@ -478,10 +477,31 @@ template<class Impl> void verifyCoverage(Impl& impl, FT_Face face, uint32_t glyp
     target.num_grays = 256; target.pixel_mode = FT_PIXEL_MODE_GRAY;
     ftCheck(FT_Outline_Get_Bitmap(impl.library, &outline, &target), "FT_Outline_Get_Bitmap coverage");
     for (auto& value : mask) value = value >= 128 ? 1 : 0;
+    return mask;
+}
+template<class Impl> void verifyCoverage(Impl& impl, FT_Face face, uint32_t glyphId, SdfGlyph& image) {
+    if (image.width <= 0 || image.height <= 0) return;
+    const unsigned k = coverage_sdf::supersample(image.width, image.height);
+    const auto mask = coverageMask(impl, face, glyphId, image, k);
     if (coverage_sdf::compare(image.pixels, mask, image.width, image.height, k).failed()) {
         image.pixels = coverage_sdf::fromMask(mask, image.width, image.height, k, image.spread);
         ++impl.coverageRebuilds;
     }
+}
+// TEXT FIX 9c: tiers above the 48 ppem base are generated from coverage directly. FreeType's SDF renderer costs
+// ~0.3 s (192 ppem) to ~1 s (384 ppem) per glyph on the host; this path costs a few ms and has no overlap holes.
+// The grid is FreeType's exactly: the normal-mode bitmap preset (what ft_sdf_render presets) padded by the spread.
+template<class Impl> void coverageTier(Impl& impl, FT_Face face, uint32_t glyphId, SdfGlyph& image) {
+    ftCheck(FT_Load_Glyph(face, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP), "FT_Load_Glyph tier");
+    ftCheck(FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL), "FT_Render_Glyph tier grid");
+    const auto& preset = face->glyph->bitmap;
+    if (!preset.rows || !preset.width) return; // Nothing to render, as FreeType's SDF renderer.
+    const int pad = static_cast<int>(image.spread);
+    image.width = static_cast<int>(preset.width) + 2 * pad; image.height = static_cast<int>(preset.rows) + 2 * pad;
+    image.left = face->glyph->bitmap_left - pad; image.top = face->glyph->bitmap_top + pad;
+    const unsigned k = coverage_sdf::supersample(image.width, image.height);
+    image.pixels = coverage_sdf::fromMask(coverageMask(impl, face, glyphId, image, k), image.width, image.height, k, image.spread);
+    ++impl.coverageTiers;
 }
 }
 
@@ -519,8 +539,10 @@ std::shared_ptr<const SdfGlyph> FontManager::sdf(const std::string& id, uint32_t
         const double pixelHeight=std::ceil((double(bounds.yMax)-double(bounds.yMin))/64)+2*spread;
         if(pixelWidth>2048 || pixelHeight>2048 || pixelWidth<0 || pixelHeight<0)
             throw std::invalid_argument("Font glyph exceeds the 2048-pixel SDF dimension limit; choose another font");
-        ftCheck(FT_Render_Glyph(face.ft->glyph, FT_RENDER_MODE_SDF), "FT_Render_Glyph SDF");
         ++impl_->rasterizations;
+        if (ppem > tiers::BasePpem) coverageTier(*impl_, face.ft, glyphId, *result);
+        else {
+        ftCheck(FT_Render_Glyph(face.ft->glyph, FT_RENDER_MODE_SDF), "FT_Render_Glyph SDF");
         const auto& bitmap = face.ft->glyph->bitmap;
         if (bitmap.pixel_mode != FT_PIXEL_MODE_GRAY) throw std::runtime_error("Expected R8 SDF");
         result->width = static_cast<int>(bitmap.width); result->height = static_cast<int>(bitmap.rows);
@@ -531,6 +553,7 @@ std::shared_ptr<const SdfGlyph> FontManager::sdf(const std::string& id, uint32_t
             std::copy_n(row, result->width, result->pixels.data() + static_cast<size_t>(y) * result->width);
         }
         verifyCoverage(*impl_, face.ft, glyphId, *result);
+        }
     }
     impl_->rasters.push_back({key, result});
     impl_->index[key] = std::prev(impl_->rasters.end());
@@ -604,7 +627,7 @@ std::vector<uint32_t> FontManager::latinGlyphs(const std::string& id) {
 }
 FontStats FontManager::stats() {
     auto guard = impl_->lock();
-    FontStats result{impl_->rasterizations, impl_->hits, impl_->waitNs, 0, 0, impl_->layouts.size(), impl_->shapes,impl_->shapingNs,impl_->rasterNs,impl_->coverageRebuilds};
+    FontStats result{impl_->rasterizations, impl_->hits, impl_->waitNs, 0, 0, impl_->layouts.size(), impl_->shapes,impl_->shapingNs,impl_->rasterNs,impl_->coverageRebuilds,impl_->coverageTiers};
     for (const auto& entry : impl_->rasters) {
         result.cacheBytes += entry.value->pixels.size();
         if (entry.value.use_count() > 1) result.pinnedBytes += entry.value->pixels.size();
@@ -687,3 +710,8 @@ std::string layoutJson(const Layout& layout) {
     return out.str();
 }
 } // namespace fluxx::text
+bool fluxx::text::FontManager::contains(const std::string& id) {
+    auto guard = impl_->lock();
+    for (const auto& face : impl_->faces) if (face->input.id == id) return true;
+    return false;
+}

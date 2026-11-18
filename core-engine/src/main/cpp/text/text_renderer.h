@@ -1,6 +1,7 @@
 #pragma once
 #include "font_manager.h"
 #include "atlas_packer.h"
+#include "prepared_text_packet.h"
 #include <vulkan/vulkan.h>
 #include <android/asset_manager.h>
 #include <array>
@@ -37,6 +38,7 @@ struct TextGpuStats {
     uint64_t meshBuildNs=0;
     uint64_t atlasUploadCpuNs=0;
     uint64_t tierGlyphs=0, tierPending=0, tierBytes=0, tierDegrades=0, tierEvictions=0;
+    uint64_t tierExternalRequested=0, tierExternalSupplied=0, tierExternalFailed=0; // TEXT FIX 9c: imported-font tiers.
 };
 
 // Device-owned state. Preparation finishes before any composition render pass.
@@ -68,6 +70,14 @@ public:
     bool setTier(const Layout* layout, unsigned ppem);
     // Export: generate missing tier glyphs inline (deterministic). Preview: generate off-thread, fall back meanwhile.
     void setSynchronousTiers(bool synchronous) { synchronousTiers_=synchronous; }
+    // TEXT FIX 9c: imported faces exist only in the isolated worker, so the tier catalog cannot rasterise "user.*" keys.
+    // Those keys are external: takeExternalRequests() returns missing ones (marked in flight, at most [max]) for the app
+    // to send to the worker; supplyTierGlyphs() accepts the reply (requested keys only) into the same ready cache, so
+    // eviction order, CPU budget and the atlas cap are shared. Failed keys stay on the lower tier; deferred ones are
+    // asked for again. awaitTiers() counts in-flight external keys, so a settled preview redraws when they arrive.
+    static bool external(const std::string& fontId) { return fontId.rfind("user.",0)==0; }
+    std::vector<TierKey> takeExternalRequests(const std::vector<std::shared_ptr<const Layout>>& layouts,size_t max=MaxTierRequests);
+    size_t supplyTierGlyphs(const TierReply& reply);
     bool needsCollect() const { return tierRevision_.load()!=collectedRevision_; }
     // Waits up to timeoutMs for queued tier glyphs; returns how many are still pending.
     size_t awaitTiers(int timeoutMs);
@@ -136,6 +146,7 @@ private:
     std::condition_variable tierWake_, tierIdle_;
     std::deque<Key> queue_;
     std::set<Key> queued_, failed_;
+    std::set<Key> externalInFlight_;
     std::map<Key,std::shared_ptr<const SdfGlyph>> ready_;
     std::map<Key,uint64_t> readyUse_;
     size_t readyBytes_=0, cpuBudget_=tiers::CpuBudget;

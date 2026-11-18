@@ -1369,7 +1369,9 @@ std::string VulkanRenderer::textStatsJson() const {
     json << ",\"meshBuildNs\":" << stats.meshBuildNs;
     json << ",\"atlasUploadCpuNs\":" << stats.atlasUploadCpuNs;
     json << ",\"tierGlyphs\":" << stats.tierGlyphs << ",\"tierBytes\":" << stats.tierBytes << ",\"tierPending\":" << stats.tierPending
-        << ",\"tierDegrades\":" << stats.tierDegrades << ",\"tierEvictions\":" << stats.tierEvictions;
+        << ",\"tierDegrades\":" << stats.tierDegrades << ",\"tierEvictions\":" << stats.tierEvictions
+        << ",\"tierExternalRequested\":" << stats.tierExternalRequested << ",\"tierExternalSupplied\":" << stats.tierExternalSupplied
+        << ",\"tierExternalFailed\":" << stats.tierExternalFailed;
     json << "}"; return json.str();
 }
 bool VulkanRenderer::setFrameLayer(int64_t id, AHardwareBuffer* buffer, const float* matrix, float opacity) {
@@ -1609,4 +1611,15 @@ bool VulkanRenderer::setTextTiers(const int64_t* handles,const int32_t* ppems,si
         changed=mText->setTier(found->second.get(),static_cast<unsigned>(ppems[i])) || changed;
     }
     return changed;
+}
+std::vector<uint8_t> VulkanRenderer::takeTextTierRequests() {
+    if(!mText) return {};
+    std::vector<std::shared_ptr<const fluxx::text::Layout>> layouts;
+    for(const auto& entry:mTextLayouts) layouts.push_back(entry.second);
+    const auto keys=mText->takeExternalRequests(layouts);
+    return keys.empty()?std::vector<uint8_t>{}:fluxx::text::encodeTierRequests(keys);
+}
+size_t VulkanRenderer::supplyTextTierGlyphs(const uint8_t* bytes,size_t length) {
+    if(!mText) return 0;
+    return mText->supplyTierGlyphs(fluxx::text::decodeTierReply(bytes,length));
 }

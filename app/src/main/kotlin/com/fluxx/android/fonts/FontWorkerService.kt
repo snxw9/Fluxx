@@ -18,7 +18,7 @@ class FontWorkerService : Service() {
                 if(message.what==CRASH_PROOF && com.fluxx.android.BuildConfig.DEBUG) {
                     android.os.Process.killProcess(android.os.Process.myPid());return
                 }
-                if(message.what !in listOf(INSPECT,PREPARE) || message.replyTo==null) return
+                if(message.what !in listOf(INSPECT,PREPARE,TIERS) || message.replyTo==null) return
                 val reply=Message.obtain(null,message.what)
                 @Suppress("DEPRECATION")
                 val input=message.data.getParcelable<ParcelFileDescriptor>(INPUT)
@@ -64,7 +64,11 @@ class FontWorkerService : Service() {
                         val seeds=cache?.let { descriptor -> ParcelFileDescriptor.AutoCloseInputStream(descriptor).use {stream ->
                             val bytes=stream.readBytesLimited(8*1024*1024);bytes
                         } } ?: ByteArray(0)
-                        IsolatedFontParser.prepare(assets,rows.map { requireNotNull(it.getString("id")) }.toTypedArray(),fonts,
+                        if(message.what==TIERS) IsolatedFontParser.tiers(assets,rows.map { requireNotNull(it.getString("id")) }.toTypedArray(),fonts,
+                            rows.map { it.getInt("face") }.toIntArray(),rows.map { it.getInt("instance",-1) }.toIntArray(),
+                            rows.map { it.getString("tags").orEmpty() }.toTypedArray(),rows.map { it.getFloatArray("values") ?: FloatArray(0) }.toTypedArray(),
+                            bytes).also { require(it.size<=MAX_TIER_REPLY_BYTES) { "Tier reply exceeds 8 MiB" } }
+                        else IsolatedFontParser.prepare(assets,rows.map { requireNotNull(it.getString("id")) }.toTypedArray(),fonts,
                             rows.map { it.getInt("face") }.toIntArray(),rows.map { it.getInt("instance",-1) }.toIntArray(),
                             rows.map { it.getString("tags").orEmpty() }.toTypedArray(),rows.map { it.getFloatArray("values") ?: FloatArray(0) }.toTypedArray(),
                             bytes,message.data.getBoolean("ligatures"),message.data.getBoolean("nominal"),seeds)
@@ -98,6 +102,8 @@ class FontWorkerService : Service() {
     companion object {
         const val INSPECT=1
         const val PREPARE=2;const val FONTS="fonts";const val CACHE="sdf-cache"
+        /** TEXT FIX 9c: rasterise imported-font atlas tiers; input = tier requests, output = tier reply (<= 8 MiB). */
+        const val TIERS=3;const val MAX_TIER_REPLY_BYTES=8*1024*1024
         internal const val CRASH_PROOF=99
         const val INPUT="input";const val OUTPUT="output";const val OK="ok";const val ERROR="error"
         const val MAX_FONT_BYTES=16*1024*1024;const val MAX_METADATA_BYTES=4*1024*1024

@@ -21,6 +21,10 @@ object RenderBridge {
     external fun textTiers(session: Long, handles: LongArray, ppems: IntArray, synchronous: Boolean): Boolean
     /** Waits up to [timeoutMs] for off-thread tier glyphs; returns how many are still pending. */
     external fun awaitTextTiers(session: Long, timeoutMs: Int): Int
+    /** TEXT FIX 9c: missing imported-font tier keys (marked in flight), as a tier request packet; empty when none. */
+    external fun textTierRequests(session: Long): ByteArray
+    /** TEXT FIX 9c: hands the isolated worker's tier reply to the renderer; returns accepted glyphs (-1 on a bad reply). */
+    external fun supplyTextTierGlyphs(session: Long, reply: ByteArray): Int
     external fun textLayer(session: Long, handle: Long, matrix: FloatArray, size: Float,
         alignment: Int, argb: Int, opacity: Float, tracking: Float = 0f, leading: Float = 0f,
         baselineShift: Float = 0f, stroke: Int = 0xff000000.toInt(), strokeWidth: Float = 0f, paintOrder: Int = 0, softness: Float = 0f,

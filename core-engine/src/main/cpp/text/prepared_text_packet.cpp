@@ -1,4 +1,6 @@
 #include "prepared_text_packet.h"
+#include "sdf_tiers.h"
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <map>
@@ -143,5 +145,84 @@ std::shared_ptr<const Layout> decodePreparedText(const uint8_t* bytes,size_t len
         out->externalSdfs.push_back(image);
     }
     return out;
+}
+}
+
+// ---- TEXT FIX 9c: imported-font tier requests and replies ------------------------------------------------------
+namespace fluxx::text {
+namespace {
+constexpr uint64_t TierRequestMagic=0x46545251, TierReplyMagic=0x46545447;
+void writeKey(Writer& out,const TierKey& key) { out.string(key.fontId);out.integer(key.glyphId);out.integer(key.ppem); }
+TierKey readKey(Reader& in) {
+    TierKey key;key.fontId=in.string();key.glyphId=in.count(UINT32_MAX);key.ppem=in.count(1024);
+    if(!tiers::valid(key.ppem) || key.ppem==tiers::BasePpem) throw std::invalid_argument("Invalid tier request ppem");
+    return key;
+}
+void writeKeys(Writer& out,const std::vector<TierKey>& keys) { out.integer(keys.size());for(const auto& key:keys) writeKey(out,key); }
+std::vector<TierKey> readKeys(Reader& in) {
+    const auto count=in.count(MaxTierRequests);std::vector<TierKey> keys;keys.reserve(count);
+    for(uint32_t i=0;i<count;++i) keys.push_back(readKey(in));return keys;
+}
+}
+std::vector<uint8_t> encodeTierRequests(const std::vector<TierKey>& keys) {
+    if(keys.size()>MaxTierRequests) throw std::invalid_argument("Too many tier requests");
+    Writer out;out.integer(TierRequestMagic);out.integer(1);writeKeys(out,keys);return out.bytes;
+}
+std::vector<TierKey> decodeTierRequests(const uint8_t* bytes,size_t length) {
+    if(!bytes || length<12 || length>1024*1024) throw std::invalid_argument("Invalid tier request packet");
+    Reader in{bytes,length};
+    if(in.integer()!=TierRequestMagic || in.integer()!=1) throw std::invalid_argument("Unsupported tier request packet");
+    auto keys=readKeys(in);if(in.at!=length) throw std::invalid_argument("Trailing tier request data");return keys;
+}
+std::vector<uint8_t> encodeTierReply(const TierReply& reply) {
+    if(reply.glyphs.size()>MaxTierRequests || reply.failed.size()>MaxTierRequests || reply.deferred.size()>MaxTierRequests)
+        throw std::invalid_argument("Too many tier glyphs");
+    Writer out;out.integer(TierReplyMagic);out.integer(1);out.integer(reply.glyphs.size());
+    for(const auto& image:reply.glyphs) {
+        out.string(image->fontId);out.integer(image->glyphId);out.integer(image->ppem);out.integer(image->spread);
+        for(auto field:{image->width,image->height,image->left,image->top}) out.integer(static_cast<uint32_t>(field));
+        out.integer(image->pixels.size());out.bytes.insert(out.bytes.end(),image->pixels.begin(),image->pixels.end());
+        if(out.bytes.size()>MaxTierReplyBytes) throw std::invalid_argument("Tier reply exceeds 8 MiB");
+    }
+    writeKeys(out,reply.failed);writeKeys(out,reply.deferred);return out.bytes;
+}
+TierReply decodeTierReply(const uint8_t* bytes,size_t length) {
+    if(!bytes || length<20 || length>MaxTierReplyBytes) throw std::invalid_argument("Invalid tier reply size");
+    Reader in{bytes,length};
+    if(in.integer()!=TierReplyMagic || in.integer()!=1) throw std::invalid_argument("Unsupported tier reply");
+    TierReply reply;const auto count=in.count(MaxTierRequests);
+    for(uint32_t i=0;i<count;++i) {
+        auto image=std::make_shared<SdfGlyph>();image->fontId=in.string();image->glyphId=in.count(UINT32_MAX);
+        image->ppem=in.count(1024);image->spread=in.count(tiers::MaxSpread);image->overlaps=true;
+        if(!tiers::valid(image->ppem) || image->ppem==tiers::BasePpem || image->spread!=tiers::spread(image->ppem))
+            throw std::invalid_argument("Invalid tier glyph ppem or spread");
+        image->width=static_cast<int>(in.count(2048));image->height=static_cast<int>(in.count(2048));
+        image->left=in.signedInteger();image->top=in.signedInteger();const auto pixels=in.count(2048*2048);
+        if(pixels!=static_cast<uint64_t>(image->width)*image->height || pixels>length-in.at ||
+            std::abs(static_cast<int64_t>(image->left))>16384 || std::abs(static_cast<int64_t>(image->top))>16384)
+            throw std::invalid_argument("Invalid tier glyph pixels");
+        image->pixels.assign(bytes+in.at,bytes+in.at+pixels);in.at+=pixels;reply.glyphs.push_back(image);
+    }
+    reply.failed=readKeys(in);reply.deferred=readKeys(in);
+    if(in.at!=length) throw std::invalid_argument("Trailing tier reply data");
+    return reply;
+}
+TierReply rasteriseTiers(FontManager& fonts,const std::vector<TierKey>& keys,size_t byteBudget,double secondsBudget) {
+    if(keys.size()>MaxTierRequests) throw std::invalid_argument("Too many tier requests");
+    TierReply reply;size_t bytes=64;const auto start=std::chrono::steady_clock::now();
+    for(const auto& key:keys) {
+        const double elapsed=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
+        if(elapsed>secondsBudget) { reply.deferred.push_back(key);continue; }
+        if(!fonts.contains(key.fontId)) { reply.failed.push_back(key);continue; } // Never a fallback face.
+        std::shared_ptr<const SdfGlyph> image;
+        try { image=fonts.sdf(key.fontId,key.glyphId,true,key.ppem); }
+        catch(const std::exception&) { reply.failed.push_back(key);continue; }
+        const size_t record=key.fontId.size()+40+image->pixels.size();
+        // Keep room for the failed/deferred lists (<= 2 x 256 keys).
+        if(bytes+record+2*MaxTierRequests*(1024+12)>byteBudget && !reply.glyphs.empty()) { reply.deferred.push_back(key);continue; }
+        if(bytes+record>byteBudget) { reply.failed.push_back(key);continue; } // A single glyph larger than the reply.
+        bytes+=record;reply.glyphs.push_back(image);
+    }
+    return reply;
 }
 }

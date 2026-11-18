@@ -238,7 +238,8 @@ void TextRenderer::ensureTier(const Layout& layout,unsigned ppem,bool synchronou
         std::lock_guard<std::mutex> lock(tierMutex_);
         for(size_t i=0;i<layout.glyphs.size();++i) {
             Key key{layout.glyphFont(i),layout.glyphs[i].id,ppem};
-            if(!retained_.count(key) && !ready_.count(key) && !failed_.count(key)) missing.insert(std::move(key));
+            // External (imported) keys are rasterised by the isolated worker, never here.
+            if(!external(std::get<0>(key)) && !retained_.count(key) && !ready_.count(key) && !failed_.count(key)) missing.insert(std::move(key));
         }
         if(!synchronous) {
             for(const auto& key:missing) if(queued_.insert(key).second) queue_.push_back(key);
@@ -290,16 +291,53 @@ void TextRenderer::trimReady() {
 }
 size_t TextRenderer::awaitTiers(int timeoutMs) {
     std::unique_lock<std::mutex> lock(tierMutex_);
-    if(timeoutMs>0) tierIdle_.wait_for(lock,std::chrono::milliseconds(timeoutMs),[this] { return queue_.empty() && !busy_; });
-    return queue_.size()+(busy_?1:0);
+    if(timeoutMs>0) tierIdle_.wait_for(lock,std::chrono::milliseconds(timeoutMs),[this] { return queue_.empty() && !busy_ && externalInFlight_.empty(); });
+    return queue_.size()+(busy_?1:0)+externalInFlight_.size();
+}
+std::vector<TierKey> TextRenderer::takeExternalRequests(const std::vector<std::shared_ptr<const Layout>>& layouts,size_t max) {
+    std::vector<TierKey> requests;std::set<Key> seen;
+    std::lock_guard<std::mutex> lock(tierMutex_);
+    for(const auto& layout:layouts) {
+        const unsigned tier=tierFor(layout.get());
+        if(tier==tiers::BasePpem) continue;
+        for(size_t i=0;i<layout->glyphs.size() && requests.size()<max;++i) {
+            Key key{layout->glyphFont(i),layout->glyphs[i].id,tier};
+            if(!external(std::get<0>(key)) || !seen.insert(key).second) continue;
+            if(retained_.count(key) || ready_.count(key) || failed_.count(key) || externalInFlight_.count(key)) continue;
+            externalInFlight_.insert(key);requests.push_back({std::get<0>(key),std::get<1>(key),tier});
+        }
+    }
+    stats_.tierExternalRequested+=requests.size();
+    return requests;
+}
+size_t TextRenderer::supplyTierGlyphs(const TierReply& reply) {
+    size_t accepted=0;
+    {
+        std::lock_guard<std::mutex> lock(tierMutex_);
+        for(const auto& glyph:reply.glyphs) {
+            const Key key{glyph->fontId,glyph->glyphId,glyph->ppem};
+            // Only keys this renderer asked for: an isolated-worker reply can never inject other atlas entries.
+            if(!externalInFlight_.erase(key)) continue;
+            readyBytes_+=glyph->pixels.size();ready_[key]=glyph;readyUse_[key]=frame_;++accepted;
+        }
+        for(const auto& k:reply.failed) { const Key key{k.fontId,k.glyphId,k.ppem};if(externalInFlight_.erase(key)) { failed_.insert(key);++stats_.tierExternalFailed; } }
+        for(const auto& k:reply.deferred) externalInFlight_.erase(Key{k.fontId,k.glyphId,k.ppem}); // Asked for again next frame.
+        stats_.tierExternalSupplied+=accepted;
+        trimReady();
+    }
+    ++tierRevision_; // The next preparation re-collects and may move layouts up a tier.
+    tierIdle_.notify_all();
+    return accepted;
 }
 void TextRenderer::collect(const std::shared_ptr<const Layout>& layout) {
     collected_.push_back(layout);
     collectOne(layout);
 }
 void TextRenderer::collectOne(const std::shared_ptr<const Layout>& layout) {
-    // Imported fonts arrive as validated 48 ppem bitmaps from the isolated worker; they stay on the base tier.
-    const unsigned wanted=layout->externalSdfs.empty()?tierFor(layout.get()):tiers::BasePpem;
+    // TEXT FIX 9c: imported fonts (and per-character catalogues) use the same per-layout tier as bundled text. Their base
+    // bitmaps arrive in the prepared packet; sharper tiers come from the tier thread (bundled ids) or the isolated worker
+    // (external "user.*" ids, see takeExternalRequests). Until a tier is fully ready the lower tier stays in use.
+    const unsigned wanted=tierFor(layout.get());
     unsigned resolved=tiers::BasePpem;
     if(wanted>tiers::BasePpem) {
         if(synchronousTiers_) {
@@ -379,7 +417,7 @@ void TextRenderer::pack(bool proofOnly) {
     dirty_=true; ++stats_.generation;
     {
         std::lock_guard<std::mutex> lock(tierMutex_);
-        stats_.tierGlyphs=ready_.size(); stats_.tierBytes=readyBytes_; stats_.tierPending=queue_.size()+(busy_?1:0);
+        stats_.tierGlyphs=ready_.size(); stats_.tierBytes=readyBytes_; stats_.tierPending=queue_.size()+(busy_?1:0)+externalInFlight_.size();
     }
 }
 void TextRenderer::repackRetained() {

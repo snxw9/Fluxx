@@ -104,8 +104,15 @@ class FontLibraryRepository private constructor(private val context: Context) {
             for(axis in effective.axes) { append(':');append(axis.tag);append(':');append(axis.value.staticValue.toRawBits()) }
         }
         val identity=MessageDigest.getInstance("SHA-256").digest(signature.toByteArray()).joinToString("") { "%02x".format(it.toInt() and 255) }
-        return FontWorkerClient.FontInput("user.$identity",file,effective)
+        return FontWorkerClient.FontInput("user.$identity",file,effective).also { input -> synchronized(resolvedInputs) { resolvedInputs[input.id]=input } }
     }
+    /** Resolved identities (bounded, most recent first out): lets the renderer's tier requests name their font files. */
+    private val resolvedInputs=object: LinkedHashMap<String,FontWorkerClient.FontInput>(16,.75f,true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String,FontWorkerClient.FontInput>)=size>256
+    }
+    /** TEXT FIX 9c: font inputs for tier requests; identities whose file is gone are left out (they stay on the lower tier). */
+    internal fun inputs(ids: Set<String>): List<FontWorkerClient.FontInput> =
+        synchronized(resolvedInputs) { ids.mapNotNull { resolvedInputs[it] } }.filter { it.file.isFile }
     private fun writeIndex(bytes: ByteArray) {
         val atomic=AtomicFile(index);val stream=atomic.startWrite()
         try { stream.write(bytes);atomic.finishWrite(stream) }

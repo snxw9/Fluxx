@@ -1,5 +1,6 @@
 #ifdef FLUXX_TEXT_DIAGNOSTICS
 #include "text/allocation_probe.h"
+#include "text/prepared_text_packet.h"
 #endif
 #include <jni.h>
 #include <android/hardware_buffer_jni.h>
@@ -157,6 +158,25 @@ JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_textTiers(
 }
 JNIEXPORT jint JNICALL Java_com_fluxx_android_engine_RenderBridge_awaitTextTiers(JNIEnv*,jobject,jlong session,jint timeoutMs) {
     return static_cast<jint>(reinterpret_cast<VulkanRenderer*>(session)->awaitTextTiers(timeoutMs));
+}
+JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_RenderBridge_textTierRequests(JNIEnv* env,jobject,jlong session) {
+    try {
+        const auto bytes=reinterpret_cast<VulkanRenderer*>(session)->takeTextTierRequests();
+        const auto result=env->NewByteArray(static_cast<jsize>(bytes.size()));
+        if(result && !bytes.empty()) env->SetByteArrayRegion(result,0,static_cast<jsize>(bytes.size()),reinterpret_cast<const jbyte*>(bytes.data()));
+        return result;
+    } catch(const std::exception& error) { textFailure(env,error); return nullptr; }
+}
+JNIEXPORT jint JNICALL Java_com_fluxx_android_engine_RenderBridge_supplyTextTierGlyphs(JNIEnv* env,jobject,jlong session,jbyteArray reply) {
+    try {
+        if(!reply) throw std::invalid_argument("Missing tier reply");
+        const auto length=env->GetArrayLength(reply);
+        if(length<=0 || static_cast<size_t>(length)>fluxx::text::MaxTierReplyBytes) throw std::invalid_argument("Invalid tier reply size");
+        std::vector<uint8_t> buffer(static_cast<size_t>(length));
+        env->GetByteArrayRegion(reply,0,length,reinterpret_cast<jbyte*>(buffer.data()));
+        if(env->ExceptionCheck()) return -1;
+        return static_cast<jint>(reinterpret_cast<VulkanRenderer*>(session)->supplyTextTierGlyphs(buffer.data(),buffer.size()));
+    } catch(const std::exception& error) { textFailure(env,error); return -1; }
 }
 JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_RenderBridge_upsertStyledText(JNIEnv* env,jobject,jlong session,jstring font,jbyteArray bytes,jboolean ligatures) {
     try {

@@ -38,6 +38,16 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private val fixtureLayouts = mutableMapOf<Long, FixtureLayout>()
     private data class ProductLayout(val handle: Long, val metrics: TextLayoutMetrics,val packetBytes: Int=0)
     private val fontLibrary=com.fluxx.android.fonts.FontLibraryRepository.getInstance(context)
+    // TEXT FIX 9c: imported-font atlas tiers come from the isolated worker. Supplies may arrive on the fetch thread after
+    // the frame that asked; [tierLock] + [closed] keep them away from a destroyed session.
+    private val tierLock=Any()
+    private var closed=false
+    private val tierFetcher=com.fluxx.android.fonts.ImportedTierFetcher(
+        fonts={ ids -> fontLibrary.inputs(ids) },
+        rasterise={ requests,inputs -> com.fluxx.android.fonts.FontWorkerClient(context).tiers(requests,inputs) },
+        supply={ reply -> synchronized(tierLock) { if(!closed) RenderBridge.supplyTextTierGlyphs(session,reply) } },
+        executor=TIER_EXECUTOR,
+        log={ message,failure -> android.util.Log.w("FluxxText",message,failure) })
     private var preparedFontRevision= -1L
     private val textLayouts = LinkedHashMap<Triple<String, TextSourceDocument, Boolean>, ProductLayout>(64, .75f, true)
     private class PreparedText(val layer: CompositionLayer, val sources: Array<TextSourceDocument>, val layouts: Array<ProductLayout>,
@@ -190,6 +200,15 @@ class CompositionRenderer(private val context: Context, private val repository: 
         }
         val handles = byHandle.keys.toLongArray()
         RenderBridge.textTiers(session, handles, IntArray(handles.size) { byHandle.getValue(handles[it]) }, !interactive)
+        // Imported-font glyphs the renderer cannot rasterise itself: preview fetches them in the background (the lower
+        // tier stays until they arrive); export fetches them now, so every exported frame is deterministic.
+        var tierRequests=synchronized(tierLock) { RenderBridge.textTierRequests(session) }
+        if(interactive) tierFetcher.submit(tierRequests)
+        else for(round in 0 until EXPORT_TIER_ROUNDS) {
+            if(tierRequests.isEmpty()) break
+            tierFetcher.fetchNow(tierRequests)
+            tierRequests=synchronized(tierLock) { RenderBridge.textTierRequests(session) } // Deferred keys come back here.
+        }
     }
 
     private var previewQuality: PreviewResolution? = null
@@ -464,10 +483,17 @@ class CompositionRenderer(private val context: Context, private val repository: 
         }
         error("Text layer has not been prepared")
     }
+    companion object {
+        /** One background thread for imported-font tier fetches across renderers (worker calls are serialised anyway). */
+        private val TIER_EXECUTOR=java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable,"fluxx-imported-tiers").apply { isDaemon=true;priority=Thread.NORM_PRIORITY-1 } }
+        /** Export rounds for deferred tier keys (each worker reply is <= 8 MiB / 20 s). */
+        private const val EXPORT_TIER_ROUNDS=8
+    }
     fun resize(width: Int,height: Int) = RenderBridge.resize(session,width,height)
     override fun close() {
         // Native teardown waits for GPU completion before producers return their Images.
-        RenderBridge.destroy(session)
+        synchronized(tierLock) { closed=true;RenderBridge.destroy(session) }
         if (interactive) TextLayerErrors.clear()
         decoders.values.forEach { it.decoder.close() }; decoders.clear()
         images.values.forEach { it.buffer.close() }; images.clear()

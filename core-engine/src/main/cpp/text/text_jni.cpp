@@ -59,19 +59,19 @@ std::vector<uint8_t> asset(AAssetManager* manager, const char* name) {
 }
 }
 
-extern "C" JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_IsolatedFontNative_prepare(JNIEnv* env,jobject,
-    jobject assets,jobjectArray ids,jobjectArray bytes,jintArray faceIndices,jintArray instanceIndices,
-    jobjectArray axisTags,jobjectArray axisValues,jbyteArray input,jboolean ligatures,jboolean nominal,jbyteArray seeds) {
-    try {
+namespace {
+// Loads the bundled faces plus the imported ones (with variations) in the isolated worker, retaining up to 4 exact
+// identity sets (64 MiB) while the binding is warm. Shared by text preparation and TEXT FIX 9c tier rasterisation.
+std::shared_ptr<FontManager> isolatedManager(JNIEnv* env,jobject assets,jobjectArray ids,jobjectArray bytes,jintArray faceIndices,
+    jintArray instanceIndices,jobjectArray axisTags,jobjectArray axisValues) {
         const auto uid=getuid()%100000;
         if(uid<90000 || uid>99999) throw std::invalid_argument("Imported font preparation requires an isolated process");
-        if(!ids || !bytes || !faceIndices || !instanceIndices || !axisTags || !axisValues || !input)
+        if(!ids || !bytes || !faceIndices || !instanceIndices || !axisTags || !axisValues)
             throw std::invalid_argument("Missing font preparation arguments");
         const auto count=env->GetArrayLength(ids);
         if(count>64 || env->GetArrayLength(bytes)!=count || env->GetArrayLength(faceIndices)!=count ||
             env->GetArrayLength(instanceIndices)!=count || env->GetArrayLength(axisTags)!=count || env->GetArrayLength(axisValues)!=count)
             throw std::invalid_argument("Prepared text supports at most 64 imported font identities");
-        if(env->GetArrayLength(input)>1024*1024) throw std::invalid_argument("Styled input exceeds 1 MiB");
         std::vector<jint> faces(count),instances(count);
         if(count>0) { env->GetIntArrayRegion(faceIndices,0,count,faces.data());env->GetIntArrayRegion(instanceIndices,0,count,instances.data()); }
         std::vector<fluxx::text::FontInput> fonts;size_t total=0;
@@ -122,6 +122,18 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_IsolatedFo
             size_t totalBytes=0;for(const auto& item:warm) totalBytes+=item.bytes;
             while(warm.size()>1 && (warm.size()>4 || totalBytes>64*1024*1024)) {totalBytes-=warm.front().bytes;warm.pop_front();}
         }
+        return manager;
+}
+}
+
+extern "C" JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_IsolatedFontNative_prepare(JNIEnv* env,jobject,
+    jobject assets,jobjectArray ids,jobjectArray bytes,jintArray faceIndices,jintArray instanceIndices,
+    jobjectArray axisTags,jobjectArray axisValues,jbyteArray input,jboolean ligatures,jboolean nominal,jbyteArray seeds) {
+    try {
+        if(!input) throw std::invalid_argument("Missing font preparation arguments");
+        if(env->GetArrayLength(input)>1024*1024) throw std::invalid_argument("Styled input exceeds 1 MiB");
+        const auto manager=isolatedManager(env,assets,ids,bytes,faceIndices,instanceIndices,axisTags,axisValues);
+        if(!manager) return nullptr;
         if(seeds) {
             const auto length=env->GetArrayLength(seeds);if(length>8*1024*1024) throw std::invalid_argument("SDF seeds exceed 8 MiB");
             std::vector<uint8_t> cachedSdfs(length);if(length) env->GetByteArrayRegion(seeds,0,length,reinterpret_cast<jbyte*>(cachedSdfs.data()));
@@ -141,6 +153,27 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_IsolatedFo
         const auto packet=fluxx::text::encodePreparedText(*layout,*manager);
         isolatedTimings[1]=static_cast<jlong>(manager->stats().rasterNs-before.rasterNs);
         isolatedTimings[2]=std::max<jlong>(0,std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-packetStart).count()-isolatedTimings[1]);
+        const auto result=env->NewByteArray(static_cast<jsize>(packet.size()));
+        if(result) env->SetByteArrayRegion(result,0,static_cast<jsize>(packet.size()),reinterpret_cast<const jbyte*>(packet.data()));
+        return result;
+    } catch(const std::exception& error) { fail(env,error);return nullptr; }
+}
+// TEXT FIX 9c: rasterise imported-font atlas tiers (48 ppem is in the prepared packet) for the app's renderer. Requests and
+// the reply use the bounded tier wire format (<= 256 keys, <= 8 MiB, 20 s budget; the rest is deferred, not dropped).
+extern "C" JNIEXPORT jbyteArray JNICALL Java_com_fluxx_android_engine_IsolatedFontNative_tiers(JNIEnv* env,jobject,
+    jobject assets,jobjectArray ids,jobjectArray bytes,jintArray faceIndices,jintArray instanceIndices,
+    jobjectArray axisTags,jobjectArray axisValues,jbyteArray requests) {
+    try {
+        if(!requests) throw std::invalid_argument("Missing tier requests");
+        const auto length=env->GetArrayLength(requests);
+        if(length<=0 || length>1024*1024) throw std::invalid_argument("Invalid tier request size");
+        const auto manager=isolatedManager(env,assets,ids,bytes,faceIndices,instanceIndices,axisTags,axisValues);
+        if(!manager) return nullptr;
+        std::vector<uint8_t> wire(static_cast<size_t>(length));
+        env->GetByteArrayRegion(requests,0,length,reinterpret_cast<jbyte*>(wire.data()));
+        if(env->ExceptionCheck()) return nullptr;
+        const auto keys=fluxx::text::decodeTierRequests(wire.data(),wire.size());
+        const auto packet=fluxx::text::encodeTierReply(fluxx::text::rasteriseTiers(*manager,keys));
         const auto result=env->NewByteArray(static_cast<jsize>(packet.size()));
         if(result) env->SetByteArrayRegion(result,0,static_cast<jsize>(packet.size()),reinterpret_cast<const jbyte*>(packet.data()));
         return result;

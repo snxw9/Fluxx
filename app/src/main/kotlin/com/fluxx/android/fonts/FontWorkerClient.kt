@@ -44,6 +44,19 @@ class FontWorkerClient(context: Context) {
             output.readBytes().also {com.fluxx.android.render.TextEditTimings.record("packet_file_transfer",preparationFileNs+System.nanoTime()-readStart,"bytes=${it.size}")}
         } finally { source.delete();output.delete();cached.delete() }
     }
+    /** TEXT FIX 9c: rasterise imported-font atlas tiers in the isolated worker (bounded by [FontImportErrors.WORKER_TIMEOUT_MS]). */
+    suspend fun tiers(requests: ByteArray,fonts: List<FontInput>): ByteArray=withContext(Dispatchers.IO) {
+        require(requests.size in 12..1024*1024 && fonts.size in 1..64)
+        require(fonts.sumOf { it.file.length() }<=32L*1024*1024) { "Imported font tiers exceed 32 MiB of font files" }
+        val source=File.createTempFile("font-tier-input-",".bin",context.cacheDir)
+        val output=File.createTempFile("font-tier-output-",".bin",context.cacheDir)
+        try {
+            source.writeBytes(requests)
+            bounded { request(source,output,FontWorkerService.TIERS,fonts) }
+            require(output.length() in 20..FontWorkerService.MAX_TIER_REPLY_BYTES.toLong()) { "Invalid tier reply size" }
+            output.readBytes()
+        } finally { source.delete();output.delete() }
+    }
     internal suspend fun crashForTest(input: File) {
         check(com.fluxx.android.BuildConfig.DEBUG)
         val output=File.createTempFile("font-crash-proof-",".tmp",context.cacheDir)

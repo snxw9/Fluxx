@@ -5,6 +5,7 @@
 #include "text_diagnostics.h"
 #include "atlas_packer.h"
 #include "sdf_coverage.h"
+#include "sdf_tiers.h"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -200,6 +201,7 @@ int main(int argc, char** argv) {
                 require(FT_Outline_Get_Bitmap(refLib,&face->glyph->outline,&bm)==0,"raster");for(auto& v:mask) v=v>=128;return mask;
             };
             // For every glyph: a raw FreeType SDF that passes is kept byte-for-byte; one that fails is rebuilt and passes.
+            double tierDrift=0;
             auto verify=[&](const std::string& id,const std::vector<uint8_t>& bytes,FontManager& manager,const std::vector<uint32_t>& glyphs,unsigned tier,size_t& kept,size_t& rebuilt) {
                 FT_Face face=nullptr;require(FT_New_Memory_Face(refLib,bytes.data(),static_cast<FT_Long>(bytes.size()),0,&face)==0,"face");
                 const unsigned ppem=tier?tier:48,spread=tier?(tier==96?16u:32u):8u;
@@ -208,8 +210,15 @@ int main(int argc, char** argv) {
                     require(got->width==raw.w && got->height==raw.h && got->left==raw.left && got->top==raw.top,"Grid changed");
                     if(raw.w==0) continue;
                     const unsigned k=cs::supersample(raw.w,raw.h);const auto mask=maskOf(face,gid,ppem,raw,k);
-                    if(!cs::compare(raw.pixels,mask,raw.w,raw.h,k).failed()) {require(got->pixels==raw.pixels,"A correct FreeType SDF changed");++kept;}
-                    else {require(!cs::compare(got->pixels,mask,raw.w,raw.h,k).failed(),"Rebuilt SDF still has holes");++rebuilt;}
+                    require(!cs::compare(got->pixels,mask,raw.w,raw.h,k).failed(),"SDF has holes");
+                    const bool rawOk=!cs::compare(raw.pixels,mask,raw.w,raw.h,k).failed();
+                    if(!tier) { if(rawOk) {require(got->pixels==raw.pixels,"A correct FreeType SDF changed");++kept;} else ++rebuilt; }
+                    else {
+                        // Tiers are coverage-generated (9c): FreeType's grid, and close to FreeType's bytes wherever FreeType is right.
+                        if(rawOk) { double sum=0;for(size_t p=0;p<raw.pixels.size();++p) sum+=std::abs(int(got->pixels[p])-int(raw.pixels[p]));
+                            const double mean=sum/raw.pixels.size();require(mean<=2.0,"Tier SDF drifts from FreeType");tierDrift=std::max(tierDrift,mean);++kept; }
+                        else ++rebuilt;
+                    }
                 }
                 FT_Done_Face(face);
             };
@@ -223,7 +232,8 @@ int main(int argc, char** argv) {
                     else for(unsigned char c:sample) {const auto g=bundled.glyphForCodepoint(in.id,c);if(g) glyphs.push_back(g);}
                     verify(in.id,in.bytes,bundled,glyphs,tier,kept,rebuilt);
                 }
-                std::cout<<"bundled tier "<<(tier?tier:48)<<": "<<kept<<" FreeType-identical, "<<rebuilt<<" rebuilt (FreeType sign errors), 0 holes\n";
+                if(!tier) std::cout<<"bundled tier 48: "<<kept<<" FreeType-identical, "<<rebuilt<<" rebuilt (FreeType sign errors), 0 holes\n";
+                else std::cout<<"bundled tier "<<tier<<": "<<kept+rebuilt<<" coverage-generated on FreeType's grid ("<<rebuilt<<" where FreeType has holes), 0 holes, worst mean drift "<<tierDrift<<"/255\n";
             }
             for(int a=3;a<argc;++a) {
                 const std::string path(argv[a]);const auto bytes=read(path);auto set=inputs;set.push_back({"import.regress",bytes});
@@ -239,6 +249,40 @@ int main(int argc, char** argv) {
             }
             FT_Done_FreeType(refLib);
             std::cout<<"PASS: coverage-correct SDF regression\n";
+        } else if(command=="tierproof") {
+            // TEXT FIX 9c: tier request/reply round trip, caps, budgets, and imported-face rasterisation at every tier.
+            std::vector<TierKey> keys;for(unsigned ppem:{96u,192u,384u}) keys.push_back({"fluxx.sans",manager.glyphForCodepoint("fluxx.sans",'g'),ppem});
+            const auto wire=encodeTierRequests(keys);require(decodeTierRequests(wire.data(),wire.size())==keys,"Request round trip");
+            std::vector<TierKey> tooMany(MaxTierRequests+1,keys[0]);
+            bool threw=false;try { encodeTierRequests(tooMany); } catch(const std::exception&) { threw=true; }require(threw,"Request cap");
+            threw=false;try { std::vector<TierKey> base{{"fluxx.sans",1,48}};auto b=encodeTierRequests(base);decodeTierRequests(b.data(),b.size()); }
+            catch(const std::exception&) { threw=true; }require(threw,"Base tier is never requested (it ships in the packet)");
+            auto reply=rasteriseTiers(manager,keys);require(reply.glyphs.size()==3 && reply.failed.empty() && reply.deferred.empty(),"Rasterise all");
+            for(const auto& g:reply.glyphs) require(g->spread==fluxx::text::tiers::spread(g->ppem) && g->width>0,"Tier spread table");
+            const auto bytes=encodeTierReply(reply);const auto back=decodeTierReply(bytes.data(),bytes.size());
+            require(back.glyphs.size()==3,"Reply round trip");
+            for(size_t i=0;i<3;++i) require(back.glyphs[i]->pixels==reply.glyphs[i]->pixels && back.glyphs[i]->ppem==reply.glyphs[i]->ppem &&
+                back.glyphs[i]->left==reply.glyphs[i]->left && back.glyphs[i]->top==reply.glyphs[i]->top,"Reply pixels");
+            // Byte budget: the rest is deferred (asked for again), never dropped; unknown fonts fail (stay on the lower tier).
+            const auto small=rasteriseTiers(manager,keys,64+2*MaxTierRequests*(1024+12)+reply.glyphs[0]->pixels.size()+64,20.0);
+            require(small.glyphs.size()==1 && small.deferred.size()==2,"Byte budget defers");
+            const auto late=rasteriseTiers(manager,keys,MaxTierReplyBytes,-1.0);require(late.glyphs.empty() && late.deferred.size()==3,"Time budget defers");
+            const auto unknown=rasteriseTiers(manager,{{"user.missing",1,96}});require(unknown.failed.size()==1,"Unknown font fails");
+            // A forged spread is rejected on decode.
+            auto forged=bytes;forged[8+4+4+10+4+4+3]^=1;threw=false;try { decodeTierReply(forged.data(),forged.size()); } catch(const std::exception&) { threw=true; }
+            require(threw,"Forged spread rejected");
+            if(argc>=4) { // Imported face with variations, all tiers.
+                auto set=inputs;set.push_back({"user.proof",read(argv[3]),0,-1,{{0x77676874u,700.f}}});FontManager imported(std::move(set));
+                std::vector<TierKey> wanted;for(char c:std::string("@&ge")) for(unsigned ppem:{96u,192u,384u})
+                    wanted.push_back({"user.proof",imported.glyphForCodepoint("user.proof",static_cast<unsigned char>(c)),ppem});
+                const auto start=std::chrono::steady_clock::now();const auto r=rasteriseTiers(imported,wanted);
+                const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
+                size_t px=0;for(const auto& g:r.glyphs) px+=g->pixels.size();
+                require(r.glyphs.size()==wanted.size(),"Imported tiers");
+                std::cout<<"imported: "<<r.glyphs.size()<<" tier glyphs (96/192/384), "<<px/1024<<" KiB, "<<ms/wanted.size()<<" ms/glyph, reply "
+                    <<encodeTierReply(r).size()/1024<<" KiB\n";
+            }
+            std::cout<<"PASS: tier wire round trip, caps, budgets, spread table\n";
         } else if(command=="ftaudit" && argc>=4) {
             // Which raw FreeType SDFs fail the coverage self-check, by how much, and how long each step costs.
             namespace cs=fluxx::text::coverage_sdf;
