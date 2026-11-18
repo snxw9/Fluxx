@@ -140,10 +140,15 @@ fun ElementInspectorSheet(
     onTextColourPreview: (AnimPropertyType, Int) -> Unit = { _, _ -> },
     textSelection: TextSelectionRange?=null,onTextSelection: (TextSelectionRange?)->Unit = {},
     onExplodePrepare: (TextExplodeOptions,(Result<TextExplodePlan>)->Unit)->Unit = {_,reply->reply(Result.failure(IllegalStateException("Explode preparation unavailable")))},
-    onExplodeCommit: (TextExplodePlan,(String?)->Unit)->Unit = {_,reply->reply("Explode unavailable")}
+    onExplodeCommit: (TextExplodePlan,(String?)->Unit)->Unit = {_,reply->reply("Explode unavailable")},
+    onTextEditVisible: (Boolean)->Unit = {}
 ) {
     key(layer.id) {
         var section by rememberSaveable { mutableStateOf<InspectorSection?>(null) }
+        val textEditVisible by rememberUpdatedState(onTextEditVisible)
+        // Edit Text uses one fixed sheet height; the editor needs to know when it is showing.
+        LaunchedEffect(section) { textEditVisible(layer.type == LayerType.TEXT && section == InspectorSection.CONTEXTUAL_EDIT) }
+        DisposableEffect(Unit) { onDispose { textEditVisible(false) } }
         var textFill by remember { mutableStateOf(false) }
         var textColourProperty by remember { mutableStateOf(AnimPropertyType.FILL_COLOUR) }
         val focusManager = LocalFocusManager.current

@@ -21,7 +21,7 @@ internal class TextNumericBindings(val begin: (TextControl)->TextNumericDraft,va
 internal val LocalTextNumericBindings=staticCompositionLocalOf<TextNumericBindings?> {null}
 
 @OptIn(ExperimentalFoundationApi::class)
-@Composable internal fun TextScrubCell(draft: TextNumericDraft,modifier: Modifier,selected: Boolean,open: ()->Unit) {
+@Composable internal fun TextScrubCell(draft: TextNumericDraft,modifier: Modifier,selected: Boolean,iconClick: (()->Unit)?=null,open: ()->Unit) {
     val bindings=LocalTextNumericBindings.current
     val c=draft.control;val label="${draft.scope.title(c)}, ${draft.scope.unit(c)}"
     val available=draft.scope.available(c) && bindings?.enabled!=false
@@ -41,9 +41,10 @@ internal val LocalTextNumericBindings=staticCompositionLocalOf<TextNumericBindin
     }
     Row(modifier.height(48.dp).background(if(selected) MaterialTheme.colorScheme.surfaceVariant else androidx.compose.ui.graphics.Color.Transparent),verticalAlignment=Alignment.CenterVertically) {
         Box(Modifier.width(36.dp).fillMaxHeight()
-            .combinedClickable(enabled=available,onClick={currentBindings?.focus?.invoke(c)},onLongClick={tooltip=true})
-            .semantics {contentDescription=if(available) "Scrub $label" else "$label; clear selection to edit layer property"
-                customActions=if(available) listOf(CustomAccessibilityAction("Increase") {step(1f)},CustomAccessibilityAction("Decrease") {step(-1f)},CustomAccessibilityAction("Set exact value") {open();true}) else emptyList()
+            .combinedClickable(enabled=available,onClick={iconClick?.invoke() ?: currentBindings?.focus?.invoke(c)},onLongClick={tooltip=true})
+            .semantics {contentDescription=if(available) "Scrub $label"+(if(iconClick!=null) "; tap for choices" else "") else "$label; clear selection to edit layer property"
+                customActions=if(available) listOfNotNull(CustomAccessibilityAction("Increase") {step(1f)},CustomAccessibilityAction("Decrease") {step(-1f)},CustomAccessibilityAction("Set exact value") {open();true},
+                    iconClick?.let {CustomAccessibilityAction("Choices") {it();true}}) else emptyList()
                 if(!available) disabled()
             }
             .pointerInput(c,available) {if(available) awaitEachGesture {

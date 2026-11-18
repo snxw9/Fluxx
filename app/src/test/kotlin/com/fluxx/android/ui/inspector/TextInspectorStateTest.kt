@@ -47,15 +47,14 @@ class TextInspectorStateTest {
         assertEquals(fast*.1f,TextScrubTuning.delta(TextControl.BOX,100f,5000f,true),0f)
         assertEquals(50f*TextScrubTuning.MAX_ACCELERATION,TextScrubTuning.delta(TextControl.TRACKING,100f,5000f),0f)
     }
-    @Test fun sourceBudgetAt360AndAccessibilityScales() {
-        for(scale in listOf(1f,1.3f,2f)) for(height in listOf(268f,328f)) {
-            val total=height*scale;val body=TextInspectorBudget.bodyHeight(total,scale)
-            assertTrue(body>=96f);assertEquals(total,body+48+32*scale+40+48+4,0.001f)
-            assertEquals(if(scale>1.2f) 3 else 4,TextInspectorBudget.columns(360f,scale))
-        }
-        assertTrue(TextInspectorBudget.needsOverlay(200f,2f))
-        for(total in listOf(100f,132f,164f,200f)) for(scale in listOf(1f,1.3f,2f)) {
-            assertEquals(total,48+TextInspectorBudget.headerHeight(total,scale)+TextInspectorBudget.tabsHeight(total)+TextInspectorBudget.bodyHeight(total,scale)+48+4,.001f)
+    @Test fun fixedSheetHoldsEveryCharacterRowWithoutPaging() {
+        for(scale in listOf(1f,1.3f,2f)) {
+            val total=TextInspectorBudget.sheetHeight(scale)
+            val rows=TextInspectorLayout.rows(TextTab.CHARACTER,scale)
+            assertEquals(rows.size,TextInspectorBudget.bodyRows(total,scale))
+            assertEquals(1,TextInspectorLayout.pages(rows,TextInspectorBudget.bodyRows(total,scale)).size)
+            assertEquals(1,TextInspectorLayout.pages(TextInspectorLayout.rows(TextTab.PARAGRAPH,scale),TextInspectorBudget.bodyRows(total,scale)).size)
+            assertEquals(if(scale>1.2f) 3 else 4,TextInspectorLayout.columns(scale))
         }
     }
     @Test fun savedDraftRestoresCapturedScopeTimeAndLayerWithoutDocumentMutation() {

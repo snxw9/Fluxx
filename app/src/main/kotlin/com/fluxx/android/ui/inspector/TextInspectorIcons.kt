@@ -54,6 +54,8 @@ internal object TextInspectorIcons {
             "3D"->"M12,2 L22,7 L22,18 L12,23 L2,18 L2,7 Z M2,7 L12,12 L22,7 M12,12 L12,23"
             "OVERFLOW","ACTIONS","FORMAT"->"M12,3 L12,5 M12,11 L12,13 M12,19 L12,21"
             "DONE"->"M3,12 L9,18 L21,5"
+            "MINUS"->"M5,12 L19,12"
+            "PLUS"->"M5,12 L19,12 M12,5 L12,19"
             "CANCEL","DELETE"->"M5,5 L19,19 M19,5 L5,19"
             "RESET","INHERIT"->"M4,8 Q18,-1 21,12 Q23,23 9,21 M4,3 L4,9 L10,9"
             "IMPORT"->"M12,2 L12,17 M7,12 L12,17 L17,12 M3,17 L3,22 L21,22 L21,17"

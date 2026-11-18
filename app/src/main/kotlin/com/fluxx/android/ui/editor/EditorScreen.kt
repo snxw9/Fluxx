@@ -38,6 +38,7 @@ import com.fluxx.android.ui.dialogs.CompositionSettingsDialog
 import com.fluxx.android.ui.dialogs.ExportDialog
 import com.fluxx.android.ui.inspector.ElementInspectorSheet
 import com.fluxx.android.ui.inspector.InspectorPanel
+import com.fluxx.android.ui.inspector.TextInspectorBudget
 import com.fluxx.android.ui.preview.CompositionPreview
 import com.fluxx.android.ui.theme.*
 import com.fluxx.android.ui.timeline.TimelineView
@@ -199,6 +200,7 @@ fun EditorScreen(
     var addContentHeight by remember { mutableStateOf(0.dp) }
     var addContentError by remember { mutableStateOf<String?>(null) }
     var inspectorSheetVisible by rememberSaveable { mutableStateOf(false) }
+    var textEditOpen by remember { mutableStateOf(false) }
     var focusedProperty by remember { mutableStateOf<AnimPropertyType?>(null) }
     var anchorMode by remember { mutableStateOf(false) }
     var eyedropperLayerId by remember { mutableStateOf<Long?>(null) }
@@ -314,7 +316,10 @@ fun EditorScreen(
             // Reserve ruler + track gap + one row + inspector separation in BOTH preview modes.
             // Expansion trades inspector height for canvas height; opening the inspector never moves the preview.
             val available = (maxHeight - if (textTyping) 0.dp else EditorActionBarHeight + TimelineInspectorAnchorHeight).coerceAtLeast(0.dp)
-            val targetInspectorHeight = (if (isExpandedPreview) 268.dp else 328.dp) * density.fontScale.coerceAtLeast(1f)
+            // Edit Text has ONE fixed height sized for its 4-row Character face; Preview Expansion is ignored while it is open.
+            val editTextOpen = isInspectorOpen && textEditOpen && selectedLayer?.type == LayerType.TEXT
+            val targetInspectorHeight = if (editTextOpen) TextInspectorBudget.sheetHeight(density.fontScale).dp
+                else (if (isExpandedPreview) 268.dp else 328.dp) * density.fontScale.coerceAtLeast(1f)
             val minimumPreview=if(available>=264.dp) 96.dp else 48.dp
             val desiredInspectorHeight=if(isInspectorOpen && selectedLayer?.type==LayerType.TEXT)
                 targetInspectorHeight.coerceAtMost((available-minimumPreview).coerceAtLeast(0.dp)) else targetInspectorHeight
@@ -723,6 +728,7 @@ fun EditorScreen(
                             android.widget.Toast.makeText(context,"Drag the crosshair and release to sample; Back cancels",android.widget.Toast.LENGTH_SHORT).show()
                             }
                         },
+                        onTextEditVisible = { textEditOpen = it },
                         modifier = Modifier.fillMaxSize()
                     )
                 }

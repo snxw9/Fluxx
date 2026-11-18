@@ -14,10 +14,76 @@ internal enum class TextControl(val label: String,val unit: String="") {
     H_SCALE("Horizontal glyph scale","%"),V_SCALE("Vertical glyph scale","%"),KERNING("Kerning mode"),
     MANUAL_KERNING("Manual spacing after selected characters","1/1000 em"),BOLD("Faux bold"),ITALIC("Faux italic"),
     CASE("Case"),SUPER("Superscript"),SUB("Subscript"),LIGATURES("Optional ligatures"),ALIGNMENT("Alignment"),
+    ALIGN_LEFT("Align left"),ALIGN_CENTRE("Align centre"),ALIGN_RIGHT("Align right"),JUSTIFY("Justify choices"),
     INDENT_LEFT("Left indent","px"),INDENT_RIGHT("Right indent","px"),INDENT_FIRST("First-line indent","px"),
     BEFORE("Space before paragraph","px"),AFTER("Space after paragraph","px"),BOX("Box width","px"),DIRECTION("Paragraph direction"),
-    FORMAT("Character formatting"),PAINT("Fill and stroke"),INDENTS("Paragraph indents"),SPACING("Paragraph spacing"),
-    CHARACTER_CONTROLS("Character controls"),PARAGRAPH_CONTROLS("Paragraph controls"),BASE_FONT("Layer base font"),BASE_ALIGNMENT("Layer base alignment")
+    PAINT("Fill and stroke"),BASE_FONT("Layer base font"),BASE_ALIGNMENT("Layer base alignment")
+}
+
+/** One grid cell; [control] null is an empty slot that keeps columns aligned. */
+internal data class TextGridCell(val control: TextControl?,val weight: Float=1f)
+
+/** Data-only tab faces. Every common control sits directly on its tab; no aggregate popups. */
+internal object TextInspectorLayout {
+    private fun cells(vararg c: TextControl?)=c.map {TextGridCell(it)}
+    // Font chip takes 1.8 of 4 columns so each Fill/Stroke swatch keeps a 48dp-wide target (51.6dp at 344dp).
+    val characterRows: List<List<TextGridCell>> = listOf(
+        listOf(TextGridCell(TextControl.FONT,1.8f),TextGridCell(TextControl.SIZE),TextGridCell(TextControl.PAINT,1.2f)),
+        cells(TextControl.TRACKING,TextControl.LEADING,TextControl.BASELINE,TextControl.STROKE_WIDTH),
+        cells(TextControl.H_SCALE,TextControl.V_SCALE,TextControl.KERNING,TextControl.ORDER),
+        listOf(TextControl.BOLD,TextControl.ITALIC,TextControl.CASE,TextControl.SUPER,TextControl.SUB,TextControl.LIGATURES).map {TextGridCell(it,4f/6f)})
+    val paragraphRows: List<List<TextGridCell>> = listOf(
+        cells(TextControl.ALIGN_LEFT,TextControl.ALIGN_CENTRE,TextControl.ALIGN_RIGHT,TextControl.JUSTIFY),
+        cells(TextControl.INDENT_LEFT,TextControl.INDENT_RIGHT,TextControl.INDENT_FIRST,TextControl.DIRECTION),
+        cells(TextControl.BEFORE,TextControl.AFTER,TextControl.BOX,null))
+    fun columns(fontScale: Float)=if(TextInspectorBudget.large(fontScale)) 3 else 4
+    /** 4-column faces at standard scale; the labelled 3-column fallback reflows the same cells in the same order. */
+    fun rows(tab: TextTab,fontScale: Float): List<List<TextGridCell>> {
+        val base=when(tab) {TextTab.CHARACTER->characterRows;TextTab.PARAGRAPH->paragraphRows;TextTab.ANIMATE->return emptyList()}
+        if(!TextInspectorBudget.large(fontScale)) return base
+        return flow(base.flatten().mapNotNull {c->c.control?.let {TextGridCell(it,if(it==TextControl.FONT) 2f else 1f)}},3)
+    }
+    fun flow(cells: List<TextGridCell>,columns: Int): List<List<TextGridCell>> {
+        val rows=mutableListOf<MutableList<TextGridCell>>();var used=0f
+        for(cell in cells) {
+            if(rows.isEmpty() || used+cell.weight>columns+1e-3f) {rows+=mutableListOf<TextGridCell>();used=0f}
+            rows.last()+=cell;used+=cell.weight
+        }
+        rows.lastOrNull()?.let {last->val free=columns-last.sumOf {it.weight.toDouble()}.toFloat();if(free>1e-3f) last+=TextGridCell(null,free)}
+        return rows
+    }
+    /** Short-window fallback: whole rows per page, switched from the tab row. The sheet itself never scrolls. */
+    fun pages(rows: List<List<TextGridCell>>,capacity: Int): List<List<List<TextGridCell>>> =
+        if(rows.isEmpty()) listOf(emptyList()) else rows.chunked(capacity.coerceAtLeast(1))
+    /** Overlay rows sit beside their anchor row, never on it, when the page has room. */
+    fun overlayRow(anchor: Int?,height: Int,rowCount: Int): Int {
+        if(anchor==null || anchor<0 || anchor>=rowCount) return 0
+        return when {
+            anchor-height>=0 -> anchor-height
+            anchor+1+height<=rowCount -> anchor+1
+            else -> (rowCount-height).coerceAtLeast(0)
+        }
+    }
+    fun rowOf(rows: List<List<TextGridCell>>,control: TextControl)=rows.indexOfFirst {r->r.any {it.control==control}}.takeIf {it>=0}
+}
+
+/** Stroke clamp feedback, shown only while clamped. Width-scaled forms keep one line at each font scale. */
+internal object TextFeedback {
+    private fun number(v: Float)=if(v==v.toLong().toFloat()) v.toLong().toString() else "%.2f".format(java.util.Locale.ROOT,v).trimEnd('0').trimEnd('.')
+    private fun effective(clampLabel: String?)=clampLabel?.removePrefix("Apply · clamp ")?.removeSuffix(" px")?.let {range->
+        val parts=range.split('–');if(parts.size==2 && parts[0]==parts[1]) parts[0] else range}
+    /** Accessibility/announcement text: always complete. */
+    fun strokeClampFull(requested: Float,clampLabel: String?)=effective(clampLabel)?.let {"Requested ${number(requested)} px | Effective $it px | SDF spread / size limit"}
+    /** Visible one-line text. Proven width envelope: requested ≤ 999.99, effective range ≤ 99.99–99.99. */
+    fun strokeClamp(requested: Float,clampLabel: String?,fontScale: Float=1f): String? {
+        val e=effective(clampLabel) ?: return null
+        return when {
+            fontScale<=1.2f -> "Requested ${number(requested)} px | Effective $e px | SDF limit"
+            fontScale<=1.4f -> "Req ${number(requested)} | Eff $e px | SDF limit"
+            else -> "Req ${number(requested)} | Eff $e"
+        }
+    }
+    fun line(error: String?,message: String?,numeric: String?,stroke: String?)=error ?: message ?: numeric ?: stroke
 }
 internal data class TextEditScope(val range: TextSelectionRange?) {
     val selected get()=range!=null && !range.collapsed
@@ -180,12 +246,27 @@ internal object TextInspectorModeCodec {
     val sourceSaver=Saver<TextFieldValue,Long>(save={val id=++serial;sourceField=id to it;id},restore={id->sourceField?.takeIf {it.first==id}?.second})
 }
 
+/**
+ * One fixed Edit Text height, sized for the 4-row Character face. Text mode removes all parent chrome
+ * (no header, padding or drag handle), so the sheet height is the whole surface. The sheet never scrolls.
+ */
 internal object TextInspectorBudget {
-    // Text mode removes all old parent chrome; main inspector never scrolls.
     const val PARENT_CHROME=0f
-    fun headerHeight(total: Float,fontScale: Float)=if(total-(48f+32f*fontScale+40f+48f+4f)<48f) 0f else 32f*fontScale
-    fun tabsHeight(total: Float)=if(total<140f) 0f else 40f
-    fun bodyHeight(total: Float,fontScale: Float): Float=(total-PARENT_CHROME-48f-headerHeight(total,fontScale)-tabsHeight(total)-48f-4f).coerceAtLeast(0f)
-    fun columns(width: Float,fontScale: Float)=if(fontScale>1.2f) 3 else if(width>=600f) 6 else 4
-    fun needsOverlay(total: Float,fontScale: Float)=bodyHeight(total,fontScale)<96f
+    const val SOURCE=48f
+    const val STATUS=32f
+    const val TABS=40f
+    const val ROW=48f
+    const val FEEDBACK=16f
+    const val RAIL=48f
+    const val SIDE=8f
+    const val MIN_TARGET=48f
+    const val SCRUB_ZONE=36f
+    fun large(fontScale: Float)=fontScale>1.2f
+    fun statusHeight(fontScale: Float)=STATUS*fontScale.coerceAtLeast(1f)
+    fun feedbackHeight(fontScale: Float)=FEEDBACK*fontScale.coerceAtLeast(1f)
+    private fun chrome(fontScale: Float)=PARENT_CHROME+SOURCE+statusHeight(fontScale)+TABS+feedbackHeight(fontScale)+RAIL
+    fun sheetHeight(fontScale: Float)=chrome(fontScale)+ROW*TextInspectorLayout.rows(TextTab.CHARACTER,fontScale).size
+    fun bodyHeight(total: Float,fontScale: Float)=(total-chrome(fontScale)).coerceAtLeast(0f)
+    fun bodyRows(total: Float,fontScale: Float)=kotlin.math.floor(bodyHeight(total,fontScale)/ROW+1e-3f).toInt()
+    fun cellWidth(width: Float,weight: Float,columns: Int)=(width-2*SIDE)*weight/columns
 }
