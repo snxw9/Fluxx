@@ -270,13 +270,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
             System.arraycopy(tierHandleTiers, 0, tierSent, 0, tierSent.size)
         }
         if (interactive) {
-            // Idle-priority warm-up (native drains it only after 750 ms without a frame); sent only when a target changes.
+            // Idle-priority warm-up targets per handle; renderPreview sends them from settled frames only.
             java.util.Arrays.fill(tierWarmHandles, SdfAtlasTiers.BASE)
             for (e in preparedText.indices) for (slot in tierSlots[e]) if (tierWarm[e] > tierWarmHandles[slot]) tierWarmHandles[slot] = tierWarm[e]
-            if (!tierWarmHandles.contentEquals(tierWarmSent)) {
-                RenderBridge.warmTextTiers(session, tierAllHandles, tierWarmHandles)
-                System.arraycopy(tierWarmHandles, 0, tierWarmSent, 0, tierWarmSent.size)
-            }
         }
         stageNs[STAGE_TIER_JNI] += System.nanoTime() - tierJni
         if (!sharp) return // Base tier only: nothing for the isolated worker.
@@ -293,6 +289,18 @@ class CompositionRenderer(private val context: Context, private val repository: 
         }
     }
 
+    /**
+     * TEXT PERF 11: sends the idle tier warm-up targets, from settled frames only (open, pause, seek). During playback
+     * and scrubbing the native queue would not run anyway, and a target on a tier boundary (size × reach ≈ a tier's
+     * sharp limit) flipped between frames and re-sent, allocating inside F1's zero-allocation window. Targets only rise
+     * within a prepared project, so boundary jitter never re-sends.
+     */
+    private fun requestTierWarmUp() {
+        if (tierPlanFor !== preparedText || tierWarmSent.isEmpty()) return
+        var raised = false
+        for (i in tierWarmHandles.indices) if (tierWarmHandles[i] > tierWarmSent[i]) { tierWarmSent[i] = tierWarmHandles[i]; raised = true }
+        if (raised) RenderBridge.warmTextTiers(session, tierAllHandles, tierWarmSent)
+    }
     private var previewQuality: PreviewResolution? = null
     private var previewCompWidth = 0
     private var previewCompHeight = 0
@@ -391,6 +399,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         val streaming = lastPreviewTime >= 0 && timeUs > lastPreviewTime && framing - lastPreviewEnd < 100_000_000L &&
             timeUs - lastPreviewTime <= elapsedUs + streamingSpanUs
         lastPreviewStart = framing; lastPreviewTime = timeUs
+        if (!streaming) requestTierWarmUp()
         try {
             if (streaming || RenderBridge.awaitTextTiers(session, 0) == 0) return
             val deadline = now + 1_500_000_000L

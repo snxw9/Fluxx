@@ -1429,7 +1429,8 @@ std::string VulkanRenderer::textStatsJson() const {
     json << ",\"tierGlyphs\":" << stats.tierGlyphs << ",\"tierBytes\":" << stats.tierBytes << ",\"tierPending\":" << stats.tierPending
         << ",\"tierDegrades\":" << stats.tierDegrades << ",\"tierEvictions\":" << stats.tierEvictions
         << ",\"tierExternalRequested\":" << stats.tierExternalRequested << ",\"tierExternalSupplied\":" << stats.tierExternalSupplied
-        << ",\"tierExternalFailed\":" << stats.tierExternalFailed;
+        << ",\"tierExternalFailed\":" << stats.tierExternalFailed
+        << ",\"tierWarmQueued\":" << stats.tierWarmQueued << ",\"tierWarmed\":" << stats.tierWarmed;
     json << "}"; return json.str();
 }
 bool VulkanRenderer::setFrameLayer(int64_t id, AHardwareBuffer* buffer, const float* matrix, float opacity) {
