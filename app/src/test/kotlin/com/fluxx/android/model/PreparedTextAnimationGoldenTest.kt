@@ -95,6 +95,44 @@ class PreparedTextAnimationGoldenTest {
         return sha.digest().joinToString("") { "%02x".format(it.toInt() and 255) }
     }
 
+    /**
+     * TEXT PERF 11 TrackMemo: duplicated layers share memo slots. Three layers per stack on ONE memo, evaluated
+     * interleaved (the second at a different local time, as layers with different keyframe anchors are, with repeated
+     * and backward times), must produce byte-identical records, bounds and geometry to the same layers on private
+     * memos. Equal tracks built separately share a slot; a layer whose start track differs does not share that one.
+     */
+    @Test fun sharedTrackMemoIsBitIdenticalAcrossLayers() {
+        val source = "AV office gy 0123456789 AV office gy"
+        for ((rich, wrapped, advanced) in listOf(Triple(false, false, false), Triple(true, false, false), Triple(true, true, false), Triple(true, true, true))) {
+            fun build(memo: TrackMemo, variant: Boolean): PreparedTextAnimation {
+                val (base, document) = text(source, rich, wrapped, advanced)
+                val text = if (!variant) base else base.copy(animators = FrozenList.of(base.animators.mapIndexed { a, animator ->
+                    if (a != 0) animator else animator.copy(selectors = FrozenList.of(animator.selectors.mapIndexed { s, selector ->
+                        if (s == 0) selector.copy(start = track(0f, 11f)) else selector })) }))
+                return PreparedTextAnimation(text, metrics(source.length), SelectorEaseTable.shared, document,
+                    breaks = IntArray(source.length + 1) { it }, paragraphKernel = ParagraphOracle, memo = memo)
+            }
+            val shared = TrackMemo()
+            val layers = listOf(build(shared, false), build(shared, false), build(shared, true))
+            val alone = listOf(build(TrackMemo(), false), build(TrackMemo(), false), build(TrackMemo(), true))
+            val sharedSlots = shared.slots
+            val privateSlots = TrackMemo().also { m -> build(m, false) }.slots
+            assertTrue("equal tracks share slots ($sharedSlots vs $privateSlots)", sharedSlots < privateSlots * 3)
+            assertTrue("the changed start track is its own slot", sharedSlots > privateSlots)
+            fun snapshot(p: PreparedTextAnimation): String {
+                val bytes = ByteArray(p.modifiers.capacity()); p.modifiers.duplicate().also { it.position(0) }.get(bytes)
+                val g = p.geometrySnapshot()
+                return bytes.contentToString() + (p.logicalBounds + p.inkBounds + g.boxes + g.origins + g.logical)
+                    .joinToString(",") { java.lang.Float.floatToRawIntBits(it).toString() } + g.lines.contentToString()
+            }
+            for (time in longArrayOf(0, 16_667, 1_234_567, 5_000_000, 5_000_000, 2_500_000, 6_000_000, 9_999_999, 12_000_000, 16_667)) {
+                val times = longArrayOf(time, time + 33_333, time)
+                for (i in layers.indices) { layers[i].evaluate(times[i]); alone[i].evaluate(times[i]) }
+                for (i in layers.indices) assertEquals("stack rich=$rich wrapped=$wrapped advanced=$advanced layer $i at ${times[i]}",
+                    snapshot(alone[i]), snapshot(layers[i]))
+            }
+        }
+    }
     @Test fun evaluationIsBitIdenticalToTextFix9() {
         val actual = listOf(digest(false, false, false), digest(true, false, false), digest(true, true, false), digest(true, true, true))
         assertEquals(GOLDEN, actual)

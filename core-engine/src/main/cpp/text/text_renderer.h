@@ -85,6 +85,14 @@ public:
     size_t awaitTiers(int timeoutMs);
     unsigned resolvedTier(const Layout* layout) const { auto f=resolvedTier_.find(layout); return f==resolvedTier_.end()?tiers::BasePpem:f->second; }
     void retireBatch();
+    // TEXT PERF 11: merged text batches. The owner keeps text-only batches until one submit per frame, so the mesh
+    // storage must hold every text layer drawn since the last submit. meshFits() tells the owner when it must submit
+    // early; reserveFrame() (preparation only) sizes storage to the previous frame's demand, bounded by
+    // [mergedGlyphs], so steady-state frames neither allocate nor split.
+    bool meshFits(const Layout& layout,const GlyphModifier* modifiers) const;
+    void reserveFrame();
+    size_t mergedGlyphs() const { return maxPages_<=3?MergedGlyphsLowRam:MergedGlyphs; }
+    static constexpr size_t MergedGlyphs=16384, MergedGlyphsLowRam=8192;
     void repackRetained();
     TextGpuStats stats() const { return stats_; }
     FontStats fontStats() { return fonts_->stats(); }
@@ -116,6 +124,7 @@ private:
     PagedAtlas packed_{};
     unsigned maxPages_, allocatedPages_=0;
     std::vector<TextVertex> vertices_; std::vector<uint32_t> indices_;
+    size_t frameDemand_=0; // Glyph slots mesh() needed since the last reserveFrame() (TEXT PERF 11).
     struct PreparedGlyph { const SdfGlyph* sdf=nullptr; float u=0,v=0; unsigned page=0; };
     struct CharacterBinding {
         struct Character { uint32_t original=0,font=0;std::vector<uint32_t> marks; };

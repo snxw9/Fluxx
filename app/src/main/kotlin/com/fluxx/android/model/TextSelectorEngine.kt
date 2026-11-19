@@ -179,7 +179,20 @@ class LinePermutationPool {
 /** Sparse execution; immutable animator snapshot makes invalidation explicit: rebuild on edits.
  * All four maps/permutations exist before evaluation. Units changes need no extra permutation. */
 class PreparedSelectorEngine(private val animator: TextAnimator, private val membership: SelectorMembership,
-    private val ease: SelectorEaseTable,linePool: LinePermutationPool?=null,lineMinimum: Int=0,lineMaximum: Int=membership.counts[3]) {
+    private val ease: SelectorEaseTable,linePool: LinePermutationPool?=null,lineMinimum: Int=0,lineMaximum: Int=membership.counts[3],
+    memo: TrackMemo=TrackMemo()) {
+    /** TEXT PERF 11: the selector tracks as shared memo slots (equal tracks across layers evaluate once per time). */
+    private class Slots(memo: TrackMemo,p: TextRangeSelector) {
+        val enabled=memo.scalar(p.enabled);val mode=memo.scalar(p.mode);val basedOn=memo.scalar(p.basedOn);val kind=memo.scalar(p.kind)
+        val minAmount=memo.scalar(p.minAmount);val maxAmount=memo.scalar(p.maxAmount);val amount=memo.scalar(p.amount)
+        val wiggles=memo.scalar(p.wigglesPerSecond);val correlation=memo.scalar(p.correlation);val temporal=memo.scalar(p.temporalPhase)
+        val spatial=memo.scalar(p.spatialPhase);val lock=memo.scalar(p.lockDimensions);val units=memo.scalar(p.units)
+        val start=memo.scalar(p.start);val end=memo.scalar(p.end);val offset=memo.scalar(p.offset);val shape=memo.scalar(p.shape)
+        val smoothness=memo.scalar(p.smoothness);val easeLow=memo.scalar(p.easeLow);val easeHigh=memo.scalar(p.easeHigh)
+        val randomize=memo.scalar(p.randomizeOrder)
+    }
+    private val animatorEnabled=memo.scalar(animator.enabled)
+    private val slots=Array(animator.selectors.size) { Slots(memo,animator.selectors[it]) }
     private val weights=DoubleArray(membership.characterCount)
     private val pool=linePool ?: LinePermutationPool()
     private val seeds=Array(animator.selectors.size) { s ->
@@ -209,12 +222,12 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
     fun evaluate(time: Long,out: DoubleArray,dimension: Int=0) {
         require(out.size==membership.starts.size)
         out.fill(0.0)
-        if(animator.enabled.hold(time)==0f) return
+        if(animatorEnabled.hold(time)==0f) return
         var first=true
         for(s in animator.selectors.indices) {
             val selector=animator.selectors[s]
-            if(selector.enabled.hold(time)==0f) continue
-            val mode=SelectorMode.entries[selector.mode.hold(time).toInt()]
+            if(slots[s].enabled.hold(time)==0f) continue
+            val mode=SelectorMode.entries[slots[s].mode.hold(time).toInt()]
             if(first) { weights.fill(SelectorMath.initial(mode));first=false }
             if(!static[s] || !ready[s] || revisions[s]!=membership.revision) {
                 coverage(selector,s,time,cache[s],dimension);ready[s]=true;revisions[s]=membership.revision;coverageBuilds++
@@ -228,13 +241,14 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
         }
     }
     private fun coverage(p: TextRangeSelector,index: Int,time: Long,out: DoubleArray,dimension: Int) {
-        val variant=p.basedOn.hold(time).toInt();val n=membership.counts[variant]
-        if(p.kind.hold(time)==1f) {
-            val a=p.minAmount.evaluate(time).toDouble();val b=p.maxAmount.evaluate(time).toDouble()
-            val lo=min(a,b)/100;val hi=max(a,b)/100;val amount=p.amount.evaluate(time)/100.0
-            val seed=p.seedAt(time);val frequency=p.wigglesPerSecond.evaluate(time).toDouble()
-            val correlation=p.correlation.evaluate(time).toDouble();val temporal=p.temporalPhase.evaluate(time).toDouble()
-            val spatial=p.spatialPhase.evaluate(time).toDouble();val locked=p.lockDimensions.hold(time)!=0f
+        val t=slots[index]
+        val variant=t.basedOn.hold(time).toInt();val n=membership.counts[variant]
+        if(t.kind.hold(time)==1f) {
+            val a=t.minAmount.evaluate(time).toDouble();val b=t.maxAmount.evaluate(time).toDouble()
+            val lo=min(a,b)/100;val hi=max(a,b)/100;val amount=t.amount.evaluate(time)/100.0
+            val seed=p.seedAt(time);val frequency=t.wiggles.evaluate(time).toDouble()
+            val correlation=t.correlation.evaluate(time).toDouble();val temporal=t.temporal.evaluate(time).toDouble()
+            val spatial=t.spatial.evaluate(time).toDouble();val locked=t.lock.hold(time)!=0f
             for(i in out.indices) {
                 val member=membership.maps[variant][i]
                 out[i]=if(member<0) 0.0 else (amount*(lo+(hi-lo)*(WigglySelectorMath.value(seed,member,time,frequency,
@@ -242,16 +256,16 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
             }
             return
         }
-        val factor=if(p.units.hold(time)==0f) n/100.0 else 1.0
-        val a=(p.start.evaluate(time).toDouble()+p.offset.evaluate(time))*factor
-        val b=(p.end.evaluate(time).toDouble()+p.offset.evaluate(time))*factor
+        val factor=if(t.units.hold(time)==0f) n/100.0 else 1.0
+        val a=(t.start.evaluate(time).toDouble()+t.offset.evaluate(time))*factor
+        val b=(t.end.evaluate(time).toDouble()+t.offset.evaluate(time))*factor
         if(n==0 || b<=a) { out.fill(0.0);return }
-        val shape=SelectorShape.entries[p.shape.hold(time).toInt()]
-        val smooth=p.smoothness.evaluate(time)/200.0
-        val low=p.easeLow.evaluate(time).toDouble();val high=p.easeHigh.evaluate(time).toDouble()
-        val av=p.minAmount.evaluate(time).toDouble();val bv=p.maxAmount.evaluate(time).toDouble()
-        val lo=min(av,bv);val hi=max(av,bv);val amount=p.amount.evaluate(time)/100.0
-        val random=p.randomizeOrder.hold(time)!=0f
+        val shape=SelectorShape.entries[t.shape.hold(time).toInt()]
+        val smooth=t.smoothness.evaluate(time)/200.0
+        val low=t.easeLow.evaluate(time).toDouble();val high=t.easeHigh.evaluate(time).toDouble()
+        val av=t.minAmount.evaluate(time).toDouble();val bv=t.maxAmount.evaluate(time).toDouble()
+        val lo=min(av,bv);val hi=max(av,bv);val amount=t.amount.evaluate(time)/100.0
+        val random=t.randomize.hold(time)!=0f
         val seed=p.seedAt(time);var seedIndex=0
         while(seeds[index][seedIndex]!=seed) seedIndex++
         for(i in out.indices) {

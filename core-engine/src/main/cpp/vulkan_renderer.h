@@ -79,7 +79,7 @@ public:
     // count, atlas upload CPU (ns), tier-change calls, prepared-glyph placement lookups (layouts re-resolved).
     enum Stage : size_t { WorkFenceWait, BatchRecord, BatchSubmitWait, PresentFenceWait, Acquire, PresentRecord,
         PresentSubmit, PresentIdleWait, GpuBatch, GpuPresent, Batches, Frames,
-        TextLayers, MeshBuild, CollectPack, Collects, AtlasUpload, TierChanges, PlacementLookups, StageCount };
+        TextLayers, MeshBuild, CollectPack, Collects, AtlasUpload, TierChanges, PlacementLookups, MergedFlushes, StageCount };
     void frameStages(int64_t* out, size_t count) {
         for (size_t i = 0; i < count && i < StageCount; ++i) out[i] = mStages[i];
         std::fill(std::begin(mStages), std::end(mStages), 0);
@@ -90,7 +90,12 @@ public:
     bool beginFrame(int width, int height, int presentationWidth = 0, int presentationHeight = 0);
     bool setFrameLayer(int64_t id, AHardwareBuffer* buffer, const float* matrix, float opacity);
     bool finishFrame();
+    // Kotlin's flush (four entries at most, unchanged). A text-only batch holds no Kotlin-owned resource after
+    // setTextLayer returns, so TEXT PERF 11 merges it into the next real submit; any batch with a raster entry, and
+    // finishFrame, submits everything pending and waits for its fence as before.
     bool flushBatch();
+    // Debug parity switch: false restores one submit per flush (TEXT PERF 10 behaviour) for pixel comparison.
+    void setMergeTextBatches(bool merge) { mMergeText=merge; }
     bool copyYuv(uint8_t* y, uint8_t* u, uint8_t* v, int yr, int ur, int vr, int up, int vp);
     // Render-thread only, after a completed paused frame. -1 denotes failure/outside canvas.
     int64_t readPreviewPixel(float normalizedX, float normalizedY);
@@ -122,6 +127,9 @@ private:
         fluxx::text::TextPush push{};
     };
     std::vector<DrawEntry> mDrawOrder;
+    std::vector<DrawEntry> mDeferred; // TEXT PERF 11: text-only batches flushed by Kotlin, submitted with the next real batch.
+    bool mMergeText=true;
+    bool submitPending();
     std::unique_ptr<fluxx::text::TextRenderer> mText;
     std::map<int64_t,std::shared_ptr<const fluxx::text::Layout>> mTextLayouts;
     std::vector<std::shared_ptr<const fluxx::text::Layout>> mTierLayouts; // TEXT FIX 9d: reused per frame.

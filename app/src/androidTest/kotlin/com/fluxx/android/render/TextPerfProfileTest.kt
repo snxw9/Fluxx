@@ -34,8 +34,8 @@ class TextPerfProfileTest {
     private val kotlinCounts = setOf("layers", "flushes")
     private val nativeNames = listOf("workFenceWait", "batchRecord", "batchSubmitWait", "presentFenceWait", "acquire",
         "presentRecord", "presentSubmit", "presentIdleWait", "gpuBatch", "gpuPresent", "batches", "frames",
-        "nativeTextLayers", "nativeMeshBuild", "collectPack", "collects", "atlasUpload", "tierCalls", "placementLookups")
-    private val nativeCounts = setOf("batches", "frames", "nativeTextLayers", "collects", "tierCalls", "placementLookups")
+        "nativeTextLayers", "nativeMeshBuild", "collectPack", "collects", "atlasUpload", "tierCalls", "placementLookups", "mergedFlushes")
+    private val nativeCounts = setOf("batches", "frames", "nativeTextLayers", "collects", "tierCalls", "placementLookups", "mergedFlushes")
 
     @Test fun representativeStages() = f2("representative", false)
     @Test fun maximumStages() = f2("maximum", true, warm = 10, frames = 40)

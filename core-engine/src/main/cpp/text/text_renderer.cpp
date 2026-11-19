@@ -192,6 +192,22 @@ void TextRenderer::begin() {
     collected_.clear(); ++frame_; collectedRevision_=tierRevision_.load();
 }
 void TextRenderer::retireBatch() { vertices_.clear(); indices_.clear(); }
+bool TextRenderer::meshFits(const Layout& layout,const GlyphModifier* modifiers) const {
+    const auto found=preparedLayouts_.find(&layout);
+    if(found==preparedLayouts_.end()) return true; // mesh() reports the missing preparation.
+    const auto binding=found->second.characters.find(modifiers);
+    const size_t maximum=binding==found->second.characters.end()?layout.glyphs.size():std::max(layout.glyphs.size(),binding->second.maximumGlyphs);
+    return vertices_.size()+maximum*4<=vertices_.capacity() && indices_.size()+maximum*6<=indices_.capacity();
+}
+void TextRenderer::reserveFrame() {
+    // Called during preparation, after the previous submit's fence: resizing the GPU buffers here is safe.
+    const size_t glyphs=std::min(frameDemand_,mergedGlyphs());
+    frameDemand_=0;
+    if(vertices_.capacity()<glyphs*4) vertices_.reserve(glyphs*4);
+    if(indices_.capacity()<glyphs*6) indices_.reserve(glyphs*6);
+    buffer(vertex_,vertices_.capacity()*sizeof(TextVertex),VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    buffer(index_,indices_.capacity()*sizeof(uint32_t),VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+}
 std::shared_ptr<const Layout> TextRenderer::styledLayout(const std::string& font,const StyledInput& input,bool ligatures) {
     auto result=fonts_->shapeStyled(font,input.text,input.runs,input.uppercase,ligatures);
     std::set<Key> unique;
@@ -518,6 +534,7 @@ TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, con
     const auto maximumGlyphs=binding?std::max(layout.glyphs.size(),binding->maximumGlyphs):layout.glyphs.size();
     if(vertices_.size()+maximumGlyphs*4>vertices_.capacity() || indices_.size()+maximumGlyphs*6>indices_.capacity())
         throw TextCapacityError("Text batch exceeds prepared mesh capacity");
+    frameDemand_+=maximumGlyphs;
     TextMesh result{static_cast<uint32_t>(indices_.size()),0};
     const double factor=static_cast<double>(size)/layout.upem;
     const double spacing=static_cast<double>(tracking)*size/1000.0;

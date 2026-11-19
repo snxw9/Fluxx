@@ -9,7 +9,7 @@ import kotlin.math.*
 class PreparedTextAnimation(private val text: TextProperties,private val data: DoubleArray,
     ease: SelectorEaseTable,private val document: TextSourceDocument?=null,private val linePool: LinePermutationPool=LinePermutationPool(),
     breaks: IntArray?=null,paragraphKernel: ParagraphWrapKernel=NativeParagraphWrapKernel,
-    characterCatalogue: TextCharacterCatalogue?=null) {
+    characterCatalogue: TextCharacterCatalogue?=null,memo: TrackMemo=TrackMemo()) {
     private val lines=data[4].toInt();private val glyphs=data[5].toInt()
     private val prefix=6+lines*2+glyphs*8
     private val clusters=data[prefix+1].toInt();private val characterCount=data[prefix+2].toInt()
@@ -38,8 +38,18 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         SelectorMembership(maps,intArrayOf(characterCount,nonSpaces,words,lines),starts,ends)
     }
     private val engines=Array(text.animators.size) { PreparedSelectorEngine(text.animators[it],membership,ease,
-        linePool,lines,lineCapacity) }
+        linePool,lines,lineCapacity,memo) }
     private val properties=Array(text.animators.size) { text.animators[it].properties.toTypedArray() }
+    // TEXT PERF 11: layer, animator and property tracks as shared memo slots (TrackMemo).
+    private val sizeTrack=memo.scalar(text.size);private val trackingTrack=memo.scalar(text.tracking)
+    private val leadingTrack=memo.scalar(text.leading);private val baselineTrack=memo.scalar(text.baselineShift)
+    private val fillTrack=memo.colour(text.fill);private val strokeTrack=memo.colour(text.strokeColour)
+    private val strokeWidthTrack=memo.scalar(text.strokeWidth)
+    private val enabledTracks=Array(text.animators.size) { memo.scalar(text.animators[it].enabled) }
+    private val groupingTracks=Array(text.animators.size) { memo.scalar(text.animators[it].anchorGrouping) }
+    private val scalarTracks=Array(text.animators.size) { a -> Array(properties[a].size) { j -> properties[a][j].scalar?.let(memo::scalar) } }
+    private val vectorTracks=Array(text.animators.size) { a -> Array(properties[a].size) { j -> properties[a][j].vector?.let(memo::vector) } }
+    private val colourTracks=Array(text.animators.size) { a -> Array(properties[a].size) { j -> properties[a][j].colour?.let(memo::colour) } }
     private val coverage=Array(text.animators.size) { DoubleArray(clusters) }
     private val independent=BooleanArray(text.animators.size) { a->text.animators[a].selectors.any { s->
         (s.kind.staticValue!=0f || s.kind.keyframes.any { it.value!=0f }) &&
@@ -134,11 +144,11 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         evaluatedTime=time;hasEvaluation=true
     }
     private fun evaluateSelectors(time: Long) {
-        size=text.size.evaluate(time).toDouble();factor=size/data[0]
-        tracking=text.tracking.evaluate(time).toDouble()*size/1000
-        val leading=text.leading.evaluate(time).toDouble();baseline=text.baselineShift.evaluate(time).toDouble()
+        size=sizeTrack.evaluate(time).toDouble();factor=size/data[0]
+        tracking=trackingTrack.evaluate(time).toDouble()*size/1000
+        val leading=leadingTrack.evaluate(time).toDouble();baseline=baselineTrack.evaluate(time).toDouble()
         step=(data[1]-data[2]+max(0.0,data[3]))*factor+leading
-        paragraph?.evaluate(size,text.tracking.evaluate(time).toDouble(),step)
+        paragraph?.evaluate(size,trackingTrack.evaluate(time).toDouble(),step)
         workingLines=if(paragraph!=null) paragraph.lineCount else lines
         if(paragraph!=null) {
             paragraph.clusterLines.copyInto(clusterLines)
@@ -149,8 +159,8 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         lineCharacters.fill(0);extraSpacing.fill(0.0)
         characterTotals.fill(0.0);characters?.begin()
         for(c in 0 until clusters) lineCharacters[clusterLines[c]]+=ends[c]-starts[c]
-        baseFill=text.fill.evaluate(time);baseStroke=text.strokeColour.evaluate(time)
-        baseWidth=text.strokeWidth.evaluate(time).toDouble()
+        baseFill=fillTrack.evaluate(time);baseStroke=strokeTrack.evaluate(time)
+        baseWidth=strokeWidthTrack.evaluate(time).toDouble()
         if(paragraph==null) for(c in 0 until clusters) {
             val spacingScale=runSizes[c]*styles[c].horizontalScale/100
             val delta=runManual[c]*size*spacingScale/1000+(if(nextInLine[c]) runSpacing[c]*size*spacingScale/1000+tracking*(spacingScale-1) else 0.0)
@@ -172,18 +182,21 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
     }
     private fun evaluateAnimator(a: Int,time: Long) {
         val animator=text.animators[a]
-        active[a]=animator.enabled.hold(time)!=0f
+        active[a]=enabledTracks[a].hold(time)!=0f
         if(!active[a]) return
         engines[a].evaluate(time,coverage[a])
         if(independent[a]) { engines[a].evaluate(time,coverageY[a],1);engines[a].evaluate(time,coverageZ[a],2) }
         values[a].fill(0.0)
-        grouping[a]=animator.anchorGrouping.hold(time).toInt()
-        for(p in properties[a]) {
+        grouping[a]=groupingTracks[a].hold(time).toInt()
+        val list=properties[a];val scalars=scalarTracks[a];val vectors=vectorTracks[a];val colourSlots=colourTracks[a]
+        for(j in list.indices) {
+            val p=list[j]
             val i=p.property.ordinal
+            val scalar=scalars[j];val vectorSlot=vectors[j]
             when {
-                p.scalar!=null -> values[a][i*2]=p.scalar.evaluate(time).toDouble()
-                p.vector!=null -> { p.vector.evaluate(time,vector,0);values[a][i*2]=vector[0].toDouble();values[a][i*2+1]=vector[1].toDouble() }
-                else -> colours[a][i]=requireNotNull(p.colour).evaluate(time)
+                scalar!=null -> values[a][i*2]=scalar.evaluate(time).toDouble()
+                vectorSlot!=null -> { vectorSlot.evaluate(time,vector,0);values[a][i*2]=vector[0].toDouble();values[a][i*2+1]=vector[1].toDouble() }
+                else -> colours[a][i]=requireNotNull(colourSlots[j]).evaluate(time)
             }
             if(p.property==AnimatorProperty.CHARACTER_OFFSET || p.property==AnimatorProperty.CHARACTER_VALUE)
                 characters?.apply(p.property,values[a][i*2],coverage[a])

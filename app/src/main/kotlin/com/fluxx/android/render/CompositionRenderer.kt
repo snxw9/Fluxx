@@ -79,6 +79,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
         for(handle in characterHandles) RenderBridge.releaseText(session,handle)
         characterHandles.clear()
         var characterBytes=0L
+        // TEXT PERF 11: one track memo per prepared project, used only on this renderer's thread. Equal tracks of
+        // different layers (duplicated layers, shared animators) are evaluated once per frame time.
+        val memo=TrackMemo()
         val layers = project.composition.layers
         val wanted=layers.filter { it.type==LayerType.TEXT }.flatMap { layer ->
             StyledTextPreparation.alternatives(layer.text.source).flatMap { source ->
@@ -107,7 +110,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 }
                 RenderBridge.upsertPreparedText(session,packet).also { characterHandles.add(it) }
             }?.toLongArray()
-            val animations=Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(layer.text,selectorEase,sources[it/2],linePool,catalogue?.catalogue)) }
+            val animations=Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(layer.text,selectorEase,sources[it/2],linePool,catalogue?.catalogue,memo)) }
             if(handles!=null) for(i in animations.indices) animations[i].characters?.let { characters->
                 RenderBridge.bindTextCharacters(session,layouts[i].handle,handles,characters.catalogue.codepoints,characters.fontIndices,
                     sources[i/2].text,animations[i].modifiers,characters.codes)
@@ -244,11 +247,13 @@ class CompositionRenderer(private val context: Context, private val repository: 
             RenderBridge.textTiers(session, tierAllHandles, tierHandleTiers, !interactive)
             System.arraycopy(tierHandleTiers, 0, tierSent, 0, tierSent.size)
         }
-        if (!sharp) { stageNs[STAGE_TIER_JNI] += System.nanoTime() - tierJni; return } // Base tier only: nothing for the isolated worker.
+        stageNs[STAGE_TIER_JNI] += System.nanoTime() - tierJni
+        if (!sharp) return // Base tier only: nothing for the isolated worker.
+        val requestJni = System.nanoTime()
         // Imported-font glyphs the renderer cannot rasterise itself: preview fetches them in the background (the lower
         // tier stays until they arrive); export fetches them now, so every exported frame is deterministic.
         var tierRequests = synchronized(tierLock) { RenderBridge.textTierRequests(session) }
-        stageNs[STAGE_TIER_JNI] += System.nanoTime() - tierJni
+        stageNs[STAGE_TIER_JNI] += System.nanoTime() - requestJni
         if (interactive) { if (tierRequests != null) tierFetcher.submit(tierRequests) }
         else for (round in 0 until EXPORT_TIER_ROUNDS) {
             if (tierRequests == null) break

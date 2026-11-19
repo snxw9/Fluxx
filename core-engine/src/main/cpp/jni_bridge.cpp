@@ -246,6 +246,10 @@ JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_TextDebugBridge_allocation
 JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_TextDebugBridge_allocationCanary(JNIEnv*,jobject) {
     return fluxx::text::debug::allocationCanary();
 }
+// TEXT PERF 11: parity switch for merged text batches (false = one submit per flush, the TEXT PERF 10 behaviour).
+JNIEXPORT void JNICALL Java_com_fluxx_android_engine_TextDebugBridge_mergeTextBatches(JNIEnv*,jobject,jlong session,jboolean merge) {
+    reinterpret_cast<VulkanRenderer*>(session)->setMergeTextBatches(merge);
+}
 // TEXT PERF 10: frame stage profile (VulkanRenderer::Stage order); resets the accumulators.
 JNIEXPORT void JNICALL Java_com_fluxx_android_engine_TextDebugBridge_frameStages(JNIEnv* env,jobject,jlong session,jlongArray output) {
     int64_t values[VulkanRenderer::StageCount]{};

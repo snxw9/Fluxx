@@ -434,7 +434,7 @@ bool VulkanRenderer::proofSurface(ANativeWindow* window, int width, int height) 
 }
 void VulkanRenderer::proofRepack() {
 #ifdef FLUXX_TEXT_DIAGNOSTICS
-    if(!mText || !mDrawOrder.empty() || vkDeviceWaitIdle(mDevice)!=VK_SUCCESS) throw std::logic_error("Repack requires an idle text renderer");
+    if(!mText || !mDrawOrder.empty() || !mDeferred.empty() || vkDeviceWaitIdle(mDevice)!=VK_SUCCESS) throw std::logic_error("Repack requires an idle text renderer");
     mText->repackRetained();
 #endif
 }
@@ -1318,7 +1318,8 @@ bool VulkanRenderer::beginFrame(int width, int height, int presentationWidth, in
     mPresentationWidth = presentationWidth > 0 ? presentationWidth : width;
     mPresentationHeight = presentationHeight > 0 ? presentationHeight : height;
     mFirstBatch = true;
-    mDrawOrder.clear();
+    mDrawOrder.clear(); mDeferred.clear();
+    if (mText) mText->retireBatch();
     mTextPrepared=false;
     if (width != mCompWidth || height != mCompHeight) {
         LOGI("Offscreen target resize %dx%d -> %dx%d (presentation %dx%d)",
@@ -1357,7 +1358,7 @@ int64_t VulkanRenderer::upsertPreparedText(const uint8_t* bytes,size_t length) {
 }
 bool VulkanRenderer::prepareText(const int64_t* handles, size_t count, bool proofOnly) {
     TraceScope trace("fluxx.prepareText");
-    if(!mInitialized || !mDrawOrder.empty() || !mFirstBatch) throw std::logic_error("Text preparation must precede composition draws");
+    if(!mInitialized || !mDrawOrder.empty() || !mDeferred.empty() || !mFirstBatch) throw std::logic_error("Text preparation must precede composition draws");
     if(!count) return true;
     if(!mText || !beginWork()) return false;
     if(mPreparedProofOnly==proofOnly && count==mPreparedTextHandles.size() &&
@@ -1373,7 +1374,8 @@ bool VulkanRenderer::prepareText(const int64_t* handles, size_t count, bool proo
     const uint64_t lookups=mText->stats().placementLookups;
     for(size_t i=0;i<count;++i) mText->prepareMesh(mTextLayouts.at(handles[i]));
     mStages[PlacementLookups]+=static_cast<int64_t>(mText->stats().placementLookups-lookups);
-    mDrawOrder.reserve(4); mTextPrepared=true;
+    mText->reserveFrame(); // TEXT PERF 11: room for every text layer of the frame in one merged submit.
+    mDrawOrder.reserve(4); mDeferred.reserve(64); mTextPrepared=true;
     // No command submission yet: pack/capacity validation finishes before any draw.
     return true;
 }
@@ -1394,6 +1396,8 @@ bool VulkanRenderer::setTextLayer(int64_t handle, const float* matrix, float siz
     DrawEntry entry{}; entry.text=true;
     const auto& layout=*mTextLayouts.at(handle);
     if(modifiers && modifierBytes!=layout.clusters.size()*sizeof(fluxx::text::GlyphModifier)) throw std::invalid_argument("Modifier buffer size does not match clusters");
+    // Merged text storage full (first frames, or beyond the bounded reserve): submit what is pending now.
+    if((!mDeferred.empty() || !mDrawOrder.empty()) && !mText->meshFits(layout,modifiers) && !submitPending()) return false;
     entry.mesh=mText->mesh(layout,size,alignment,modifiers,tracking,leading,baselineShift,argb,stroke,strokeWidth,softness);
     std::copy(matrix,matrix+16,entry.push.matrix);
     entry.push.settings[0]=static_cast<float>(paintOrder);entry.push.settings[1]=opacity;
@@ -1458,7 +1462,7 @@ bool VulkanRenderer::setFrameLayer(int64_t id, AHardwareBuffer* buffer, const fl
 }
 bool VulkanRenderer::finishFrame() {
     if (!mInitialized) return false;
-    if ((!mDrawOrder.empty() || mFirstBatch) && !flushBatch()) return false;
+    if ((!mDrawOrder.empty() || !mDeferred.empty() || mFirstBatch) && !submitPending()) return false;
     if (mWindow) {
         // TEXT PERF 10: no vkQueueWaitIdle after present (it held the render thread for the whole blit, 3.5-8 ms a
         // frame). GPU order already protects every later use: the next batch's render pass depends on TRANSFER reads
@@ -1502,6 +1506,19 @@ bool VulkanRenderer::submitWork() {
     return done;
 }
 bool VulkanRenderer::flushBatch() {
+    // TEXT PERF 11: 30 text layers used to cost 8 submits, 8 fence waits and 8 full-target load/store render passes
+    // per frame. A text entry's mesh is built into native storage and its matrix copied when setTextLayer returns, so
+    // a text-only batch references nothing Kotlin may release after flush: keep it for the next real submit.
+    if (mMergeText && !mDrawOrder.empty() && std::all_of(mDrawOrder.begin(),mDrawOrder.end(),[](const DrawEntry& e) { return e.text; })) {
+        mDeferred.insert(mDeferred.end(),mDrawOrder.begin(),mDrawOrder.end());
+        mDrawOrder.clear(); ++mStages[MergedFlushes];
+        return true;
+    }
+    return submitPending();
+}
+// Records every pending entry (merged text first, in draw order, then the current batch) in one render pass, submits
+// it and waits for its fence. After it returns no pending GPU work references any layer resource.
+bool VulkanRenderer::submitPending() {
     if (!beginWork()) return false;
     const int64_t recording = nowNs();
     ATrace_beginSection("fluxx.batchRecord");
@@ -1558,7 +1575,7 @@ bool VulkanRenderer::flushBatch() {
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    for (const auto& entry : mDrawOrder) {
+    auto record = [&](const DrawEntry& entry) {
         VkViewport viewport{};
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
@@ -1577,14 +1594,16 @@ bool VulkanRenderer::flushBatch() {
         vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-        if(entry.text) { mText->draw(commandBuffer,entry.mesh,entry.push); continue; }
+        if(entry.text) { mText->draw(commandBuffer,entry.mesh,entry.push); return; }
         auto& layer = mLayers.at(entry.rasterId);
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layer.mVideoPipeline);
 
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layer.mVideoPipelineLayout, 0, 1, &layer.mVideoDescriptorSet, 0, nullptr);
         vkCmdPushConstants(commandBuffer, layer.mVideoPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(LayerTransform), &layer.transform);
         vkCmdDraw(commandBuffer, 6, 1, 0, 0);
-    }
+    };
+    for (const auto& entry : mDeferred) record(entry);
+    for (const auto& entry : mDrawOrder) record(entry);
 
     vkCmdEndRenderPass(commandBuffer);
     if (mTimestamps) vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, mTimestamps, 1);
@@ -1593,7 +1612,7 @@ bool VulkanRenderer::flushBatch() {
     if (!submitWork()) return false;
     mStages[GpuBatch] += gpuSpanNs(0); ++mStages[Batches];
     mFirstBatch=false;
-    mDrawOrder.clear();
+    mDrawOrder.clear(); mDeferred.clear();
     // submitWork waits for this batch's fence: reuse mesh storage without
     // retaining and re-uploading every preceding text layer in the frame.
     if (mText) mText->retireBatch();
@@ -1605,7 +1624,7 @@ void VulkanRenderer::releaseLayers() {
         cleanupVideoImage(entry.second); cleanupVideoPipeline(entry.second);
         if (entry.second.buffer) AHardwareBuffer_release(entry.second.buffer);
     }
-    mLayers.clear(); mDrawOrder.clear();
+    mLayers.clear(); mDrawOrder.clear(); mDeferred.clear();
 }
 
 bool VulkanRenderer::readbackRgba() {
