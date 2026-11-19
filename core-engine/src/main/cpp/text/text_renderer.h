@@ -149,7 +149,12 @@ private:
     std::set<Key> queued_, failed_;
     std::set<Key> externalInFlight_;
     // Layouts whose external keys were all ready/retained/failed at the given tier (skip the scan; cleared on eviction).
-    std::map<const Layout*,unsigned> externalSettled_;
+    // Layout -> (settled tier, epoch). TEXT PERF 10: invalidated by bumping externalEpoch_ rather than clear(), so a
+    // layout keeps its node and re-settling after a repack/eviction never allocates (it inserted 1 node per layout).
+    struct Settled { unsigned tier=0; uint64_t epoch=0; };
+    std::map<const Layout*,Settled> externalSettled_;
+    uint64_t externalEpoch_=1;
+    void unsettleExternal() { ++externalEpoch_; }
     std::map<Key,std::shared_ptr<const SdfGlyph>> ready_;
     std::map<Key,uint64_t> readyUse_;
     size_t readyBytes_=0, cpuBudget_=tiers::CpuBudget;

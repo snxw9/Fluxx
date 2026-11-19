@@ -52,7 +52,7 @@ fun interpolateColour(a: Int, b: Int, progress: Float): Int {
         val shift = 16 - channel * 8
         val value = SrgbCodec.linear8((a ushr shift) and 255) * aa * (1 - t) +
             SrgbCodec.linear8((b ushr shift) and 255) * ba * t
-        result = result or ((if (alpha == 0.0) 0 else SrgbCodec.encode8((value / alpha).coerceIn(0.0, 1.0))) shl shift)
+        result = result or ((if (alpha == 0.0) 0 else SrgbCodec.encode8(SelectorMath.clamp(value / alpha, 0.0, 1.0))) shl shift)
     }
     return result
 }

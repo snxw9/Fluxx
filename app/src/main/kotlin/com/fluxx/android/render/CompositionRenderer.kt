@@ -355,6 +355,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
 
     private fun renderTarget(project: ProjectDocument, timeUs: Long, targetWidth: Int, targetHeight: Int,
         cancelled: () -> Boolean) {
+        TextIdlePrewarm.frameRendered(System.nanoTime()) // TEXT PERF 10: idle prewarm stays paused while frames render.
         // Export pins the prepared resource snapshot; interactive previews refresh library edits.
         if((interactive || prepared!==project) && preparedFontRevision!=fontLibrary.revision) {
             for(layout in textLayouts.values) RenderBridge.releaseText(session,layout.handle)

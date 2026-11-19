@@ -269,13 +269,19 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         for(a in engines.indices) if(active[a]) applyAnimator(a)
     }
     private fun applyAnimator(a: Int) {
+        // Ordinals once per animator (Enum.ordinal was a call per glyph in the debuggable JIT); same indices.
+        val oGROUPING_ALIGNMENT=AnimatorProperty.GROUPING_ALIGNMENT.ordinal;val oFILL_OPACITY=AnimatorProperty.FILL_OPACITY.ordinal
+        val oSTROKE_OPACITY=AnimatorProperty.STROKE_OPACITY.ordinal;val oFILL_HUE=AnimatorProperty.FILL_HUE.ordinal
+        val oFILL_SATURATION=AnimatorProperty.FILL_SATURATION.ordinal;val oFILL_BRIGHTNESS=AnimatorProperty.FILL_BRIGHTNESS.ordinal
+        val oSTROKE_HUE=AnimatorProperty.STROKE_HUE.ordinal;val oSTROKE_SATURATION=AnimatorProperty.STROKE_SATURATION.ordinal
+        val oSTROKE_BRIGHTNESS=AnimatorProperty.STROKE_BRIGHTNESS.ordinal
         val v=values[a];val has=present[a]
         for(c in 0 until clusters) {
             val weight=coverage[a][c];val weightY=coverageY[a][c];val weightZ=coverageZ[a][c]
             if(weight==0.0 && weightY==0.0 && weightZ==0.0) continue
             val kind=grouping[a];val bounds=groups[kind];val gi=group(c,kind)*4
-            val px=(bounds[gi]+bounds[gi+2])*.5+v[AnimatorProperty.GROUPING_ALIGNMENT.ordinal*2]/100*(bounds[gi+2]-bounds[gi])
-            val py=(bounds[gi+1]+bounds[gi+3])*.5+v[AnimatorProperty.GROUPING_ALIGNMENT.ordinal*2+1]/100*(bounds[gi+3]-bounds[gi+1])
+            val px=(bounds[gi]+bounds[gi+2])*.5+v[oGROUPING_ALIGNMENT*2]/100*(bounds[gi+2]-bounds[gi])
+            val py=(bounds[gi+1]+bounds[gi+3])*.5+v[oGROUPING_ALIGNMENT*2+1]/100*(bounds[gi+3]-bounds[gi+1])
             SelectorMath.affine(affine,weight,v[0],v[1],px,py,v[12],v[13],v[4],
                 if(has[1]) v[2] else 100.0,if(has[1]) v[3] else 100.0,v[8],v[10],weightY,trig)
             val i=c*6;val a0=matrices[i];val a1=matrices[i+1];val a2=matrices[i+2];val a3=matrices[i+3];val a4=matrices[i+4];val a5=matrices[i+5]
@@ -287,12 +293,12 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
             if(has[7]) fill[c]=if(independent[a]) TextAnimatorColour.blend(fill[c],colours[a][7],weight,weightY,weightZ) else interpolateColour(fill[c],colours[a][7],colourWeight)
             if(has[8]) stroke[c]=if(independent[a]) TextAnimatorColour.blend(stroke[c],colours[a][8],weight,weightY,weightZ) else interpolateColour(stroke[c],colours[a][8],colourWeight)
             val cw=colourWeight.toDouble();val cy=SelectorMath.clamp(weightY,0.0,1.0);val cz=SelectorMath.clamp(weightZ,0.0,1.0)
-            if(has[AnimatorProperty.FILL_OPACITY.ordinal]) fill[c]=TextAnimatorColour.opacity(fill[c],v[AnimatorProperty.FILL_OPACITY.ordinal*2],cw)
-            if(has[AnimatorProperty.STROKE_OPACITY.ordinal]) stroke[c]=TextAnimatorColour.opacity(stroke[c],v[AnimatorProperty.STROKE_OPACITY.ordinal*2],cw)
-            fill[c]=TextAnimatorColour.hsb(fill[c],v[AnimatorProperty.FILL_HUE.ordinal*2]*cw,
-                v[AnimatorProperty.FILL_SATURATION.ordinal*2]*cy,v[AnimatorProperty.FILL_BRIGHTNESS.ordinal*2]*cz)
-            stroke[c]=TextAnimatorColour.hsb(stroke[c],v[AnimatorProperty.STROKE_HUE.ordinal*2]*cw,
-                v[AnimatorProperty.STROKE_SATURATION.ordinal*2]*cy,v[AnimatorProperty.STROKE_BRIGHTNESS.ordinal*2]*cz)
+            if(has[oFILL_OPACITY]) fill[c]=TextAnimatorColour.opacity(fill[c],v[oFILL_OPACITY*2],cw)
+            if(has[oSTROKE_OPACITY]) stroke[c]=TextAnimatorColour.opacity(stroke[c],v[oSTROKE_OPACITY*2],cw)
+            fill[c]=TextAnimatorColour.hsb(fill[c],v[oFILL_HUE*2]*cw,
+                v[oFILL_SATURATION*2]*cy,v[oFILL_BRIGHTNESS*2]*cz)
+            stroke[c]=TextAnimatorColour.hsb(stroke[c],v[oSTROKE_HUE*2]*cw,
+                v[oSTROKE_SATURATION*2]*cy,v[oSTROKE_BRIGHTNESS*2]*cz)
             width[c]+=weight*v[18];blur[c]+=weight*v[24]
         }
     }

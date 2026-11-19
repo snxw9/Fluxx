@@ -211,6 +211,8 @@ bool TextRenderer::setTier(const Layout* layout,unsigned ppem) {
     const unsigned current=found==wantedTier_.end()?tiers::BasePpem:found->second;
     if(current==ppem) return false;
     wantedTier_[layout]=ppem; tierCap_.erase(layout); ++tierRevision_;
+    // TEXT PERF 10: the settled-tier node exists from the tier-change frame (which already re-collects), never later.
+    if(ppem!=tiers::BasePpem) { std::lock_guard<std::mutex> lock(tierMutex_); externalSettled_.try_emplace(layout); }
     return true;
 }
 unsigned TextRenderer::tierFor(const Layout* layout) const {
@@ -287,7 +289,7 @@ void TextRenderer::trimReady() {
     for(const auto& key:order) {
         if(readyBytes_<=cpuBudget_) break;
         readyBytes_-=ready_[key]->pixels.size(); ready_.erase(key); readyUse_.erase(key); ++stats_.tierEvictions;
-        if(external(std::get<0>(key))) externalSettled_.clear();
+        if(external(std::get<0>(key))) unsettleExternal();
     }
 }
 size_t TextRenderer::awaitTiers(int timeoutMs) {
@@ -304,7 +306,7 @@ std::vector<TierKey> TextRenderer::takeExternalRequests(const std::vector<std::s
         const unsigned tier=tierFor(layout.get());
         if(tier==tiers::BasePpem) continue;
         const auto settled=externalSettled_.find(layout.get());
-        if(settled!=externalSettled_.end() && settled->second==tier) continue;
+        if(settled!=externalSettled_.end() && settled->second.tier==tier && settled->second.epoch==externalEpoch_) continue;
         bool complete=true;
         for(size_t i=0;i<layout->glyphs.size();++i) {
             const auto& font=layout->glyphFont(i);
@@ -315,7 +317,8 @@ std::vector<TierKey> TextRenderer::takeExternalRequests(const std::vector<std::s
             if(externalInFlight_.count(key) || requests.size()>=max) continue;
             externalInFlight_.insert(key);requests.push_back({font,layout->glyphs[i].id,tier});
         }
-        if(complete) externalSettled_[layout.get()]=tier; else externalSettled_.erase(layout.get());
+        if(complete) { auto& entry=externalSettled_[layout.get()]; entry.tier=tier; entry.epoch=externalEpoch_; }
+        else if(settled!=externalSettled_.end()) settled->second.epoch=0; // Unsettled; the node is kept for reuse.
     }
     stats_.tierExternalRequested+=requests.size();
     return requests;
@@ -332,7 +335,7 @@ size_t TextRenderer::supplyTierGlyphs(const TierReply& reply) {
         }
         for(const auto& k:reply.failed) { const Key key{k.fontId,k.glyphId,k.ppem};if(externalInFlight_.erase(key)) { failed_.insert(key);++stats_.tierExternalFailed; } }
         for(const auto& k:reply.deferred) externalInFlight_.erase(Key{k.fontId,k.glyphId,k.ppem}); // Asked for again next frame.
-        if(!reply.deferred.empty()) externalSettled_.clear();
+        if(!reply.deferred.empty()) unsettleExternal();
         stats_.tierExternalSupplied+=accepted;
         trimReady();
     }
@@ -423,7 +426,7 @@ void TextRenderer::pack(bool proofOnly) {
         destroyAtlas(); allocatedPages_=count; createAtlas(); ++stats_.arrayRecreations; stats_.atlasPages=count;
     } else if(!image_) { allocatedPages_=std::max(allocatedPages_,count); createAtlas(); stats_.atlasPages=allocatedPages_; }
     retained_=std::move(candidates); packed_=std::move(packed); placements_.clear();
-    { std::lock_guard<std::mutex> settledLock(tierMutex_); externalSettled_.clear(); } // Repacked atlas: rescan external keys.
+    { std::lock_guard<std::mutex> settledLock(tierMutex_); unsettleExternal(); } // Repacked atlas: rescan external keys.
     for(unsigned page=0;page<packed_.pages.size();++page) for(const auto& p:packed_.pages[page].placements)
         placements_.emplace(Key{p.glyph->fontId,p.glyph->glyphId,p.glyph->ppem},PagePlacement{p,page});
     dirty_=true; ++stats_.generation;

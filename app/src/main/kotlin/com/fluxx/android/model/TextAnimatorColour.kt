@@ -36,7 +36,7 @@ object TextAnimatorColour {
             val shift=16-channel*8
             val value=SrgbCodec.linear8((a ushr shift) and 255)*aa*(1-weight)+SrgbCodec.linear8((b ushr shift) and 255)*ba*weight
             val valueAlpha=aa*(1-weight)+ba*weight
-            val byte=if(valueAlpha==0.0) 0 else SrgbCodec.encode8((value/valueAlpha).coerceIn(0.0,1.0))
+            val byte=if(valueAlpha==0.0) 0 else SrgbCodec.encode8(SelectorMath.clamp(value/valueAlpha,0.0,1.0))
             result=result or (byte shl shift)
         }
         return result

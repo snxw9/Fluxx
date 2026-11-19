@@ -14,26 +14,37 @@ object TextIdlePrewarm {
     private val scope=CoroutineScope(SupervisorJob()+dispatcher)
     private var job: Job?=null
     private val epoch=AtomicLong()
-    @Volatile private var cursor=0
     private val faces=TextFontRef.BUNDLED_IDS.toList()
     private val scalars=(32..126).toList()+(160..255).toList()
     private var session: FontSession?=null
+    /** TEXT PERF 10: renderer frames pause the prewarm; it resumes this long after the last frame. */
+    const val QUIET_MS=750L
+    val activity=FrameActivityGate(QUIET_MS*1_000_000)
+    /** Called once per rendered frame (render thread): one volatile store, no allocation. */
+    fun frameRendered(nowNs: Long) = activity.frame(nowNs)
+    private val loop=IdleWarmLoop(faces.size*scalars.size,activity) { index ->
+        val fonts=requireNotNull(session)
+        fonts.warmGlyph(faces[index/scalars.size],scalars[index%scalars.size])
+    }
     @Synchronized fun foreground(context: Context) {
         val generation=epoch.incrementAndGet();job?.cancel()
-        if(cursor>=faces.size*scalars.size) return
+        if(loop.finished) return
         val app=context.applicationContext
         job=scope.launch {
             delay(1500)
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
-            val fonts=session ?: FontSession(app.assets).also {session=it}
-            val began=System.nanoTime();var bytes=0L;var glyphs=0
+            if(session==null) session=FontSession(app.assets)
+            val began=System.nanoTime();val startCursor=loop.cursor;val startBytes=loop.bytes
             try {
-                while(cursor<faces.size*scalars.size && epoch.get()==generation) {
+                while(epoch.get()==generation) {
                     ensureActive()
-                    bytes+=fonts.warmGlyph(faces[cursor/scalars.size],scalars[cursor%scalars.size]);cursor++;glyphs++
-                    yield()
+                    when(loop.next(System.nanoTime())) {
+                        IdleWarmLoop.Step.DONE -> break
+                        IdleWarmLoop.Step.PAUSED -> delay(QUIET_MS/3) // Playback or scrubbing: stay off the CPU.
+                        IdleWarmLoop.Step.WARMED -> yield()
+                    }
                 }
-            } finally {TextEditTimings.record("idle_prewarm",System.nanoTime()-began,"glyphs=$glyphs,requested_pixel_bytes=$bytes")}
+            } finally {TextEditTimings.record("idle_prewarm",System.nanoTime()-began,"glyphs=${loop.cursor-startCursor},requested_pixel_bytes=${loop.bytes-startBytes}")}
         }
     }
     fun imported(context: Context,reference: TextFontRef) {
