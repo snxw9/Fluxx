@@ -327,7 +327,11 @@ fun EditorScreen(
             val minimumPreview=if(available>=264.dp) 96.dp else 48.dp
             val desiredInspectorHeight=if(isInspectorOpen && selectedLayer?.type==LayerType.TEXT)
                 targetInspectorHeight.coerceAtMost((available-minimumPreview).coerceAtLeast(0.dp)) else targetInspectorHeight
-            val previewHeight = (available - desiredInspectorHeight).coerceAtLeast(0.dp)
+            // TEXT PERF 11: short windows (landscape phone, split screen, resized window) kept the full inspector budget
+            // and left the canvas no height at all (A16 landscape: 0 dp). Below 560dp of window height the preview keeps at
+            // least 45% of the space; portrait phone windows (~780dp+) never reach this branch and are unchanged.
+            val shortWindowPreview = if (maxHeight < 560.dp) available * 0.45f else 0.dp
+            val previewHeight = (available - desiredInspectorHeight).coerceAtLeast(shortWindowPreview).coerceAtMost(available)
             val inspectorHeight = available - previewHeight
             // Match the real space below the preview, including the bottom system inset.
             SideEffect { addContentHeight = maxHeight - previewHeight + innerPadding.calculateBottomPadding() }
