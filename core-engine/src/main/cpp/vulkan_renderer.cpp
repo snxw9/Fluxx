@@ -562,10 +562,17 @@ bool VulkanRenderer::createSwapchain() {
     createInfo.imageFormat = surfaceFormat.format;
     createInfo.imageColorSpace = surfaceFormat.colorSpace;
 
-    if (capabilities.currentExtent.width != 0xFFFFFFFF) {
+    if (mWidth > 0 && mHeight > 0) {
+        // TEXT PERF 11: the size the SurfaceView reported (surfaceChanged), clamped to what the surface accepts. Right
+        // after a rotation or window resize currentExtent can still be the previous size, which left the preview
+        // stretched until another resize arrived (A16 landscape: requested 2240x219, swapchain 2340x212).
+        createInfo.imageExtent = {
+            std::clamp((uint32_t)mWidth, capabilities.minImageExtent.width, std::max(capabilities.minImageExtent.width, capabilities.maxImageExtent.width)),
+            std::clamp((uint32_t)mHeight, capabilities.minImageExtent.height, std::max(capabilities.minImageExtent.height, capabilities.maxImageExtent.height)) };
+    } else if (capabilities.currentExtent.width != 0xFFFFFFFF) {
         createInfo.imageExtent = capabilities.currentExtent;
     } else {
-        createInfo.imageExtent = { (uint32_t)mWidth, (uint32_t)mHeight };
+        createInfo.imageExtent = { 1u, 1u };
     }
 
     createInfo.imageArrayLayers = 1;
