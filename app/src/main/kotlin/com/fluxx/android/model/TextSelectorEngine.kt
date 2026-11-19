@@ -32,6 +32,17 @@ object SelectorMath {
     /** Math.min / Math.max exactly (NaN first operand, signed zeros), without doubleToRawLongBits on two zeros. */
     @Suppress("NOTHING_TO_INLINE") inline fun least(a: Double,b: Double)=if(a!=a) a else if(a==0.0 && b==0.0) (if(1.0/b<0) b else a) else if(a<=b) a else b
     @Suppress("NOTHING_TO_INLINE") inline fun greatest(a: Double,b: Double)=if(a!=a) a else if(a==0.0 && b==0.0) (if(1.0/a<0) b else a) else if(a>=b) a else b
+    /**
+     * Exactly Math.floor for every double (signed zero, infinities and integral values of 2^52 and above pass
+     * through; a NaN is quieted by an FPU add, as floor quiets it), inlined: in debuggable ART Math.floor is a
+     * generic JNI call (TEXT PERF 10).
+     */
+    @Suppress("NOTHING_TO_INLINE") inline fun floor(x: Double): Double {
+        if(x!=x) return x+0.0
+        if(!(x>-4503599627370496.0 && x<4503599627370496.0) || x==0.0) return x
+        val f=x.toLong().toDouble()
+        return if(f>x) f-1.0 else f
+    }
     fun smooth(t: Double) = t*t*(3-2*t)
     fun shape(shape: SelectorShape,u: Double): Double = when(shape) {
         SelectorShape.SQUARE -> 1.0

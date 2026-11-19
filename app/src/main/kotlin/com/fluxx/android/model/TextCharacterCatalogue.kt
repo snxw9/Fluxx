@@ -12,9 +12,12 @@ object TextCharacterPreparation {
     fun needed(text: TextProperties)=text.animators.any { a->a.properties.any {
         it.property==AnimatorProperty.CHARACTER_OFFSET || it.property==AnimatorProperty.CHARACTER_VALUE
     } }
-    fun valid(value: Double): Boolean = value.isFinite() && value>=0 && value<=0x10ffff &&
-        value.toInt() !in 0xd800..0xdfff && Character.getType(value.toInt())!=Character.CONTROL.toInt() &&
-        Character.getType(value.toInt())!=Character.FORMAT.toInt()
+    /** TEXT PERF 10: `value - value == 0.0` is isFinite without Math.abs, and getType (a JNI call) is taken once. Same result. */
+    fun valid(value: Double): Boolean {
+        if(!(value-value==0.0 && value>=0 && value<=0x10ffff)) return false
+        val code=value.toInt();if(code in 0xd800..0xdfff) return false
+        val type=Character.getType(code);return type!=Character.CONTROL.toInt() && type!=Character.FORMAT.toInt()
+    }
     fun resolve(original: Int,current: Int,property: AnimatorProperty,requested: Double,coverage: Double): Int {
         if(coverage==0.0) return current
         val value=floor((if(property==AnimatorProperty.CHARACTER_VALUE) requested else current+coverage*requested)+.5)
@@ -98,7 +101,7 @@ class PreparedTextCharacters(document: TextSourceDocument,private val starts: In
     fun begin() { for(i in originals.indices) codes.putInt(i*4,originals[i]);changed.fill(false);active.fill(false) }
     fun apply(property: AnimatorProperty,value: Double,coverage: DoubleArray) {
         for(c in starts.indices) if(coverage[c]!=0.0) for(i in starts[c] until ends[c]) {
-            val attempted=floor((if(property==AnimatorProperty.CHARACTER_VALUE) value else codes.getInt(i*4)+coverage[c]*value)+.5)
+            val attempted=SelectorMath.floor((if(property==AnimatorProperty.CHARACTER_VALUE) value else codes.getInt(i*4)+coverage[c]*value)+.5)
             active[i]=TextCharacterPreparation.valid(attempted)
             codes.putInt(i*4,if(active[i]) attempted.toInt() else originals[i])
         }
