@@ -57,6 +57,11 @@ public:
     // SDF atlas tier per layout handle (ppem from text/sdf_tiers.h). Returns true when any tier changed.
     bool setTextTiers(const int64_t* handles,const int32_t* ppems,size_t count,bool synchronous);
     size_t awaitTextTiers(int timeoutMs) { return mText?mText->awaitTiers(timeoutMs):0; }
+    // TEXT PERF 11: queue the bundled glyphs of each layout for every tier up to ppem, at idle priority.
+    void warmTextTiers(const int64_t* handles,const int32_t* ppems,size_t count) {
+        if(!mText) return;
+        for(size_t i=0;i<count;++i) { const auto found=mTextLayouts.find(handles[i]); if(found!=mTextLayouts.end()) mText->warmTier(*found->second,static_cast<unsigned>(ppems[i])); }
+    }
     // TEXT FIX 9c: imported-font tier glyphs, rasterised by the isolated font worker on the app's behalf.
     std::vector<uint8_t> takeTextTierRequests();
     size_t supplyTextTierGlyphs(const uint8_t* bytes,size_t length);

@@ -40,6 +40,7 @@ struct TextGpuStats {
     uint64_t placementLookups=0; // TEXT PERF 11: layouts whose glyph placements were re-resolved (atlas lookups).
     uint64_t tierGlyphs=0, tierPending=0, tierBytes=0, tierDegrades=0, tierEvictions=0;
     uint64_t tierExternalRequested=0, tierExternalSupplied=0, tierExternalFailed=0; // TEXT FIX 9c: imported-font tiers.
+    uint64_t tierWarmQueued=0, tierWarmed=0; // TEXT PERF 11: idle warm-up of the tiers a layer will need.
 };
 
 // Device-owned state. Preparation finishes before any composition render pass.
@@ -83,6 +84,13 @@ public:
     bool needsCollect() const { return tierRevision_.load()!=collectedRevision_; }
     // Waits up to timeoutMs for queued tier glyphs; returns how many are still pending.
     size_t awaitTiers(int timeoutMs);
+    // TEXT PERF 11: queue every bundled glyph of [layout] for each tier in (base, ppem] at idle priority. The tier worker
+    // rasterises warm keys only after WarmQuietNs without a frame (markFrame), so playback and scrubbing never wait
+    // for or compete with them, and warm keys never count as pending in awaitTiers. External (imported) keys are
+    // skipped: those come from the isolated worker on demand.
+    void warmTier(const Layout& layout,unsigned ppem);
+    void markFrame();
+    static constexpr int64_t WarmQuietNs=750'000'000;
     unsigned resolvedTier(const Layout* layout) const { auto f=resolvedTier_.find(layout); return f==resolvedTier_.end()?tiers::BasePpem:f->second; }
     void retireBatch();
     // TEXT PERF 11: merged text batches. The owner keeps text-only batches until one submit per frame, so the mesh
@@ -157,6 +165,9 @@ private:
     std::condition_variable tierWake_, tierIdle_;
     std::deque<Key> queue_;
     std::set<Key> queued_, failed_;
+    std::deque<Key> warmQueue_; std::set<Key> warmQueued_; bool warmBusy_=false;
+    std::atomic<int64_t> lastFrameNs_{0};
+    bool warmIdle() const;
     std::set<Key> externalInFlight_;
     // Layouts whose external keys were all ready/retained/failed at the given tier (skip the scan; cleared on eviction).
     // Layout -> (settled tier, epoch). TEXT PERF 10: invalidated by bumping externalEpoch_ rather than clear(), so a

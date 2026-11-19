@@ -161,8 +161,14 @@ class FontWorkerClient(context: Context) {
                     warmContext=context;warmConnection=connection
                 }
             }
-            main.postDelayed(expire,30_000)
+            main.postDelayed(expire,KEEP_WARM_MS)
         }
+        /**
+         * TEXT PERF 11: how long the isolated worker stays bound after its last request. At 30 s the process was often gone
+         * when the user came back to the Fonts page or applied the next face (A16: 770 ms to bind a new process after
+         * 35 s idle, against 3-5 ms while bound). Three minutes covers an editing session; the binding is still released.
+         */
+        const val KEEP_WARM_MS=180_000L
         private val requests=java.util.concurrent.atomic.AtomicLong()
         val requestCount get()=requests.get()
         /**

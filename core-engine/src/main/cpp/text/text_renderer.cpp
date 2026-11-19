@@ -36,7 +36,7 @@ TextRenderer::TextRenderer(VkPhysicalDevice physical, VkDevice device, VkRenderP
 TextRenderer::~TextRenderer() {
     {
         std::lock_guard<std::mutex> lock(tierMutex_);
-        stopWorker_=true; queue_.clear();
+        stopWorker_=true; queue_.clear(); warmQueue_.clear();
     }
     tierWake_.notify_all();
     if(worker_.joinable()) worker_.join();
@@ -276,21 +276,52 @@ void TextRenderer::ensureTier(const Layout& layout,unsigned ppem,bool synchronou
     std::lock_guard<std::mutex> lock(tierMutex_);
     trimReady();
 }
+namespace { int64_t steadyNs() { return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); } }
+void TextRenderer::markFrame() { lastFrameNs_.store(steadyNs(),std::memory_order_relaxed); }
+bool TextRenderer::warmIdle() const { return steadyNs()-lastFrameNs_.load(std::memory_order_relaxed)>=WarmQuietNs; }
+void TextRenderer::warmTier(const Layout& layout,unsigned ppem) {
+    if(!tiers::valid(ppem) || ppem==tiers::BasePpem) return;
+    {
+        std::lock_guard<std::mutex> lock(tierMutex_);
+        for(unsigned tier:tiers::Ppem) {
+            if(tier==tiers::BasePpem || tier>ppem) continue;
+            for(size_t i=0;i<layout.glyphs.size();++i) {
+                Key key{layout.glyphFont(i),layout.glyphs[i].id,tier};
+                if(external(std::get<0>(key)) || retained_.count(key) || ready_.count(key) || failed_.count(key) ||
+                    queued_.count(key) || warmQueued_.count(key)) continue;
+                warmQueued_.insert(key); warmQueue_.push_back(std::move(key)); ++stats_.tierWarmQueued;
+            }
+        }
+        if(!warmQueue_.empty() && !worker_.joinable()) worker_=std::thread([this] { tierWorker(); });
+    }
+    tierWake_.notify_one();
+}
 void TextRenderer::tierWorker() {
     std::unique_lock<std::mutex> lock(tierMutex_);
     while(true) {
-        tierWake_.wait(lock,[this] { return stopWorker_ || !queue_.empty(); });
+        // Demand keys first. Warm keys (TEXT PERF 11) only while no frame has started for WarmQuietNs; re-check that
+        // at least every 250 ms while warm work is waiting.
+        tierWake_.wait_for(lock,std::chrono::milliseconds(warmQueue_.empty()?60'000:250),
+            [this] { return stopWorker_ || !queue_.empty() || (!warmQueue_.empty() && warmIdle()); });
         if(stopWorker_) return;
-        const Key key=queue_.front(); queue_.pop_front(); busy_=true;
+        Key key; bool warm=false;
+        if(!queue_.empty()) { key=queue_.front(); queue_.pop_front(); busy_=true; }
+        else if(!warmQueue_.empty() && warmIdle()) {
+            key=warmQueue_.front(); warmQueue_.pop_front(); warmQueued_.erase(key);
+            if(retained_.count(key) || ready_.count(key) || failed_.count(key) || queued_.count(key)) continue;
+            warm=true; warmBusy_=true;
+        } else continue;
         lock.unlock();
         std::shared_ptr<const SdfGlyph> glyph;
         try { glyph=tierFonts()->sdf(std::get<0>(key),std::get<1>(key),true,std::get<2>(key)); } catch(const std::exception&) {}
         lock.lock();
-        queued_.erase(key); busy_=false;
+        if(warm) { warmBusy_=false; if(glyph) ++stats_.tierWarmed; }
+        else { queued_.erase(key); busy_=false; }
         if(glyph) { readyBytes_+=glyph->pixels.size(); ready_[key]=std::move(glyph); readyUse_[key]=frame_; trimReady(); }
         else failed_.insert(key);
-        // A finished glyph may let a layout move up a tier: the next preparation re-collects.
-        if(queue_.empty()) ++tierRevision_;
+        // A finished glyph may let a layout move up a tier: the next preparation re-collects. Warm glyphs only matter once
+        // a layout asks for their tier (it then finds them ready), so they bump the revision once, when warming drains.
+        if(queue_.empty() && (!warm || warmQueue_.empty())) ++tierRevision_;
         tierIdle_.notify_all();
     }
 }

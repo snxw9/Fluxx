@@ -79,6 +79,7 @@ class FontLibraryRepository private constructor(private val context: Context) {
         if(next.size!=mutable.value.size) {
             writeIndex(FontMetadataCodec.encode(next));revision=Math.addExact(revision,1);mutable.value=next
             AtomicFile(File(directory,hash)).delete()
+            synchronized(verified) { verified.remove(hash) }
         }
     } }.await()
     /** Presence is metadata only; renderer preparation verifies the content hash again. */
@@ -92,12 +93,19 @@ class FontLibraryRepository private constructor(private val context: Context) {
         val file=File(directory,hash)
         if(!file.isFile) return null
         require(file.length()==entry.bytes) { "Imported font size changed; re-import the font" }
-        val actual=MessageDigest.getInstance("SHA-256").let { digest ->
-            file.inputStream().use { stream -> val buffer=ByteArray(8192)
-                while(true) { val count=stream.read(buffer);if(count<0) break;digest.update(buffer,0,count) } }
-            digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) }
+        // TEXT PERF 11: the full-file SHA-256 ran on every preparation (22 ms for a 1.9 MB variable font, several times
+        // per apply). A file verified in this process is trusted again while its length and modification time are
+        // unchanged; any rewrite of the private file changes them and is verified again.
+        val stamp=file.length() to file.lastModified()
+        if(synchronized(verified) { verified[hash] }!=stamp) {
+            val actual=MessageDigest.getInstance("SHA-256").let { digest ->
+                file.inputStream().use { stream -> val buffer=ByteArray(8192)
+                    while(true) { val count=stream.read(buffer);if(count<0) break;digest.update(buffer,0,count) } }
+                digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) }
+            }
+            require(actual==hash) { "Imported font checksum changed; re-import the font" }
+            synchronized(verified) { verified[hash]=stamp }
         }
-        require(actual==hash) { "Imported font checksum changed; re-import the font" }
         val effective=face.reference(hash,reference.namedInstance,reference.axes.associate { it.tag to it.value.staticValue })
         val signature=buildString {
             append(hash);append(':');append(effective.faceIndex);append(':');append(effective.namedInstance)
@@ -106,6 +114,8 @@ class FontLibraryRepository private constructor(private val context: Context) {
         val identity=MessageDigest.getInstance("SHA-256").digest(signature.toByteArray()).joinToString("") { "%02x".format(it.toInt() and 255) }
         return FontWorkerClient.FontInput("user.$identity",file,effective).also { input -> synchronized(resolvedInputs) { resolvedInputs[input.id]=input } }
     }
+    /** Font files whose SHA-256 was verified in this process: hash -> (length, modification time) at verification. */
+    private val verified=HashMap<String,Pair<Long,Long>>()
     /** Resolved identities (bounded, most recent first out): lets the renderer's tier requests name their font files. */
     private val resolvedInputs=object: LinkedHashMap<String,FontWorkerClient.FontInput>(16,.75f,true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String,FontWorkerClient.FontInput>)=size>256

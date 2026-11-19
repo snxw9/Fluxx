@@ -1319,7 +1319,7 @@ bool VulkanRenderer::beginFrame(int width, int height, int presentationWidth, in
     mPresentationHeight = presentationHeight > 0 ? presentationHeight : height;
     mFirstBatch = true;
     mDrawOrder.clear(); mDeferred.clear();
-    if (mText) mText->retireBatch();
+    if (mText) { mText->retireBatch(); mText->markFrame(); } // markFrame: idle tier warm-up pauses while frames render.
     mTextPrepared=false;
     if (width != mCompWidth || height != mCompHeight) {
         LOGI("Offscreen target resize %dx%d -> %dx%d (presentation %dx%d)",

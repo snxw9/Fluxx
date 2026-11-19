@@ -156,6 +156,18 @@ JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_textTiers(
         return reinterpret_cast<VulkanRenderer*>(session)->setTextTiers(handleValues.data(),ppemValues.data(),handleValues.size(),synchronous);
     } catch(const std::exception& error) { textFailure(env,error); return false; }
 }
+// TEXT PERF 11: idle-priority warm-up of the tiers each prepared layout will need (ppem = highest tier to warm).
+JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_warmTextTiers(JNIEnv* env,jobject,jlong session,jlongArray handles,jintArray ppems) {
+    try {
+        const auto count=env->GetArrayLength(handles);
+        if(count!=env->GetArrayLength(ppems)) throw std::invalid_argument("Tier arrays differ in length");
+        std::vector<jlong> h(static_cast<size_t>(count));std::vector<jint> p(static_cast<size_t>(count));
+        env->GetLongArrayRegion(handles,0,count,h.data());env->GetIntArrayRegion(ppems,0,count,p.data());
+        if(env->ExceptionCheck()) return;
+        std::vector<int64_t> handleValues(h.begin(),h.end());std::vector<int32_t> ppemValues(p.begin(),p.end());
+        reinterpret_cast<VulkanRenderer*>(session)->warmTextTiers(handleValues.data(),ppemValues.data(),handleValues.size());
+    } catch(const std::exception& error) { textFailure(env,error); }
+}
 JNIEXPORT jint JNICALL Java_com_fluxx_android_engine_RenderBridge_awaitTextTiers(JNIEnv*,jobject,jlong session,jint timeoutMs) {
     return static_cast<jint>(reinterpret_cast<VulkanRenderer*>(session)->awaitTextTiers(timeoutMs));
 }
