@@ -49,7 +49,7 @@ class TextF2AcceptanceTest {
             check(!it.exists()) { "Archive the earlier reports and use a new textRunLabel" };check(it.mkdirs())
         }
     }
-    private fun fixture(maximum: Boolean,rich: Boolean=false,font: TextFontRef?=null,wrapped: Boolean=false,advanced: Boolean=false,characters: Boolean=false): ProjectDocument {
+    internal fun fixture(maximum: Boolean,rich: Boolean=false,font: TextFontRef?=null,wrapped: Boolean=false,advanced: Boolean=false,characters: Boolean=false): ProjectDocument {
         val count=if(maximum) 16 else 8;val selectors=if(maximum) 8 else 4
         val source=if(maximum) "A".repeat(4096) else "AV office gy 0123456789 \n".repeat(30)
         val animators=List(count) { a -> TextAnimator(a+1L,anchorGrouping=scalar((a%4).toFloat()),

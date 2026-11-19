@@ -73,6 +73,14 @@ public:
         out[0]=gpu.meshBuildNs; out[1]=font.rasterizations; out[2]=gpu.uploads;
         out[3]=font.shapes; out[4]=mTextLayouts.at(handle)->glyphs.size(); out[5]=gpu.generation;
     }
+    // TEXT PERF 10: frame stage profile (ns accumulated since the last read; GPU from timestamp queries). Diagnostic
+    // only: reading it never changes rendering. Layout matches FrameStages in RenderBridge.kt.
+    enum Stage : size_t { WorkFenceWait, BatchRecord, BatchSubmitWait, PresentFenceWait, Acquire, PresentRecord,
+        PresentSubmit, PresentIdleWait, GpuBatch, GpuPresent, Batches, Frames, StageCount };
+    void frameStages(int64_t* out, size_t count) {
+        for (size_t i = 0; i < count && i < StageCount; ++i) out[i] = mStages[i];
+        std::fill(std::begin(mStages), std::end(mStages), 0);
+    }
     bool proofSurface(ANativeWindow* window, int width, int height);
     void proofRepack();
     bool proofPixels(uint8_t* output, size_t capacity);
@@ -134,6 +142,11 @@ private:
     VkRenderPass mLoadRenderPass = VK_NULL_HANDLE;
     VkCommandBuffer mWorkCommand = VK_NULL_HANDLE;
     VkFence mWorkFence = VK_NULL_HANDLE;
+    int64_t mStages[StageCount]{};
+    VkQueryPool mTimestamps = VK_NULL_HANDLE; // 0/1: batch begin/end, 2/3: present blit begin/end.
+    double mTimestampPeriodNs = 0;
+    uint64_t mTimestampMask = 0;
+    int64_t gpuSpanNs(uint32_t first);
     VkBuffer mReadback = VK_NULL_HANDLE;
     VkDeviceMemory mReadbackMemory = VK_NULL_HANDLE;
     void* mReadbackMapped = nullptr;

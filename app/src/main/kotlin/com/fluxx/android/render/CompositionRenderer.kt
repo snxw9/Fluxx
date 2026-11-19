@@ -125,9 +125,11 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private fun renderPreparedText(project: ProjectDocument, time: Long, cancelled: () -> Boolean) {
         require(time >= 0)
         val comp = project.composition
+        val preparing = System.nanoTime()
         try {
             if (nativePreparedTextProject === project) check(RenderBridge.reusePreparedText(session))
             else { check(RenderBridge.prepareText(session,preparedHandles)); nativePreparedTextProject = project }
+            stageNs[STAGE_PREPARE] += System.nanoTime() - preparing
         }
         catch (error: TextCapacityException) {
             val ids = preparedText.map { it.layer.id }.toSet()
@@ -148,17 +150,22 @@ class CompositionRenderer(private val context: Context, private val repository: 
             val layout = entry.layouts[index]; val text = layer.text
             val size = text.size.evaluate(local); val tracking = text.tracking.evaluate(local)
             val leading = text.leading.evaluate(local); val baseline = text.baselineShift.evaluate(local)
-            val animation=entry.animations[index];animation.evaluate(local)
+            val animation=entry.animations[index]
+            val evaluating = System.nanoTime(); animation.evaluate(local); stageNs[STAGE_EVALUATE] += System.nanoTime() - evaluating
             animation.logicalBounds.copyInto(logicalBounds)
             LayerGeometry.textMatrixInto(matrix,evaluatedTransform,logicalBounds,comp.width,comp.height,
                 layer.referenceWidth.takeIf { it > 0 } ?: comp.width,layer.referenceHeight.takeIf { it > 0 } ?: comp.height,layer.anchorX,layer.anchorY)
             if (staged == 4) flush()
+            val meshing = System.nanoTime()
             check(RenderBridge.textLayer(session,layout.handle,matrix,size,text.alignment.ordinal,text.fill.evaluate(local),opacity,
                 tracking,leading,baseline,text.strokeColour.evaluate(local),text.strokeWidth.evaluate(local),text.paintOrder(local),modifiers=animation.modifiers))
+            stageNs[STAGE_MESH] += System.nanoTime() - meshing
             staged++
         }
         if (cancelled()) throw CancellationException("Superseded frame")
+        val finishing = System.nanoTime()
         check(RenderBridge.finish(session)); staged = 0
+        stageNs[STAGE_FINISH] += System.nanoTime() - finishing
         if(interactive && TextEditTimings.waitingFor(project)) TextEditTimings.frameReady(project,RenderBridge.textStats(session))
     }
     // ---- SDF atlas tiers -------------------------------------------------------------------------------------
@@ -210,7 +217,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
                     runScale = maxOf(runScale, style.sizeFactor * maxOf(style.horizontalScale, style.verticalScale) / 100f); bold = bold || style.fauxBold }
                 if (runs.size == 0) runScale = 1f
                 val animation = entry.animations[index]
-                animation.evaluate(local)
+                val evaluating = System.nanoTime(); animation.evaluate(local); stageNs[STAGE_EVALUATE] += System.nanoTime() - evaluating
                 val referenceWidth = if (layer.referenceWidth > 0) layer.referenceWidth else comp.width
                 val referenceHeight = if (layer.referenceHeight > 0) layer.referenceHeight else comp.height
                 val projection = maxOf(comp.width.toFloat() / referenceWidth, comp.height.toFloat() / referenceHeight)
@@ -325,7 +332,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
             previewTargetWidth = width; previewTargetHeight = height
             previewCompWidth = comp.width; previewCompHeight = comp.height; previewQuality = resolution
         }
-        renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled)
+        val framing = System.nanoTime(); android.os.Trace.beginSection("fluxx.frame")
+        try { renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled) } finally { android.os.Trace.endSection() }
+        stageNs[STAGE_FRAME] += System.nanoTime() - framing
         // Sharper SDF tiers are generated off-thread; this frame used the previous tier. Unless frames are already
         // streaming (playback), wait (cancellably) for the glyphs and redraw once so a settled frame becomes sharp.
         val now = System.nanoTime()
@@ -367,7 +376,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
         check(RenderBridge.begin(session,targetWidth,targetHeight,comp.width,comp.height)) { "Could not start composition frame" }
         staged=0
         val outputScale=if(comp.width>0) targetWidth.toFloat()/comp.width else 1f
-        applyTextTiers(project,timeUs,outputScale)
+        val tiering = System.nanoTime(); android.os.Trace.beginSection("fluxx.tiers")
+        try { applyTextTiers(project,timeUs,outputScale) } finally { android.os.Trace.endSection() }
+        stageNs[STAGE_TIERS] += System.nanoTime() - tiering
         if (onlyText && TextFixtureProvider.entries().isEmpty()) { renderPreparedText(project,timeUs,cancelled); return }
         val fixtures = if (com.fluxx.android.BuildConfig.DEBUG) TextFixtureProvider.entries() else emptyList()
         val fixtureIds = fixtures.mapTo(mutableSetOf()) { it.id }
@@ -521,7 +532,24 @@ class CompositionRenderer(private val context: Context, private val repository: 
         }
         error("Text layer has not been prepared")
     }
+    /**
+     * TEXT PERF 10 frame stage profile, in ns since the last [frameStages] call (then reset). Wall clock on the render
+     * thread; [STAGE_EVALUATE] is inside [STAGE_TIERS] (and the prepared-text pass), the others are disjoint parts of
+     * [STAGE_FRAME]. Diagnostic only: System.nanoTime per stage, no allocation, no effect on output.
+     */
+    private val stageNs = LongArray(STAGES)
+    internal fun frameStages(out: LongArray) {
+        require(out.size >= STAGES)
+        stageNs.copyInto(out); java.util.Arrays.fill(stageNs, 0L)
+    }
     companion object {
+        const val STAGE_FRAME = 0
+        const val STAGE_TIERS = 1
+        const val STAGE_EVALUATE = 2
+        const val STAGE_PREPARE = 3
+        const val STAGE_MESH = 4
+        const val STAGE_FINISH = 5
+        const val STAGES = 6
         /** One background thread for imported-font tier fetches across renderers (worker calls are serialised anyway). */
         private val TIER_EXECUTOR=java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable,"fluxx-imported-tiers").apply { isDaemon=true;priority=Thread.NORM_PRIORITY-1 } }

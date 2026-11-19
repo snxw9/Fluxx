@@ -13,6 +13,13 @@ object TextDebugBridge {
     external fun allocationCanary(): Long
     /** Reusable output: mesh ns, rasterizations, atlas uploads, shape count, glyph count, generation. */
     external fun frameCounters(session: Long, handle: Long, output: LongArray)
+    /**
+     * TEXT PERF 10: native frame stages since the last call, in ns (then reset): work fence wait, batch record,
+     * batch submit+wait, present fence wait, acquire, present record, present submit, present idle wait,
+     * GPU batch, GPU present (timestamp queries), batch count, frame count.
+     */
+    external fun frameStages(session: Long, output: LongArray)
+    const val STAGES = 12
     fun dump(session: FontSession, directory: File) {
         check(directory.mkdirs() || directory.isDirectory)
         session.withHandle { dump(it, directory.absolutePath) }

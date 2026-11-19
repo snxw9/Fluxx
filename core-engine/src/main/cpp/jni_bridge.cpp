@@ -246,6 +246,12 @@ JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_TextDebugBridge_allocation
 JNIEXPORT jlong JNICALL Java_com_fluxx_android_engine_TextDebugBridge_allocationCanary(JNIEnv*,jobject) {
     return fluxx::text::debug::allocationCanary();
 }
+// TEXT PERF 10: frame stage profile (VulkanRenderer::Stage order); resets the accumulators.
+JNIEXPORT void JNICALL Java_com_fluxx_android_engine_TextDebugBridge_frameStages(JNIEnv* env,jobject,jlong session,jlongArray output) {
+    int64_t values[VulkanRenderer::StageCount]{};
+    reinterpret_cast<VulkanRenderer*>(session)->frameStages(values,VulkanRenderer::StageCount);
+    env->SetLongArrayRegion(output,0,std::min<jsize>(env->GetArrayLength(output),VulkanRenderer::StageCount),values);
+}
 JNIEXPORT void JNICALL Java_com_fluxx_android_engine_TextDebugBridge_frameCounters(JNIEnv* env,jobject,jlong session,jlong handle,jlongArray output) {
     try {
         if(env->GetArrayLength(output)!=6) throw std::invalid_argument("Expected six frame counters");

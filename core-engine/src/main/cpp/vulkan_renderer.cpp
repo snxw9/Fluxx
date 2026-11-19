@@ -9,6 +9,14 @@
 #include <cstring>
 #include <cmath>
 #include "gpu_ledger.h"
+#include <android/trace.h>
+#include <chrono>
+
+namespace {
+// TEXT PERF 10: monotonic ns for the frame stage profile, and a Perfetto/atrace section scope.
+inline int64_t nowNs() { return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+struct TraceScope { explicit TraceScope(const char* name) { ATrace_beginSection(name); } ~TraceScope() { ATrace_endSection(); } };
+}
 
 VulkanRenderer::VulkanRenderer() {
     LOGI("VulkanRenderer created");
@@ -56,6 +64,20 @@ bool VulkanRenderer::init(ANativeWindow* window, AAssetManager* assetManager) {
         VkFenceCreateInfo fence{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
         fence.flags = VK_FENCE_CREATE_SIGNALED_BIT;
         if (vkCreateFence(mDevice, &fence, nullptr, &mWorkFence) != VK_SUCCESS) { cleanup(); return false; }
+        {   // TEXT PERF 10: GPU timestamps for the frame stage profile (skipped where the queue has no timestamps).
+            uint32_t families = 0; vkGetPhysicalDeviceQueueFamilyProperties(mPhysicalDevice, &families, nullptr);
+            std::vector<VkQueueFamilyProperties> properties(families);
+            vkGetPhysicalDeviceQueueFamilyProperties(mPhysicalDevice, &families, properties.data());
+            VkPhysicalDeviceProperties device; vkGetPhysicalDeviceProperties(mPhysicalDevice, &device);
+            const uint32_t bits = mGraphicsQueueFamilyIndex < families ? properties[mGraphicsQueueFamilyIndex].timestampValidBits : 0;
+            if (bits && device.limits.timestampPeriod > 0) {
+                VkQueryPoolCreateInfo query{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+                query.queryType = VK_QUERY_TYPE_TIMESTAMP; query.queryCount = 4;
+                if (vkCreateQueryPool(mDevice, &query, nullptr, &mTimestamps) != VK_SUCCESS) mTimestamps = VK_NULL_HANDLE;
+                mTimestampPeriodNs = device.limits.timestampPeriod;
+                mTimestampMask = bits >= 64 ? ~0ull : ((1ull << bits) - 1);
+            }
+        }
 
         mInitialized = true;
         LOGI("VulkanRenderer initialized successfully");
@@ -89,10 +111,15 @@ void VulkanRenderer::resize(int width, int height) {
 bool VulkanRenderer::render(int resizeRetries) {
     if (!mInitialized || mDevice == VK_NULL_HANDLE || mDevice == (VkDevice)1 || !mSwapchain || mWidth <= 0 || mHeight <= 0) return false;
 
-    if (vkWaitForFences(mDevice, 1, &mInFlightFence, VK_TRUE, 1000000000ULL) != VK_SUCCESS) return false;
+    const int64_t fenced = nowNs();
+    { TraceScope trace("fluxx.presentFenceWait"); if (vkWaitForFences(mDevice, 1, &mInFlightFence, VK_TRUE, 1000000000ULL) != VK_SUCCESS) return false; }
+    mStages[PresentFenceWait] += nowNs() - fenced;
 
     uint32_t imageIndex;
-    VkResult result = vkAcquireNextImageKHR(mDevice, mSwapchain, 1000000000ULL, mImageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+    const int64_t acquiring = nowNs();
+    VkResult result;
+    { TraceScope trace("fluxx.acquire"); result = vkAcquireNextImageKHR(mDevice, mSwapchain, 1000000000ULL, mImageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex); }
+    mStages[Acquire] += nowNs() - acquiring;
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         resize(mWidth, mHeight);
@@ -104,6 +131,7 @@ bool VulkanRenderer::render(int resizeRetries) {
     }
 
 
+    const int64_t recording = nowNs();
     VkCommandBuffer commandBuffer = mCommandBuffers[imageIndex];
     vkResetCommandBuffer(commandBuffer, 0);
 
@@ -114,8 +142,10 @@ bool VulkanRenderer::render(int resizeRetries) {
         LOGE("Failed to begin recording command buffer!");
         return false;
     }
-
-
+    if (mTimestamps) {
+        vkCmdResetQueryPool(commandBuffer, mTimestamps, 2, 2);
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, mTimestamps, 2);
+    }
 
     VkImageMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -178,6 +208,7 @@ bool VulkanRenderer::render(int resizeRetries) {
     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.dstAccessMask = 0;
     vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+    if (mTimestamps) vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, mTimestamps, 3);
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
         LOGE("Failed to record command buffer!");
@@ -200,6 +231,7 @@ bool VulkanRenderer::render(int resizeRetries) {
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
+    mStages[PresentRecord] += nowNs() - recording;
     vkResetFences(mDevice, 1, &mInFlightFence);
     if (vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, mInFlightFence) != VK_SUCCESS) {
         LOGE("Failed to submit draw command buffer!");
@@ -216,7 +248,9 @@ bool VulkanRenderer::render(int resizeRetries) {
     presentInfo.pSwapchains = swapchains;
     presentInfo.pImageIndices = &imageIndex;
 
-    result = vkQueuePresentKHR(mPresentQueue, &presentInfo);
+    const int64_t presenting = nowNs();
+    { TraceScope trace("fluxx.queuePresent"); result = vkQueuePresentKHR(mPresentQueue, &presentInfo); }
+    mStages[PresentSubmit] += nowNs() - presenting;
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         resize(mWidth, mHeight);
@@ -251,6 +285,8 @@ void VulkanRenderer::cleanup() {
     }
     if (mWorkFence) vkDestroyFence(mDevice,mWorkFence,nullptr);
     mWorkFence=VK_NULL_HANDLE; mWorkCommand=VK_NULL_HANDLE;
+    if (mTimestamps) vkDestroyQueryPool(mDevice,mTimestamps,nullptr);
+    mTimestamps=VK_NULL_HANDLE;
     if (mCommandPool != VK_NULL_HANDLE) {
         vkDestroyCommandPool(mDevice, mCommandPool, nullptr);
         mCommandPool = VK_NULL_HANDLE;
@@ -1318,6 +1354,7 @@ int64_t VulkanRenderer::upsertPreparedText(const uint8_t* bytes,size_t length) {
     const int64_t handle=mNextTextHandle++;mTextLayouts.emplace(handle,std::move(layout));return handle;
 }
 bool VulkanRenderer::prepareText(const int64_t* handles, size_t count, bool proofOnly) {
+    TraceScope trace("fluxx.prepareText");
     if(!mInitialized || !mDrawOrder.empty() || !mFirstBatch) throw std::logic_error("Text preparation must precede composition draws");
     if(!count) return true;
     if(!mText || !beginWork()) return false;
@@ -1346,6 +1383,7 @@ void VulkanRenderer::bindTextCharacters(int64_t handle,const std::vector<int64_t
 bool VulkanRenderer::setTextLayer(int64_t handle, const float* matrix, float size, int alignment, uint32_t argb, float opacity, float tracking, float leading, float baselineShift, uint32_t stroke, float strokeWidth, int paintOrder, float softness,const fluxx::text::GlyphModifier* modifiers,size_t modifierBytes) {
     if(!std::isfinite(strokeWidth) || strokeWidth<0 || !std::isfinite(softness) || softness<0 || paintOrder<0 || paintOrder>1) return false;
     if(!mInitialized || !mTextPrepared || mDrawOrder.size()>=4) return false;
+    TraceScope trace("fluxx.textMesh");
     DrawEntry entry{}; entry.text=true;
     const auto& layout=*mTextLayouts.at(handle);
     if(modifiers && modifierBytes!=layout.clusters.size()*sizeof(fluxx::text::GlyphModifier)) throw std::invalid_argument("Modifier buffer size does not match clusters");
@@ -1412,11 +1450,29 @@ bool VulkanRenderer::setFrameLayer(int64_t id, AHardwareBuffer* buffer, const fl
 bool VulkanRenderer::finishFrame() {
     if (!mInitialized) return false;
     if ((!mDrawOrder.empty() || mFirstBatch) && !flushBatch()) return false;
-    if (mWindow) { return render() && vkQueueWaitIdle(mPresentQueue) == VK_SUCCESS; }
+    if (mWindow) {
+        if (!render()) return false;
+        const int64_t idle = nowNs();
+        { TraceScope trace("fluxx.presentIdleWait"); if (vkQueueWaitIdle(mPresentQueue) != VK_SUCCESS) return false; }
+        mStages[PresentIdleWait] += nowNs() - idle; mStages[GpuPresent] += gpuSpanNs(2); ++mStages[Frames];
+        return true;
+    }
+    ++mStages[Frames];
     return true;
 }
+int64_t VulkanRenderer::gpuSpanNs(uint32_t first) {
+    // Both timestamps were written by a command buffer whose fence/queue the caller has already waited on.
+    if (!mTimestamps) return 0;
+    uint64_t ticks[2]{};
+    if (vkGetQueryPoolResults(mDevice, mTimestamps, first, 2, sizeof(ticks), ticks, sizeof(uint64_t),
+            VK_QUERY_RESULT_64_BIT) != VK_SUCCESS) return 0;
+    const uint64_t span = ((ticks[1] & mTimestampMask) - (ticks[0] & mTimestampMask)) & mTimestampMask;
+    return static_cast<int64_t>(span * mTimestampPeriodNs);
+}
 bool VulkanRenderer::beginWork() {
-    if (vkWaitForFences(mDevice,1,&mWorkFence,VK_TRUE,5000000000ULL) != VK_SUCCESS) return false;
+    const int64_t waiting = nowNs();
+    { TraceScope trace("fluxx.workFenceWait"); if (vkWaitForFences(mDevice,1,&mWorkFence,VK_TRUE,5000000000ULL) != VK_SUCCESS) return false; }
+    mStages[WorkFenceWait] += nowNs() - waiting;
     vkResetCommandBuffer(mWorkCommand,0);
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin.flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -1427,12 +1483,22 @@ bool VulkanRenderer::submitWork() {
     VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
     submit.commandBufferCount=1; submit.pCommandBuffers=&mWorkCommand;
     vkResetFences(mDevice,1,&mWorkFence);
+    const int64_t submitted = nowNs();
+    TraceScope trace("fluxx.batchSubmitWait");
     if (vkQueueSubmit(mGraphicsQueue,1,&submit,mWorkFence)!=VK_SUCCESS) return false;
-    return vkWaitForFences(mDevice,1,&mWorkFence,VK_TRUE,5000000000ULL)==VK_SUCCESS;
+    const bool done = vkWaitForFences(mDevice,1,&mWorkFence,VK_TRUE,5000000000ULL)==VK_SUCCESS;
+    mStages[BatchSubmitWait] += nowNs() - submitted;
+    return done;
 }
 bool VulkanRenderer::flushBatch() {
     if (!beginWork()) return false;
+    const int64_t recording = nowNs();
+    ATrace_beginSection("fluxx.batchRecord");
     auto commandBuffer=mWorkCommand;
+    if (mTimestamps) {
+        vkCmdResetQueryPool(commandBuffer, mTimestamps, 0, 2);
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, mTimestamps, 0);
+    }
     if(mTextPrepared && mText) mText->upload(commandBuffer);
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1506,7 +1572,11 @@ bool VulkanRenderer::flushBatch() {
     }
 
     vkCmdEndRenderPass(commandBuffer);
+    if (mTimestamps) vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, mTimestamps, 1);
+    ATrace_endSection();
+    mStages[BatchRecord] += nowNs() - recording;
     if (!submitWork()) return false;
+    mStages[GpuBatch] += gpuSpanNs(0); ++mStages[Batches];
     mFirstBatch=false;
     mDrawOrder.clear();
     // submitWork waits for this batch's fence: reuse mesh storage without
