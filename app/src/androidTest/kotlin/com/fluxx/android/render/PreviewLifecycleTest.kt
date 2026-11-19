@@ -34,7 +34,8 @@ class PreviewLifecycleTest {
         require(label.matches(Regex("[A-Za-z0-9_-]+")))
         val out = File(context.getExternalFilesDir(null), "text/$label").also { it.mkdirs() }
         val kind = TextMultiLayerFixture.Kind.valueOf(InstrumentationRegistry.getArguments().getString("lifecycleKind") ?: "SIZE")
-        val project = TextMultiLayerFixture.project(30, true, kind)
+        val stacked = InstrumentationRegistry.getArguments().getString("lifecycleLayout") == "stacked"
+        val project = TextMultiLayerFixture.project(context, 30, true, kind, stacked)
         val samples = CopyOnWriteArrayList<Sample>()
         val closer = Executors.newSingleThreadExecutor()
         var preview: PreviewController? = null // Main thread only, like MainActivity.preview.
@@ -95,13 +96,22 @@ class PreviewLifecycleTest {
             instrumentation.runOnMainSync { preview?.play() }
             SystemClock.sleep(3_000)
             val afterReturn = samples.toList()
+            // Then from the start, as a user replaying the clip does: the rebuilt renderer needs every sharp tier again.
+            instrumentation.runOnMainSync { preview?.seek(0) }
+            SystemClock.sleep(1_500)
+            samples.clear()
+            val playFromStart = SystemClock.uptimeMillis()
+            instrumentation.runOnMainSync { preview?.play() }
+            SystemClock.sleep(3_000)
+            val fromStartAfterReturn = samples.toList()
             instrumentation.runOnMainSync { preview?.pause() }
-            val report = JSONObject().put("kind", kind.name).put("layers", 30)
+            val report = JSONObject().put("kind", kind.name).put("layers", 30).put("stacked", stacked)
                 .put("beforeHome", cadence(beforeHome, playBefore)).put("afterReturn", cadence(afterReturn, playAfter))
+                .put("fromStartAfterReturn", cadence(fromStartAfterReturn, playFromStart))
                 .put("playheadAtStopUs", playheadAtStop).put("playheadWhileStoppedUs", playheadWhileStopped)
                 .put("playheadAfterReturnUs", playheadAfterReturn).put("stoppedMs", stoppedMs)
                 .put("firstFrameAfterReturnMs", firstFrameAfterReturnMs)
-            File(out, "perf11-lifecycle-${kind.name.lowercase()}.json").writeText(report.toString(2))
+            File(out, "perf11-lifecycle-${kind.name.lowercase()}${if (stacked) "-stacked" else ""}.json").writeText(report.toString(2))
             android.util.Log.i("FluxxPerf11", "lifecycle ${kind.name}: $report".replace('\n', ' '))
             assertTrue("Playhead advanced while stopped: $playheadAtStop -> $playheadWhileStopped -> $playheadAfterReturn",
                 playheadWhileStopped == playheadAtStop && playheadAfterReturn == playheadAtStop)

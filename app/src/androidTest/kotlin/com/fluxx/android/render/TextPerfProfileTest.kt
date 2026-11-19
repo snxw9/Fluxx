@@ -49,7 +49,7 @@ class TextPerfProfileTest {
         for (kind in TextMultiLayerFixture.Kind.entries) for ((rows, separate) in listOf(30 to false, 30 to true, 60 to true)) {
             val name = "${if (separate) "layers$rows" else "single$rows"}-${kind.name.lowercase()}"
             if (wanted != null && name !in wanted) continue
-            val project = TextMultiLayerFixture.project(rows, separate, kind)
+            val project = TextMultiLayerFixture.project(context, rows, separate, kind)
             val sized = kind == TextMultiLayerFixture.Kind.SIZE
             profile(name, project, tag = "FluxxPerf11", prefix = "perf11",
                 span = if (sized) (TextMultiLayerFixture.SIZE_SPAN_US / 16_667L).toInt() else 600,
@@ -68,7 +68,7 @@ class TextPerfProfileTest {
         for (kind in listOf(TextMultiLayerFixture.Kind.ANIMATED, TextMultiLayerFixture.Kind.SIZE)) for ((rows, separate) in listOf(30 to false, 30 to true)) {
             val name = "${if (separate) "layers$rows" else "single$rows"}-${kind.name.lowercase()}"
             if (wanted != null && name !in wanted) continue
-            val project = TextMultiLayerFixture.project(rows, separate, kind)
+            val project = TextMultiLayerFixture.project(context, rows, separate, kind)
             val host = instrumentation.startActivitySync(Intent(context, TextProofActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as TextProofActivity
             val worker = Executors.newSingleThreadExecutor()
             try {
