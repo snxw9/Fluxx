@@ -25,8 +25,7 @@ object TextAnimatorColour {
         val bb=when(sector) { 3,4->c;2,5->x;else->0.0 }
         return (argb and 0xff000000.toInt()) or (channel(rr) shl 16) or (channel(gg) shl 8) or channel(bb)
     }
-    private fun linear(v: Double)=if(v<=.04045) v/12.92 else ((v+.055)/1.055).pow(2.4)
-    private fun srgb(v: Double)=if(v<=.0031308) v*12.92 else 1.055*v.pow(1/2.4)-.055
+    // TEXT PERF 10: exact table forms (SrgbCodec) of linear()/srgb(); same bytes, no pow per channel.
     /** Independent component weights, shared alpha weight; linear-light premultiplied blend. */
     fun blend(a: Int,b: Int,red: Double,green: Double,blue: Double): Int {
         val aa=(a ushr 24)/255.0;val ba=(b ushr 24)/255.0
@@ -35,9 +34,9 @@ object TextAnimatorColour {
         for(channel in 0..2) {
             val weight=(if(channel==0) red else if(channel==1) green else blue).coerceIn(0.0,1.0)
             val shift=16-channel*8
-            val value=linear(((a ushr shift) and 255)/255.0)*aa*(1-weight)+linear(((b ushr shift) and 255)/255.0)*ba*weight
+            val value=SrgbCodec.linear8((a ushr shift) and 255)*aa*(1-weight)+SrgbCodec.linear8((b ushr shift) and 255)*ba*weight
             val valueAlpha=aa*(1-weight)+ba*weight
-            val byte=if(valueAlpha==0.0) 0 else (srgb((value/valueAlpha).coerceIn(0.0,1.0))*255+.5).toInt().coerceIn(0,255)
+            val byte=if(valueAlpha==0.0) 0 else SrgbCodec.encode8((value/valueAlpha).coerceIn(0.0,1.0))
             result=result or (byte shl shift)
         }
         return result

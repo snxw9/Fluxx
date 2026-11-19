@@ -25,28 +25,50 @@ object SelectorMath {
         // Original membership -> selection rank, not reordered glyph drawing.
         return IntArray(size).also { inverse -> p.forEachIndexed { rank, original -> inverse[original]=rank } }
     }
+    /** Same as coerceIn (including NaN passing through), inlined: kotlin.ranges.coerceIn is a real call per value. */
+    @Suppress("NOTHING_TO_INLINE") inline fun clamp(x: Double,low: Double,high: Double)=if(x<low) low else if(x>high) high else x
+    /** Same as abs() for every non-NaN input (abs(-0.0) is +0.0 here too), without doubleToRawLongBits. */
+    @Suppress("NOTHING_TO_INLINE") inline fun magnitude(x: Double)=if(x<=0.0) 0.0-x else x
+    /** Math.min / Math.max exactly (NaN first operand, signed zeros), without doubleToRawLongBits on two zeros. */
+    @Suppress("NOTHING_TO_INLINE") inline fun least(a: Double,b: Double)=if(a!=a) a else if(a==0.0 && b==0.0) (if(1.0/b<0) b else a) else if(a<=b) a else b
+    @Suppress("NOTHING_TO_INLINE") inline fun greatest(a: Double,b: Double)=if(a!=a) a else if(a==0.0 && b==0.0) (if(1.0/a<0) b else a) else if(a>=b) a else b
     fun smooth(t: Double) = t*t*(3-2*t)
     fun shape(shape: SelectorShape,u: Double): Double = when(shape) {
         SelectorShape.SQUARE -> 1.0
         SelectorShape.RAMP_UP -> u
         SelectorShape.RAMP_DOWN -> 1-u
-        SelectorShape.TRIANGLE -> 1-abs(2*u-1)
+        SelectorShape.TRIANGLE -> 1-magnitude(2*u-1)
         SelectorShape.ROUND -> (2*u-1).let { x -> sqrt(max(0.0,1-x*x)) }
-        SelectorShape.SMOOTH -> smooth(1-abs(2*u-1))
+        SelectorShape.SMOOTH -> smooth(1-magnitude(2*u-1))
     }
     fun combine(c: Double,v: Double,mode: SelectorMode): Double = when(mode) {
         SelectorMode.ADD -> c+v;SelectorMode.SUBTRACT -> c-v;SelectorMode.INTERSECT -> c*v
-        SelectorMode.MIN -> min(c,v);SelectorMode.MAX -> max(c,v);SelectorMode.DIFFERENCE -> abs(c-v)
-    }.coerceIn(-1.0,1.0)
+        SelectorMode.MIN -> least(c,v);SelectorMode.MAX -> greatest(c,v);SelectorMode.DIFFERENCE -> magnitude(c-v)
+    }.let { clamp(it,-1.0,1.0) }
     fun initial(mode: SelectorMode) = if(mode==SelectorMode.MIN || mode==SelectorMode.INTERSECT) 1.0 else 0.0
     fun lineShift(lineAnchor: Double, selectedTrackingSum: Double) = -lineAnchor/100*selectedTrackingSum
     /** Anchor-only animation moves by -c*anchor even when R/Skew/S are identity. */
     fun affine(out: DoubleArray,c: Double,posX: Double,posY: Double,pivotX: Double,pivotY: Double,
-        anchorX: Double,anchorY: Double,rotation: Double,scaleX: Double,scaleY: Double,skew: Double=0.0,axis: Double=0.0,weightY: Double=c) {
+        anchorX: Double,anchorY: Double,rotation: Double,scaleX: Double,scaleY: Double,skew: Double=0.0,axis: Double=0.0,weightY: Double=c) =
+        affine(out,c,posX,posY,pivotX,pivotY,anchorX,anchorY,rotation,scaleX,scaleY,skew,axis,weightY,null)
+    /**
+     * [trig] (TEXT PERF 10) memoises sin/cos/tan on their exact radian inputs. Per-glyph calls repeat the axis every
+     * time and rotation/skew whenever coverage weights repeat; each trig call is a JNI call in the debuggable JIT.
+     * The values are the same as recomputing (same input bits, same function).
+     */
+    fun affine(out: DoubleArray,c: Double,posX: Double,posY: Double,pivotX: Double,pivotY: Double,
+        anchorX: Double,anchorY: Double,rotation: Double,scaleX: Double,scaleY: Double,skew: Double,axis: Double,weightY: Double,trig: AffineTrig?) {
         require(out.size>=6)
         val r=Math.toRadians(rotation*c);val a=Math.toRadians(axis)
-        val k=tan(Math.toRadians((skew*c).coerceIn(-85.0,85.0)))
-        val ca=cos(a);val sa=sin(a);val cr=cos(r);val sr=sin(r)
+        val skewRadians=Math.toRadians(clamp(skew*c,-85.0,85.0))
+        val k: Double;val ca: Double;val sa: Double;val cr: Double;val sr: Double
+        if(trig==null) { k=tan(skewRadians);ca=cos(a);sa=sin(a);cr=cos(r);sr=sin(r) }
+        else {
+            if(!AffineTrig.same(trig.axis,a)) { trig.axis=a;trig.ca=cos(a);trig.sa=sin(a) }
+            if(!AffineTrig.same(trig.rotation,r)) { trig.rotation=r;trig.cr=cos(r);trig.sr=sin(r) }
+            if(!AffineTrig.same(trig.skew,skewRadians)) { trig.skew=skewRadians;trig.k=tan(skewRadians) }
+            k=trig.k;ca=trig.ca;sa=trig.sa;cr=trig.cr;sr=trig.sr
+        }
         val sx=1+c*(scaleX/100-1);val sy=1+weightY*(scaleY/100-1)
         val h00=1-ca*sa*k; val h01=ca*ca*k;val h10=-sa*sa*k;val h11=1+ca*sa*k
         val m00=(cr*h00-sr*h10)*sx;val m01=(cr*h01-sr*h11)*sy
@@ -54,6 +76,17 @@ object SelectorMath {
         out[0]=m00;out[1]=m10;out[2]=m01;out[3]=m11
         out[4]=posX*c+pivotX-m00*(pivotX+c*anchorX)-m01*(pivotY+weightY*anchorY)
         out[5]=posY*weightY+pivotY-m10*(pivotX+c*anchorX)-m11*(pivotY+weightY*anchorY)
+    }
+}
+
+/** Last trigonometry inputs/results for [SelectorMath.affine]; one per evaluating animation (not thread-shared). */
+class AffineTrig {
+    var axis=Double.NaN;var ca=1.0;var sa=0.0
+    var rotation=Double.NaN;var cr=1.0;var sr=0.0
+    var skew=Double.NaN;var k=0.0
+    companion object {
+        /** Same bits without doubleToRawLongBits (a JNI call when not intrinsified): equal, and the same zero sign. NaN never matches. */
+        fun same(a: Double,b: Double)=a==b && (a!=0.0 || 1.0/a==1.0/b)
     }
 }
 
@@ -74,7 +107,7 @@ class SelectorEaseTable {
         if(low==0.0 && high==0.0) return t // No lookup for identity.
         if(t<=0) return 0.0;if(t>=1) return 1.0
         val lp=(low+100)/10;val hp=(high+100)/10;val tp=t*256
-        val l=lp.toInt().coerceIn(0,19);val h=hp.toInt().coerceIn(0,19);val i=tp.toInt()
+        val li=lp.toInt();val hi=hp.toInt();val l=if(li<0) 0 else if(li>19) 19 else li;val h=if(hi<0) 0 else if(hi>19) 19 else hi;val i=tp.toInt()
         val lf=lp-l;val hf=hp-h;val tf=tp-i
         val a=at(l,h,i,tf)*(1-hf)+at(l,h+1,i,tf)*hf
         val b=at(l+1,h,i,tf)*(1-hf)+at(l+1,h+1,i,tf)*hf
@@ -194,7 +227,7 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
             for(i in out.indices) {
                 val member=membership.maps[variant][i]
                 out[i]=if(member<0) 0.0 else (amount*(lo+(hi-lo)*(WigglySelectorMath.value(seed,member,time,frequency,
-                    correlation,temporal,spatial,dimension,locked)+1)/2)).coerceIn(-1.0,1.0)
+                    correlation,temporal,spatial,dimension,locked)+1)/2)).let { SelectorMath.clamp(it,-1.0,1.0) }
             }
             return
         }
@@ -220,12 +253,12 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
             var e=1.0;var v=1.0
             if(shape==SelectorShape.SQUARE) {
                 e=if(smooth==0.0) { if(x>=a && x<b) 1.0 else 0.0 } else
-                    SelectorMath.smooth(((x-a+smooth)/(2*smooth)).coerceIn(0.0,1.0))*
-                    SelectorMath.smooth(((b+smooth-x)/(2*smooth)).coerceIn(0.0,1.0))
+                    SelectorMath.smooth(SelectorMath.clamp((x-a+smooth)/(2*smooth),0.0,1.0))*
+                    SelectorMath.smooth(SelectorMath.clamp((b+smooth-x)/(2*smooth),0.0,1.0))
                 e=ease.evaluate(e,low,high)
             } else if(x<a || x>=b) e=0.0
             else v=ease.evaluate(SelectorMath.shape(shape,(x-a)/(b-a)),low,high)
-            out[i]=(amount*e*(lo/100+(hi-lo)/100*v)).coerceIn(-1.0,1.0)
+            out[i]=SelectorMath.clamp(amount*e*(lo/100+(hi-lo)/100*v),-1.0,1.0)
         }
     }
 }

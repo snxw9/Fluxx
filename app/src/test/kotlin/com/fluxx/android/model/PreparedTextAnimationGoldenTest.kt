@@ -82,6 +82,9 @@ class PreparedTextAnimationGoldenTest {
         for (time in longArrayOf(0, 16_667, 1_234_567, 2_500_000, 5_000_000, 6_000_000, 7_777_777, 9_999_999, 10_000_000, 12_000_000, 5_000_000)) {
             prepared.evaluate(time)
             prepared.modifiers.duplicate().also { it.position(0) }.get(bytes); sha.update(bytes)
+            // TEXT PERF 10: tier inputs read from the staged records equal the TEXT FIX 9 buffer scan.
+            assertEquals(com.fluxx.android.render.SdfAtlasTiers.maxGlyphScale(prepared.modifiers).toRawBits(), prepared.maxGlyphScale().toRawBits())
+            assertEquals(com.fluxx.android.render.SdfAtlasTiers.maxModifierDistanceEm(prepared.modifiers).toRawBits(), prepared.maxModifierDistanceEm().toRawBits())
             for (v in prepared.logicalBounds + prepared.inkBounds) sha.update(java.lang.Float.floatToRawIntBits(v).toString().toByteArray())
             val geometry = prepared.geometrySnapshot()
             sha.update((geometry.starts.contentToString() + geometry.ends.contentToString() + geometry.lines.contentToString() +

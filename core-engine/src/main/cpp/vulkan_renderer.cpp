@@ -114,6 +114,7 @@ bool VulkanRenderer::render(int resizeRetries) {
     const int64_t fenced = nowNs();
     { TraceScope trace("fluxx.presentFenceWait"); if (vkWaitForFences(mDevice, 1, &mInFlightFence, VK_TRUE, 1000000000ULL) != VK_SUCCESS) return false; }
     mStages[PresentFenceWait] += nowNs() - fenced;
+    if (mPresentTimed) { mStages[GpuPresent] += gpuSpanNs(2); mPresentTimed = false; } // The previous blit has completed.
 
     uint32_t imageIndex;
     const int64_t acquiring = nowNs();
@@ -233,6 +234,7 @@ bool VulkanRenderer::render(int resizeRetries) {
 
     mStages[PresentRecord] += nowNs() - recording;
     vkResetFences(mDevice, 1, &mInFlightFence);
+    mPresentTimed = mTimestamps != VK_NULL_HANDLE;
     if (vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, mInFlightFence) != VK_SUCCESS) {
         LOGE("Failed to submit draw command buffer!");
         return false;
@@ -1451,10 +1453,12 @@ bool VulkanRenderer::finishFrame() {
     if (!mInitialized) return false;
     if ((!mDrawOrder.empty() || mFirstBatch) && !flushBatch()) return false;
     if (mWindow) {
+        // TEXT PERF 10: no vkQueueWaitIdle after present (it held the render thread for the whole blit, 3.5-8 ms a
+        // frame). GPU order already protects every later use: the next batch's render pass depends on TRANSFER reads
+        // of the offscreen image (dependencies[0]), render() waits mInFlightFence before reusing the present command
+        // buffers, and readback/resize/teardown wait on their own fence or vkDeviceWaitIdle.
         if (!render()) return false;
-        const int64_t idle = nowNs();
-        { TraceScope trace("fluxx.presentIdleWait"); if (vkQueueWaitIdle(mPresentQueue) != VK_SUCCESS) return false; }
-        mStages[PresentIdleWait] += nowNs() - idle; mStages[GpuPresent] += gpuSpanNs(2); ++mStages[Frames];
+        ++mStages[Frames];
         return true;
     }
     ++mStages[Frames];

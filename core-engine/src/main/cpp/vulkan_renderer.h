@@ -147,6 +147,7 @@ private:
     double mTimestampPeriodNs = 0;
     uint64_t mTimestampMask = 0;
     int64_t gpuSpanNs(uint32_t first);
+    bool mPresentTimed = false;
     VkBuffer mReadback = VK_NULL_HANDLE;
     VkDeviceMemory mReadbackMemory = VK_NULL_HANDLE;
     void* mReadbackMapped = nullptr;

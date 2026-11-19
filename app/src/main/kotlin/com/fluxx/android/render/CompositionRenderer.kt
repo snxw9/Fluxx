@@ -222,9 +222,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 val referenceHeight = if (layer.referenceHeight > 0) layer.referenceHeight else comp.height
                 val projection = maxOf(comp.width.toFloat() / referenceWidth, comp.height.toFloat() / referenceHeight)
                 val layerScale = maxOf(kotlin.math.abs(evaluatedTransform[2]), kotlin.math.abs(evaluatedTransform[3])) * projection
-                val px = SdfAtlasTiers.pixelsPerEm(size, runScale, SdfAtlasTiers.maxGlyphScale(animation.modifiers), layerScale, outputScale)
+                val px = SdfAtlasTiers.pixelsPerEm(size, runScale, animation.maxGlyphScale(), layerScale, outputScale)
                 val distance = SdfAtlasTiers.distanceEm(layer.text.strokeWidth.evaluate(local), size, bold,
-                    SdfAtlasTiers.maxModifierDistanceEm(animation.modifiers))
+                    animation.maxModifierDistanceEm())
                 SdfAtlasTiers.selectTier(px, entry.tier, distance)
             }
             entry.tier = tier

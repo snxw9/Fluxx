@@ -44,17 +44,15 @@ data class AnimatableColour(val isAnimated: Boolean = false, val staticValue: In
 /** Linear-light, premultiplied interpolation; persisted/static endpoints remain straight sRGB ARGB. */
 fun interpolateColour(a: Int, b: Int, progress: Float): Int {
     if (progress <= 0f) return a; if (progress >= 1f) return b
-    fun linear(value: Double) = if (value <= .04045) value / 12.92 else ((value + .055) / 1.055).pow(2.4)
-    fun srgb(value: Double) = if (value <= .0031308) value * 12.92 else 1.055 * value.pow(1.0 / 2.4) - .055
+    // TEXT PERF 10: SrgbCodec gives the same bytes as linear()/srgb() with pow, without a pow per channel.
     val t = progress.toDouble(); val aa = (a ushr 24) / 255.0; val ba = (b ushr 24) / 255.0
     val alpha = aa * (1 - t) + ba * t
-    fun byte(value: Double) = (value * 255 + .5).toInt().coerceIn(0, 255)
-    var result = byte(alpha) shl 24
-    repeat(3) { channel ->
+    var result = SrgbCodec.byte(alpha) shl 24
+    for (channel in 0..2) {
         val shift = 16 - channel * 8
-        val value = linear(((a ushr shift) and 255) / 255.0) * aa * (1 - t) +
-            linear(((b ushr shift) and 255) / 255.0) * ba * t
-        result = result or (byte(if (alpha == 0.0) 0.0 else srgb((value / alpha).coerceIn(0.0, 1.0))) shl shift)
+        val value = SrgbCodec.linear8((a ushr shift) and 255) * aa * (1 - t) +
+            SrgbCodec.linear8((b ushr shift) and 255) * ba * t
+        result = result or ((if (alpha == 0.0) 0 else SrgbCodec.encode8((value / alpha).coerceIn(0.0, 1.0))) shl shift)
     }
     return result
 }

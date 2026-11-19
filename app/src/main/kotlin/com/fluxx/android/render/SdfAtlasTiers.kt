@@ -112,6 +112,30 @@ object SdfAtlasTiers {
         }
         return if (result > 0f) result else 1f
     }
+    /**
+     * [maxGlyphScale] over the float records the animation stages before its bulk copy into the modifier buffer
+     * (TEXT FIX 9 read the direct buffer back with one JNI peek per float in the debuggable JIT). Same values, same
+     * arithmetic: records are [stride] floats, a, b, c, d first.
+     */
+    fun maxGlyphScale(records: FloatArray, count: Int, stride: Int = 24): Float {
+        var result = 0f
+        for (r in 0 until count) {
+            val at = r * stride
+            val s = max(hypot(records[at], records[at + 1]), hypot(records[at + 2], records[at + 3]))
+            if (s - s == 0f) result = max(result, s) // isFinite() exactly, without floatToRawIntBits
+        }
+        return if (result > 0f) result else 1f
+    }
+    /** [maxModifierDistanceEm] over the staged float records (half stroke at float 16, softness at 17). */
+    fun maxModifierDistanceEm(records: FloatArray, count: Int, stride: Int = 24): Float {
+        var result = 0f
+        for (r in 0 until count) {
+            val at = r * stride
+            val d = records[at + 16] + records[at + 17]
+            if (d - d == 0f) result = max(result, d / 3f)
+        }
+        return result
+    }
     /** Largest animator half stroke + softness in a modifier buffer, in em (base-tier distance units / 3). */
     fun maxModifierDistanceEm(modifiers: ByteBuffer?, stride: Int = 96): Float {
         modifiers ?: return 0f
