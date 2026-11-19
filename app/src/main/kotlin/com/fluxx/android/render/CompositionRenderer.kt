@@ -160,6 +160,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
             check(RenderBridge.textLayer(session,layout.handle,matrix,size,text.alignment.ordinal,text.fill.evaluate(local),opacity,
                 tracking,leading,baseline,text.strokeColour.evaluate(local),text.strokeWidth.evaluate(local),text.paintOrder(local),modifiers=animation.modifiers))
             stageNs[STAGE_MESH] += System.nanoTime() - meshing
+            stageNs[STAGE_LAYERS]++
             staged++
         }
         if (cancelled()) throw CancellationException("Superseded frame")
@@ -238,14 +239,16 @@ class CompositionRenderer(private val context: Context, private val repository: 
             if (tierPpems[e] > tierHandleTiers[slot]) tierHandleTiers[slot] = tierPpems[e]
             if (tierPpems[e] > SdfAtlasTiers.BASE) sharp = true
         }
+        val tierJni = System.nanoTime()
         if (!tierHandleTiers.contentEquals(tierSent)) {
             RenderBridge.textTiers(session, tierAllHandles, tierHandleTiers, !interactive)
             System.arraycopy(tierHandleTiers, 0, tierSent, 0, tierSent.size)
         }
-        if (!sharp) return // Base tier only: nothing for the isolated worker.
+        if (!sharp) { stageNs[STAGE_TIER_JNI] += System.nanoTime() - tierJni; return } // Base tier only: nothing for the isolated worker.
         // Imported-font glyphs the renderer cannot rasterise itself: preview fetches them in the background (the lower
         // tier stays until they arrive); export fetches them now, so every exported frame is deterministic.
         var tierRequests = synchronized(tierLock) { RenderBridge.textTierRequests(session) }
+        stageNs[STAGE_TIER_JNI] += System.nanoTime() - tierJni
         if (interactive) { if (tierRequests != null) tierFetcher.submit(tierRequests) }
         else for (round in 0 until EXPORT_TIER_ROUNDS) {
             if (tierRequests == null) break
@@ -282,6 +285,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private fun flush() {
         if (staged == 0) return
         check(RenderBridge.flush(session)) { "GPU compositing failed" }
+        stageNs[STAGE_FLUSHES]++
         staged = 0
     }
     private fun evictDecoder() {
@@ -537,6 +541,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
      * TEXT PERF 10 frame stage profile, in ns since the last [frameStages] call (then reset). Wall clock on the render
      * thread; [STAGE_EVALUATE] is inside [STAGE_TIERS] (and the prepared-text pass), the others are disjoint parts of
      * [STAGE_FRAME]. Diagnostic only: System.nanoTime per stage, no allocation, no effect on output.
+     * TEXT PERF 11 adds counts, not times: [STAGE_LAYERS] text layers drawn and [STAGE_FLUSHES] mid-frame batch flushes;
+     * [STAGE_TIER_JNI] is the tier/tier-request JNI time inside [STAGE_TIERS].
      */
     private val stageNs = LongArray(STAGES)
     internal fun frameStages(out: LongArray) {
@@ -550,7 +556,10 @@ class CompositionRenderer(private val context: Context, private val repository: 
         const val STAGE_PREPARE = 3
         const val STAGE_MESH = 4
         const val STAGE_FINISH = 5
-        const val STAGES = 6
+        const val STAGE_LAYERS = 6
+        const val STAGE_FLUSHES = 7
+        const val STAGE_TIER_JNI = 8
+        const val STAGES = 9
         /** One background thread for imported-font tier fetches across renderers (worker calls are serialised anyway). */
         private val TIER_EXECUTOR=java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable,"fluxx-imported-tiers").apply { isDaemon=true;priority=Thread.NORM_PRIORITY-1 } }

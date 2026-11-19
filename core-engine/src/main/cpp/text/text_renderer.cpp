@@ -456,6 +456,7 @@ void TextRenderer::prepareMesh(const std::shared_ptr<const Layout>& layout) {
     buffer(index_,indices_.capacity()*sizeof(uint32_t),VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
     const unsigned tier=resolvedTier(layout.get());
     if (prepared.generation==stats_.generation && prepared.tier==tier) return;
+    ++stats_.placementLookups;
     prepared.glyphs.resize(layout->glyphs.size());
     for(size_t i=0;i<layout->glyphs.size();++i) {
         const Key key{layout->glyphFont(i),layout->glyphs[i].id,tier};

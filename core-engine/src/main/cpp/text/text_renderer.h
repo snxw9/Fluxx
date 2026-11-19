@@ -37,6 +37,7 @@ struct TextGpuStats {
     uint64_t pools=0, sets=0, layouts=0, pipelines=0, pipelineLayouts=0;
     uint64_t meshBuildNs=0;
     uint64_t atlasUploadCpuNs=0;
+    uint64_t placementLookups=0; // TEXT PERF 11: layouts whose glyph placements were re-resolved (atlas lookups).
     uint64_t tierGlyphs=0, tierPending=0, tierBytes=0, tierDegrades=0, tierEvictions=0;
     uint64_t tierExternalRequested=0, tierExternalSupplied=0, tierExternalFailed=0; // TEXT FIX 9c: imported-font tiers.
 };

@@ -75,8 +75,11 @@ public:
     }
     // TEXT PERF 10: frame stage profile (ns accumulated since the last read; GPU from timestamp queries). Diagnostic
     // only: reading it never changes rendering. Layout matches FrameStages in RenderBridge.kt.
+    // TEXT PERF 11 appends per-layer counters: text layers drawn, native mesh build (ns), re-collect+pack (ns) and
+    // count, atlas upload CPU (ns), tier-change calls, prepared-glyph placement lookups (layouts re-resolved).
     enum Stage : size_t { WorkFenceWait, BatchRecord, BatchSubmitWait, PresentFenceWait, Acquire, PresentRecord,
-        PresentSubmit, PresentIdleWait, GpuBatch, GpuPresent, Batches, Frames, StageCount };
+        PresentSubmit, PresentIdleWait, GpuBatch, GpuPresent, Batches, Frames,
+        TextLayers, MeshBuild, CollectPack, Collects, AtlasUpload, TierChanges, PlacementLookups, StageCount };
     void frameStages(int64_t* out, size_t count) {
         for (size_t i = 0; i < count && i < StageCount; ++i) out[i] = mStages[i];
         std::fill(std::begin(mStages), std::end(mStages), 0);

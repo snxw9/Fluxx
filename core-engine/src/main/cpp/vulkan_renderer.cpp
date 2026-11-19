@@ -1363,12 +1363,16 @@ bool VulkanRenderer::prepareText(const int64_t* handles, size_t count, bool proo
     if(mPreparedProofOnly==proofOnly && count==mPreparedTextHandles.size() &&
         std::equal(handles,handles+count,mPreparedTextHandles.begin()) && !mText->needsCollect()) mText->retireBatch();
     else {
+        const int64_t collecting=nowNs();
         mText->begin();
         for(size_t i=0;i<count;++i) mText->collect(mTextLayouts.at(handles[i]));
         mText->pack(proofOnly);
         mPreparedTextHandles.assign(handles,handles+count); mPreparedProofOnly=proofOnly;
+        mStages[CollectPack]+=nowNs()-collecting; ++mStages[Collects];
     }
+    const uint64_t lookups=mText->stats().placementLookups;
     for(size_t i=0;i<count;++i) mText->prepareMesh(mTextLayouts.at(handles[i]));
+    mStages[PlacementLookups]+=static_cast<int64_t>(mText->stats().placementLookups-lookups);
     mDrawOrder.reserve(4); mTextPrepared=true;
     // No command submission yet: pack/capacity validation finishes before any draw.
     return true;
@@ -1386,13 +1390,16 @@ bool VulkanRenderer::setTextLayer(int64_t handle, const float* matrix, float siz
     if(!std::isfinite(strokeWidth) || strokeWidth<0 || !std::isfinite(softness) || softness<0 || paintOrder<0 || paintOrder>1) return false;
     if(!mInitialized || !mTextPrepared || mDrawOrder.size()>=4) return false;
     TraceScope trace("fluxx.textMesh");
+    const int64_t meshing=nowNs();
     DrawEntry entry{}; entry.text=true;
     const auto& layout=*mTextLayouts.at(handle);
     if(modifiers && modifierBytes!=layout.clusters.size()*sizeof(fluxx::text::GlyphModifier)) throw std::invalid_argument("Modifier buffer size does not match clusters");
     entry.mesh=mText->mesh(layout,size,alignment,modifiers,tracking,leading,baselineShift,argb,stroke,strokeWidth,softness);
     std::copy(matrix,matrix+16,entry.push.matrix);
     entry.push.settings[0]=static_cast<float>(paintOrder);entry.push.settings[1]=opacity;
-    mDrawOrder.push_back(entry); return true;
+    mDrawOrder.push_back(entry);
+    mStages[MeshBuild]+=nowNs()-meshing; ++mStages[TextLayers];
+    return true;
 }
 std::string VulkanRenderer::textStatsJson() const {
     const auto stats=mText?mText->stats():fluxx::text::TextGpuStats{};
@@ -1503,7 +1510,11 @@ bool VulkanRenderer::flushBatch() {
         vkCmdResetQueryPool(commandBuffer, mTimestamps, 0, 2);
         vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, mTimestamps, 0);
     }
-    if(mTextPrepared && mText) mText->upload(commandBuffer);
+    if(mTextPrepared && mText) {
+        const uint64_t uploadNs=mText->stats().atlasUploadCpuNs;
+        mText->upload(commandBuffer);
+        mStages[AtlasUpload]+=static_cast<int64_t>(mText->stats().atlasUploadCpuNs-uploadNs);
+    }
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassInfo.renderPass = mFirstBatch ? mOffscreenRenderPass : mLoadRenderPass;
@@ -1684,6 +1695,7 @@ bool VulkanRenderer::setTextTiers(const int64_t* handles,const int32_t* ppems,si
         if(found==mTextLayouts.end()) continue;
         changed=mText->setTier(found->second.get(),static_cast<unsigned>(ppems[i])) || changed;
     }
+    ++mStages[TierChanges];
     return changed;
 }
 std::vector<uint8_t> VulkanRenderer::takeTextTierRequests() {
