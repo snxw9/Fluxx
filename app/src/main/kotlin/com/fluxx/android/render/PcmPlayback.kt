@@ -7,8 +7,13 @@ import java.io.File
 import java.io.RandomAccessFile
 import java.io.Closeable
 
-/** Streams the prepared stereo mix. The AudioTrack playback head, not UI timers, owns the clock. */
-internal class PcmPlayback(file: File, startUs: Long) : Closeable {
+/**
+ * Streams the prepared stereo mix. The AudioTrack playback head, not UI timers, owns the clock.
+ * TEXT PERF 11: the track is filled at once but plays only when [gate] opens (the first frame of this playback has
+ * been presented), so the head never runs ahead of a slow first frame. Until then [positionUs] is the start position.
+ */
+internal class PcmPlayback(file: File, startUs: Long,
+                           private val gate: PlaybackGate = PlaybackGate({ PreviewFrames.count }, System::nanoTime)) : Closeable {
     private val startFrame = startUs*AudioMixer.RATE/1_000_000
     private val track = AudioTrack.Builder()
         .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build())
@@ -18,6 +23,7 @@ internal class PcmPlayback(file: File, startUs: Long) : Closeable {
     @Volatile private var running=true
     @Volatile var error: Throwable?=null
         private set
+    private var playing=false
     private val thread=Thread({
         try {
             RandomAccessFile(file,"r").use { input ->
@@ -37,11 +43,19 @@ internal class PcmPlayback(file: File, startUs: Long) : Closeable {
             }
         } catch(e:Exception) { if(running) error=e }
     },"FluxxAudio")
-    init { check(track.state==AudioTrack.STATE_INITIALIZED);track.play();thread.start() }
-    val positionUs: Long get() = (startFrame+(track.playbackHeadPosition.toLong() and 0xffffffffL))*1_000_000/AudioMixer.RATE
+    init { check(track.state==AudioTrack.STATE_INITIALIZED);thread.start() }
+    /** Read on the preview worker only (it also starts the track once the gate opens). */
+    val positionUs: Long get() {
+        if(!playing && gate.poll()) { track.play();playing=true }
+        return position(startFrame,track.playbackHeadPosition.toLong() and 0xffffffffL)
+    }
     override fun close() {
         running=false
         thread.join()
         track.pause();track.flush();track.release()
+    }
+    companion object {
+        /** The head is 0 until the track plays, so the position before the gate opens is the start position. */
+        fun position(startFrame: Long, headFrames: Long): Long = (startFrame+headFrames)*1_000_000/AudioMixer.RATE
     }
 }

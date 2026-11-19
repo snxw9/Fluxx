@@ -173,7 +173,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
         if(interactive && TextEditTimings.waitingFor(project)) TextEditTimings.frameReady(project,RenderBridge.textStats(session))
     }
     // ---- SDF atlas tiers -------------------------------------------------------------------------------------
-    private var lastPreviewCall = 0L
+    private var lastPreviewStart = 0L
+    private var lastPreviewEnd = 0L
     private var lastPreviewTime = -1L
     private var streamingRate: com.fluxx.android.model.FrameRate? = null
     private var streamingSpanUs = 0L
@@ -344,22 +345,31 @@ class CompositionRenderer(private val context: Context, private val repository: 
         val framing = System.nanoTime(); android.os.Trace.beginSection("fluxx.frame")
         try { renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled) } finally { android.os.Trace.endSection() }
         stageNs[STAGE_FRAME] += System.nanoTime() - framing
+        PreviewFrames.presented()
         // Sharper SDF tiers are generated off-thread; this frame used the previous tier. Unless frames are already
         // streaming (playback), wait (cancellably) for the glyphs and redraw once so a settled frame becomes sharp.
         val now = System.nanoTime()
         // Cached per frame rate: FrameRate's exact arithmetic allocates (~19 objects), and this runs every preview frame.
         if (comp.frameRate != streamingRate) { streamingRate = comp.frameRate; streamingSpanUs = comp.frameRate.let { it.frameTimeUs(3) - it.frameTimeUs(0) } }
-        val frame = streamingSpanUs
-        val streaming = lastPreviewTime >= 0 && timeUs > lastPreviewTime && timeUs - lastPreviewTime <= frame && now - lastPreviewCall < 100_000_000L
-        lastPreviewCall = now; lastPreviewTime = timeUs
-        if (streaming || RenderBridge.awaitTextTiers(session, 0) == 0) return
-        val deadline = now + 1_500_000_000L
-        while (!cancelled() && System.nanoTime() < deadline) {
-            if (RenderBridge.awaitTextTiers(session, 8) == 0) {
-                if (!cancelled()) renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled)
-                return
+        // TEXT PERF 11: frames stream (playback, forward scrubbing) when calls follow each other back to back (the previous
+        // call ended < 100 ms before this one began) and time moves forward by no more than the wall time between the two
+        // calls plus three frames. TEXT FIX 9 measured end to end and allowed three frames of progress, so any frame over
+        // ~96 ms, or playback below 20 fps (30 text layers with size animation, a renderer rebuilt after Home), looked like
+        // a seek: each such frame then blocked up to 1.5 s for sharp tiers while the audio clock ran on, and playback
+        // stuttered and skipped ahead.
+        val elapsedUs = (framing - lastPreviewStart) / 1000
+        val streaming = lastPreviewTime >= 0 && timeUs > lastPreviewTime && framing - lastPreviewEnd < 100_000_000L &&
+            timeUs - lastPreviewTime <= elapsedUs + streamingSpanUs
+        lastPreviewStart = framing; lastPreviewTime = timeUs
+        try {
+            if (streaming || RenderBridge.awaitTextTiers(session, 0) == 0) return
+            val deadline = now + 1_500_000_000L
+            while (!cancelled() && System.nanoTime() < deadline) {
+                if (RenderBridge.awaitTextTiers(session, 8) == 0) {
+                    if (!cancelled()) { renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled); PreviewFrames.presented() }
+                    return
             }
-        }
+        } finally { lastPreviewEnd = System.nanoTime() }
     }
 
     private fun renderTarget(project: ProjectDocument, timeUs: Long, targetWidth: Int, targetHeight: Int,

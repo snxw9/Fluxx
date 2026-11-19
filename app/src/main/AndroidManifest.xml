@@ -26,9 +26,13 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Fluxx">
         
+        <!-- TEXT PERF 11: rotation, split screen and window resizes are handled in place (Compose relayouts and the
+             preview surface only resizes), so they never tear down the editor or its renderer. Other changes still
+             recreate the Activity; AppNavigation keeps the open project across that. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:theme="@style/Theme.Fluxx">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
