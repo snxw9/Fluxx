@@ -1,6 +1,6 @@
 # TEXT F3.1: Animate tab rework, crash fix, limits, global Prev/Next
 
-Branch `text-f3-1`, built on master after TEXT F3 (`7993799`). It addresses the first A16 test of the Animate tab:
+Branch `text-f3-1`, built on master after TEXT F3 (`7993799`). Merged to master together with TEXT F3.2 (`c8109d9`). It addresses the first A16 test of the Animate tab:
 - the layout was hard to use;
 - adding Character offset or Character value crashed the app;
 - some options were duplicates;

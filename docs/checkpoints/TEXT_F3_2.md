@@ -1,6 +1,6 @@
 # TEXT F3.2: AE parity fixes, seed flicker, export/playback, Animate polish
 
-Branch `text-f3-2`, built on `text-f3-1` (`24cb2fd`). One consolidated pass, organised by the sections of the brief.
+Branch `text-f3-2`, built on `text-f3-1` (`24cb2fd`). Merged to master, with F3.1, in `c8109d9`. One consolidated pass, organised by the sections of the brief.
 
 Status:
 - Implemented in source.
