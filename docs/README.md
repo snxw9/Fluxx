@@ -2,9 +2,9 @@
 
 Start with the [roadmap](architecture/FLUXX_ROADMAP.md) for active scope. The [Phase 2 status matrix](checkpoints/PHASE_2_STATUS_AND_BACKEND.md) distinguishes implemented controls from placeholders. Feature references below own their detailed behavior and verification evidence.
 
-**Current state (2026-11-22):** Phase 2 is active. Text E1–E3, F1/F2 and T1–T4 are user-tested on the A16; FIX and EXPLODE are committed; T5 (Arabic/Hebrew RTL) is stopped pending a cross-style shaping decision ([report](checkpoints/TEXT_FIX_EXPLODE_T5.md)). The Edit Text UI rework through TEXT UI 8 is implemented in source, device-unverified ([overhaul record](checkpoints/TEXT_UI_OVERHAUL.md)). TEXT FIX 9 and TEXT PERF 10/11 were device-assisted on the A16 and record measured results and open items ([PERF 11 still open](checkpoints/TEXT_PERF_11.md#still-open)). F3 (the Animate tab), its F3.1 rework (bars, scrolling body, crash fix, limits, global Prev/Next) and the F3.2 parity and polish pass are merged to master (`c8109d9`). F3.3 (popover exits, Prev/Next fall-through, sheet swipe, markers keep the inspector open) is on branch `text-f3-3`. JVM and A16 instrumented tests pass; phone acceptance is pending ([F3](checkpoints/TEXT_F3.md), [F3.1](checkpoints/TEXT_F3_1.md), [F3.2](checkpoints/TEXT_F3_2.md), [F3.3](checkpoints/TEXT_F3_3.md)). The graph editor is the next big item. Phase 3 effects/masks are not started. Separate 16 KB/golden checks remain outstanding.
+**Current state (2026-11-22):** Phase 2 is active. **The text phase is complete**; the next big item is the graph editor. Every text plan, spec and stage record is consolidated in the [text record](checkpoints/TEXT.md): E1–E3, F1/F2, T1–T4 and the Edit Text UI were user-tested; FIX and EXPLODE are committed; T5 (Arabic/Hebrew RTL) is stopped pending a cross-style shaping decision; TEXT FIX 9 and PERF 10/11 were device-assisted A16 passes; F3 (the Animate tab) and F3.1–F3.3 are merged to master (`c8109d9`, `67df5f3`) with **phone acceptance of F3.1–F3.3 done**; F3.4 (the Character Tracking cap and the docs consolidation) is merged from the single `text` branch. Open items carried forward are listed at the top of the text record. Phase 3 effects/masks are not started.
 
-*Historical (2026-10-01):* E1b/E1c accepted; E1d lazy 2048 R8 rendering and E1e debug visual/lifecycle/resource harness implemented in source, unverified at the time. E2/E3 then followed the [approved array-overflow design](checkpoints/TEXT_LAYER.md#e2-implementation-and-approved-array-overflow).
+*Historical (2026-10-01):* E1b/E1c accepted; E1d lazy 2048 R8 rendering and E1e debug visual/lifecycle/resource harness implemented in source, unverified at the time. E2/E3 then followed the [approved array-overflow design](checkpoints/TEXT.md#e2-implementation-and-approved-array-overflow).
 
 ## Architecture and scope
 
@@ -31,27 +31,9 @@ Start with the [roadmap](architecture/FLUXX_ROADMAP.md) for active scope. The [P
 
 ## Text references
 
-Listed in build order. The text checkpoint is the main owner; the others record one stage or pass each.
-
 | Document | Owns |
 | --- | --- |
-| [Text checkpoint](checkpoints/TEXT_LAYER.md) | E1–E3 and T1–T4 implementation, limits, build/parity/PNG results and user-run lists |
-| [Text implementation plan](checkpoints/TEXT_LAYER_IMPLEMENTATION_PLAN.md) | E1 gates and E2/E3 property/schema/editor decisions |
-| [F1 property completion](checkpoints/TEXT_F1_IMPLEMENTATION.md) | Tracking/leading/baseline/stroke properties, v10, spread spike and F1 acceptance |
-| [Text animation F1–F3 plan](checkpoints/TEXT_ANIMATION_F1_F3_PLAN.md) | F2 selector/animator engine, v11, F2 evidence and the F3 animator UI outline |
-| [Text completion spec](architecture/TEXT_COMPLETION_SPEC.md) | Verbatim T1–T5 specification |
-| [FIX / EXPLODE / T5](checkpoints/TEXT_FIX_EXPLODE_T5.md) | Case/script/selection fixes, Explode Text, and the T5 stop evidence |
-| [Variable-instance fix](checkpoints/TEXT_VARIABLE_INSTANCE_FIX.md) | Named-instance style arrows correction |
-| [Text UI improvements proposal](checkpoints/TEXT_UI_IMPROVEMENTS_PROPOSAL.md) | Original eight-item UI proposal (superseded by the overhaul) |
-| [Edit Text UI plan](architecture/TEXT_UI_OVERHAUL_PLAN.md) | Approved Edit Text surface and final old-to-new control inventory |
-| [Edit Text UI overhaul](checkpoints/TEXT_UI_OVERHAUL.md) | Overhaul commits, TEXT UI 5–8 changes, limits, deviations and A16 lists |
-| [TEXT FIX 9](checkpoints/TEXT_FIX_9.md) | Font import regression, overlap-safe SDF, sharp tiers and device suites |
-| [TEXT PERF 10](checkpoints/TEXT_PERF_10.md) | Single-layer text frame-time profile and fixes |
-| [TEXT PERF 11](checkpoints/TEXT_PERF_11.md) | Multi-layer text cost, resume/rotation fixes and imported-font latency |
-| [TEXT F3](checkpoints/TEXT_F3.md) | Animate tab: layout figures, full control inventory, icons, deviations and the A16 list |
-| [TEXT F3.1](checkpoints/TEXT_F3_1.md) | Animate rework: bars, scrolling body, hidden fields, Character crash root cause and fix, limits table, global Prev/Next, A16 list |
-| [TEXT F3.2](checkpoints/TEXT_F3_2.md) | AE parity (Ramp extension, seed interpolation, tracking alignment), keyframe-drag crash and export/playback root causes, re-recorded goldens, caps table, non-modal popovers, keyboard, Animate layout, Prev/Next tier 1, A16 list |
-| [TEXT F3.3](checkpoints/TEXT_F3_3.md) | Popover exits (same tile, empty space, swipe, Back), Prev/Next fall-through tier and final tier list, sheet swipe on every page (audit), marker add keeps the inspector open (root cause), Tracking slider ±1000, add bar visibility, box-text tracking tests, A16 list |
+| [Text record](checkpoints/TEXT.md) | The whole text phase (complete): status, what was built, open items carried forward, and every plan, spec and stage record in build order — E plan and E1–E3/T1–T4 checkpoint, F1, the F1–F3 animation plan, the T1–T5 spec, FIX/EXPLODE/T5, the variable-instance fix, the Edit Text UI proposal, plan and overhaul (TEXT UI 5–8), TEXT FIX 9, PERF 10/11, and F3–F3.4 |
 
 [Design assets](assets/) contain UI references. Vendored dependency documentation/licenses belong to their upstream packages, not this product index.
 

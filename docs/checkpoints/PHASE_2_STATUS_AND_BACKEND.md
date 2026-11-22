@@ -1,6 +1,6 @@
 # Phase 2 Status, Backend Architecture & UI Control Matrix
 
-**Current state:** see the [roadmap](../architecture/FLUXX_ROADMAP.md) status and the [documentation index](../README.md). Text evidence is owned by the [text checkpoint](TEXT_LAYER.md), [FIX/EXPLODE/T5](TEXT_FIX_EXPLODE_T5.md), [Edit Text UI overhaul](TEXT_UI_OVERHAUL.md) and [TEXT PERF 11](TEXT_PERF_11.md). This matrix owns engine boundaries, the control matrix and the gesture protocol.
+**Current state:** see the [roadmap](../architecture/FLUXX_ROADMAP.md) status and the [documentation index](../README.md). Text evidence is owned by the [text checkpoint](TEXT.md#rec-text-layer), [FIX/EXPLODE/T5](TEXT.md#rec-text-fix-explode-t5), [Edit Text UI overhaul](TEXT.md#rec-text-ui-overhaul) and [TEXT PERF 11](TEXT.md#rec-text-perf-11). This matrix owns engine boundaries, the control matrix and the gesture protocol.
 
 ---
 
@@ -13,7 +13,7 @@ Phase 2 transitions Fluxx from a single-layer proof-of-concept to a multi-layer 
 - **Step C:** Mobile editing UI (shell, timeline, inspector, media browser, autosave). *(Implemented in source, pending on-device acceptance)*
 - **Step D:** Keyframe animation on transform properties (Bezier interpolation + 1 easing preset). *(Implemented in source, pending on-device acceptance)*
   - [Approved Option B architecture, regression coverage and acceptance checklist](KEYFRAME_ANIMATION.md).
-- **Step E:** Text layers. E1–E3 behaviour is user-confirmed on device; the lazy 2048 R8 SDF texture-array atlas, v9 model and Edit Text editor are in place. Later text stages are F1/F2 (properties, animator engine), T1–T4 plus FIX/EXPLODE (rich text, fonts, paragraphs, animator gaps), and the Edit Text UI overhaul; T5 RTL is stopped. Separate 16 KB/golden evidence remains outstanding. See [TEXT_LAYER.md](TEXT_LAYER.md).
+- **Step E:** Text layers. E1–E3 behaviour is user-confirmed on device; the lazy 2048 R8 SDF texture-array atlas, v9 model and Edit Text editor are in place. Later text stages are F1/F2 (properties, animator engine), T1–T4 plus FIX/EXPLODE (rich text, fonts, paragraphs, animator gaps), and the Edit Text UI overhaul; T5 RTL is stopped. Separate 16 KB/golden evidence remains outstanding. See [the text record](TEXT.md#rec-text-layer).
 
 ---
 
@@ -76,7 +76,7 @@ This matrix maps every editor control to its underlying engine state, distinguis
 | **Palette Import (External)** | Not implemented | External .ase/.gpl swatch import is deferred. |
 | **Contextual Edit (Edit Solid)** | **Functional** (Opens Global Colour Picker) | Integrated via shared `FluxxColourPicker` (FULL). |
 | **Contextual Edit (Edit Footage)** | Visible, disabled & inert (non-tappable) | Footage editing capabilities (speed ramping, retiming, source replace). |
-| **Contextual Edit (Edit Text)** | Functional in source: fixed typography controls, asynchronous source sessions and the Animate tab ([TEXT F3](TEXT_F3.md), reworked in [TEXT F3.1](TEXT_F3_1.md)) | Existing gesture undo, shared picker/metrics and workspace IME handling; JVM tests passed, phone acceptance pending. |
+| **Contextual Edit (Edit Text)** | Functional in source: fixed typography controls, asynchronous source sessions and the Animate tab ([TEXT F3](TEXT.md#rec-text-f3), reworked in [TEXT F3.1](TEXT.md#rec-text-f3-1)) | Existing gesture undo, shared picker/metrics and workspace IME handling; JVM tests passed, phone acceptance pending. |
 | **Blending & Opacity Tab** | **Functional** (Opacity slider, reset; blend mode row is inert) | Additional blend modes require per-mode shader / linear blend math. |
 | **Effects Tab** | Visible, disabled & inert (non-tappable) | Phase 3: Curves + Gaussian Blur ping-pong FBO pipeline (SDD §4, §9). |
 | **Layer Styles Tab** | Visible, disabled & inert (non-tappable) | Layer style model, drop shadow, and glow rendering. |
@@ -117,6 +117,6 @@ F1 is user-accepted; its performance harness, pre-encode parity and lifecycle ch
 
 V11 adds default-on hold-keyed Ligatures: effective on only when layer tracking evaluates to zero. Animator tracking does not split ligatures. Both source/font/mode layouts, shared membership maps and seeded permutations for every source alternative are prepared ahead of playback. V10 loading is retained permanently. Per-animator grouping, averaged cluster influence, lookup-table easing, signed spatial influence with clamped colour influence, round SDF joins and bounded SDF softness are documented deviations/semantics. Paint order stays per glyph; no additional paint scope or two-pass draw.
 
-Detailed stage evidence and the exact user-run list are maintained in [the existing text animation plan](TEXT_ANIMATION_F1_F3_PLAN.md). No animator UI is added; data/edit actions exist for later F3 diamonds/controls.
+Detailed stage evidence and the exact user-run list are maintained in [the existing text animation plan](TEXT.md#rec-text-animation-plan). No animator UI is added; data/edit actions exist for later F3 diamonds/controls.
 
 The text worker prepares both ligature layouts for every held source value, native character/cluster/word/line maps and all seeded variant permutations. Kotlin writes reusable 96-byte cluster modifier records to a prepared direct buffer; native code emits 68-byte per-glyph vertices in the existing indexed mesh. Fill/stroke, stroke threshold, softness, opacity and affine effects therefore vary by glyph without layer-wide property push constants. Preview, export and thumbnails use this same preparation/evaluation/shader path. Generic mixed-media scheduling retains its existing allocations; the prepared animator evaluator and text-only acceptance window are the zero-allocation contract. Actual 60fps and device allocation/parity evidence remain pending.
