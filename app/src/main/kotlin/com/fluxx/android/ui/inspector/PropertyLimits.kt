@@ -103,6 +103,35 @@ internal object PropertyLimits {
         return PropertyLimit("Position", "px", 0f, compositionSize.coerceAtLeast(1).toFloat(), -span, span, -span, span, compositionSize / 2f, step = .1f)
     }
 
+    // ---- Text animators (TEXT F3). Slider = comfortable range, typed/hard = what the backend accepts and renders. ----
+    /** Animator Position / Anchor offsets in layer pixels (the model is unbounded; this is the UI cap). */
+    val ANIM_OFFSET = PropertyLimit("Offset", "px", -500f, 500f, -100000f, 100000f, -100000f, 100000f, 0f, detentStep = 50f, step = .1f)
+    /** Skew is clamped to ±85° per glyph by the evaluator (after coverage), so wider typed values still matter. */
+    val ANIM_SKEW = PropertyLimit("Skew", "°", -85f, 85f, -3600f, 3600f, -3600f, 3600f, 0f, detentStep = 15f, step = .1f)
+    val ANIM_ANGLE = PropertyLimit("Angle", "°", -180f, 180f, -3600f, 3600f, -3600f, 3600f, 0f, detentStep = 15f, step = .1f)
+    /** Percent fields the model validates to 0..100 (opacity family, line anchor). */
+    val ANIM_PERCENT = PropertyLimit("Percent", "%", 0f, 100f, 0f, 100f, 0f, 100f, 0f, detentStep = 10f)
+    val ANIM_BLUR = PropertyLimit("Blur", "px", 0f, 50f, 0f, 200f, 0f, 200f, 0f, detentStep = 5f, step = .5f)
+    /** Hue in degrees (wraps modulo 360 in the evaluator). */
+    val ANIM_HUE = PropertyLimit("Hue", "°", -180f, 180f, -3600f, 3600f, -3600f, 3600f, 0f, detentStep = 30f)
+    /** Saturation / brightness in percentage points; the evaluator clamps the result, so ±100 is the useful range. */
+    val ANIM_POINTS = PropertyLimit("Points", "%", -100f, 100f, -100f, 100f, -100f, 100f, 0f, detentStep = 10f)
+    val ANIM_LINE_SPACING = PropertyLimit("Line spacing", "px", -100f, 100f, -2000f, 2000f, -2000f, 2000f, 0f, detentStep = 10f)
+    val ANIM_GROUPING = PropertyLimit("Grouping alignment", "%", -100f, 100f, -1000f, 1000f, -1000f, 1000f, 0f, detentStep = 25f)
+    /** Character offset in code points; the typed cap is the Unicode range. */
+    val ANIM_CHARACTER_OFFSET = PropertyLimit("Character offset", "", -100f, 100f, -1114111f, 1114111f, -1114111f, 1114111f, 0f, detentStep = 10f)
+    /** Character value: an absolute code point. The slider covers printable ASCII to Latin Extended-B; type the rest. */
+    val ANIM_CHARACTER_VALUE = PropertyLimit("Character value", "", 32f, 591f, 0f, 1114111f, 0f, 1114111f, 0f, detentStep = 32f)
+    /** Selector start / end / offset: the model is unbounded; the slider is the selector's own 0–100% range. */
+    val SELECTOR_RANGE = PropertyLimit("Range", "%", 0f, 100f, -100000f, 100000f, -100000f, 100000f, 0f, detentStep = 10f, step = .1f)
+    val SELECTOR_OFFSET = PropertyLimit("Offset", "%", -100f, 100f, -100000f, 100000f, -100000f, 100000f, 0f, detentStep = 10f, step = .1f)
+    /** Amount, ease high/low, min/max amount: the model validates -100..100. */
+    val SELECTOR_SIGNED = PropertyLimit("Amount", "%", -100f, 100f, -100f, 100f, -100f, 100f, 0f, detentStep = 10f)
+    val SELECTOR_SMOOTHNESS = PropertyLimit("Smoothness", "%", 0f, 100f, 0f, 100f, 0f, 100f, 100f, detentStep = 10f)
+    val SELECTOR_WIGGLES = PropertyLimit("Wiggles per second", "/s", 0f, 10f, 0f, 1000f, 0f, 1000f, 2f, detentStep = 1f, step = .1f)
+    val SELECTOR_CORRELATION = PropertyLimit("Correlation", "%", 0f, 100f, 0f, 100f, 0f, 100f, 50f, detentStep = 10f)
+    val SELECTOR_PHASE = PropertyLimit("Phase", "°", -360f, 360f, -36000f, 36000f, -36000f, 36000f, 0f, detentStep = 45f, step = .1f)
+
     fun forControl(control: TextControl, selected: Boolean): PropertyLimit? = when (control) {
         TextControl.SIZE -> if (selected) RELATIVE_SIZE else FONT_SIZE
         TextControl.RELATIVE_SIZE -> RELATIVE_SIZE

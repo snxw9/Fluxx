@@ -44,17 +44,22 @@ object TextAnimatorActions {
     }
     fun apply(state: EditorState,action: EditorAction.EditTextAnimator): EditorAction {
         val layer=requireNotNull(state.project.composition.layers.firstOrNull { it.id==action.id })
+        return EditorAction.SetTextPayload(action.id,payload(layer,state.project.composition.frameRate,action.edit))
+    }
+    /**
+     * The text payload one [AnimatorEdit] produces on [layer] (the same arithmetic the reducer applies). The Animate
+     * page previews drags through the existing begin/preview/finish draft with this payload.
+     */
+    fun payload(layer: CompositionLayer,rate: FrameRate,edit: AnimatorEdit): TextProperties {
         require(layer.type==LayerType.TEXT)
         val groups=layer.text.animators.toMutableList()
         fun group(id: Long)=groups.indexOfFirst { it.id==id }.also { require(it>=0) }
         fun snap(t: Long): Long {
             val absolute=Math.addExact(layer.resolvedKeyframeAnchorUs,t)
-            val rate=state.project.composition.frameRate
             val frame=Markers.signedFrame(rate,absolute)
             val value=if(frame>=0) rate.frameTimeUs(frame) else Math.negateExact(rate.frameTimeUs(Math.negateExact(frame)))
             return Math.subtractExact(value,layer.resolvedKeyframeAnchorUs)
         }
-        val edit=action.edit
         when(edit) {
             is AnimatorEdit.Put -> { val i=groups.indexOfFirst { it.id==edit.animator.id };if(i<0) groups.add(edit.animator) else groups[i]=edit.animator }
             is AnimatorEdit.Remove -> groups.removeAt(group(edit.id))
@@ -86,7 +91,7 @@ object TextAnimatorActions {
                 }
             }
         }
-        return EditorAction.SetTextPayload(action.id,layer.text.copy(animators=FrozenList.of(groups)))
+        return layer.text.copy(animators=FrozenList.of(groups))
     }
     private fun editKey(a: TextAnimator,e: AnimatorEdit.Key,time: Long,target: Long): TextAnimator {
         fun <T> keys(old: List<T>,get: (T)->Long,move: (T,Long)->T,value: ()->T): FrozenList<T> {

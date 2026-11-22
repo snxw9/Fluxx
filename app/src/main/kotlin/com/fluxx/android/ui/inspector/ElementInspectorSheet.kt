@@ -95,6 +95,8 @@ fun ElementInspectorSheet(
     playheadUs: Long = 0L,
     onAction: (EditorAction) -> Unit = {},
     onPropertyFocus: (AnimPropertyType?) -> Unit = {},
+    /** Animate tab (TEXT F3): the focused animator field, for timeline focus and Prev/Next. */
+    onAnimatorFocus: (AnimatorTrackAddress?) -> Unit = {},
     onRename: (String) -> Unit,
     onDuplicate: () -> Unit,
     onCopyLayer: () -> Unit = {},
@@ -253,7 +255,8 @@ fun ElementInspectorSheet(
                                 InspectorSection.CONTEXTUAL_EDIT -> if (layer.type == LayerType.TEXT) TextInspectorPanel(
                                     layer,playheadUs,textFrameRate,onAction,onPropertyFocus,onTextBegin,onTextDraftSelection,onTextFinish,onTextCancel,
                                     onTextSizeBegin,onTextPayloadPreview,onTextCharacter,onTextParagraph,onTextBoxWidth,compositionWidth,textSelection,onTextSelection,textError,
-                                    {section=null},onExplodePrepare,onExplodeCommit,paletteRepository,onEyedropperRequest,onTextBeginDraft,textFinishing,textStrokeClamp,onTextSampleColour,onTextCancelSample,onTextSourceSelection)
+                                    {section=null},onExplodePrepare,onExplodeCommit,paletteRepository,onEyedropperRequest,onTextBeginDraft,textFinishing,textStrokeClamp,onTextSampleColour,onTextCancelSample,onTextSourceSelection,
+                                    compositionHeight,onAnimatorFocus)
                                 // Edit Solid: the FULL variant of the shared colour picker (one undo per interaction).
                                 else FluxxColourPicker(ColourPickerVariant.FULL, layer.solidColorArgb,
                                     onBegin = onTransformBegin, onPreview = { onColorPreview(it) }, onFinish = onTransformCommit,
@@ -314,7 +317,7 @@ private fun SectionHeader(sections: List<InspectorSection>, section: InspectorSe
  * Escape/Back cancels). The keyboard overlays the editor; only that popover lifts above it. One edit = one undo.
  */
 @Composable
-private fun CompactValueBox(
+internal fun CompactValueBox(
     label: String,
     valueText: String,
     suffix: String = "",
@@ -402,7 +405,7 @@ private fun DrawScope.dotGrid() {
 }
 
 @Composable
-private fun PositionTrackpad(
+internal fun PositionTrackpad(
     xFraction: Float, yFraction: Float,
     onBegin: () -> Unit, onPreview: (Float, Float) -> Unit,
     onCommit: () -> Unit, onCancel: () -> Unit
@@ -428,7 +431,7 @@ private fun PositionTrackpad(
 }
 
 @Composable
-private fun RotationDialController(
+internal fun RotationDialController(
     rotationDegrees: Float,
     onBegin: () -> Unit, onPreview: (Float) -> Unit,
     onCommit: () -> Unit, onCancel: () -> Unit, onEdit: (Float) -> Unit, valueHeight: Dp = SectionLayout.VALUE_BOX.dp
@@ -486,7 +489,7 @@ private fun parseRotation(input: String): Float? {
  * unlinked: Width and Height rulers. Previews go through the existing onPreview path, one undo per drag.
  */
 @Composable
-private fun ScaleController(
+internal fun ScaleController(
     scaleX: Float, scaleY: Float, linked: Boolean,
     onBegin: () -> Unit, onPreview: (Float, Float) -> Unit,
     onCommit: () -> Unit, onCancel: () -> Unit, onTyped: (Float, Float) -> Unit,

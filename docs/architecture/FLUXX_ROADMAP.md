@@ -1,6 +1,6 @@
 # Fluxx Roadmap: v0.1 → Full Vision
 
-**Current status (2026-11-22):** Phase 2 remains active. T1–T4 are user-tested; FIX/EXPLODE are committed; T5 is stopped (below). After that, the Edit Text UI overhaul and TEXT UI 5–8 ([record](../checkpoints/TEXT_UI_OVERHAUL.md)) are implemented in source, device-unverified. TEXT FIX 9 ([record](../checkpoints/TEXT_FIX_9.md)) and TEXT PERF 10/11 ([10](../checkpoints/TEXT_PERF_10.md), [11](../checkpoints/TEXT_PERF_11.md)) were device-assisted A16 passes, merged at `4c85cb2`. Open decisions: T5 cross-style shaping ownership; a non-debuggable measurement build; animator threading or a batch/draw contract change for 30 animated layers under 16.6 ms p95. Stage-by-stage evidence is in the linked checkpoints.
+**Current status (2026-11-22):** Phase 2 remains active. T1–T4 are user-tested; FIX/EXPLODE are committed; T5 is stopped (below). After that, the Edit Text UI overhaul and TEXT UI 5–8 ([record](../checkpoints/TEXT_UI_OVERHAUL.md)) are implemented in source, device-unverified. TEXT FIX 9 ([record](../checkpoints/TEXT_FIX_9.md)) and TEXT PERF 10/11 ([10](../checkpoints/TEXT_PERF_10.md), [11](../checkpoints/TEXT_PERF_11.md)) were device-assisted A16 passes, merged at `4c85cb2`. F3 (the Animate tab) is implemented in source on `text-f3` ([checkpoint](../checkpoints/TEXT_F3.md)). Open decisions: T5 cross-style shaping ownership; a non-debuggable measurement build; animator threading or a batch/draw contract change for 30 animated layers under 16.6 ms p95. Stage-by-stage evidence is in the linked checkpoints.
 
 **Current T5 stop (2026-10-09):** FIX `85b9de4` and EXPLODE `59a54a0` passed their compile/JVM/host gates and are implemented in source, device-unverified. T5 is dropped under the approved droppable-stage rule. The user's indivisible cursive-word decision resolves the historical emergency-wrap finding, but a new host proof shows mandatory Arabic lam-alef is lost across separate style items even with full source context and optional ligatures off. Cross-style shaping requires a further style-ownership decision beyond the approved wrapping change. No partial RTL code or production fonts remain; stored RTL still receives the existing rendering error. The diagnostic and this report remain uncommitted after the two feature commits. [Evidence, limits and exact manual tests](../checkpoints/TEXT_FIX_EXPLODE_T5.md). Earlier checkpoint statements below retain their historical context.
 
@@ -115,10 +115,34 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
 - [ ] **Step T5: Arabic/Hebrew direction** — stopped under the droppable-stage rule; needs a cross-style shaping ownership decision. Stored RTL is still rejected for rendering.
 - [x] **Edit Text UI overhaul, TEXT UI 5–8** — fixed non-scrolling Character/Paragraph faces, in-sheet overlays, shared colour picker family, marker popover and fixed section sizing. Implemented in source, device-unverified ([plan](TEXT_UI_OVERHAUL_PLAN.md), [record](../checkpoints/TEXT_UI_OVERHAUL.md)).
 - [x] **TEXT FIX 9 and TEXT PERF 10/11** — import regression, overlap-safe SDF and sharp tiers, with device confirmation per [FIX 9](../checkpoints/TEXT_FIX_9.md). Measured A16 frame-time fixes, one GPU submit per frame for text, and the resume/rotation fixes ([PERF 10](../checkpoints/TEXT_PERF_10.md), [PERF 11](../checkpoints/TEXT_PERF_11.md)). Open items are listed in PERF 11.
-- [ ] **Step F3: Animator UI**
-  - Deferred: Add Animator picker, fixed selector pages, diamonds and preview range handles. No new UI in F2.
+- [x] **Step F3: Animator UI** (branch `text-f3`)
+  - The Edit Text Animate tab on the F2/T4 backend: animator strip, Properties | Selectors, all 25 properties, Range (handle strip) and Wiggly selectors, keyframes through the existing rail/badges/timeline. No schema, preparation, evaluation or protocol change and no new action types. Presets are not in this pass. Implemented in source; A16 behaviour unverified. [Checkpoint, inventory and A16 list](../checkpoints/TEXT_F3.md).
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.
+
+### Timeline productivity (planned, not started)
+
+User ideas, recorded for planning; none is built.
+
+- **Select all and multi-select for layers.** This is the foundation for the rest; "Select all" is still a disabled placeholder.
+- **Duplicate count.** Hold the duplicate button on a layer to choose how many duplicates to make, instead of tapping once per copy.
+- **Stagger** the selected layers by a chosen number of seconds.
+- **Arrange and sequence layers:** layer arrangement, and placing layers end to end, with or without overlap.
+- **Keyframe stagger / sequence:** the same stagger and sequence operations for keyframes.
+
+### Parked / follow-ups
+
+- **Landscape editor layout.** Rotation now keeps the project open, but the landscape layout is cramped and the preview distorts.
+- **T5 right-to-left text.** Stopped; needs the cross-style shaping ownership decision.
+- **Shapes and masks from text.**
+- **3D text extrusion.**
+- **Imported-font latency.** Still not instant; the worker's first rasterisation is unchanged (TEXT PERF 11).
+- **Eyedropper in the animator colour popover** (TEXT F3 follow-up): wire the existing eyedropper to Fill/Stroke colour animator properties.
+- **Release-like benchmark build type**, for real performance numbers.
+- **Animator evaluation on a second core.**
+- **Per-cluster modifiers in the vertex shader.**
+- **Double-buffered batch resources.**
+- **Environmental test gaps:** GPU validation-layer tests and the missing E1a export source asset.
 
 ### Phase 3 — First Real Effects + Masks
 - Ping-pong FBO effect stack with Curves + Blur

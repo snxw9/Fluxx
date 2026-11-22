@@ -3,9 +3,12 @@ package com.fluxx.android.ui.timeline
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import com.fluxx.android.editor.AnimPropertyType
+import com.fluxx.android.editor.AnimatorTrackAddress
+import com.fluxx.android.editor.TextAnimatorEdits
 import com.fluxx.android.editor.aggregateKeyTimes
 import com.fluxx.android.editor.propertyKeyTimes
 import com.fluxx.android.model.CompositionLayer
+import com.fluxx.android.model.LayerType
 
 /**
  * Keyframe markers on a timeline layer bar. The bar always shows that a layer has keys: markers for ALL keyed
@@ -49,6 +52,11 @@ internal object LayerKeyMarkers {
     /** Clip-relative times of the focused property's keys (empty when no property is focused). */
     fun focusedClipTimes(layer: CompositionLayer, property: AnimPropertyType?, anchorOffsetUs: Long): Set<Long> =
         if (property == null) emptySet() else layer.propertyKeyTimes(property).map { it + anchorOffsetUs }.toSet()
+
+    /** Clip-relative times of the focused animator field's keys (Animate tab); empty when none is focused. */
+    fun focusedAnimatorClipTimes(layer: CompositionLayer, address: AnimatorTrackAddress?, anchorOffsetUs: Long): Set<Long> =
+        if (address == null || layer.type != LayerType.TEXT || !TextAnimatorEdits.exists(layer.text, address)) emptySet()
+        else TextAnimatorEdits.keyTimes(layer, address).map { it + anchorOffsetUs }.toSet()
 
     /** One marker per distinct time; focused wins when several properties share a time. */
     fun markers(all: List<Long>, focused: Set<Long>): List<Marker> =

@@ -80,6 +80,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import com.fluxx.android.editor.AnimPropertyType
+import com.fluxx.android.editor.AnimatorEdit
+import com.fluxx.android.editor.AnimatorKeyOperation
+import com.fluxx.android.editor.AnimatorTrackAddress
 import com.fluxx.android.editor.EditorAction
 import com.fluxx.android.editor.TimelineEdits
 import com.fluxx.android.media.MediaRepository
@@ -157,6 +160,8 @@ fun TimelineView(
     onOpenClipOptions: (Long) -> Unit,
     inspectorVisible: Boolean = false,
     activeProperty: AnimPropertyType? = null,
+    /** Animate tab (TEXT F3): the focused animator field; its keys are the editable ones, like [activeProperty]. */
+    activeAnimatorTrack: AnimatorTrackAddress? = null,
     onDragSelect: (Long) -> Unit = { onSelectLayer(it) },
     onDismissInspector: () -> Unit = {},
     onMarkerAction: (EditorAction) -> Unit = {},
@@ -442,6 +447,7 @@ fun TimelineView(
                                         layer = layer,
                                         isSelected = layer.id == selectedLayerId,
                                         activeProperty = activeProperty,
+                                        activeAnimatorTrack = activeAnimatorTrack,
                                         onMarkerSelect = { tapMarker(layer.id, it) },
                                         popoverMarkerId = markerSession?.ref?.takeIf { it.layerId == layer.id && markerOnBar }?.id,
                                         popover = markerPopover,
@@ -687,6 +693,7 @@ private fun TimelineClipRow(
     layer: CompositionLayer,
     isSelected: Boolean,
     activeProperty: AnimPropertyType?,
+    activeAnimatorTrack: AnimatorTrackAddress? = null,
     onMarkerSelect: (Marker) -> Unit,
     popoverMarkerId: Long?,
     popover: @Composable () -> Unit,
@@ -875,8 +882,9 @@ private fun TimelineClipRow(
         val anchorOffsetUs = layer.resolvedKeyframeAnchorUs - startUs
         // Every keyed property of the layer (all text properties and animators included), aggregated once per change.
         val observedTimes = remember(anim, layer.text, anchorOffsetUs) { LayerKeyMarkers.clipTimes(layer, anchorOffsetUs) }
-        val focusedTimes = remember(anim, layer.text, activeProperty, anchorOffsetUs) {
-            LayerKeyMarkers.focusedClipTimes(layer, activeProperty, anchorOffsetUs)
+        val focusedTimes = remember(anim, layer.text, activeProperty, activeAnimatorTrack, anchorOffsetUs) {
+            LayerKeyMarkers.focusedClipTimes(layer, activeProperty, anchorOffsetUs) +
+                LayerKeyMarkers.focusedAnimatorClipTimes(layer, activeAnimatorTrack, anchorOffsetUs)
         }
         val diamondPath = remember { Path() }
         val markerStroke = remember(density) { Stroke(width = with(density) { 1.5.dp.toPx() }) }
@@ -913,14 +921,14 @@ private fun TimelineClipRow(
                                 .align(Alignment.CenterStart)
                                 .offset(x = kfOffsetDp - (LayerKeyMarkers.HIT_WIDTH_DP / 2).dp)
                                 .size(width = LayerKeyMarkers.HIT_WIDTH_DP.dp, height = TRACK_ROW_HEIGHT_DP.dp)
-                                .then(if (editable) Modifier.pointerInput(kfTimeUs, startUs, anchorOffsetUs, activeProperty) {
+                                .then(if (editable) Modifier.pointerInput(kfTimeUs, startUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
                                     detectTapGestures(
                                         onTap = {
                                             onSeek(startUs + kfTimeUs, false)
                                         }
                                     )
                                 }
-                                .pointerInput(kfTimeUs, startUs, durationUs, pxPerUs, anchorOffsetUs, activeProperty) {
+                                .pointerInput(kfTimeUs, startUs, durationUs, pxPerUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
                                     var initialKfTime = kfTimeUs
                                     var accumulatedUs = kfTimeUs
                                     detectDragGesturesAfterLongPress(
@@ -950,9 +958,12 @@ private fun TimelineClipRow(
                                                 markerTimes = markerSnapTimes
                                             )
                                             movingTo = snappedUs
-                                            preview(EditorAction.MoveKeyframe(layer.id, activeProperty,
-                                                Math.subtractExact(initialKfTime, anchorOffsetUs),
-                                                Math.subtractExact(snappedUs, anchorOffsetUs)))
+                                            val fromLocal = Math.subtractExact(initialKfTime, anchorOffsetUs)
+                                            val toLocal = Math.subtractExact(snappedUs, anchorOffsetUs)
+                                            // An animator-focused key moves only that field (existing AnimatorEdit.Key MOVE).
+                                            preview(if (activeProperty == null && activeAnimatorTrack != null)
+                                                EditorAction.EditTextAnimator(layer.id, AnimatorEdit.Key(activeAnimatorTrack, AnimatorKeyOperation.MOVE, fromLocal, toLocal))
+                                            else EditorAction.MoveKeyframe(layer.id, activeProperty, fromLocal, toLocal))
                                         }
                                     )
                                 } else Modifier),
@@ -1005,7 +1016,7 @@ private fun TimelineClipRow(
                     val right = if (next != null && next < endUs)
                         minOf(x + 24.dp, with(density) { ((next / 2.0 + time / 2.0) * pxPerUs).toFloat().toDp() }) else x + 24.dp
                     Box(Modifier.offset(x = left).width((right - left).coerceAtLeast(0.dp))
-                        .height(if (isSelected && activeProperty != null) 12.dp else TRACK_ROW_HEIGHT_DP.dp)
+                        .height(if (isSelected && (activeProperty != null || activeAnimatorTrack != null)) 12.dp else TRACK_ROW_HEIGHT_DP.dp)
                         .pointerInput(marker.id, marker.timeUs) { detectTapGestures { selectMarker(marker) } }
                         .semantics {
                             contentDescription = "Layer marker: ${marker.description}"

@@ -222,21 +222,115 @@ internal object InspectorIcons {
         put("AREA", p().rect(3f, 4f, 18f, 16f, 3f).line(7f, 9f, 17f, 9f).line(7f, 12.5f, 17f, 12.5f).line(7f, 16f, 13f, 16f).build())
         put("BOX", p().rect(3f, 5f, 18f, 14f, 3f).line(7f, 12f, 17f, 12f).line(9f, 10f, 7f, 12f, 9f, 14f).line(15f, 10f, 17f, 12f, 15f, 14f).build())
         put("LTR", direction(false)); put("DIRECTION", getValue("LTR")); put("RTL", direction(true))
+        // ---- Edit Text: Animate (TEXT F3) -------------------------------------------------------------------
+        put("ANIMATOR", p().line(3f, 5f, 12f, 5f).line(7.5f, 5f, 7.5f, 19f).arc(12f, 19f, 8f, 8f, 0, 0, 20f, 11f).line(17f, 10f, 20f, 11f, 21f, 8f).build())
+        put("ADD", p().line(12f, 5f, 12f, 19f).line(5f, 12f, 19f, 12f).build())
+        put("PROPERTIES", p().line(4f, 6f, 20f, 6f).line(4f, 12f, 20f, 12f).line(4f, 18f, 20f, 18f).circle(15f, 6f, 2f).circle(8f, 12f, 2f).circle(13f, 18f, 2f).build())
+        put("SELECTORS", p().line(8f, 6f, 6f, 6f, 6f, 18f, 8f, 18f).line(16f, 6f, 18f, 6f, 18f, 18f, 16f, 18f).line(10f, 12f, 14f, 12f).build())
+        put("RANGE", p().line(3f, 18f, 7f, 18f, 10f, 7f, 14f, 7f, 17f, 18f, 21f, 18f).build())
+        put("WIGGLY", p().cubic(3f, 12f, 6f, 4f, 9f, 4f, 12f, 12f).cubic(12f, 12f, 15f, 20f, 18f, 20f, 21f, 12f).build())
+        put("ENABLED", p().arc(8f, 7f, 7f, 7f, 1, 0, 16f, 7f).line(12f, 3f, 12f, 11f).build())
+        put("GROUPING", p().rect(3f, 7f, 8f, 10f, 2f).rect(13f, 7f, 8f, 10f, 2f).circle(7f, 12f, 1f).circle(17f, 12f, 1f).build())
+        put("GROUPING_ALL", p().rect(3f, 6f, 18f, 12f, 3f).circle(12f, 12f, 1.2f).build())
+        // Selector shapes: the coverage profile over the selected range.
+        put("SHAPE_SQUARE", p().line(3f, 19f, 6f, 19f, 6f, 6f, 18f, 6f, 18f, 19f, 21f, 19f).build())
+        put("SHAPE_RAMP_UP", p().line(3f, 19f, 6f, 19f, 18f, 6f, 21f, 6f).build())
+        put("SHAPE_RAMP_DOWN", p().line(3f, 6f, 6f, 6f, 18f, 19f, 21f, 19f).build())
+        put("SHAPE_TRIANGLE", p().line(3f, 19f, 12f, 6f, 21f, 19f).build())
+        put("SHAPE_ROUND", p().arc(4f, 19f, 8f, 13f, 0, 1, 20f, 19f).build())
+        put("SHAPE_SMOOTH", p().cubic(3f, 19f, 9f, 19f, 9f, 6f, 12f, 6f).cubic(12f, 6f, 15f, 6f, 15f, 19f, 21f, 19f).build())
+        // Based on (also the anchor grouping choices).
+        put("BASIS_CHARACTERS", p().rect(3f, 8f, 5f, 8f, 2f).rect(9.5f, 8f, 5f, 8f, 2f).rect(16f, 8f, 5f, 8f, 2f).build())
+        put("BASIS_NON_SPACE", p().rect(3f, 8f, 5f, 8f, 2f).rect(16f, 8f, 5f, 8f, 2f).line(10f, 14f, 10f, 16f, 14f, 16f, 14f, 14f).build())
+        put("BASIS_WORDS", p().rect(3f, 8f, 8f, 8f, 2f).rect(13f, 8f, 8f, 8f, 2f).build())
+        put("BASIS_LINES", p().line(4f, 7f, 20f, 7f).line(4f, 12f, 20f, 12f).line(4f, 17f, 14f, 17f).build())
+        // Selector combination modes.
+        // Selector combination modes: two overlapping circles (A left, B right), with the result region filled.
+        // Min / Max: a tall and a short rounded bar, with the smaller / larger one filled.
+        put("MODE_ADD", modePair()); put("MODE_SUBTRACT", modePair()); put("MODE_INTERSECT", modePair()); put("MODE_DIFFERENCE", modePair())
+        put("MODE_MIN", modeBars()); put("MODE_MAX", modeBars())
+        // Selector values.
+        put("UNITS_PERCENT", p().circle(7f, 7f, 2.2f).circle(17f, 17f, 2.2f).line(18f, 5f, 6f, 19f).build())
+        put("UNITS_INDEX", p().line(9f, 4f, 7f, 20f).line(17f, 4f, 15f, 20f).line(4f, 9f, 20f, 9f).line(4f, 15f, 20f, 15f).build())
+        put("RANGE_START", p().line(8f, 4f, 8f, 20f).line(8f, 12f, 20f, 12f).line(17.5f, 9.5f, 20f, 12f, 17.5f, 14.5f).build())
+        put("RANGE_END", p().line(16f, 4f, 16f, 20f).line(16f, 12f, 4f, 12f).line(6.5f, 9.5f, 4f, 12f, 6.5f, 14.5f).build())
+        put("RANGE_OFFSET", p().line(3f, 12f, 21f, 12f).line(18.5f, 9.5f, 21f, 12f, 18.5f, 14.5f).line(5.5f, 9.5f, 3f, 12f, 5.5f, 14.5f).line(9f, 6f, 9f, 18f).line(15f, 6f, 15f, 18f).build())
+        put("SMOOTHNESS", p().line(3f, 18f, 7f, 18f).cubic(7f, 18f, 10f, 18f, 10f, 6f, 13f, 6f).line(13f, 6f, 21f, 6f).build())
+        put("EASE_HIGH", p().line(4f, 19f, 10f, 19f).cubic(10f, 19f, 13f, 19f, 14f, 6f, 20f, 6f).line(14f, 3f, 20f, 3f).build())
+        put("EASE_LOW", p().cubic(4f, 18f, 10f, 18f, 11f, 5f, 14f, 5f).line(14f, 5f, 20f, 5f).line(4f, 21f, 10f, 21f).build())
+        put("AMOUNT", p().rect(3f, 9f, 18f, 6f, 3f).line(6f, 12f, 14f, 12f).build())
+        put("MIN_AMOUNT", p().line(4f, 19f, 20f, 19f).line(12f, 5f, 12f, 15f).line(9f, 12f, 12f, 15f, 15f, 12f).build())
+        put("MAX_AMOUNT", p().line(4f, 5f, 20f, 5f).line(12f, 19f, 12f, 9f).line(9f, 12f, 12f, 9f, 15f, 12f).build())
+        put("RANDOMIZE", p().line(3f, 7f, 7f, 7f).cubic(7f, 7f, 11f, 7f, 13f, 17f, 17f, 17f).line(17f, 17f, 21f, 17f).line(3f, 17f, 7f, 17f)
+            .cubic(7f, 17f, 11f, 17f, 13f, 7f, 17f, 7f).line(17f, 7f, 21f, 7f).line(18.5f, 4.5f, 21f, 7f, 18.5f, 9.5f).line(18.5f, 14.5f, 21f, 17f, 18.5f, 19.5f).build())
+        put("SEED", p().rect(4f, 4f, 16f, 16f, 3f).circle(9f, 9f, 1f).circle(15f, 9f, 1f).circle(9f, 15f, 1f).circle(15f, 15f, 1f).build())
+        put("WIGGLES", p().cubic(3f, 12f, 4.5f, 7f, 6f, 7f, 7.5f, 12f).cubic(7.5f, 12f, 9f, 17f, 10.5f, 17f, 12f, 12f)
+            .cubic(12f, 12f, 13.5f, 7f, 15f, 7f, 16.5f, 12f).cubic(16.5f, 12f, 18f, 17f, 19.5f, 17f, 21f, 12f).build())
+        put("CORRELATION", p().cubic(3f, 9f, 8f, 4f, 13f, 14f, 21f, 9f).cubic(3f, 17f, 8f, 12f, 13f, 22f, 21f, 17f).build())
+        put("TEMPORAL_PHASE", p().circle(8f, 8f, 4f).line(8f, 6f, 8f, 8f, 9.5f, 9f).cubic(3f, 18f, 8f, 13f, 13f, 22f, 21f, 16f).build())
+        put("SPATIAL_PHASE", p().cubic(3f, 10f, 8f, 5f, 13f, 15f, 21f, 9f).line(5f, 18f, 19f, 18f).line(16.5f, 15.5f, 19f, 18f, 16.5f, 20.5f).build())
+        put("LOCK", p().rect(5f, 11f, 14f, 10f, 3f).arc(8f, 11f, 4f, 4f, 0, 1, 16f, 11f).line(12f, 15f, 12f, 17f).build())
+        // Animator properties without a layer counterpart (Position, Scale, Rotation, Anchor, Tracking, Stroke width
+        // and Leading reuse their existing glyphs).
+        put("OPACITY", p().circle(12f, 12f, 8f).line(12f, 4f, 12f, 20f).line(12f, 8f, 18.5f, 8f).line(12f, 12f, 20f, 12f).line(12f, 16f, 18.5f, 16f).build())
+        put("SKEW", p().poly(2f, 9f, 5f, 20f, 5f, 15f, 19f, 4f, 19f).build())
+        put("SKEW_AXIS", p().line(4f, 19f, 20f, 19f).line(4f, 19f, 15f, 6f).arc(10f, 19f, 6f, 6f, 0, 0, 7.88f, 14.42f).build())
+        put("LINE_ANCHOR", p().line(4f, 8f, 20f, 8f).line(4f, 16f, 20f, 16f).line(8f, 5f, 8f, 19f).build())
+        put("BLUR", p().circle(12f, 12f, 4f).arc(4.5f, 12f, 7.5f, 7.5f, 0, 1, 12f, 4.5f).arc(19.5f, 12f, 7.5f, 7.5f, 0, 1, 12f, 19.5f).build())
+        put("FILL_OPACITY", p().rect(5f, 5f, 14f, 14f, 3.5f).line(8f, 16f, 16f, 8f).build())
+        put("STROKE_OPACITY", p().rect(4f, 4f, 16f, 16f, 4f).rect(8f, 8f, 8f, 8f, 2f).line(6f, 18f, 18f, 6f).build())
+        put("FILL_HUE", hue(p()).build())
+        put("FILL_SATURATION", saturation(p()).build())
+        put("FILL_BRIGHTNESS", brightness(p()).build())
+        put("STROKE_HUE", hue(p()).rect(16f, 16f, 6f, 6f, 2f).build())
+        put("STROKE_SATURATION", saturation(p()).rect(16f, 16f, 6f, 6f, 2f).build())
+        put("STROKE_BRIGHTNESS", brightness(p()).rect(16f, 16f, 6f, 6f, 2f).build())
+        put("GROUPING_ALIGNMENT", p().rect(3f, 3f, 18f, 18f, 3f).circle(12f, 12f, 1f).line(12.7f, 11.3f, 15f, 9f).circle(16f, 8f, 1.5f).build())
+        put("CHARACTER_OFFSET", aLetter(p(), 3f, 11f, 6f, 15f).line(13f, 10.5f, 21f, 10.5f).line(18.5f, 8f, 21f, 10.5f, 18.5f, 13f).line(4f, 19f, 20f, 19f).build())
+        put("CHARACTER_VALUE", aLetter(p().rect(3f, 4f, 18f, 16f, 3f), 7.5f, 16.5f, 7.5f, 16.5f).build())
     }
+    private fun hue(b: IconPath) = b.circle(11f, 11f, 7f).line(11f, 4f, 11f, 7f).line(11f, 15f, 11f, 18f).line(4f, 11f, 7f, 11f).line(15f, 11f, 18f, 11f)
+    private fun saturation(b: IconPath) = b.line(11f, 3f, 15.5f, 10f).arc(15.5f, 10f, 5f, 5f, 0, 1, 6.5f, 10f).line(6.5f, 10f, 11f, 3f)
+    // Mode circles: centres 9.5 and 14.5, radius 6; they cross at (12, 6.55) and (12, 17.45).
+    private const val MT = "12,6.55"; private const val MB = "12,17.45"
+    private fun modePair() = p().circle(9.5f, 12f, 6f).circle(14.5f, 12f, 6f).build()
+    private fun modeBars() = p().rect(4f, 4f, 7f, 16f, 2.5f).rect(13f, 11f, 7f, 9f, 2.5f).build()
+    /**
+     * Filled regions drawn over a hollow outline (selector modes only). The region is a state glyph: it shows the
+     * result of combining two selections. Same stroke, caps and joins as the outline.
+     */
+    val REGIONS: Map<String, String> = mapOf(
+        // Union: around A's left side, then around B's right side.
+        "MODE_ADD" to "M$MT A6,6 0 1 0 $MB A6,6 0 1 0 $MT Z",
+        // A minus B: around A's left side, back along B's left edge.
+        "MODE_SUBTRACT" to "M$MT A6,6 0 1 0 $MB A6,6 0 0 1 $MT Z",
+        // Intersection: the lens (A's right edge, then B's left edge).
+        "MODE_INTERSECT" to "M$MT A6,6 0 0 1 $MB A6,6 0 0 1 $MT Z",
+        // Symmetric difference: both crescents, lens left empty.
+        "MODE_DIFFERENCE" to "M$MT A6,6 0 1 0 $MB A6,6 0 0 1 $MT Z M$MT A6,6 0 1 1 $MB A6,6 0 0 0 $MT Z",
+        "MODE_MIN" to IconPath().rect(13f, 11f, 7f, 9f, 2.5f).build(),
+        "MODE_MAX" to IconPath().rect(4f, 4f, 7f, 16f, 2.5f).build())
+    private fun brightness(b: IconPath) = b.circle(11f, 11f, 3.5f).line(11f, 3f, 11f, 5f).line(11f, 17f, 11f, 19f).line(3f, 11f, 5f, 11f).line(17f, 11f, 19f, 11f)
+        .line(5.3f, 5.3f, 6.7f, 6.7f).line(15.3f, 15.3f, 16.7f, 16.7f).line(5.3f, 16.7f, 6.7f, 15.3f).line(15.3f, 6.7f, 16.7f, 5.3f)
 
     /** Every name shown anywhere in the inspector, the editor action bar or the quick action bar. */
     val VISIBLE: List<String> get() = PATHS.keys.toList()
 
     fun path(name: String): String = PATHS[name] ?: error("No inspector icon named $name")
     /** Identity of a drawn glyph: path plus fill, so a filled and hollow diamond are different glyphs. */
-    fun glyph(name: String) = path(name) + if (name in FILLED) "#filled" else ""
+    fun glyph(name: String) = path(name) + (if (name in FILLED) "#filled" else "") + (REGIONS[name]?.let { "#region:$it" } ?: "")
 
     private val cache = mutableMapOf<String, ImageVector>()
     fun icon(name: String): ImageVector = synchronized(cache) { cache.getOrPut(name) { build(name, path(name), name in FILLED) } }
-    private fun build(name: String, data: String, filled: Boolean): ImageVector =
-        ImageVector.Builder(name, 24.dp, 24.dp, GRID, GRID).addPath(PathParser().parsePathString(data).toNodes(),
+    private fun build(name: String, data: String, filled: Boolean): ImageVector {
+        val b = ImageVector.Builder(name, 24.dp, 24.dp, GRID, GRID).addPath(PathParser().parsePathString(data).toNodes(),
             fill = if (filled) SolidColor(Color.Black) else null, stroke = SolidColor(Color.Black),
-            strokeLineWidth = STROKE, strokeLineCap = CAP, strokeLineJoin = JOIN).build()
+            strokeLineWidth = STROKE, strokeLineCap = CAP, strokeLineJoin = JOIN)
+        // Region glyphs (selector modes): the hollow outline first, then the filled result region over it.
+        REGIONS[name]?.let { region -> b.addPath(PathParser().parsePathString(region).toNodes(), fill = SolidColor(Color.Black),
+            stroke = SolidColor(Color.Black), strokeLineWidth = STROKE, strokeLineCap = CAP, strokeLineJoin = JOIN) }
+        return b.build()
+    }
 
     /** Edit Text control → icon name (one place, so no control can silently fall back to a default glyph). */
     fun controlName(c: TextControl): String = when (c) {

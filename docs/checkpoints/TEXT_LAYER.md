@@ -1,5 +1,7 @@
 # Text layer checkpoint
 
+**TEXT F3 Animate tab (2026-11-22):** The Animate tab is implemented in source; A16 behaviour is unverified. It edits the existing animator model through the existing `AnimatorEdit` actions (no new action types, no schema/preparation/evaluation change). Selectors and properties are as validated by the backend: 16 animators × 8 selectors, all 25 property families, Range and Wiggly. Keys use the same tracks, rail, badges and timeline markers. [Checkpoint, inventory, deviations and A16 list](TEXT_F3.md).
+
 **Edit Text UI rework (2026-11-18):** Implemented in source, device-unverified; UI only. No text model, schema, preparation, native, PreviewController, gesture-protocol or batch/draw change. Aggregate popups are deleted; all common Character/Paragraph controls are on fixed tab faces; overlays stay inside the sheet; the header ⋮ has four items; the status line and Hold label are replaced by rail diamond states, a selection chip and the feedback strip; Back returns to the layer inspector grid; size / vertical scale / horizontal scale have distinct glyphs. Stroke clamp feedback still preserves the requested value and reports the effective range only while clamped. [Inventory](../architecture/TEXT_UI_OVERHAUL_PLAN.md#11-rework-2026-11-18-final-surface-and-inventory) and [gate, deviations and user-run list](TEXT_UI_OVERHAUL.md#rework-commit-2-menu-back-status-and-icons).
 
 ## FIX / EXPLODE / T5 continuation — 2026-10-09

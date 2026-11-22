@@ -203,6 +203,8 @@ fun EditorScreen(
     var textEditOpen by remember { mutableStateOf(false) }
     val backDispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     var focusedProperty by remember { mutableStateOf<AnimPropertyType?>(null) }
+    // Animate tab (TEXT F3): the focused animator field owns timeline focus and Prev/Next, like focusedProperty.
+    var focusedAnimatorTrack by remember { mutableStateOf<AnimatorTrackAddress?>(null) }
     var anchorMode by remember { mutableStateOf(false) }
     var eyedropperLayerId by remember { mutableStateOf<Long?>(null) }
     var sampledColor by remember { mutableStateOf<Int?>(null) }
@@ -426,7 +428,7 @@ fun EditorScreen(
                     onPrevBoundary = {
                         textEditor.finish {
                             val prevUs = editor.navigateBoundary(false,
-                                inspectorSheetVisible && editor.state.selectedLayerId != null, focusedProperty)
+                                inspectorSheetVisible && editor.state.selectedLayerId != null, focusedProperty, focusedAnimatorTrack)
                             previewController?.update(editor.state.project, prevUs, false)
                         }
                     },
@@ -442,7 +444,7 @@ fun EditorScreen(
                     onNextBoundary = {
                         textEditor.finish {
                             val nextUs = editor.navigateBoundary(true,
-                                inspectorSheetVisible && editor.state.selectedLayerId != null, focusedProperty)
+                                inspectorSheetVisible && editor.state.selectedLayerId != null, focusedProperty, focusedAnimatorTrack)
                             previewController?.update(editor.state.project, nextUs, false)
                         }
                     },
@@ -473,12 +475,14 @@ fun EditorScreen(
                     selectedLayerId = displayedState.selectedLayerId,
                     inspectorVisible = isInspectorOpen,
                     activeProperty = focusedProperty.takeIf { isInspectorOpen },
+                    activeAnimatorTrack = focusedAnimatorTrack.takeIf { isInspectorOpen },
                     onMarkerAction = { editor.dispatch(it) },
                     onMarkerConfigure = { previewController?.pause() },
                     onMarkerSelect = { owner, marker ->
                         previewController?.pause()
                         dismissInspector()
                         focusedProperty = null
+                        focusedAnimatorTrack = null
                         editor.dispatch(EditorAction.Select(owner))
                         val layer = editor.state.selectedLayer
                         val time = Math.addExact(layer?.resolvedKeyframeAnchorUs ?: 0L, marker.timeUs)
@@ -647,6 +651,12 @@ fun EditorScreen(
                             // should clear selection/cancel gestures, never every recomposition.
                             if (inspectorSheetVisible && focusedProperty != it) {
                                 focusedProperty = it
+                                if (it != null && !textEditor.active) editor.dispatch(EditorAction.SelectMarker(null))
+                            }
+                        },
+                        onAnimatorFocus = {
+                            if (focusedAnimatorTrack != it) {
+                                focusedAnimatorTrack = it.takeIf { inspectorSheetVisible }
                                 if (it != null && !textEditor.active) editor.dispatch(EditorAction.SelectMarker(null))
                             }
                         },
