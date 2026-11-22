@@ -15,21 +15,11 @@
 
 **Edit Text rework (2026-11-18):** Implemented in source, device-unverified. Edit Text is a fixed, non-scrolling sheet: every common control sits on the Character (4 rows) or Paragraph (3 rows) face; the only overlays are Case / Justify / Box width choice rows, exact numeric entry, Fonts and the colour picker, all inside the sheet, which is docked below the preview, so none hides the edited layer. While Edit Text is open the sheet uses one fixed height (344dp at font scale 1; labelled 3-column reflow at larger scales) and ignores Preview Expansion. **Back:** the editor's top-left arrow dispatches system Back while Edit Text is open; Back first leaves the innermost transient state (Explode dialog, numeric/source/colour draft, confirmation, base-alignment row, choice row, Fonts) and otherwise returns directly to this inspector's landing grid, clearing any text selection. The check mark keeps its Done behaviour. The header ⋮ holds exactly Explode Text, Reset {tab} style, Manual kerning and Relative size; the status line and Hold label are gone (the rail diamond carries key state). [Final inventory](../architecture/TEXT_UI_OVERHAUL_PLAN.md#11-rework-2026-11-18-final-surface-and-inventory), [gate and A16 user-run list](TEXT_UI_OVERHAUL.md#rework-commit-2-menu-back-status-and-icons).
 
-**Current T5 stop (2026-10-09):** FIX `85b9de4` and EXPLODE `59a54a0` passed their compile/JVM/host gates and are implemented in source, device-unverified. T5 is dropped under the approved droppable-stage rule. The user's indivisible cursive-word decision resolves the historical emergency-wrap finding, but a new host proof shows mandatory Arabic lam-alef is lost across separate style items even with full source context and optional ligatures off. Cross-style shaping requires a further style-ownership decision beyond the approved wrapping change. No partial RTL code or production fonts remain; stored RTL still receives the existing rendering error. The diagnostic and this report remain uncommitted after the two feature commits. [Evidence, limits and exact manual tests](TEXT_FIX_EXPLODE_T5.md). Earlier checkpoint statements below retain their historical context.
+**Explode Text** (header ⋮): its compact dialog contains the five split modes, Skip spaces, Keep original, Group/Each pivot, a freeze/drop summary, Prepare/Confirm and explicit confirmation above 200 pieces. It uses existing pages and undo transactions; no sub-screen or frozen layout schema. [Current gate, limits and exact user-run list](TEXT_FIX_EXPLODE_T5.md).
 
-**Explode continuation (2026-10-09):** The top-level Edit Text page adds only the requested Explode Text row. Its compact dialog contains the five split modes, Skip spaces, Keep original, Group/Each pivot, a freeze/drop summary, Prepare/Confirm and explicit confirmation above 200 pieces. It uses existing pages and undo transactions; no sub-screen or frozen layout schema. Source-only, device-unverified. [Current gate, limits and exact user-run list](TEXT_FIX_EXPLODE_T5.md).
-
-**Text FIX continuation (2026-10-09):** Existing Character/Paragraph pages now contain the four Case chips and Box width Auto (0)/Fill composition/numeric controls. Preview long press/double tap/selection handles share one transient logical range with the source field; formatting uses existing undo transactions. Variable-axis page/slider structure is retained with last-wins frame throttling. No new Edit Text sub-screen. Implemented in source, device-unverified; the compile/JVM/host gate passed. [Exact user-run list and implementation decisions](TEXT_FIX_EXPLODE_T5.md). T1–T4 device testing is user-confirmed; EXPLODE/T5 have not shipped.
-
-**T4 continuation (2026-10-05):** T4a/T4b and T4c character substitution implement all 25 animator property families in source, device-unverified. Native Debug/Release both ABIs, Kotlin Debug/Release, both instrumentation compilations and 228 JVM tests passed; host selftest, six shaping references and 1,445 checksums passed. T4c uses bounded prepared cmap/SDF catalogues and reusable codepoint buffers with unchanged draw/gesture/PreviewController contracts. No F3 controls or new font assets; APK code delta unmeasured. See TEXT_LAYER.md for semantics, limits, exact user-run fixtures and final commit-gate evidence. F1 perf/parity/lifecycle remain unrun. T5 stops under its approved droppable rule: the host Arabic joining proof shows emergency wrap boundaries change glyph forms and advances, requiring a boundary-dependent preparation/wrapping design extension. No partial RTL support ships; direction attributes remain preserved but rendering rejects RTL. Layer transforms remain separate from glyph geometry; derivative AA is implemented, future 4x4/Z is deferred.
-
-**Text continuation (2026-10-05):** T3a (f05e402) and T3b paragraph/box integration are source-implemented, device-unverified. T3b passed native Debug/Release on both ABIs, Kotlin Debug/Release, both instrumentation compilations, 212 JVM tests, host selftest and six shaping references. Per-frame wrapping uses reusable buffers; the 64-layout cap covers held documents x ligature modes, with 256 lines and 32 MiB prepared line-permutation payload/layer. Edit Text has fixed Paragraph subpages and a width handle on unchanged gesture transactions. Wrapping precedes animator spacing; logical words survive soft wraps. RTL is stored only until T5; T4/T5 remain outstanding. See TEXT_LAYER.md for deviations and the exact user-run list. F1 perf/parity/lifecycle remain unrun; no protected API or batch/draw changes.
-
-**T1–T5 current work (2026-10-04):** T1a rich Source Text/v12 foundation is committed. T1b adds selection-based Character editing in the existing fixed/paged Edit Text sheet: eight compact subpages for faces, faux/caps, script/kerning, scales/size, baseline, spacing/stroke, ARGB overrides and manual kerning. An empty selection applies to all text; formatting writes an atomic held Source Text value and one undo transaction. Paragraph/library/box controls remain T2/T3 work. No scrolling sheet, F3 animator UI, PreviewController or gesture change. Controls are source-implemented, device-unverified; see [current evidence](TEXT_LAYER.md).
+Earlier Edit Text stages (E3, T1–T4 pages, FIX preview selection) are recorded in the [text checkpoint](TEXT_LAYER.md) and [FIX/EXPLODE/T5](TEXT_FIX_EXPLODE_T5.md); the rework above is the current surface.
 
 **Status:** Implemented in source. Android debug Kotlin compilation passed during E1b/E1c; the feature-specific JVM/phone checks below remain pending. This document owns inspector navigation, layer actions and trim/extend/split.
-
-**Text pass:** E1d, E1e, E2 and E3 are implemented in source and compiled; E1–E3 device behavior was subsequently confirmed by the user; F2 remains device-unverified. Native debug/release compilation passed for arm64-v8a and x86_64, Kotlin debug/release and instrumentation sources compiled, and the final JVM run passed 150/150 tests. No APK was installed or launched. See [stage evidence and exact user-run checklists](TEXT_LAYER.md). The approved overflow policy uses lazy texture-array growth; F2 range selectors and animators are now implemented in source (see the current status below); F3 UI remains deferred.
 
 ### Anchor acceptance — 2026-09-24
 
@@ -135,7 +125,7 @@ Transform mode provides a right rail to toggle between **Position**, **Rotation*
 
 ### Contextual Edit (Edit Solid / Edit Footage)
 - **Edit Solid (Solids):**
-  - Powered by the shared **Global Colour Picker** (`FluxxColorPicker`), providing:
+  - Powered by the shared **Global Colour Picker** (`FluxxColourPicker`, FULL variant), providing:
     - Saturation-value box (X = saturation, Y = value) with a vertical hue strip; the separate V slider is deleted
     - Editable hex/numeric input (`#RRGGBB` / `#AARRGGBB`) with strict validation
     - Alpha slider (0–100%) with checkerboard transparency preview
@@ -270,7 +260,7 @@ Video Extend In clamps to `max(0, start - sourceIn)`. Images and solids extend t
 
 ### Persistence
 
-Signed key times and persistent animation origins were introduced in **version 5**; the current writer uses v9. Versions 1-4 still load, with absent anchors resolving to clip start.
+Signed key times and persistent animation origins were introduced in **version 5**; the current writer uses v12. Versions 1-4 still load, with absent anchors resolving to clip start.
 
 The additive Layer fields are `keyframe_anchor_us:long=-1` and `has_keyframe_anchor:bool=false`. The presence bit is necessary: moving a trimmed clip earlier can create a legitimate negative anchor, including exactly -1. Null remains null on round-trip; explicit -1 survives as an explicit value. Decoding also accepts a non-sentinel anchor without the presence flag.
 
@@ -299,7 +289,7 @@ Phone acceptance:
 6. Check all inspector pages fit without scrolling in both preview sizes; the 36dp action row appears only on the landing page.
 
 
-## E3 Text inspector — implemented in source, device-unverified
+## E3 Text inspector — historical baseline (current surface: Edit Text rework at the top)
 
 Text enables Contextual Edit as Edit Text. Its controls stay fixed; only the source field scrolls. A compact header and workspace-level IME padding keep the source field, Done/Cancel and letterboxed preview visible while typing; timeline/actions restore their prior layout after dismissal. Font and alignment are static controls. Size, Fill and Hold-only Source Text use the existing keyframe focus/navigation/easing framework. Fill opens the existing Global Colour Picker and eyedropper.
 
@@ -309,13 +299,10 @@ Text gets shared-metric natural-pixel bounds, handles, hit testing and anchor co
 
 ### F2 implementation status (2026-10-04)
 
-F1 is user-accepted; its performance harness, pre-encode parity and lifecycle checks remain unrun and deferred under the final instruction. F2a and F2b are implemented in source, device-unverified. F3 and UI improvements remain deferred. No PreviewController API or gesture-protocol changes, no new animator UI and no agent device runs.
+F1 is user-accepted; its performance harness, pre-encode parity and lifecycle checks were deferred at this checkpoint and have since run on the A16 (TEXT FIX 9, TEXT PERF 10/11). F2a and F2b are implemented in source, device-unverified. F3 and UI improvements remain deferred. No PreviewController API or gesture-protocol changes, no new animator UI and no agent device runs.
 
 V11 adds default-on hold-keyed Ligatures: effective on only when layer tracking evaluates to zero. Animator tracking does not split ligatures. Both source/font/mode layouts, shared membership maps and seeded permutations for every source alternative are prepared ahead of playback. V10 loading is retained permanently. Per-animator grouping, averaged cluster influence, lookup-table easing, signed spatial influence with clamped colour influence, round SDF joins and bounded SDF softness are documented deviations/semantics. Paint order stays per glyph; no additional paint scope or two-pass draw.
 
 Detailed stage evidence and the exact user-run list are maintained in [the existing text animation plan](TEXT_ANIMATION_F1_F3_PLAN.md). No animator UI is added; data/edit actions exist for later F3 diamonds/controls.
 
 The data model exposes addressed `(layerId, animatorId, selectorId?, propertyId)` edit/key actions, all scalar/vector/colour tracks, hold-keyed enum/boolean fields, per-animator grouping and the hold-keyed layer Ligatures property. Add/remove/reorder are single undo transactions. Auto-key, freeze/reset, navigation and timeline key aggregation include animator tracks; duplicate/clipboard preserve seeds/order/values with fresh animator/selector IDs; trim/extend/split retain checked signed rebasing. These are backend contracts only: no Add Animator picker, selector controls, new diamonds or handles are exposed in this pass. Existing selection/fit/typing geometry consumers now request the evaluated ligature layout; their gesture protocol and controls are unchanged.
-# T2b continuation status — 2026-10-04
-
-Font import/library, isolated untrusted-font preparation, missing-font preservation/fallback and static variable-font/named-instance controls are implemented in source, device-unverified. Character uses fixed Library/Variable Axes pages; Paragraph/box text, animator gaps and direction remain T3–T5 work. No PreviewController, gesture or batch/draw contract changes. Native Debug/Release (both ABIs), Kotlin Debug/Release, both instrumentation source sets and 205 JVM tests passed; host selftest, six shaping references, variable CFF/TTC proofs and 1,445 input checks passed. No device runs or APK packaging. F1 perf/parity/lifecycle remain deferred and unrun. Exact limits, deviations, size estimates and user-run tests are in [TEXT_LAYER.md](TEXT_LAYER.md).

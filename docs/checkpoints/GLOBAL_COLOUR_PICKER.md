@@ -2,7 +2,7 @@
 
 > **TEXT UI 8 (2026-11-18):** the FULL variant's controls row is exactly the SV square (no stretch), and the picker is centred vertically in leftover height. The marker popover uses COMPACT with `header = false`. See `TEXT_UI_OVERHAUL.md`, section TEXT UI 8.
 
-> **TEXT UI 7 (2026-11-18):** `FluxxColorPicker` was replaced by the shared `FluxxColourPicker` family (COMPACT popover / FULL page; in-place hex, alpha and RGB entry, one undo per interaction). See `TEXT_UI_OVERHAUL.md`, section TEXT UI 7. The palette repository, eyedropper and hex rules below are unchanged; the layout notes describe the pre-TEXT UI 7 picker.
+> **TEXT UI 7 (2026-11-18):** the shared `FluxxColourPicker` family (COMPACT popover / FULL page) replaced the original picker. The palette repository, eyedropper and hex rules below are unchanged.
 
 ## Status — 2026-09-22
 
@@ -11,10 +11,9 @@ The user confirmed the previous picker works and prefers the expanded preview's 
 ## Shared colour component
 
 - `model/FluxxColor.kt` contains straight-alpha sRGB floats, HSV conversion, packed ARGB conversion and hex parsing. The Compose conversion extension lives in `ui/common/colorpicker/ColorPickerConfig.kt`, keeping the domain free of Compose/Android dependencies.
-- `FluxxColorPicker` replaces both `CompactColorSectionContent` and the creation sheet's `RgbSlider` implementation. Inspector-wide touch-target sizing remains; the colour-specific compact branch is gone.
-- A square saturation-value box (X = saturation, Y = inverse brightness) and 22dp vertical hue strip occupy the left column. `ColorWheel.kt` and the separate V slider are deleted; value has one visible control. The right column retains preview, editable hex, alpha/RGB sliders and eyedropper, followed by a single 22dp horizontally scrollable palette row. The square is bounded by height and reserves 135dp for the right column. Physical layout acceptance remains pending.
-- `isDraggingColorControl` protects hue, saturation **and value** only during SV/hue drags, retaining full precision through ARGB round trips. RGB/A controls call the original gesture callbacks directly and resync the selectors live. Cancel restores pre-drag selector state; near-black/grey colours retain a meaningful hue, and the strip's 360-degree red endpoint is retained.
-- Six-digit hex is **RRGGBB**, preserving current alpha; eight-digit hex is **AARRGGBB**. Commit occurs on Done/focus loss. Invalid input is marked and discarded on commit, leaving colour unchanged.
+- `FluxxColourPicker` (`ui/common/colorpicker/FluxxColourPicker.kt`) is the one shared picker, built on `SaturationValueBox`, `HueStrip` and `FluxxColor`. It has two variants: COMPACT for popovers (Edit Text Fill/Stroke, markers, swatch editor) and FULL for pages (Edit Solid, Add content → Solid). Each interaction is one `ColourTransaction`, so one undo. Layout sizes, the surface-to-variant table and in-place hex/alpha/RGB entry are owned by [TEXT UI 7](TEXT_UI_OVERHAUL.md#4-colour-picker-family) and [TEXT UI 8](TEXT_UI_OVERHAUL.md#text-ui-8-marker-popover-centred-layer-keyframes-consistent-control-sizing).
+- The picker's local drag state protects hue, saturation **and value** only during SV/hue drags, retaining full precision through ARGB round trips. RGB/A controls call the original gesture callbacks directly and resync the selectors live. Cancel restores pre-drag selector state; near-black/grey colours retain a meaningful hue, and the strip's 360-degree red endpoint is retained.
+- Six-digit hex is **RRGGBB**, preserving current alpha; eight-digit hex is **AARRGGBB**. Valid complete values apply live in place, with one undo per edit session; invalid or incomplete input applies nothing and reverts on blur.
 - Alpha is independent of layer opacity. Packed `solidColorArgb`, `SetColor` and FlatBuffers persistence are unchanged. The existing straight-alpha upload/compositor path combines colour alpha with layer opacity.
 - Both call sites use the same app-scoped palette library. Creation has no eyedropper. Drag callbacks use the existing gesture protocol with `SetColor` previews and a single undo entry; hex and palette clicks are discrete edits.
 
