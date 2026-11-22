@@ -131,7 +131,7 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
   - Ramp Up / Ramp Down selector coverage extends past End / before Start (AE). Random Seed interpolates and rounds per frame (flicker), 256 seeds per selector. Animated tracking spreads from the alignment point. These are deliberate evaluation changes; the goldens were re-recorded and a non-ramp guard golden is unchanged.
   - Fixed: the timeline keyframe-drag crash for animator fields, and the stale export dialog plus dead playback after an export.
   - Non-modal slider popovers (scrub, key and play while open), Animate caps, compact sliders with X/Y glyphs, signed number keyboards with lenient parsing, the Animate layout pass (add bar, opaque blocks, Property bar trash, swipe-delete tiles), and Prev/Next tier 1 across every key of the selected layer.
-  - Status: JVM suite passes; instrumented sources compile. The A16 run and phone acceptance are pending. [Checkpoint](../checkpoints/TEXT_F3_2.md).
+  - Status: JVM suite passes; A16 Animate layout tests pass (7 of 7); phone acceptance pending. [Checkpoint](../checkpoints/TEXT_F3_2.md).
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.
 

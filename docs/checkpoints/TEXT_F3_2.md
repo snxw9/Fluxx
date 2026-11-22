@@ -5,7 +5,7 @@ Branch `text-f3-2`, built on `text-f3-1` (`24cb2fd`). One consolidated pass, org
 Status:
 - Implemented in source.
 - The JVM suite passes, and the debug, release and instrumentation Kotlin sources compile.
-- **Not run on the A16.** Building and installing the APKs was blocked in this session (AGENTS.md forbids packaging unless you explicitly ask), so the A16 layout tests are updated but have not run. See §12.
+- **A16:** the Animate layout tests pass on the A16 (7 of 7), after a scroll fix the first run exposed; adjacent inspector and render suites pass too. See §12.
 - Phone acceptance is pending your run of §13.
 
 Hard rules kept:
@@ -286,7 +286,7 @@ This is tested. Samsung keyboard behaviour itself is unverified on the device.
   - The glyph stays fixed in the page centre, does not scroll, and never moves with the list (tested).
   - Collapsed bars are opaque, as before.
   - An expanded animator's rows are one opaque block in the sheet colour (`Surface`). The expanded bar's lower half joins the block, so the glyph shows only in the half-gap margins between bars.
-- **"+ Animator" placement:** it now follows the last animator at full width and scrolls with the list.
+- **"+ Animator" placement:** it now follows the last animator at full width and scrolls with the list. After an add, the list scrolls to the new animator's bar (without that, the move of the add row dragged the scroll to the end).
 - **Smaller "+" for property and selector:** a 28dp drawn tile with a 16dp glyph. The touch target is ≥ 48dp wide × one row pitch tall (40dp at 268, 48dp at 328, like every Animate tile).
 - **Property tiles:**
   - One collapsible **Property bar**: chevron, count, trash and small +. The tiles below it are in **insertion order**, with no category headers.
@@ -351,18 +351,18 @@ AE parity §16, Timeline Layout and Markers were updated.
   - Rewritten: `ContextualNavigationTest` (12).
   - Updated: the golden, `PreparedTextAnimationTest`, `WigglySelectorTest`, `TextAnimateStateTest` and `TextAnimatorEditsTest`.
 - **Compile:** `compileDebugKotlin`, `compileReleaseKotlin` and `compileDebugAndroidTestKotlin` all pass.
-- **A16 instrumented: not run.**
-  - Building the APKs (`assembleDebug` / `assembleDebugAndroidTest`) for `adb install -r` was blocked by this session's permission policy (AGENTS.md: no APK packaging unless explicitly asked). Nothing was installed, uninstalled or cleared.
-  - `TextAnimateLayoutTest` is updated:
+- **A16 instrumented (SM-A165F), run on request after the first commit.** Debug and test APKs were installed with `adb install -r`. Nothing was uninstalled, no data was cleared, no UI was scripted on the app and no projects were touched.
+  - `TextAnimateLayoutTest`: **7 of 7 pass** (fit at 268/328 × 1/1.3; bar icons and both control styles; Character offset/value; the new non-modal popover, X/Y glyph, swipe and trash test). It covers:
     - add bar on top and full width;
     - glyph centred, smaller and fixed;
     - Property bar, trash and toggle;
     - insertion order;
-    - add bar after the Grouping row;
-    - a new test for the non-modal popover with the rail diamond, the X/Y glyphs, swipe delete and trash.
-  - It has not run on the device.
-- **Device:** only the read-only crash buffer was read. No settings were changed, and no projects or app data were touched.
-
+    - add bar after the Grouping row.
+  - The first run failed 2 of 7 and exposed a real bug: adding the first animator moved the add bar from the top to the bottom, and the LazyColumn kept its scroll anchored to that row's key, so the list jumped to the end and the new animator was off-screen. Fixed: the page scrolls to the new animator's bar after adding (`revealAnimator`). Then 7 of 7.
+  - Regression: `TextInspectorLayoutTest` 3 of 3 (Character tab popovers are now non-modal) and `AnimatorPropertyRenderTest` 2 of 2 (all 25 properties through the preview and export renderers on the new engine).
+  - Logs: `build/f32-animate-layout.txt` and the `build/f32-*.txt` files.
+  - Not run: the long warm-up / F2 device suites (excluded by the brief).
+- **Device:** besides the test runs, only the read-only crash buffer was read. No settings were changed.
 ## 13. A16 manual test list
 
 1. **Fade up (bottom up):** Animate → Position + Opacity, Position Y 100, Opacity 0%. Offset −100% → 100% over 1 s. Advanced: Ramp Up, Ease High 25, Ease Low 100. The text is hidden at the start and rises letter by letter.

@@ -106,6 +106,8 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val drag = remember(layer.id) { AnimateDrag() }
+    /** An animator just added: scroll its bar into view once the rows include it. */
+    var revealAnimator by remember(layer.id) { mutableStateOf<Long?>(null) }
 
     // ---- Edit plumbing ----------------------------------------------------------------------------------------
     var draft by remember { mutableStateOf<CompositionLayer?>(null) }
@@ -352,6 +354,13 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
 
         val rows = AnimateRows.build(text, bars, local, metrics.columns)
         val keys = rows.map { it.key }
+        // TEXT F3.2: the add bar moves below the new animator, and the list keeps its scroll anchored to the add bar's key;
+        // without this the list would jump to the end. Show the new (expanded) animator from its bar instead.
+        LaunchedEffect(revealAnimator, keys) {
+            val id = revealAnimator ?: return@LaunchedEffect
+            val index = keys.indexOf("a:$id")
+            if (index >= 0) { list.scrollToItem(index); revealAnimator = null }
+        }
         fun scrollPos() = list.firstVisibleItemIndex * rowPx + list.firstVisibleItemScrollOffset
 
         // ---- Grip reorder: the timeline hierarchy rule (absolute pointer vs. slot centres at drag start) -----------
@@ -487,7 +496,7 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                                 Modifier.fillMaxSize(), hollow = true, enabled = !finishing, text = "Animator",
                                 state = "${text.animators.size} of ${TextAnimatorEdits.MAX_ANIMATORS}", testTag = "animate-add-animator", fill = inset) {
                                 commit { t -> listOf(TextAnimatorEdits.addAnimator(t).also { put ->
-                                    state.bars = state.bars.expandAnimator(put.animator.id).expandSelector(put.animator.selectors.first().id) }) }
+                                    state.bars = state.bars.expandAnimator(put.animator.id).expandSelector(put.animator.selectors.first().id); revealAnimator = put.animator.id }) }
                             }
                         }
                         is AnimateRow.AnimatorBar -> {
