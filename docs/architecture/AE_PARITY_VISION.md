@@ -412,19 +412,20 @@ Keep the Editor Action Bar compact.
 
 # 16. Contextual Previous / Next Navigation
 
-**One global rule (TEXT F3.1).** Per direction, the first tier with a stop strictly earlier (Previous) or strictly later (Next) than the playhead frame wins; an exhausted tier falls through. It behaves the same on every inspector page and with the inspector closed (closed simply means nothing is focused).
+**One global rule (TEXT F3.1, tiers 1–2 split in F3.3).** Per direction, the first tier with a stop strictly earlier (Previous) or strictly later (Next) than the playhead frame wins; an exhausted tier falls through. It behaves the same on every inspector page and with the inspector closed (closed simply means nothing is focused).
 
 With a layer selected:
 
-1. **Keyframes (TEXT F3.2):** a focused property or animator field that has keyframes uses only its own keyframes. Otherwise (nothing focused, the inspector closed, or a focused field without keyframes) the stops are the union of ALL keyframe times of the selected layer: transform and text properties, animator properties, selector fields (including seed keys) and the animator enabled flag.
-2. **Markers inside the layer span** (in ≤ t ≤ out): the layer's markers and the composition's markers.
-3. **Layer in / out.**
-4. **Markers outside the layer span:** the layer's markers (including those kept outside a trimmed clip) and the composition's markers.
-5. **Timeline bounds:** start, end and every layer boundary.
+1. **Focused field (TEXT F3.3):** the focused property or animator field's own keyframes. Empty when nothing is focused, the inspector is closed, or the focused field has no keyframes.
+2. **Every other keyframe of the selected layer (TEXT F3.3):** the union of ALL keyframe times of the layer: transform and text properties, animator properties, selector fields (including seed keys) and the animator enabled flag. A focused field whose keys all lie behind the playhead therefore falls through to the layer's other keys ahead (for example Start or Tracking after a Random Seed key), never straight to the markers or the out point.
+3. **Markers inside the layer span** (in ≤ t ≤ out): the layer's markers and the composition's markers.
+4. **Layer in / out.**
+5. **Markers outside the layer span:** the layer's markers (including those kept outside a trimmed clip) and the composition's markers.
+6. **Timeline bounds:** start, end and every layer boundary.
 
 With nothing selected: composition markers, then the timeline bounds.
 
-**Deliberate behaviour change (F3.1):** a focused property no longer blocks markers (it only wins while it has keys in that direction), and a selected layer no longer hides composition markers: composition markers inside the span join tier 2, those outside join tier 4.
+**Deliberate behaviour change (F3.1):** a focused property no longer blocks markers (it only wins while it has keys in that direction), and a selected layer no longer hides composition markers: composition markers inside the span join tier 3, those outside join tier 5 (tier numbers as of F3.3).
 
 Unchanged guards: negative and overflowing times are ignored; tiers are ordered sets (lower / higher); Next stays put beyond the last bound; key times use the temporal anchor; seeking to a non-marker stop still clears marker selection.
 

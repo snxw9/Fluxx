@@ -91,6 +91,13 @@ internal object MarkerEditing {
         if (ref.layerId == null) EditorAction.EditCompositionMarker(ref.id, colour, description)
         else EditorAction.EditLayerMarker(ref.layerId, ref.id, colour, description)
 
+    /**
+     * TEXT F3.3: the layer selected after a marker is tapped or created. Marker selection is not an inspector change:
+     * it keeps the inspector open on the same page and focus. Only a marker owned by a different layer moves the
+     * selection to that layer; a composition marker keeps the current selection.
+     */
+    fun selectionAfterMarker(selected: Long?, owner: Long?): Long? = owner ?: selected
+
     /** Single line, at most [DESCRIPTION_MAX] characters (the schema's limit). */
     fun sanitize(text: String) = text.replace("\n", "").replace("\r", "").take(DESCRIPTION_MAX)
 }

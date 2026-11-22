@@ -56,7 +56,11 @@ class TextAnimateStateTest {
         val rows=AnimateRows.build(t,bars,0,6)
         // Property bar, its tiles in insertion order (no category groups), Selector row, two selector bars, Grouping.
         assertEquals(listOf("a:${first.id}","p:${first.id}","pt:${first.id}:0","sl:${first.id}","s:${first.selectors[0].id}",
-            "s:${first.selectors[1].id}","g:${first.id}","a:${second.id}","add"),rows.map { it.key })
+            "s:${first.selectors[1].id}","g:${first.id}","a:${second.id}"),rows.map { it.key })
+        // TEXT F3.3: "+ Animator" is hidden while a bar is expanded, and returns at the bottom once all are collapsed.
+        assertFalse(rows.any { it == AnimateRow.Add })
+        assertEquals("add",AnimateRows.build(t,bars.toggleAnimator(first.id),0,6).last().key)
+        assertEquals(listOf("a:${first.id}","a:${second.id}","add"),AnimateRows.build(t,AnimateBars().toggleAnimator(99),0,6).map { it.key })
         assertEquals(first.properties.map { it.property },(rows[2] as AnimateRow.PropertyTiles).properties)
         assertEquals(first.properties.size,(rows[1] as AnimateRow.PropertyLabel).count)
         // Insertion order is kept even across categories (Opacity added before Position stays first).
@@ -175,7 +179,7 @@ class TextAnimateStateTest {
             AnimatorProperty.FILL_HUE to listOf(-180f,180f,-3600f,3600f,-3600f,3600f), AnimatorProperty.STROKE_HUE to listOf(-180f,180f,-3600f,3600f,-3600f,3600f),
             AnimatorProperty.FILL_SATURATION to listOf(-100f,100f,-100f,100f,-100f,100f), AnimatorProperty.FILL_BRIGHTNESS to listOf(-100f,100f,-100f,100f,-100f,100f),
             AnimatorProperty.STROKE_SATURATION to listOf(-100f,100f,-100f,100f,-100f,100f), AnimatorProperty.STROKE_BRIGHTNESS to listOf(-100f,100f,-100f,100f,-100f,100f),
-            AnimatorProperty.TRACKING to listOf(-100f,100f,-1000f,1000f,-1000f,1000f), AnimatorProperty.LINE_ANCHOR to listOf(0f,100f,0f,100f,0f,100f),
+            AnimatorProperty.TRACKING to listOf(-1000f,1000f,-1000f,1000f,-1000f,1000f), AnimatorProperty.LINE_ANCHOR to listOf(0f,100f,0f,100f,0f,100f),
             AnimatorProperty.LINE_SPACING to listOf(-100f,100f,-2000f,2000f,-2000f,2000f), AnimatorProperty.GROUPING_ALIGNMENT to listOf(-100f,100f,-1000f,1000f,-1000f,1000f),
             AnimatorProperty.BLUR to listOf(0f,50f,0f,250f,0f,250f),
             AnimatorProperty.CHARACTER_OFFSET to listOf(-100f,100f,-1114111f,1114111f,-1114111f,1114111f),

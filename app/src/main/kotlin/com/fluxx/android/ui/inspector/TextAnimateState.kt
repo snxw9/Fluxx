@@ -359,7 +359,8 @@ internal object AnimateRows {
     const val PROPERTIES = "Properties"
     /**
      * TEXT F3.2: with no animators the "+ Animator" bar is the first (only) row; otherwise it follows the last animator,
-     * scrolling with the list. Property tiles keep insertion order under one collapsible Property bar.
+     * scrolling with the list, and (TEXT F3.3) only while every animator bar is collapsed. Property tiles keep insertion
+     * order under one collapsible Property bar.
      */
     fun build(text: TextProperties, bars: AnimateBars, local: Long, columns: Int): List<AnimateRow> {
         val out = mutableListOf<AnimateRow>()
@@ -389,7 +390,8 @@ internal object AnimateRows {
             }
             out += AnimateRow.GroupingRow(a.id)
         }
-        if (text.animators.isNotEmpty()) out += AnimateRow.Add
+        // TEXT F3.3: hidden while any animator bar is expanded; it returns (at the bottom) once every bar is collapsed.
+        if (text.animators.isNotEmpty() && text.animators.none { it.id == bars.animator }) out += AnimateRow.Add
         return out
     }
     /** Every selector field a built list shows (for the "hidden fields never appear" checks). */

@@ -1,6 +1,6 @@
 # Fluxx Roadmap: v0.1 → Full Vision
 
-**Current status (2026-11-22):** Phase 2 remains active. T1–T4 are user-tested; FIX/EXPLODE are committed; T5 is stopped (below). After that, the Edit Text UI overhaul and TEXT UI 5–8 ([record](../checkpoints/TEXT_UI_OVERHAUL.md)) are implemented in source, device-unverified. TEXT FIX 9 ([record](../checkpoints/TEXT_FIX_9.md)) and TEXT PERF 10/11 ([10](../checkpoints/TEXT_PERF_10.md), [11](../checkpoints/TEXT_PERF_11.md)) were device-assisted A16 passes, merged at `4c85cb2`. F3 (the Animate tab), its F3.1 rework and the F3.2 parity and polish pass are all merged to master (`c8109d9`); A16 instrumented tests pass and phone acceptance of F3.1 and F3.2 is pending ([F3](../checkpoints/TEXT_F3.md), [F3.1](../checkpoints/TEXT_F3_1.md), [F3.2](../checkpoints/TEXT_F3_2.md)). The graph editor is the next big item. Open decisions: T5 cross-style shaping ownership; a non-debuggable measurement build; animator threading or a batch/draw contract change for 30 animated layers under 16.6 ms p95. Stage-by-stage evidence is in the linked checkpoints.
+**Current status (2026-11-22):** Phase 2 remains active. T1–T4 are user-tested; FIX/EXPLODE are committed; T5 is stopped (below). After that, the Edit Text UI overhaul and TEXT UI 5–8 ([record](../checkpoints/TEXT_UI_OVERHAUL.md)) are implemented in source, device-unverified. TEXT FIX 9 ([record](../checkpoints/TEXT_FIX_9.md)) and TEXT PERF 10/11 ([10](../checkpoints/TEXT_PERF_10.md), [11](../checkpoints/TEXT_PERF_11.md)) were device-assisted A16 passes, merged at `4c85cb2`. F3 (the Animate tab), its F3.1 rework and the F3.2 parity and polish pass are all merged to master (`c8109d9`). F3.3 (popover exits, the Prev/Next fall-through, sheet swipe on every page, markers keep the inspector open) is on branch `text-f3-3`. A16 instrumented tests pass; phone acceptance of F3.1–F3.3 is pending ([F3](../checkpoints/TEXT_F3.md), [F3.1](../checkpoints/TEXT_F3_1.md), [F3.2](../checkpoints/TEXT_F3_2.md), [F3.3](../checkpoints/TEXT_F3_3.md)). The graph editor is the next big item. Open decisions: T5 cross-style shaping ownership; a non-debuggable measurement build; animator threading or a batch/draw contract change for 30 animated layers under 16.6 ms p95. Stage-by-stage evidence is in the linked checkpoints.
 
 **Current T5 stop (2026-10-09):** FIX `85b9de4` and EXPLODE `59a54a0` passed their compile/JVM/host gates and are implemented in source, device-unverified. T5 is dropped under the approved droppable-stage rule. The user's indivisible cursive-word decision resolves the historical emergency-wrap finding, but a new host proof shows mandatory Arabic lam-alef is lost across separate style items even with full source context and optional ligatures off. Cross-style shaping requires a further style-ownership decision beyond the approved wrapping change. No partial RTL code or production fonts remain; stored RTL still receives the existing rendering error. The diagnostic and this report remain uncommitted after the two feature commits. [Evidence, limits and exact manual tests](../checkpoints/TEXT_FIX_EXPLODE_T5.md). Earlier checkpoint statements below retain their historical context.
 
@@ -125,23 +125,29 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
     - Range/Wiggly tiles with Advanced groups, and redundant fields hidden in the UI only.
   - The Character offset/value crash is fixed at the metrics and renderer-preparation boundaries, with a cap pre-check.
   - Skew is capped at ±85°, Blur at 100px.
-  - Prev/Next follows one global rule (focused keys → markers inside the span → in/out → markers outside → bounds).
+  - Prev/Next follows one global rule (focused keys → markers inside the span → in/out → markers outside → bounds; layer-wide keys added in F3.2 and made their own tier in F3.3).
   - Status: A16 instrumented tests pass; phone acceptance pending. [Checkpoint](../checkpoints/TEXT_F3_1.md).
 - [x] **Step F3.2: AE parity fixes, seed flicker, export/playback, Animate polish** (branch `text-f3-2`, merged in `c8109d9`)
   - Ramp Up / Ramp Down selector coverage extends past End / before Start (AE). Random Seed interpolates and rounds per frame (flicker), 256 seeds per selector. Animated tracking spreads from the alignment point. These are deliberate evaluation changes; the goldens were re-recorded and a non-ramp guard golden is unchanged.
   - Fixed: the timeline keyframe-drag crash for animator fields, and the stale export dialog plus dead playback after an export.
   - Non-modal slider popovers (scrub, key and play while open), Animate caps, compact sliders with X/Y glyphs, signed number keyboards with lenient parsing, the Animate layout pass (add bar, opaque blocks, Property bar trash, swipe-delete tiles), and Prev/Next tier 1 across every key of the selected layer.
   - Status: JVM suite passes; A16 Animate layout tests pass (7 of 7); phone acceptance pending. [Checkpoint](../checkpoints/TEXT_F3_2.md).
+- [x] **Step F3.3: popover exits, Prev/Next fall-through, sheet swipe, small polish** (branch `text-f3-3`)
+  - Slider popovers stay non-modal and now also close on the same tile, empty sheet-body space, a swipe down, and Back (first).
+  - Prev/Next gains a tier: the focused field's keys, then every other key of the selected layer, then markers inside the span, in/out, markers outside, bounds. A keyed Random Seed behind the playhead no longer jumps to the layer end.
+  - Swipe down from the top of the sheet is one sheet-level behaviour on every page (Edit Text had none). Adding or tapping a marker keeps the inspector open on the same page and focus.
+  - Animate Tracking slider spans ±1000; "+ Animator" hides while a bar is expanded. Box-text tracking already spread from the alignment point (tests added).
+  - Status: JVM suite passes (478); A16 Animate, inspector-swipe and inspector layout tests pass; phone acceptance pending. [Checkpoint](../checkpoints/TEXT_F3_3.md).
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.
 
 ### Next big item: graph editor (planned, not started)
 
-The graph editor (value and speed curves for keyframes, reached from the rail's placeholder) is the next big item after TEXT F3.2.
+The graph editor (value and speed curves for keyframes, reached from the rail's placeholder) is the next big item after TEXT F3.3.
 
 ### Timeline productivity (parked)
 
-Still parked after TEXT F3.2. These are user ideas recorded for planning; none is built.
+Still parked after TEXT F3.3. These are user ideas recorded for planning; none is built.
 
 - **Select all and multi-select for layers.** This is the foundation for the rest; "Select all" is still a disabled placeholder.
 - **Duplicate count.** Hold the duplicate button on a layer to choose how many duplicates to make, instead of tapping once per copy.

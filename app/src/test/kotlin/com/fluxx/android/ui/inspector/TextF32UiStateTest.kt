@@ -9,9 +9,10 @@ import org.junit.Test
 /** TEXT F3.2 UI state: non-modal popover dismiss rule, slider caps and sizes, lenient typed entry, Animate layout rules. */
 class TextF32UiStateTest {
     // ---- §6 popovers --------------------------------------------------------------------------------------------
-    @Test fun nonModalPopoversCloseOnlyOnPreviewOtherTileOrBack() {
+    @Test fun nonModalPopoversNeverCloseForTimelineTransportRailOrSlider() {
         for (t in PopoverDismissal.Touch.entries) {
-            val expected = t == PopoverDismissal.Touch.PREVIEW || t == PopoverDismissal.Touch.OTHER_TILE || t == PopoverDismissal.Touch.BACK
+            // TEXT F3.3 added the same tile, empty sheet space and a swipe down (TextF33UiStateTest).
+            val expected = t !in setOf(PopoverDismissal.Touch.TIMELINE, PopoverDismissal.Touch.TRANSPORT, PopoverDismissal.Touch.RAIL, PopoverDismissal.Touch.SLIDER)
             assertEquals(t.name, expected, PopoverDismissal.dismisses(t))
         }
         // The preview's request is an increasing tick that open popovers wait for.
