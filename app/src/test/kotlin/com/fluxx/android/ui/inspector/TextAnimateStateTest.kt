@@ -165,7 +165,7 @@ class TextAnimateStateTest {
         assertEquals("SHAPE_TRIANGLE",AnimateFields.icon(AnimateFields.selector(SelectorField.SHAPE),3f))
     }
 
-    /** The limits table of docs/checkpoints/TEXT_F3_1.md: slider min/max, typed (= hard) min/max. */
+    /** The limits table of the TEXT F3.1 record (docs/checkpoints/TEXT.md): slider min/max, typed (= hard) min/max. */
     @Test fun limitsTable() {
         fun row(l: PropertyLimit?)=l?.let { listOf(it.sliderMin,it.sliderMax,it.typedMin,it.typedMax,it.hardMin,it.hardMax) }
         val properties=mapOf(

@@ -28,7 +28,7 @@ class E1aGoldenExportTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val label = requireNotNull(InstrumentationRegistry.getArguments().getString("e1aLabel")) {
-            "Set instrumentation argument e1aLabel to r26 or r28; see TEXT_LAYER.md"
+            "Set instrumentation argument e1aLabel to r26 or r28; see docs/checkpoints/TEXT.md (text layer record)"
         }
         require(label == "r26" || label == "r28")
         val expectedNdk = if (label == "r26") "26.1.10909125" else "28.2.13676358"

@@ -1,8 +1,8 @@
 # Fluxx Roadmap: v0.1 → Full Vision
 
-**Current status (2026-11-22):** Phase 2 remains active. T1–T4 are user-tested; FIX/EXPLODE are committed; T5 is stopped (below). After that, the Edit Text UI overhaul and TEXT UI 5–8 ([record](../checkpoints/TEXT_UI_OVERHAUL.md)) are implemented in source, device-unverified. TEXT FIX 9 ([record](../checkpoints/TEXT_FIX_9.md)) and TEXT PERF 10/11 ([10](../checkpoints/TEXT_PERF_10.md), [11](../checkpoints/TEXT_PERF_11.md)) were device-assisted A16 passes, merged at `4c85cb2`. F3 (the Animate tab), its F3.1 rework and the F3.2 parity and polish pass are all merged to master (`c8109d9`). F3.3 (popover exits, the Prev/Next fall-through, sheet swipe on every page, markers keep the inspector open) is on branch `text-f3-3`. A16 instrumented tests pass; phone acceptance of F3.1–F3.3 is pending ([F3](../checkpoints/TEXT_F3.md), [F3.1](../checkpoints/TEXT_F3_1.md), [F3.2](../checkpoints/TEXT_F3_2.md), [F3.3](../checkpoints/TEXT_F3_3.md)). The graph editor is the next big item. Open decisions: T5 cross-style shaping ownership; a non-debuggable measurement build; animator threading or a batch/draw contract change for 30 animated layers under 16.6 ms p95. Stage-by-stage evidence is in the linked checkpoints.
+**Current status (2026-11-22):** Phase 2 remains active. **The text phase is complete** and the next big item is the [graph editor](#next-big-item-graph-editor-planned-not-started). Every text plan, spec and stage record is now one document, the [text record](../checkpoints/TEXT.md). In brief: E1–E3, F1, T1–T4 and the Edit Text UI were user-tested; FIX/EXPLODE are committed; T5 is stopped (below); TEXT FIX 9 and PERF 10/11 were device-assisted A16 passes (`4c85cb2`). F3 (the Animate tab) and its F3.1–F3.3 follow-ups are merged to master (F3.1/F3.2 in `c8109d9`, F3.3 in `67df5f3`), with A16 instrumented tests passing and **phone acceptance of F3.1–F3.3 done** (user-confirmed). F3.4 (the Character Tracking cap and these docs fixes) is on the single `text` branch, merged to master. Open decisions: T5 cross-style shaping ownership; a non-debuggable measurement build; animator threading or a batch/draw contract change for 30 animated layers under 16.6 ms p95. Stage-by-stage evidence is in the text record.
 
-**Current T5 stop (2026-10-09):** FIX `85b9de4` and EXPLODE `59a54a0` passed their compile/JVM/host gates and are implemented in source, device-unverified. T5 is dropped under the approved droppable-stage rule. The user's indivisible cursive-word decision resolves the historical emergency-wrap finding, but a new host proof shows mandatory Arabic lam-alef is lost across separate style items even with full source context and optional ligatures off. Cross-style shaping requires a further style-ownership decision beyond the approved wrapping change. No partial RTL code or production fonts remain; stored RTL still receives the existing rendering error. The diagnostic and this report remain uncommitted after the two feature commits. [Evidence, limits and exact manual tests](../checkpoints/TEXT_FIX_EXPLODE_T5.md). Earlier checkpoint statements below retain their historical context.
+**Current T5 stop (2026-10-09):** FIX `85b9de4` and EXPLODE `59a54a0` passed their compile/JVM/host gates and are implemented in source, device-unverified. T5 is dropped under the approved droppable-stage rule. The user's indivisible cursive-word decision resolves the historical emergency-wrap finding, but a new host proof shows mandatory Arabic lam-alef is lost across separate style items even with full source context and optional ligatures off. Cross-style shaping requires a further style-ownership decision beyond the approved wrapping change. No partial RTL code or production fonts remain; stored RTL still receives the existing rendering error. The diagnostic and this report remain uncommitted after the two feature commits. [Evidence, limits and exact manual tests](../checkpoints/TEXT.md#rec-text-fix-explode-t5). Earlier checkpoint statements below retain their historical context.
 
 > Companion to `FLUXX_SDD.md`, which describes the complete target architecture. This document defines what actually gets built first, in what order, and why.
 
@@ -32,7 +32,7 @@ The full SDD scope — dual Graph Editor, 15 effects, masks/mattes/blend modes, 
 
 ## Current Status & Active Phase
 
-Fluxx is currently in **Phase 2: Timeline + Multiple Layers**. F1/F2 text are user-accepted. Their deferred device suites have since run on the A16 in [TEXT FIX 9](../checkpoints/TEXT_FIX_9.md#9d-deferred-device-suites-results-fixes-findings) and TEXT PERF 10/11. Results and the remaining environmental failures (Vulkan validation layer, golden source asset) are recorded there. The F3 animator UI is implemented and merged, reworked by F3.1 and polished by F3.2 ([F3.1](../checkpoints/TEXT_F3_1.md), [F3.2](../checkpoints/TEXT_F3_2.md)). See the [existing text animation plan](../checkpoints/TEXT_ANIMATION_F1_F3_PLAN.md#f2b-implementation-and-verification).
+Fluxx is currently in **Phase 2: Timeline + Multiple Layers**. F1/F2 text are user-accepted. Their deferred device suites have since run on the A16 in [TEXT FIX 9](../checkpoints/TEXT.md#9d-deferred-device-suites-results-fixes-findings) and TEXT PERF 10/11. Results and the remaining environmental failures (Vulkan validation layer, golden source asset) are recorded there. The F3 animator UI is implemented and merged, reworked by F3.1 and polished by F3.2–F3.4, with phone acceptance of F3.1–F3.3 done; the text phase is complete ([text record](../checkpoints/TEXT.md)). See the [existing text animation plan](../checkpoints/TEXT.md#f2b-implementation-and-verification).
 - **Steps A, B, and C** (backend composition model, Vulkan multi-layer rendering, audio mixing, and mobile editing UI across shell, inspector, timeline, browser, and autosave) are **implemented in source**.
 - Android debug Kotlin and native debug/release compilation passed during E1b/E1c; the user confirmed A16 E1a render/playback/export smoke. Feature-specific phone/JVM acceptance remains where explicitly listed; see the status matrix and text checkpoint.
 - Comprehensive feature specifications and verification checklists are consolidated under [`docs/checkpoints/`](../checkpoints/):
@@ -43,7 +43,7 @@ Fluxx is currently in **Phase 2: Timeline + Multiple Layers**. F1/F2 text are us
   - [**Autosave & Persistence**](../checkpoints/AUTOSAVE.md)
   - [**Composition & Layer Markers**](../checkpoints/MARKERS.md) — implemented in source; tests and phone acceptance pending.
   - [**Timeline Layout & Automatic Duration**](../checkpoints/TIMELINE_LAYOUT.md) — compact separated ruler/tracks/inspector regions, frame-grid ticks, content-driven new projects; source implementation with validation pending.
-- **Current focus:** see the current status at the top of this document. Historical E1–E3 evidence (150/150 JVM run, lazy 2048 R8 texture-array atlas, E3 text creation and editing) is in the [text checkpoint](../checkpoints/TEXT_LAYER.md); separate golden/16 KB evidence remains outstanding.
+- **Current focus:** see the current status at the top of this document. Historical E1–E3 evidence (150/150 JVM run, lazy 2048 R8 texture-array atlas, E3 text creation and editing) is in the [text checkpoint](../checkpoints/TEXT.md#rec-text-layer); separate golden/16 KB evidence remains outstanding.
 
 ---
 
@@ -101,22 +101,22 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
   - Export fast-path guard ensuring animated single videos use layered Vulkan pipeline.
   - *Status: Implemented in source; awaiting user Android Studio build & phone review.*
 - [x] **Step E: Text Layer Support**
-  - E1a A16 smoke and E1b/E1c acceptance are recorded in [TEXT_LAYER.md](../checkpoints/TEXT_LAYER.md). E1d/E1e/E2/E3 are implemented in source and compiled, with 150 passing JVM tests. Texture-array overflow, v9 and editor wiring are complete in source; Separate 16 KB/golden evidence remains outstanding; E1–E3 device behavior is user-confirmed.
-  - User-confirmed E1–E3 device behavior is distinct from separate golden/16 KB verification. Text data model, typography editor, font layout, and Vulkan glyph/quad rendering are implemented in source. [E2/E3 animation contract](../checkpoints/TEXT_LAYER_IMPLEMENTATION_PLAN.md#31-universal-text-property-animation): size/fill and hold-keyed Source Text reuse the property framework; remaining text animation is future work. E1–E3 device behavior is user-confirmed; separate golden/16 KB evidence remains tracked in the checkpoint.
+  - E1a A16 smoke and E1b/E1c acceptance are recorded in [the text layer record](../checkpoints/TEXT.md#rec-text-layer). E1d/E1e/E2/E3 are implemented in source and compiled, with 150 passing JVM tests. Texture-array overflow, v9 and editor wiring are complete in source; Separate 16 KB/golden evidence remains outstanding; E1–E3 device behavior is user-confirmed.
+  - User-confirmed E1–E3 device behavior is distinct from separate golden/16 KB verification. Text data model, typography editor, font layout, and Vulkan glyph/quad rendering are implemented in source. [E2/E3 animation contract](../checkpoints/TEXT.md#31-universal-text-property-animation): size/fill and hold-keyed Source Text reuse the property framework; remaining text animation is future work. E1–E3 device behavior is user-confirmed; separate golden/16 KB evidence remains tracked in the checkpoint.
 
 - [x] **Step F1: Text property completion**
   - Approved with amendments: tracking, additive leading, baseline shift, centred SDF stroke colour/width and hold-keyed paint order through existing animation/gesture infrastructure; additive v10 persistence.
-  - Implemented in source with compile/JVM and host spread evidence; the user accepts F1 device checks except performance/parity/lifecycle, which remain unrun and deferred. [Implementation and exact user-run list](../checkpoints/TEXT_F1_IMPLEMENTATION.md).
+  - Implemented in source with compile/JVM and host spread evidence; the user accepts F1 device checks except performance/parity/lifecycle, which remain unrun and deferred. [Implementation and exact user-run list](../checkpoints/TEXT.md#rec-text-f1).
 - [x] **Step F2: Text animator engine (F2a then F2b)**
-  - Additive v11 codec/model, selector engine and editing actions; per-glyph prepared rendering and dual ligature layouts implemented in source. V10 loading is permanent. Compile/JVM/host results and exact device list are in [the existing animation plan](../checkpoints/TEXT_ANIMATION_F1_F3_PLAN.md#f2b-implementation-and-verification). Device 60fps/zero-allocation/parity/lifecycle remain unverified; no limits have been reduced.
-- [x] **Step T1–T4: Text completion** ([spec](TEXT_COMPLETION_SPEC.md), [evidence](../checkpoints/TEXT_LAYER.md))
-  - Rich styled text (v12), font import/library and static variations, paragraph/box text, wiggly selector and all 25 animator property families. User-tested on the phone; FIX and EXPLODE follow-ups are committed ([report](../checkpoints/TEXT_FIX_EXPLODE_T5.md)).
+  - Additive v11 codec/model, selector engine and editing actions; per-glyph prepared rendering and dual ligature layouts implemented in source. V10 loading is permanent. Compile/JVM/host results and exact device list are in [the existing animation plan](../checkpoints/TEXT.md#f2b-implementation-and-verification). Device 60fps/zero-allocation/parity/lifecycle remain unverified; no limits have been reduced.
+- [x] **Step T1–T4: Text completion** ([spec](../checkpoints/TEXT.md#rec-text-completion-spec), [evidence](../checkpoints/TEXT.md#rec-text-layer))
+  - Rich styled text (v12), font import/library and static variations, paragraph/box text, wiggly selector and all 25 animator property families. User-tested on the phone; FIX and EXPLODE follow-ups are committed ([report](../checkpoints/TEXT.md#rec-text-fix-explode-t5)).
   - Commits: T1a `5772f10`, T1b `df056c4`, T1c `57c4251`, T2a `391aacf`, T2b `e4e6def`, T3a `f05e402`, T3b `0da4590`, T4a `adc922b`, FIX `85b9de4`, EXPLODE `59a54a0`.
 - [ ] **Step T5: Arabic/Hebrew direction** — stopped under the droppable-stage rule; needs a cross-style shaping ownership decision. Stored RTL is still rejected for rendering.
-- [x] **Edit Text UI overhaul, TEXT UI 5–8** — fixed non-scrolling Character/Paragraph faces, in-sheet overlays, shared colour picker family, marker popover and fixed section sizing. Implemented in source, device-unverified ([plan](TEXT_UI_OVERHAUL_PLAN.md), [record](../checkpoints/TEXT_UI_OVERHAUL.md)).
-- [x] **TEXT FIX 9 and TEXT PERF 10/11** — import regression, overlap-safe SDF and sharp tiers, with device confirmation per [FIX 9](../checkpoints/TEXT_FIX_9.md). Measured A16 frame-time fixes, one GPU submit per frame for text, and the resume/rotation fixes ([PERF 10](../checkpoints/TEXT_PERF_10.md), [PERF 11](../checkpoints/TEXT_PERF_11.md)). Open items are listed in PERF 11.
-- [x] **Step F3: Animator UI** (branch `text-f3`)
-  - The Edit Text Animate tab on the F2/T4 backend: animator strip, Properties | Selectors, all 25 properties, Range (handle strip) and Wiggly selectors, keyframes through the existing rail/badges/timeline. No schema, preparation, evaluation or protocol change and no new action types. Presets are not in this pass. Implemented in source; A16 behaviour unverified. [Checkpoint, inventory and A16 list](../checkpoints/TEXT_F3.md).
+- [x] **Edit Text UI overhaul, TEXT UI 5–8** — fixed non-scrolling Character/Paragraph faces, in-sheet overlays, shared colour picker family, marker popover and fixed section sizing. A16-reviewed (TEXT UI 6 layout accepted) and exercised through the F3.x phone acceptance ([plan](../checkpoints/TEXT.md#rec-text-ui-plan), [record](../checkpoints/TEXT.md#rec-text-ui-overhaul)).
+- [x] **TEXT FIX 9 and TEXT PERF 10/11** — import regression, overlap-safe SDF and sharp tiers, with device confirmation per [FIX 9](../checkpoints/TEXT.md#rec-text-fix-9). Measured A16 frame-time fixes, one GPU submit per frame for text, and the resume/rotation fixes ([PERF 10](../checkpoints/TEXT.md#rec-text-perf-10), [PERF 11](../checkpoints/TEXT.md#rec-text-perf-11)). Open items are listed in PERF 11.
+- [x] **Step F3: Animator UI** (branch `text-f3`, merged)
+  - The Edit Text Animate tab on the F2/T4 backend: animator strip, Properties | Selectors, all 25 properties, Range (handle strip) and Wiggly selectors, keyframes through the existing rail/badges/timeline. No schema, preparation, evaluation or protocol change and no new action types. Presets are not in this pass. Implemented in source; superseded by F3.1–F3.3, whose phone acceptance is done. [Checkpoint, inventory and A16 list](../checkpoints/TEXT.md#rec-text-f3).
 - [x] **Step F3.1: Animate rework** (branch `text-f3-1`, merged with F3.2 in `c8109d9`)
   - From the first A16 test:
     - one collapsible bar per animator (Property / Selector / Grouping rows), with a scrolling body (the one no-scroll deviation);
@@ -126,28 +126,32 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
   - The Character offset/value crash is fixed at the metrics and renderer-preparation boundaries, with a cap pre-check.
   - Skew is capped at ±85°, Blur at 100px.
   - Prev/Next follows one global rule (focused keys → markers inside the span → in/out → markers outside → bounds; layer-wide keys added in F3.2 and made their own tier in F3.3).
-  - Status: A16 instrumented tests pass; phone acceptance pending. [Checkpoint](../checkpoints/TEXT_F3_1.md).
+  - Status: A16 instrumented tests pass; phone acceptance done. [Record](../checkpoints/TEXT.md#rec-text-f3-1).
 - [x] **Step F3.2: AE parity fixes, seed flicker, export/playback, Animate polish** (branch `text-f3-2`, merged in `c8109d9`)
   - Ramp Up / Ramp Down selector coverage extends past End / before Start (AE). Random Seed interpolates and rounds per frame (flicker), 256 seeds per selector. Animated tracking spreads from the alignment point. These are deliberate evaluation changes; the goldens were re-recorded and a non-ramp guard golden is unchanged.
   - Fixed: the timeline keyframe-drag crash for animator fields, and the stale export dialog plus dead playback after an export.
   - Non-modal slider popovers (scrub, key and play while open), Animate caps, compact sliders with X/Y glyphs, signed number keyboards with lenient parsing, the Animate layout pass (add bar, opaque blocks, Property bar trash, swipe-delete tiles), and Prev/Next tier 1 across every key of the selected layer.
-  - Status: JVM suite passes; A16 Animate layout tests pass (7 of 7); phone acceptance pending. [Checkpoint](../checkpoints/TEXT_F3_2.md).
-- [x] **Step F3.3: popover exits, Prev/Next fall-through, sheet swipe, small polish** (branch `text-f3-3`)
+  - Status: JVM suite passes; A16 Animate layout tests pass (7 of 7); phone acceptance done. [Record](../checkpoints/TEXT.md#rec-text-f3-2).
+- [x] **Step F3.3: popover exits, Prev/Next fall-through, sheet swipe, small polish** (branch `text-f3-3`, merged in `67df5f3`)
   - Slider popovers stay non-modal and now also close on the same tile, empty sheet-body space, a swipe down, and Back (first).
   - Prev/Next gains a tier: the focused field's keys, then every other key of the selected layer, then markers inside the span, in/out, markers outside, bounds. A keyed Random Seed behind the playhead no longer jumps to the layer end.
   - Swipe down from the top of the sheet is one sheet-level behaviour on every page (Edit Text had none). Adding or tapping a marker keeps the inspector open on the same page and focus.
   - Animate Tracking slider spans ±1000; "+ Animator" hides while a bar is expanded. Box-text tracking already spread from the alignment point (tests added).
-  - Status: JVM suite passes (478); A16 Animate, inspector-swipe and inspector layout tests pass; phone acceptance pending. [Checkpoint](../checkpoints/TEXT_F3_3.md).
+  - Status: JVM suite passes (478); A16 Animate, inspector-swipe and inspector layout tests pass; phone acceptance done. [Record](../checkpoints/TEXT.md#rec-text-f3-3).
+- [x] **Step F3.4: Character Tracking cap, docs consolidation** (branch `text`)
+  - The Character Tracking slider spans its hard limit (±1000, detents every 100, typed ±1000), like the Animate one; Manual spacing keeps its ranges. Static tracking at ±1000 renders finite at unchanged cost.
+  - All text docs consolidated into one [text record](../checkpoints/TEXT.md); the text branches replaced by one `text` branch. The text phase is complete.
+  - Status: JVM suite passes (481). [Record](../checkpoints/TEXT.md#rec-text-f3-4).
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.
 
 ### Next big item: graph editor (planned, not started)
 
-The graph editor (value and speed curves for keyframes, reached from the rail's placeholder) is the next big item after TEXT F3.3.
+The graph editor (value and speed curves for keyframes, reached from the rail's placeholder) is the next big item now that the text phase is complete.
 
 ### Timeline productivity (parked)
 
-Still parked after TEXT F3.3. These are user ideas recorded for planning; none is built.
+Still parked after the text phase. These are user ideas recorded for planning; none is built.
 
 - **Select all and multi-select for layers.** This is the foundation for the rest; "Select all" is still a disabled placeholder.
 - **Duplicate count.** Hold the duplicate button on a layer to choose how many duplicates to make, instead of tapping once per copy.

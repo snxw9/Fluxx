@@ -1,6 +1,6 @@
 # Fluxx — Phase 2 Changes & After Effects-Level Architecture Notes
 
-Long-term behaviour reference. This is not a status document: see the [roadmap](FLUXX_ROADMAP.md) for the current state and the [text checkpoint](../checkpoints/TEXT_LAYER.md) for text evidence. Current text deviations from AE are listed in [§30](#30-advanced-text).
+Long-term behaviour reference. This is not a status document: see the [roadmap](FLUXX_ROADMAP.md) for the current state and the [text checkpoint](../checkpoints/TEXT.md#rec-text-layer) for text evidence. Current text deviations from AE are listed in [§30](#30-advanced-text).
 
 ## Overall Direction
 
@@ -809,9 +809,9 @@ Shape Layers should conceptually operate as an editable tree of vector groups an
 
 # 30. Advanced Text
 
-**Animation requirement amendment:** every eventual text property uses the Universal Property framework, including discrete hold tracks for categorical values. E2/E3 now includes keyframeable font size, fill colour and hold-only Source Text with inspector diamonds; alignment/font family remain temporarily static. Stroke/tracking/leading must be animatable when introduced. Reserve versioned animator schema envelopes and an optional glyph modifier interface, without implementing animators. See [E2/E3 deviations](../checkpoints/TEXT_LAYER_IMPLEMENTATION_PLAN.md#31-universal-text-property-animation); these are planned changes, not shipped behavior.
+**Animation requirement amendment:** every eventual text property uses the Universal Property framework, including discrete hold tracks for categorical values. E2/E3 now includes keyframeable font size, fill colour and hold-only Source Text with inspector diamonds; alignment/font family remain temporarily static. Stroke/tracking/leading must be animatable when introduced. Reserve versioned animator schema envelopes and an optional glyph modifier interface, without implementing animators. See [E2/E3 deviations](../checkpoints/TEXT.md#31-universal-text-property-animation); these are planned changes, not shipped behavior.
 
-**Current Fluxx text versus AE.** Implementation status and evidence live in the [roadmap](FLUXX_ROADMAP.md) and the [text checkpoint](../checkpoints/TEXT_LAYER.md). The deliberate differences from AE are:
+**Current Fluxx text versus AE.** Implementation status and evidence live in the [roadmap](FLUXX_ROADMAP.md) and the [text checkpoint](../checkpoints/TEXT.md#rec-text-layer). The deliberate differences from AE are:
 
 - *T1 styled text:* run sizes multiply the animated layer size instead of AE's absolute per-range sizes. Manual spacing within ligatures accumulates at the cluster end. Synthetic small caps omit cross-scale kerning. Layer tracking selects pre-shaped ligature modes; run/animator tracking preserves clusters. SDF joins remain round.
 - *F2 animators:* anchor grouping is per animator instead of per layer; partial source-character selections average onto an indivisible cluster; the specified Fluxx selector profiles, signed modes and LUT ease approximation do not claim exact AE numerical equivalence; colour influence clamps while spatial influence extrapolates; joins remain round; SDF softness is bounded edge softness rather than Gaussian blur. Layer tracking now splits ligatures at every nonzero value and pops at zero by design. The assumption that animator tracking/line anchor never split ligatures is explicit. Per-glyph paint overlap remains intentional; there is no all-fills-over-all-strokes mode. Wiggly selectors, per-character 3D, text paths and expressions remain unsupported and version/property rejection reports compatible-version guidance.

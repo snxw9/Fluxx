@@ -21,7 +21,7 @@ class TextGpuProofTest {
             CompositionRenderer(context, MediaRepository(context)).use { renderer ->
                 renderer.render(ProjectDocument(Composition(width = 640, height = 360)), 0)
                 val stats = JSONObject(RenderBridge.textStats(renderer.session))
-                assertTrue("Install/enable VK_LAYER_KHRONOS_validation; see TEXT_LAYER.md", stats.getBoolean("validationEnabled"))
+                assertTrue("Install/enable VK_LAYER_KHRONOS_validation; see docs/checkpoints/TEXT.md (text layer record)", stats.getBoolean("validationEnabled"))
                 assertEquals(0L, stats.getLong("validationErrors"))
                 assertEquals(1L, stats.getLong("images"))
                 assertEquals(1L, stats.getLong("draws"))

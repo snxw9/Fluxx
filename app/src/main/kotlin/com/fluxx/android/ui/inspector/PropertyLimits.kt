@@ -79,8 +79,10 @@ internal object PropertyLimits {
     // Model minimum is 8px (TextLimits.MIN_SIZE, provisional until small-size acceptance); typing 1-7 clamps to 8.
     val FONT_SIZE = PropertyLimit("Font size", "px", 8f, 300f, TextLimits.MIN_SIZE, 1000f, TextLimits.MIN_SIZE, TextLimits.MAX_SIZE, 72f, ladder = SIZE_LADDER)
     val RELATIVE_SIZE = PropertyLimit("Relative size", "%", 10f, 400f, 1f, 1000f, 1f, 1000f, 100f, detentStep = 50f)
-    val TRACKING = PropertyLimit("Tracking", "1/1000 em", -100f, 100f, -500f, 500f, -1000f, 1000f, 0f, detentStep = 10f)
-    val MANUAL_KERNING = TRACKING.copy(name = "Manual spacing")
+    /** Character Tracking. TEXT F3.4: the slider spans the hard limit (±1000) with detents every 100, like the Animate Tracking slider; typed ±1000. Fine values: type them, or rest on a detent. */
+    val TRACKING = PropertyLimit("Tracking", "1/1000 em", -1000f, 1000f, -1000f, 1000f, -1000f, 1000f, 0f, detentStep = 100f)
+    /** Manual spacing keeps the pre-F3.4 Tracking ranges (no other caps change). */
+    val MANUAL_KERNING = PropertyLimit("Manual spacing", "1/1000 em", -100f, 100f, -500f, 500f, -1000f, 1000f, 0f, detentStep = 10f)
     val LEADING = PropertyLimit("Leading", "px", 0f, 300f, 0f, 2000f, -2000f, 2000f, 0f, ladder = listOf(0f) + SIZE_LADDER)
     val GLYPH_SCALE = PropertyLimit("Glyph scale", "%", 10f, 400f, 1f, 1000f, 1f, 1000f, 100f, detentStep = 50f)
     val BASELINE = PropertyLimit("Baseline shift", "px", -100f, 100f, -1000f, 1000f, -1000f, 1000f, 0f, detentStep = 10f)
@@ -113,8 +115,8 @@ internal object PropertyLimits {
     val ANIM_SCALE = PropertyLimit("Scale", "%", 0f, 400f, -2000f, 2000f, -2000f, 2000f, 100f, detentStep = 25f, step = .1f)
     /** Animator Rotation in degrees; the read-out keeps the dial's turns notation. */
     val ANIM_ROTATION = PropertyLimit("Rotation", "°", -360f, 360f, -3600f, 3600f, -3600f, 3600f, 0f, detentStep = 45f, step = .1f)
-    /** Animator Tracking (1/1000 em). TEXT F3.3: the slider spans the whole cap (±1000), so the thumb reaches every typed value; detents every 100. The Character tab keeps [TRACKING]. */
-    val ANIM_TRACKING = TRACKING.copy(sliderMin = -1000f, sliderMax = 1000f, typedMin = -1000f, typedMax = 1000f, detentStep = 100f)
+    /** Animator Tracking (1/1000 em). TEXT F3.3: the slider spans the whole cap (±1000); detents every 100. Since F3.4 the same ranges as the Character tab [TRACKING]. */
+    val ANIM_TRACKING = TRACKING.copy()
     /** Skew: the evaluator clamps the coverage-weighted skew to ±85° per glyph (TextSelectorEngine.affine), so ±85 is the cap. */
     val ANIM_SKEW = PropertyLimit("Skew", "°", -85f, 85f, -85f, 85f, -85f, 85f, 0f, detentStep = 15f, step = .1f)
     val ANIM_ANGLE = PropertyLimit("Angle", "°", -180f, 180f, -3600f, 3600f, -3600f, 3600f, 0f, detentStep = 15f, step = .1f)

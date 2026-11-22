@@ -36,7 +36,7 @@ class TextF32UiStateTest {
         assertSame(PropertyLimits.ANIM_SCALE, AnimateFields.property(AnimatorProperty.SCALE).limit)
         assertSame(PropertyLimits.ANIM_ROTATION, AnimateFields.property(AnimatorProperty.ROTATION).limit)
         assertSame(PropertyLimits.ANIM_TRACKING, AnimateFields.property(AnimatorProperty.TRACKING).limit)
-        assertEquals(36000f, PropertyLimits.ROTATION.typedMax, 0f); assertEquals(-500f to 500f, typed(PropertyLimits.TRACKING))
+        assertEquals(36000f, PropertyLimits.ROTATION.typedMax, 0f); assertEquals(-1000f to 1000f, typed(PropertyLimits.TRACKING)) // F3.4
     }
 
     @Test fun capsStayFiniteInTheEngine() {

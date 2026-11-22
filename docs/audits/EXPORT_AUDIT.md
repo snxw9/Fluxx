@@ -4,7 +4,7 @@
 
 Current export has two paths owned by `CompositionExporter`: the guarded single-video Media3 Transformer path (dependency 1.11.1), and a separate headless Vulkan/MediaCodec path for layered compositions. [Phase 2 backend](../checkpoints/PHASE_2_STATUS_AND_BACKEND.md#dual-export-pipelines-compositionexporter) owns the current pipeline contract. Export uses an immutable project snapshot, independent renderer ownership and finalized output publication through `ExportService` to `Movies/Fluxx`.
 
-User confirmation: exports worked on the user's phone on 2026-09-10; E1a render/playback/export smoke passed on A16 on 2026-10-01. Neither establishes exhaustive codec/lifecycle coverage, the fixed r26/r28 golden comparison, or 16 KB runtime compatibility. The [text checkpoint](../checkpoints/TEXT_LAYER.md) owns those remaining gates.
+User confirmation: exports worked on the user's phone on 2026-09-10; E1a render/playback/export smoke passed on A16 on 2026-10-01. Neither establishes exhaustive codec/lifecycle coverage, the fixed r26/r28 golden comparison, or 16 KB runtime compatibility. The [text checkpoint](../checkpoints/TEXT.md#rec-text-layer) owns those remaining gates.
 
 ## Historical source audit - 2026-09-10
 

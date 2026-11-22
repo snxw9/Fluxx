@@ -45,8 +45,8 @@ class TextF33UiStateTest {
         assertEquals(l.hardMin to l.hardMax, l.sliderMin to l.sliderMax)
         assertEquals(-1000f to 1000f, l.typedMin to l.typedMax); assertEquals(1000f, l.typed(5000f), 0f)
         assertEquals(1f, l.fraction(1000f), 0f); assertEquals(0f, l.fraction(-1000f), 0f); assertEquals(.5f, l.fraction(0f), 1e-6f)
-        // Other caps unchanged (the Character tab keeps its own tracking slider).
-        assertEquals(-100f to 100f, PropertyLimits.TRACKING.sliderMin to PropertyLimits.TRACKING.sliderMax)
+        // Other caps unchanged.
+        assertEquals(-1000f to 1000f, PropertyLimits.TRACKING.sliderMin to PropertyLimits.TRACKING.sliderMax) // F3.4: Character too
         assertEquals(-500f to 500f, PropertyLimits.ANIM_OFFSET.sliderMin to PropertyLimits.ANIM_OFFSET.sliderMax)
     }
 

@@ -17,7 +17,8 @@ class InspectorLimitsTest {
     }
     @Test fun everyRowOfTheLimitsTable() {
         check(PropertyLimits.FONT_SIZE,8f to 300f,8f to 1000f,8f to 1000f)
-        check(PropertyLimits.TRACKING,-100f to 100f,-500f to 500f,-1000f to 1000f)
+        check(PropertyLimits.TRACKING,-1000f to 1000f,-1000f to 1000f,-1000f to 1000f)
+        check(PropertyLimits.MANUAL_KERNING,-100f to 100f,-500f to 500f,-1000f to 1000f)
         check(PropertyLimits.LEADING,0f to 300f,0f to 2000f,-2000f to 2000f)
         check(PropertyLimits.GLYPH_SCALE,10f to 400f,1f to 1000f,1f to 1000f)
         check(PropertyLimits.BASELINE,-100f to 100f,-1000f to 1000f,-1000f to 1000f)
@@ -52,9 +53,9 @@ class InspectorLimitsTest {
     @Test fun continuousSlidersSnapSoftlyToZeroAndDefaultWithDetents() {
         val t=PropertyLimits.TRACKING
         assertEquals(0f,t.valueAt(.5f+PropertyLimit.SNAP_FRACTION/2),0f)
-        assertEquals(-100f,t.valueAt(0f),0f);assertEquals(100f,t.valueAt(1f),0f)
+        assertEquals(-1000f,t.valueAt(0f),0f);assertEquals(1000f,t.valueAt(1f),0f)
         assertTrue(t.crossesAnchor(-3f,4f));assertFalse(t.crossesAnchor(3f,4f))
-        assertNotEquals(t.detent(9f),t.detent(11f))
+        assertNotEquals(t.detent(99f),t.detent(101f));assertEquals(t.detent(10f),t.detent(90f))
         val g=PropertyLimits.GLYPH_SCALE
         assertEquals(100f,g.valueAt(g.fraction(101f)),0f)
         assertEquals(.5f,PropertyLimits.STROKE_WIDTH.round(.6f),0f)
@@ -66,7 +67,8 @@ class InspectorLimitsTest {
         assertEquals(1000f,PropertyLimits.parseTyped(l,"5000")!!,0f)
         assertEquals(8f,PropertyLimits.parseTyped(l,"1")!!,0f)
         for(bad in listOf("","abc","NaN","Infinity","1e999")) assertNull(bad,PropertyLimits.parseTyped(l,bad))
-        assertEquals(-500f,PropertyLimits.parseTyped(PropertyLimits.TRACKING,"-9999")!!,0f)
+        assertEquals(-1000f,PropertyLimits.parseTyped(PropertyLimits.TRACKING,"-9999")!!,0f)
+        assertEquals(-500f,PropertyLimits.parseTyped(PropertyLimits.MANUAL_KERNING,"-9999")!!,0f)
         assertEquals(175f,PropertyLimits.parseTyped(PropertyLimits.LAYER_SCALE,"175%")!!,0f)
         assertEquals("72",PropertyLimits.format(l,72f));assertEquals("2.5",PropertyLimits.format(PropertyLimits.STROKE_WIDTH,2.5f))
     }
