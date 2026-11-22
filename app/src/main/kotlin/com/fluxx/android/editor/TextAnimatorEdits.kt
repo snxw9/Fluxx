@@ -13,6 +13,8 @@ object TextAnimatorEdits {
     const val MAX_ANIMATORS=16
     const val MAX_SELECTORS=8
     const val NAME_LIMIT=128
+    /** Distinct seeds (static + held keys) one selector may prepare (TextSelectorEngine preparation). */
+    const val MAX_SEEDS=64
 
     /** Discrete fields: Hold keys (the same set [TextAnimatorActions] samples with hold). */
     val HOLD_FIELDS=setOf(SelectorField.ENABLED,SelectorField.UNITS,SelectorField.BASED_ON,SelectorField.SHAPE,SelectorField.MODE,
@@ -223,7 +225,7 @@ object TextAnimatorEdits {
             ?: o?.vector?.keyframes?.firstOrNull { it.timeUs==local }?.easing ?: o?.colour?.keyframes?.firstOrNull { it.timeUs==local }?.easing
         return track(text,address)?.keyframes?.firstOrNull { it.timeUs==local }?.easing
     }
-    private fun withField(s: TextRangeSelector,field: SelectorField,p: AnimatableProperty1D)=when(field) {
+    fun withField(s: TextRangeSelector,field: SelectorField,p: AnimatableProperty1D)=when(field) {
         SelectorField.ENABLED -> s.copy(enabled=p);SelectorField.START -> s.copy(start=p);SelectorField.END -> s.copy(end=p)
         SelectorField.OFFSET -> s.copy(offset=p);SelectorField.UNITS -> s.copy(units=p);SelectorField.BASED_ON -> s.copy(basedOn=p)
         SelectorField.SHAPE -> s.copy(shape=p);SelectorField.SMOOTHNESS -> s.copy(smoothness=p);SelectorField.EASE_HIGH -> s.copy(easeHigh=p)

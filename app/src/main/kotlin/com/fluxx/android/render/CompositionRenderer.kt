@@ -84,6 +84,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         for(handle in characterHandles) RenderBridge.releaseText(session,handle)
         characterHandles.clear()
         var characterBytes=0L
+        val characterErrors=HashMap<Long,String>()
         // TEXT PERF 11: one track memo per prepared project, used only on this renderer's thread. Equal tracks of
         // different layers (duplicated layers, shared animators) are evaluated once per frame time.
         val memo=TrackMemo()
@@ -107,7 +108,16 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 val other=if(StyledTextPreparation.needsBothModes(layer.text)) textLayout(layer.text.fontId,source,!effective) else first
                 if(effective) listOf(first,other) else listOf(other,first)
             }.toTypedArray()
-            val catalogue=TextCharacterCataloguePreparation.prepare(context,layer.text.fontId,layer.text,sources)
+            // TEXT F3.1: a Character offset / value animation that cannot be prepared (codepoint or catalogue caps) never
+            // fails the preview: the layer is prepared without those overrides and the error is published for the UI.
+            // Export keeps the explicit failure (no silent degradation in a rendered file).
+            var animatedText=layer.text
+            val catalogue=try { TextCharacterCataloguePreparation.prepare(context,layer.text.fontId,layer.text,sources) }
+            catch(error: IllegalArgumentException) {
+                if(!interactive || !TextCharacterPreparation.needed(layer.text)) throw error
+                characterErrors[layer.id]=error.message ?: "Character animation cannot be prepared"
+                animatedText=TextCharacterPreparation.withoutCharacters(layer.text);null
+            }
             val handles=catalogue?.packets?.map { packet->
                 characterBytes+=packet.size
                 require(characterBytes+textLayouts.values.sumOf { it.packetBytes.toLong() }<=64L*1024*1024) {
@@ -115,7 +125,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 }
                 RenderBridge.upsertPreparedText(session,packet).also { characterHandles.add(it) }
             }?.toLongArray()
-            val animations=Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(layer.text,selectorEase,sources[it/2],linePool,catalogue?.catalogue,memo)) }
+            val animations=Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(animatedText,selectorEase,sources[it/2],linePool,catalogue?.catalogue,memo)) }
             if(handles!=null) for(i in animations.indices) animations[i].characters?.let { characters->
                 RenderBridge.bindTextCharacters(session,layouts[i].handle,handles,characters.catalogue.codepoints,characters.fontIndices,
                     sources[i/2].text,animations[i].modifiers,characters.codes)
@@ -123,6 +133,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
             PreparedText(layer,sources,layouts,handles ?: LongArray(0),animations)
         }.toTypedArray()
         require(characterBytes+textLayouts.values.sumOf { it.packetBytes.toLong() }<=64L*1024*1024) { "Prepared text/character packets exceed 64 MiB; reduce fonts or alternatives" }
+        if(interactive) TextLayerErrors.characters(characterErrors)
         preparedHandles = (preparedText.flatMap { it.layouts.map { layout -> layout.handle } }+characterHandles).distinct().toLongArray()
         // TEXT PERF 11: compile the animator evaluation in idle time before the first Play (once per preview renderer).
         if (interactive && !evaluationsWarmed) {

@@ -1,5 +1,16 @@
 # Text layer checkpoint
 
+**TEXT F3.1 (2026-11-22):** The Animate tab was reworked after the first A16 test, in source and with A16 instrumented tests:
+- one collapsible bar per animator (Property / Selector / Grouping rows), a scrolling body, grip reorder, swipe delete;
+- slider or pad/dial/ruler transform controls (app preference);
+- Range/Wiggly tiles with Advanced groups. Range Min/Max amount and Wiggly Amount are hidden in the UI only; the engine still applies them.
+- The Character offset/value crash (stale UI metrics without a character catalogue) is fixed at the metrics and renderer-preparation boundaries, with a pre-check against the 4,096-codepoint / 16,384-glyph caps.
+- Skew is capped at ±85°, Blur at 100px.
+- Animator Blur is per-glyph SDF edge softness, not a Gaussian layer blur, and is independent of the future Effects-tab blur.
+- Prev/Next follows one global rule.
+
+[Checkpoint](TEXT_F3_1.md).
+
 **TEXT F3 Animate tab (2026-11-22):** The Animate tab is implemented in source; A16 behaviour is unverified. It edits the existing animator model through the existing `AnimatorEdit` actions (no new action types, no schema/preparation/evaluation change). Selectors and properties are as validated by the backend: 16 animators × 8 selectors, all 25 property families, Range and Wiggly. Keys use the same tracks, rail, badges and timeline markers. [Checkpoint, inventory, deviations and A16 list](TEXT_F3.md).
 
 **Edit Text UI rework (2026-11-18):** Implemented in source, device-unverified; UI only. No text model, schema, preparation, native, PreviewController, gesture-protocol or batch/draw change. Aggregate popups are deleted; all common Character/Paragraph controls are on fixed tab faces; overlays stay inside the sheet; the header ⋮ has four items; the status line and Hold label are replaced by rail diamond states, a selection chip and the feedback strip; Back returns to the layer inspector grid; size / vertical scale / horizontal scale have distinct glyphs. Stroke clamp feedback still preserves the requested value and reports the effective range only while clamped. [Inventory](../architecture/TEXT_UI_OVERHAUL_PLAN.md#11-rework-2026-11-18-final-surface-and-inventory) and [gate, deviations and user-run list](TEXT_UI_OVERHAUL.md#rework-commit-2-menu-back-status-and-icons).

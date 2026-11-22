@@ -412,39 +412,23 @@ Keep the Editor Action Bar compact.
 
 # 16. Contextual Previous / Next Navigation
 
-Previous/Next navigation should change behaviour according to editing context.
+**One global rule (TEXT F3.1).** Per direction, the first tier with a stop strictly earlier (Previous) or strictly later (Next) than the playhead frame wins; an exhausted tier falls through. It behaves the same on every inspector page and with the inspector closed (closed simply means nothing is focused).
 
-### Nothing selected
+With a layer selected:
 
-Navigate to:
+1. **Focused property or animator field, only while it has keyframes:** its keyframes. A focused property with no keyframes counts as unfocused.
+2. **Markers inside the layer span** (in ≤ t ≤ out): the layer's markers and the composition's markers.
+3. **Layer in / out.**
+4. **Markers outside the layer span:** the layer's markers (including those kept outside a trimmed clip) and the composition's markers.
+5. **Timeline bounds:** start, end and every layer boundary.
 
-**Timeline start / end**
+With nothing selected: composition markers, then the timeline bounds.
 
-### Layer selected
+**Deliberate behaviour change (F3.1):** a focused property no longer blocks markers (it only wins while it has keys in that direction), and a selected layer no longer hides composition markers: composition markers inside the span join tier 2, those outside join tier 4.
 
-Navigate to:
+Unchanged guards: negative and overflowing times are ignored; tiers are ordered sets (lower / higher); Next stays put beyond the last bound; key times use the temporal anchor; seeking to a non-marker stop still clears marker selection.
 
-**Selected layer In / Out**
-
-### Animated property selected
-
-Navigate to:
-
-**Previous / next keyframe**
-
-### Composition markers available
-
-Navigate to:
-
-**Previous / next marker**
-
-### Layer selected + layer markers available
-
-Navigate to:
-
-**Previous / next marker**
-
-Markers take precedence from any playhead position, provided no inspector property is focused (or the inspector is closed). The original selected/parked activation gate was removed after user testing clarified that markers must also be reachable from between frames. A selected layer scopes navigation to its markers; otherwise composition markers apply. Each direction falls through from an exhausted marker tier to layer/global bounds. Seeking to a non-marker boundary clears marker selection.
+The earlier per-context list (markers first unless a property was focused; a selected layer scoped markers to its own) is superseded.
 
 ---
 

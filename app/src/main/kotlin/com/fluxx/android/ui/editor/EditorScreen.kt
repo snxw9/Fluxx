@@ -103,6 +103,7 @@ fun EditorScreen(
     }
     DisposableEffect(textEditor) { onDispose { textEditor.cancel() } }
     val textErrors by TextLayerErrors.state.collectAsState()
+    val characterErrors by TextLayerErrors.characters.collectAsState()
     val displayedState = editor.displayedState
     val project = displayedState.project
     val composition = project.composition
@@ -590,7 +591,7 @@ fun EditorScreen(
                                 ?.safeRange(range.start,range.end) ?: range else range
                         },
                         textTyping = textTyping,
-                        textError = textEditor.error ?: textErrors?.takeIf { it.project === project && layer.id in it.layerIds }?.message,
+                        textError = textEditor.error ?: textErrors?.takeIf { it.project === project && layer.id in it.layerIds }?.message ?: characterErrors[layer.id],
                         onTextBegin = { previewController?.pause(); textEditor.begin(layer.id) },
                         onTextDraft = textEditor::source,
                         onTextDraftSelection = textEditor::sourceSelection,

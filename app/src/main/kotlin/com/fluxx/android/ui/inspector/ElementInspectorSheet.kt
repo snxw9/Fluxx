@@ -469,7 +469,7 @@ internal fun RotationDialController(
 }
 
 /** n x degrees is a count of complete turns plus a remainder, not multiplication. */
-private fun formatRotation(degrees: Float): String {
+internal fun formatRotation(degrees: Float): String {
     val turns = kotlin.math.floor(degrees.toDouble() / 360.0).toLong()
     val remainder = degrees.toDouble() - turns * 360.0
     return "${turns}x${number(remainder.toFloat())}"

@@ -24,7 +24,7 @@ class TextLayoutMetrics private constructor(private val data: DoubleArray, val s
     private fun advance(line: Int, factor: Double, tracking: Float, size: Float): Double =
         data[6 + line] * factor + (clusters(line)-1).coerceAtLeast(0) * tracking * size / 1000.0
     fun logical(text: TextProperties, time: Long): TextBounds {
-        if(sourceDocument!=null) { val a=animation(text);a?.evaluate(time);val b=a?.logicalBounds
+        if(sourceDocument!=null) { val b=evaluated(text,time)?.logicalBounds
             if(b!=null) return TextBounds(b[0],b[1],b[2],b[3]) }
         return logical(text.size.evaluate(time),text.tracking.evaluate(time),text.leading.evaluate(time),text.baselineShift.evaluate(time))
     }
@@ -69,20 +69,40 @@ class TextLayoutMetrics private constructor(private val data: DoubleArray, val s
         if(data.size>6+lines*2+glyphs*8) PreparedTextAnimation(text,data,ease,document,linePool,characterCatalogue=catalogue,memo=memo) else null
     internal fun withCharacterCatalogue(catalogue: TextCharacterCatalogue)=TextLayoutMetrics(data,sourceEmpty,sourceDocument,catalogue)
     internal fun withDocument(document: TextSourceDocument)=TextLayoutMetrics(data,sourceEmpty,document,characterCatalogue)
+    /**
+     * TEXT F3.1: the UI-side bounds/geometry animation never throws for Character offset / value. Without a matching
+     * worker-prepared catalogue (the metrics can be one edit behind the document, or the text exceeds the caps) the
+     * layer is measured without those overrides; the renderer and the Animate page report the error explicitly.
+     */
     @Synchronized private fun animation(text: TextProperties): PreparedTextAnimation? {
-        if(boundsText!==text) { boundsAnimation=prepareAnimation(text,SelectorEaseTable.shared);boundsText=text };return boundsAnimation
+        if(boundsText!==text) {
+            boundsAnimation=if(TextCharacterPreparation.needed(text) && characterCatalogue==null) prepareWithoutCharacters(text)
+                else try { prepareAnimation(text,SelectorEaseTable.shared) } catch(e: IllegalArgumentException) {
+                    if(TextCharacterPreparation.needed(text)) prepareWithoutCharacters(text) else throw e }
+            boundsText=text
+        }
+        return boundsAnimation
+    }
+    private fun prepareWithoutCharacters(text: TextProperties)=prepareAnimation(TextCharacterPreparation.withoutCharacters(text),SelectorEaseTable.shared)
+    /** Evaluates at [time]; a catalogue that does not cover a reached codepoint falls back as in [animation]. */
+    @Synchronized private fun evaluated(text: TextProperties,time: Long): PreparedTextAnimation? {
+        val prepared=animation(text) ?: return null
+        return try { prepared.evaluate(time);prepared } catch(e: IllegalArgumentException) {
+            if(prepared.characters==null) throw e
+            prepareWithoutCharacters(text)?.also { boundsAnimation=it;it.evaluate(time) }
+        }
     }
     @Synchronized fun animatedBounds(text: TextProperties,time: Long): TextBounds {
-        val animation=animation(text) ?: return bounds(text,time)
-        animation.evaluate(time);val b=animation.inkBounds
+        val animation=evaluated(text,time) ?: return bounds(text,time)
+        val b=animation.inkBounds
         return logical(text,time).union(TextBounds(b[0],b[1],b[2],b[3]))
     }
     @Synchronized fun strokeClampLabel(text: TextProperties,time: Long,start: Int,end: Int): String? {
-        val prepared=animation(text) ?: return null;prepared.evaluate(time)
+        val prepared=evaluated(text,time) ?: return null
         return prepared.strokeClampLabel(start,end)
     }
     @Synchronized fun geometry(text: TextProperties,time: Long): TextPreparedGeometry? {
-        val prepared=animation(text) ?: return null;prepared.evaluate(time)
+        val prepared=evaluated(text,time) ?: return null
         return prepared.geometrySnapshot()
     }
     companion object {

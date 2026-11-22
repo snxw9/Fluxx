@@ -1,5 +1,7 @@
 # TEXT F3: Animate tab (animator UI)
 
+> **Superseded in part by [TEXT F3.1](TEXT_F3_1.md) (branch `text-f3-1`).** The animator strip, the Properties | Selectors switch, the paged grid, the Range handle strip, the More popover and the menu Move/Delete entries are replaced. F3.1 adds one collapsible bar per animator with Property / Selector / Grouping rows, a vertically scrolling body, grip reorder and swipe delete. It also adds slider-or-pad transform controls, rebuilt Range/Wiggly tiles with Advanced groups and hidden redundant fields, the Character offset/value crash fix, new Skew/Blur caps and the global Prev/Next rule. The record below stays as the F3 history.
+
 Branch `text-f3`. The Animate tab of Edit Text, built on the existing F2/T4 animator backend. UI, state and actions only. Rendering, animator evaluation and text preparation are unchanged. So are the schema, `PreviewController`, the gesture protocol, the batch/draw contract and the `EditorAction` contract.
 
 Status: implemented in source. Compile, JVM and instrumented results are in [Verification](#verification). Phone behaviour is unverified until you run the [A16 list](#a16-test-list).

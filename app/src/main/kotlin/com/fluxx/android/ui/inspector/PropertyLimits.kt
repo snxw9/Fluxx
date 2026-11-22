@@ -106,12 +106,17 @@ internal object PropertyLimits {
     // ---- Text animators (TEXT F3). Slider = comfortable range, typed/hard = what the backend accepts and renders. ----
     /** Animator Position / Anchor offsets in layer pixels (the model is unbounded; this is the UI cap). */
     val ANIM_OFFSET = PropertyLimit("Offset", "px", -500f, 500f, -100000f, 100000f, -100000f, 100000f, 0f, detentStep = 50f, step = .1f)
-    /** Skew is clamped to ±85° per glyph by the evaluator (after coverage), so wider typed values still matter. */
-    val ANIM_SKEW = PropertyLimit("Skew", "°", -85f, 85f, -3600f, 3600f, -3600f, 3600f, 0f, detentStep = 15f, step = .1f)
+    /** Skew: the evaluator clamps the coverage-weighted skew to ±85° per glyph (TextSelectorEngine.affine), so ±85 is the cap. */
+    val ANIM_SKEW = PropertyLimit("Skew", "°", -85f, 85f, -85f, 85f, -85f, 85f, 0f, detentStep = 15f, step = .1f)
     val ANIM_ANGLE = PropertyLimit("Angle", "°", -180f, 180f, -3600f, 3600f, -3600f, 3600f, 0f, detentStep = 15f, step = .1f)
     /** Percent fields the model validates to 0..100 (opacity family, line anchor). */
     val ANIM_PERCENT = PropertyLimit("Percent", "%", 0f, 100f, 0f, 100f, 0f, 100f, 0f, detentStep = 10f)
-    val ANIM_BLUR = PropertyLimit("Blur", "px", 0f, 50f, 0f, 200f, 0f, 200f, 0f, detentStep = 5f, step = .5f)
+    /**
+     * Per-glyph edge softness (an SDF shader parameter, not a Gaussian layer blur). PreparedTextAnimation.writeRecords
+     * clamps it to the glyph's SDF budget: 10% of the glyph's font size (7.5% with faux bold) minus half the stroke width.
+     * At the 1,000px maximum layer size that is 100px, so 100 is the typed cap.
+     */
+    val ANIM_BLUR = PropertyLimit("Blur", "px", 0f, 50f, 0f, 100f, 0f, 100f, 0f, detentStep = 5f, step = .5f)
     /** Hue in degrees (wraps modulo 360 in the evaluator). */
     val ANIM_HUE = PropertyLimit("Hue", "°", -180f, 180f, -3600f, 3600f, -3600f, 3600f, 0f, detentStep = 30f)
     /** Saturation / brightness in percentage points; the evaluator clamps the result, so ±100 is the useful range. */

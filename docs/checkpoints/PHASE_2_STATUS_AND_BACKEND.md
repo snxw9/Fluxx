@@ -76,7 +76,7 @@ This matrix maps every editor control to its underlying engine state, distinguis
 | **Palette Import (External)** | Not implemented | External .ase/.gpl swatch import is deferred. |
 | **Contextual Edit (Edit Solid)** | **Functional** (Opens Global Colour Picker) | Integrated via shared `FluxxColourPicker` (FULL). |
 | **Contextual Edit (Edit Footage)** | Visible, disabled & inert (non-tappable) | Footage editing capabilities (speed ramping, retiming, source replace). |
-| **Contextual Edit (Edit Text)** | Functional in source: fixed typography controls, asynchronous source sessions and the Animate tab ([TEXT F3](TEXT_F3.md)) | Existing gesture undo, shared picker/metrics and workspace IME handling; JVM tests passed, phone acceptance pending. |
+| **Contextual Edit (Edit Text)** | Functional in source: fixed typography controls, asynchronous source sessions and the Animate tab ([TEXT F3](TEXT_F3.md), reworked in [TEXT F3.1](TEXT_F3_1.md)) | Existing gesture undo, shared picker/metrics and workspace IME handling; JVM tests passed, phone acceptance pending. |
 | **Blending & Opacity Tab** | **Functional** (Opacity slider, reset; blend mode row is inert) | Additional blend modes require per-mode shader / linear blend math. |
 | **Effects Tab** | Visible, disabled & inert (non-tappable) | Phase 3: Curves + Gaussian Blur ping-pong FBO pipeline (SDD §4, §9). |
 | **Layer Styles Tab** | Visible, disabled & inert (non-tappable) | Layer style model, drop shadow, and glow rendering. |
