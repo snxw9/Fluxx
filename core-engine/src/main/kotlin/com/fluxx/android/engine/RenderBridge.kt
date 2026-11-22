@@ -19,6 +19,11 @@ object RenderBridge {
     external fun configureText(session: Long, pages: Int)
     /** SDF atlas tier (ppem 48/96/192/384) per prepared layout handle; synchronous for export. True when any tier changed. */
     external fun textTiers(session: Long, handles: LongArray, ppems: IntArray, synchronous: Boolean): Boolean
+    /**
+     * TEXT PERF 11: warm the bundled glyphs of each handle for every tier up to [ppems] at idle priority (the tier
+     * thread runs them only after 750 ms without a frame; they never count as pending in [awaitTextTiers]).
+     */
+    external fun warmTextTiers(session: Long, handles: LongArray, ppems: IntArray)
     /** Waits up to [timeoutMs] for off-thread tier glyphs; returns how many are still pending. */
     external fun awaitTextTiers(session: Long, timeoutMs: Int): Int
     /** TEXT FIX 9c: missing imported-font tier keys (marked in flight), as a tier request packet; null when none (no per-frame allocation). */

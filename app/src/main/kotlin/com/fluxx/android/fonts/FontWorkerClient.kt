@@ -68,6 +68,7 @@ class FontWorkerClient(context: Context) {
         suspendCancellableCoroutine<Unit> { pending ->
             keepWarm(context)
             requests.incrementAndGet()
+            val bindStart=System.nanoTime();var connectedNs=0L;var sentNs=0L
             var bound=false
             lateinit var connection: ServiceConnection
             fun release() { if(bound) { bound=false;runCatching { context.unbindService(connection) };keepWarm(context) } }
@@ -76,6 +77,9 @@ class FontWorkerClient(context: Context) {
                 override fun handleMessage(message: Message) {
                     if(message.what!=operation || !pending.isActive) return
                     if(message.data.getBoolean(FontWorkerService.OK)) {
+                        val worker=message.data.getLongArray("timings")
+                        lastTimings=longArrayOf(operation.toLong(),connectedNs-bindStart,System.nanoTime()-sentNs,
+                            worker?.getOrNull(0) ?: -1,worker?.getOrNull(1) ?: -1,worker?.getOrNull(2) ?: -1)
                         message.data.getLongArray("timings")?.let {times -> if(times.size==3) {
                             com.fluxx.android.render.TextEditTimings.record("shaping",times[0],"isolated")
                             com.fluxx.android.render.TextEditTimings.record("rasterization",times[1],"isolated cache misses")
@@ -89,6 +93,7 @@ class FontWorkerClient(context: Context) {
             connection=object: ServiceConnection {
                 override fun onServiceConnected(name: ComponentName,binder: IBinder) {
                     if(!pending.isActive) { release();return }
+                    connectedNs=System.nanoTime()
                     launch(Dispatchers.IO) {
                     val descriptors=mutableListOf<ParcelFileDescriptor>()
                     try {
@@ -114,6 +119,7 @@ class FontWorkerClient(context: Context) {
                                         putParcelableArrayList(FontWorkerService.FONTS,rows)
                                     }
                                 }
+                                sentNs=System.nanoTime()
                                 Messenger(binder).send(message)
                             }
                         }
@@ -155,9 +161,20 @@ class FontWorkerClient(context: Context) {
                     warmContext=context;warmConnection=connection
                 }
             }
-            main.postDelayed(expire,30_000)
+            main.postDelayed(expire,KEEP_WARM_MS)
         }
+        /**
+         * TEXT PERF 11: how long the isolated worker stays bound after its last request. At 30 s the process was often gone
+         * when the user came back to the Fonts page or applied the next face (A16: 770 ms to bind a new process after
+         * 35 s idle, against 3-5 ms while bound). Three minutes covers an editing session; the binding is still released.
+         */
+        const val KEEP_WARM_MS=180_000L
         private val requests=java.util.concurrent.atomic.AtomicLong()
         val requestCount get()=requests.get()
+        /**
+         * TEXT PERF 11 diagnostics for the last successful request: operation, bind→connected ns, send→reply ns, and the
+         * worker's shaping / rasterisation / encode ns (debug builds report them for PREPARE; -1 otherwise).
+         */
+        @Volatile var lastTimings=LongArray(6) { -1 };private set
     }
 }

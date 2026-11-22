@@ -47,7 +47,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
         rasterise={ requests,inputs -> com.fluxx.android.fonts.FontWorkerClient(context).tiers(requests,inputs) },
         supply={ reply -> synchronized(tierLock) { if(!closed) RenderBridge.supplyTextTierGlyphs(session,reply) } },
         executor=TIER_EXECUTOR,
-        log={ message,failure -> android.util.Log.w("FluxxText",message,failure) })
+        log={ message,failure -> android.util.Log.w("FluxxText",message,failure) },
+        cache=com.fluxx.android.fonts.TierGlyphCache.shared) // TEXT PERF 11: survives renderer rebuilds (Home, export).
     private var preparedFontRevision= -1L
     private val textLayouts = LinkedHashMap<Triple<String, TextSourceDocument, Boolean>, ProductLayout>(64, .75f, true)
     private class PreparedText(val layer: CompositionLayer, val sources: Array<TextSourceDocument>, val layouts: Array<ProductLayout>,
@@ -65,6 +66,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
         /** Every native handle this layer draws with (layouts and per-character catalogues). */
         val tierHandles=(layouts.map { it.handle }+catalogueHandles.toList()).distinct().toLongArray()
         var tier=SdfAtlasTiers.NO_TIER
+        /** TEXT PERF 11: largest keyframed font size; the idle tier warm-up reaches the tiers this layer will need. */
+        val sizeMax=layer.text.size.let { size -> maxOf(kotlin.math.abs(size.staticValue),
+            size.keyframes.maxOfOrNull { kotlin.math.abs(it.value) } ?: 0f) }
     }
     private val selectorEase by lazy { SelectorEaseTable() }
     private var preparedText = emptyArray<PreparedText>()
@@ -72,6 +76,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private val characterHandles=mutableListOf<Long>()
     private var nativePreparedTextProject: ProjectDocument? = null
     private var onlyText = false
+    private var evaluationsWarmed = false
     private val logicalBounds = FloatArray(4)
     private fun prepareTextProject(project: ProjectDocument) {
         nativePreparedTextProject = null
@@ -79,6 +84,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
         for(handle in characterHandles) RenderBridge.releaseText(session,handle)
         characterHandles.clear()
         var characterBytes=0L
+        // TEXT PERF 11: one track memo per prepared project, used only on this renderer's thread. Equal tracks of
+        // different layers (duplicated layers, shared animators) are evaluated once per frame time.
+        val memo=TrackMemo()
         val layers = project.composition.layers
         val wanted=layers.filter { it.type==LayerType.TEXT }.flatMap { layer ->
             StyledTextPreparation.alternatives(layer.text.source).flatMap { source ->
@@ -107,7 +115,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 }
                 RenderBridge.upsertPreparedText(session,packet).also { characterHandles.add(it) }
             }?.toLongArray()
-            val animations=Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(layer.text,selectorEase,sources[it/2],linePool,catalogue?.catalogue)) }
+            val animations=Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(layer.text,selectorEase,sources[it/2],linePool,catalogue?.catalogue,memo)) }
             if(handles!=null) for(i in animations.indices) animations[i].characters?.let { characters->
                 RenderBridge.bindTextCharacters(session,layouts[i].handle,handles,characters.catalogue.codepoints,characters.fontIndices,
                     sources[i/2].text,animations[i].modifiers,characters.codes)
@@ -116,6 +124,14 @@ class CompositionRenderer(private val context: Context, private val repository: 
         }.toTypedArray()
         require(characterBytes+textLayouts.values.sumOf { it.packetBytes.toLong() }<=64L*1024*1024) { "Prepared text/character packets exceed 64 MiB; reduce fonts or alternatives" }
         preparedHandles = (preparedText.flatMap { it.layouts.map { layout -> layout.handle } }+characterHandles).distinct().toLongArray()
+        // TEXT PERF 11: compile the animator evaluation in idle time before the first Play (once per preview renderer).
+        if (interactive && !evaluationsWarmed) {
+            val animated = preparedText.filter { it.layer.text.animators.isNotEmpty() }.distinctBy { it.layer.text }.take(4)
+            if (animated.isNotEmpty()) {
+                evaluationsWarmed = true
+                TextIdlePrewarm.evaluations(animated.map { Triple(it.layouts[0].metrics, it.layer.text, it.sources[0]) })
+            }
+        }
         // Release obsolete layouts; active source-key layouts remain pinned until the next project preparation.
         val iterator = textLayouts.entries.iterator()
         while (iterator.hasNext()) { val entry = iterator.next()
@@ -160,6 +176,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
             check(RenderBridge.textLayer(session,layout.handle,matrix,size,text.alignment.ordinal,text.fill.evaluate(local),opacity,
                 tracking,leading,baseline,text.strokeColour.evaluate(local),text.strokeWidth.evaluate(local),text.paintOrder(local),modifiers=animation.modifiers))
             stageNs[STAGE_MESH] += System.nanoTime() - meshing
+            stageNs[STAGE_LAYERS]++
             staged++
         }
         if (cancelled()) throw CancellationException("Superseded frame")
@@ -169,7 +186,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
         if(interactive && TextEditTimings.waitingFor(project)) TextEditTimings.frameReady(project,RenderBridge.textStats(session))
     }
     // ---- SDF atlas tiers -------------------------------------------------------------------------------------
-    private var lastPreviewCall = 0L
+    private var lastPreviewStart = 0L
+    private var lastPreviewEnd = 0L
     private var lastPreviewTime = -1L
     private var streamingRate: com.fluxx.android.model.FrameRate? = null
     private var streamingSpanUs = 0L
@@ -182,6 +200,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private var tierGlyphs = IntArray(0)
     private var tierHandleTiers = IntArray(0)
     private var tierSent = IntArray(0)
+    private var tierWarm = IntArray(0)
+    private var tierWarmHandles = IntArray(0)
+    private var tierWarmSent = IntArray(0)
     private fun tierPlan() {
         if (tierPlanFor === preparedText) return
         val handles = preparedText.flatMap { it.tierHandles.toList() }.distinct().toLongArray()
@@ -189,6 +210,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         tierSlots = Array(preparedText.size) { e -> IntArray(preparedText[e].tierHandles.size) { handles.indexOf(preparedText[e].tierHandles[it]) } }
         tierPpems = IntArray(preparedText.size); tierGlyphs = IntArray(preparedText.size)
         tierHandleTiers = IntArray(handles.size); tierSent = IntArray(handles.size) { -1 }
+        tierWarm = IntArray(preparedText.size); tierWarmHandles = IntArray(handles.size); tierWarmSent = IntArray(handles.size) { SdfAtlasTiers.BASE }
         tierPlanFor = preparedText
     }
     /**
@@ -225,8 +247,12 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 val px = SdfAtlasTiers.pixelsPerEm(size, runScale, animation.maxGlyphScale(), layerScale, outputScale)
                 val distance = SdfAtlasTiers.distanceEm(layer.text.strokeWidth.evaluate(local), size, bold,
                     animation.maxModifierDistanceEm())
+                // TEXT PERF 11: the tiers this layer reaches as its keyframed size grows (the current tier included).
+                if (interactive) tierWarm[e] = minOf(SdfAtlasTiers.ideal(if (size > 0f && entry.sizeMax > size) px * (entry.sizeMax / size) else px),
+                    SdfAtlasTiers.maxTierFor(distance))
                 SdfAtlasTiers.selectTier(px, entry.tier, distance)
             }
+            if (!active) tierWarm[e] = SdfAtlasTiers.BASE
             entry.tier = tier
             tierPpems[e] = tier; tierGlyphs[e] = entry.glyphCounts[index / 2]
         }
@@ -238,14 +264,23 @@ class CompositionRenderer(private val context: Context, private val repository: 
             if (tierPpems[e] > tierHandleTiers[slot]) tierHandleTiers[slot] = tierPpems[e]
             if (tierPpems[e] > SdfAtlasTiers.BASE) sharp = true
         }
+        val tierJni = System.nanoTime()
         if (!tierHandleTiers.contentEquals(tierSent)) {
             RenderBridge.textTiers(session, tierAllHandles, tierHandleTiers, !interactive)
             System.arraycopy(tierHandleTiers, 0, tierSent, 0, tierSent.size)
         }
+        if (interactive) {
+            // Idle-priority warm-up targets per handle; renderPreview sends them from settled frames only.
+            java.util.Arrays.fill(tierWarmHandles, SdfAtlasTiers.BASE)
+            for (e in preparedText.indices) for (slot in tierSlots[e]) if (tierWarm[e] > tierWarmHandles[slot]) tierWarmHandles[slot] = tierWarm[e]
+        }
+        stageNs[STAGE_TIER_JNI] += System.nanoTime() - tierJni
         if (!sharp) return // Base tier only: nothing for the isolated worker.
+        val requestJni = System.nanoTime()
         // Imported-font glyphs the renderer cannot rasterise itself: preview fetches them in the background (the lower
         // tier stays until they arrive); export fetches them now, so every exported frame is deterministic.
         var tierRequests = synchronized(tierLock) { RenderBridge.textTierRequests(session) }
+        stageNs[STAGE_TIER_JNI] += System.nanoTime() - requestJni
         if (interactive) { if (tierRequests != null) tierFetcher.submit(tierRequests) }
         else for (round in 0 until EXPORT_TIER_ROUNDS) {
             if (tierRequests == null) break
@@ -254,6 +289,18 @@ class CompositionRenderer(private val context: Context, private val repository: 
         }
     }
 
+    /**
+     * TEXT PERF 11: sends the idle tier warm-up targets, from settled frames only (open, pause, seek). During playback
+     * and scrubbing the native queue would not run anyway, and a target on a tier boundary (size × reach ≈ a tier's
+     * sharp limit) flipped between frames and re-sent, allocating inside F1's zero-allocation window. Targets only rise
+     * within a prepared project, so boundary jitter never re-sends.
+     */
+    private fun requestTierWarmUp() {
+        if (tierPlanFor !== preparedText || tierWarmSent.isEmpty()) return
+        var raised = false
+        for (i in tierWarmHandles.indices) if (tierWarmHandles[i] > tierWarmSent[i]) { tierWarmSent[i] = tierWarmHandles[i]; raised = true }
+        if (raised) RenderBridge.warmTextTiers(session, tierAllHandles, tierWarmSent)
+    }
     private var previewQuality: PreviewResolution? = null
     private var previewCompWidth = 0
     private var previewCompHeight = 0
@@ -282,6 +329,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private fun flush() {
         if (staged == 0) return
         check(RenderBridge.flush(session)) { "GPU compositing failed" }
+        stageNs[STAGE_FLUSHES]++
         staged = 0
     }
     private fun evictDecoder() {
@@ -335,22 +383,39 @@ class CompositionRenderer(private val context: Context, private val repository: 
         val framing = System.nanoTime(); android.os.Trace.beginSection("fluxx.frame")
         try { renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled) } finally { android.os.Trace.endSection() }
         stageNs[STAGE_FRAME] += System.nanoTime() - framing
+        PreviewFrames.presented()
         // Sharper SDF tiers are generated off-thread; this frame used the previous tier. Unless frames are already
         // streaming (playback), wait (cancellably) for the glyphs and redraw once so a settled frame becomes sharp.
         val now = System.nanoTime()
         // Cached per frame rate: FrameRate's exact arithmetic allocates (~19 objects), and this runs every preview frame.
         if (comp.frameRate != streamingRate) { streamingRate = comp.frameRate; streamingSpanUs = comp.frameRate.let { it.frameTimeUs(3) - it.frameTimeUs(0) } }
-        val frame = streamingSpanUs
-        val streaming = lastPreviewTime >= 0 && timeUs > lastPreviewTime && timeUs - lastPreviewTime <= frame && now - lastPreviewCall < 100_000_000L
-        lastPreviewCall = now; lastPreviewTime = timeUs
-        if (streaming || RenderBridge.awaitTextTiers(session, 0) == 0) return
-        val deadline = now + 1_500_000_000L
-        while (!cancelled() && System.nanoTime() < deadline) {
-            if (RenderBridge.awaitTextTiers(session, 8) == 0) {
-                if (!cancelled()) renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled)
-                return
+        // TEXT PERF 11: frames stream (playback, forward scrubbing) when calls follow each other back to back (the previous
+        // call ended < 100 ms before this one began) and time moves forward by no more than the wall time between the two
+        // calls plus three frames. TEXT FIX 9 measured end to end and allowed three frames of progress, so any frame over
+        // ~96 ms, or playback below 20 fps (30 text layers with size animation, a renderer rebuilt after Home), looked like
+        // a seek: each such frame then blocked up to 1.5 s for sharp tiers while the audio clock ran on, and playback
+        // stuttered and skipped ahead.
+        val elapsedUs = (framing - lastPreviewStart) / 1000
+        val streaming = lastPreviewTime >= 0 && timeUs > lastPreviewTime && framing - lastPreviewEnd < 100_000_000L &&
+            timeUs - lastPreviewTime <= elapsedUs + streamingSpanUs
+        lastPreviewStart = framing; lastPreviewTime = timeUs
+        if (!streaming) requestTierWarmUp()
+        try {
+            if (streaming || RenderBridge.awaitTextTiers(session, 0) == 0) return
+            val deadline = now + 1_500_000_000L
+            // TEXT PERF 11: imported-font tiers come from the isolated worker and took > 1.5 s for 15 glyphs at 384 ppem;
+            // the frame then stayed blurry because nothing redraws a settled preview. While such a fetch is in flight the
+            // wait may run to 6 s; any new request (seek, edit, play) still cancels it at once.
+            val importedDeadline = now + 6_000_000_000L
+            while (!cancelled()) {
+                val limit = if (tierFetcher.inFlight > 0) importedDeadline else deadline
+                if (System.nanoTime() >= limit) break
+                if (RenderBridge.awaitTextTiers(session, 8) == 0) {
+                    if (!cancelled()) { renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled); PreviewFrames.presented() }
+                    return
+                }
             }
-        }
+        } finally { lastPreviewEnd = System.nanoTime() }
     }
 
     private fun renderTarget(project: ProjectDocument, timeUs: Long, targetWidth: Int, targetHeight: Int,
@@ -537,6 +602,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
      * TEXT PERF 10 frame stage profile, in ns since the last [frameStages] call (then reset). Wall clock on the render
      * thread; [STAGE_EVALUATE] is inside [STAGE_TIERS] (and the prepared-text pass), the others are disjoint parts of
      * [STAGE_FRAME]. Diagnostic only: System.nanoTime per stage, no allocation, no effect on output.
+     * TEXT PERF 11 adds counts, not times: [STAGE_LAYERS] text layers drawn and [STAGE_FLUSHES] mid-frame batch flushes;
+     * [STAGE_TIER_JNI] is the tier/tier-request JNI time inside [STAGE_TIERS].
      */
     private val stageNs = LongArray(STAGES)
     internal fun frameStages(out: LongArray) {
@@ -550,7 +617,10 @@ class CompositionRenderer(private val context: Context, private val repository: 
         const val STAGE_PREPARE = 3
         const val STAGE_MESH = 4
         const val STAGE_FINISH = 5
-        const val STAGES = 6
+        const val STAGE_LAYERS = 6
+        const val STAGE_FLUSHES = 7
+        const val STAGE_TIER_JNI = 8
+        const val STAGES = 9
         /** One background thread for imported-font tier fetches across renderers (worker calls are serialised anyway). */
         private val TIER_EXECUTOR=java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable,"fluxx-imported-tiers").apply { isDaemon=true;priority=Thread.NORM_PRIORITY-1 } }

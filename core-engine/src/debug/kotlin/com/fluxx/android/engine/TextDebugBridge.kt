@@ -16,10 +16,14 @@ object TextDebugBridge {
     /**
      * TEXT PERF 10: native frame stages since the last call, in ns (then reset): work fence wait, batch record,
      * batch submit+wait, present fence wait, acquire, present record, present submit, present idle wait,
-     * GPU batch, GPU present (timestamp queries), batch count, frame count.
+     * GPU batch, GPU present (timestamp queries), batch count, frame count. TEXT PERF 11 appends: text layers drawn,
+     * native mesh build ns, re-collect+pack ns, re-collect count, atlas upload CPU ns, tier calls, placement lookups,
+     * text-only flushes merged into the next submit.
      */
     external fun frameStages(session: Long, output: LongArray)
-    const val STAGES = 12
+    const val STAGES = 20
+    /** TEXT PERF 11 parity switch: false submits every flush separately (TEXT PERF 10 behaviour). */
+    external fun mergeTextBatches(session: Long, merge: Boolean)
     fun dump(session: FontSession, directory: File) {
         check(directory.mkdirs() || directory.isDirectory)
         session.withHandle { dump(it, directory.absolutePath) }

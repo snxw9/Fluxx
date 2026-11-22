@@ -48,6 +48,47 @@ sealed interface AppDestination {
     data class Editor(val projectFile: File? = null) : AppDestination
 }
 
+/**
+ * TEXT PERF 11: the open destination outlives Activity recreation. It used to be Activity state that onSaveInstanceState
+ * deliberately wrote as "shell", so any recreation (rotation, split screen, resize, dark mode) closed the open project.
+ * The ViewModel keeps the destination (and EditorViewModel keeps the unsaved document) across recreation; after
+ * process death the saved file path reopens the project from its last autosave.
+ */
+class AppNavigation : androidx.lifecycle.ViewModel() {
+    var destination by mutableStateOf<AppDestination>(AppDestination.Shell)
+    /** False only in a ViewModel created by this onCreate (first launch or a new process). */
+    var initialized = false
+
+    companion object {
+        const val KEY = "appDestination"
+        const val KEY_FILE = "editorProjectFile"
+        /** Saved-state form of [destination]: the key value and, for the editor, the project file path (if any). */
+        fun save(destination: AppDestination): Pair<String, String?> = when (destination) {
+            AppDestination.Shell -> "shell" to null
+            AppDestination.Settings -> "settings" to null
+            is AppDestination.Editor -> "editor" to destination.projectFile?.absolutePath
+        }
+        sealed interface Restore {
+            /** The ViewModel survived (configuration change): keep its destination and document as they are. */
+            data object Keep : Restore
+            data class Show(val destination: AppDestination) : Restore
+            /** Process death while editing a saved project: reopen it from disk (its last autosave). */
+            data class Reopen(val file: File) : Restore
+        }
+        /**
+         * What onCreate restores. A surviving ViewModel ([fresh] false: configuration recreation) is authoritative and
+         * still holds the unsaved document. A fresh one with saved state means a new process: a saved editor reopens
+         * its file; an editor without a file (nothing on disk to restore) falls back to the shell.
+         */
+        fun restore(fresh: Boolean, saved: String?, savedFile: String?): Restore = when {
+            !fresh -> Restore.Keep
+            saved == "settings" -> Restore.Show(AppDestination.Settings)
+            saved == "editor" && savedFile != null -> Restore.Reopen(File(savedFile))
+            else -> Restore.Show(AppDestination.Shell)
+        }
+    }
+}
+
 @androidx.media3.common.util.UnstableApi
 class MainActivity : ComponentActivity() {
     private val editor by lazy { ViewModelProvider(this)[EditorViewModel::class.java] }
@@ -57,8 +98,11 @@ class MainActivity : ComponentActivity() {
     private val projectThumbnails by lazy { ProjectThumbnails(applicationContext, projectManager) }
     private val creation by lazy { ViewModelProvider(this)[CompositionCreationViewModel::class.java] }
     private val compositionPresets by lazy { CompositionPresetStore(applicationContext) }
+    private val navigation by lazy { ViewModelProvider(this)[AppNavigation::class.java] }
 
-    private var currentDestination by mutableStateOf<AppDestination>(AppDestination.Shell)
+    private var currentDestination: AppDestination
+        get() = navigation.destination
+        set(value) { navigation.destination = value }
     private var projectsList by mutableStateOf<List<ProjectMetadata>>(emptyList())
     private var preview by mutableStateOf<PreviewController?>(null)
     private var previewSurface: Surface? = null
@@ -131,9 +175,15 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.rgb(18, 18, 18))
         )
-        currentDestination = when (savedInstanceState?.getString("appDestination")) {
-            "settings" -> AppDestination.Settings
-            else -> AppDestination.Shell
+        // A surviving ViewModel (configuration recreation) already holds the destination and the unsaved document.
+        val fresh = !navigation.initialized; navigation.initialized = true
+        when (val restore = AppNavigation.restore(fresh, savedInstanceState?.getString(AppNavigation.KEY),
+                savedInstanceState?.getString(AppNavigation.KEY_FILE))) {
+            AppNavigation.Companion.Restore.Keep -> Unit
+            is AppNavigation.Companion.Restore.Show -> currentDestination = restore.destination
+            is AppNavigation.Companion.Restore.Reopen -> lifecycleScope.launch {
+                openProject(restore.file).onFailure { toast("Could not reopen ${restore.file.nameWithoutExtension}: ${it.message}") }
+            }
         }
         checkPermissions()
         refreshProjects()
@@ -366,15 +416,11 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        // The save is queued before any path that can destroy the editor (recreation or process death).
         autosaveEditor()
-        when (currentDestination) {
-            AppDestination.Shell -> outState.putString("appDestination", "shell")
-            AppDestination.Settings -> outState.putString("appDestination", "settings")
-            is AppDestination.Editor -> {
-                // Document process restoration belongs to the existing editor lifecycle.
-                outState.putString("appDestination", "shell")
-            }
-        }
+        val (key, file) = AppNavigation.save(currentDestination)
+        outState.putString(AppNavigation.KEY, key)
+        file?.let { outState.putString(AppNavigation.KEY_FILE, it) }
         super.onSaveInstanceState(outState)
     }
 

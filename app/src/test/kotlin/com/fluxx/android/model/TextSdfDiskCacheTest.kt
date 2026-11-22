@@ -24,9 +24,12 @@ class TextSdfDiskCacheTest {
         val cache=SdfDiskCache(directory);val seeds=cache.seeds(setOf(font))
         DataInputStream(ByteArrayInputStream(seeds)).use {input -> assertEquals(0x46534331,input.readInt());assertEquals(1,input.readInt())}
         assertTrue(cache.seeds(setOf("user."+"b".repeat(64))).isEmpty())
+        // TEXT PERF 11: records are verified when a process (instance) first reads them, then served from memory. A file
+        // corrupted on disk is therefore caught by the next process's read: never used, deleted, then re-created.
         val file=directory.listFiles()!!.single();val bytes=file.readBytes();bytes[bytes.lastIndex]=99;file.writeBytes(bytes)
-        assertTrue(cache.seeds(setOf(font)).isEmpty());assertFalse(file.exists())
-        cache.storePacket(packet(7));assertFalse(cache.seeds(setOf(font)).isEmpty())
+        val restarted=SdfDiskCache(directory)
+        assertTrue(restarted.seeds(setOf(font)).isEmpty());assertFalse(file.exists())
+        restarted.storePacket(packet(7));assertFalse(restarted.seeds(setOf(font)).isEmpty());assertTrue(file.exists())
     }
     @Test fun capEvictsLeastRecentlyUsedGlyphWithoutChangingIdentityOrPixels() {
         val directory=folder.newFolder();val first=packet(1)

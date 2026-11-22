@@ -65,8 +65,8 @@ class TextLayoutMetrics private constructor(private val data: DoubleArray, val s
     }
     fun bounds(size: Float, alignment: TextAlignment) = logical(size).union(ink(size, alignment))
     internal fun prepareAnimation(text: TextProperties,ease: SelectorEaseTable,document: TextSourceDocument?=sourceDocument,
-        linePool: LinePermutationPool=LinePermutationPool(),catalogue: TextCharacterCatalogue?=characterCatalogue): PreparedTextAnimation? =
-        if(data.size>6+lines*2+glyphs*8) PreparedTextAnimation(text,data,ease,document,linePool,characterCatalogue=catalogue) else null
+        linePool: LinePermutationPool=LinePermutationPool(),catalogue: TextCharacterCatalogue?=characterCatalogue,memo: TrackMemo=TrackMemo()): PreparedTextAnimation? =
+        if(data.size>6+lines*2+glyphs*8) PreparedTextAnimation(text,data,ease,document,linePool,characterCatalogue=catalogue,memo=memo) else null
     internal fun withCharacterCatalogue(catalogue: TextCharacterCatalogue)=TextLayoutMetrics(data,sourceEmpty,sourceDocument,catalogue)
     internal fun withDocument(document: TextSourceDocument)=TextLayoutMetrics(data,sourceEmpty,document,characterCatalogue)
     @Synchronized private fun animation(text: TextProperties): PreparedTextAnimation? {

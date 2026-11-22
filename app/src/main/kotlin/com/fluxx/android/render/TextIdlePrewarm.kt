@@ -47,6 +47,33 @@ object TextIdlePrewarm {
             } finally {TextEditTimings.record("idle_prewarm",System.nanoTime()-began,"glyphs=${loop.cursor-startCursor},requested_pixel_bytes=${loop.bytes-startBytes}")}
         }
     }
+    /**
+     * TEXT PERF 11: the first playback of an animated text layer ran the animator evaluation interpreted until the JIT
+     * compiled it (A16 debug: 165, 99, 71, 65 … 25 ms over the first 15 frames, then 18 ms). This evaluates a
+     * throwaway copy of each animated layer's prepared animation on this idle thread, so the shared evaluation code is
+     * compiled before Play. Same gate as the glyph prewarm: it pauses while frames render. The copies are private to
+     * this thread; the renderer's own animations and output are untouched.
+     */
+    private var evaluationJob: Job?=null
+    const val WARM_EVALUATIONS=30
+    @Synchronized fun evaluations(items: List<Triple<TextLayoutMetrics,TextProperties,TextSourceDocument>>) {
+        evaluationJob?.cancel()
+        if(items.isEmpty()) return
+        evaluationJob=scope.launch {
+            delay(QUIET_MS)
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+            for((metrics,text,source) in items) {
+                val animation=runCatching { metrics.prepareAnimation(text,SelectorEaseTable.shared,source,catalogue=null) }.getOrNull() ?: continue
+                var done=0
+                while(done<WARM_EVALUATIONS) {
+                    ensureActive()
+                    if(activity.busy(System.nanoTime())) { delay(QUIET_MS/3);continue }
+                    if(runCatching { animation.evaluate(1L+done*333_333L) }.isFailure) break
+                    done++;yield()
+                }
+            }
+        }
+    }
     fun imported(context: Context,reference: TextFontRef) {
         scope.launch {
             delay(1500)

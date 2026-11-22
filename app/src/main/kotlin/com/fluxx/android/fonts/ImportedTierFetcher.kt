@@ -52,6 +52,24 @@ internal object TierWire {
         require(!input.hasRemaining()) { "Trailing tier reply data" }
         return ReplySummary(glyphs, failed, deferred, pixels)
     }
+    /** TEXT PERF 11: each glyph of a reply as its exact wire record (font, glyph, ppem, spread, box, pixels). */
+    fun glyphRecords(bytes: ByteArray): List<Pair<Key, ByteArray>> {
+        summarize(bytes) // Shape and caps first.
+        val input = ByteBuffer.wrap(bytes); input.position(8)
+        return List(input.int) {
+            val start = input.position()
+            val key = Key(string(input), input.int, input.int)
+            input.position(input.position() + 20) // spread, width, height, left, top
+            val n = input.int; input.position(input.position() + n)
+            key to bytes.copyOfRange(start, input.position())
+        }
+    }
+    /** A reply holding exactly [records] (each a [glyphRecords] entry), with no failed or deferred keys. */
+    fun reply(records: List<ByteArray>): ByteArray = packet { out ->
+        require(records.size <= MAX_REQUESTS)
+        out.writeInt(REPLY_MAGIC); out.writeInt(1); out.writeInt(records.size); for (r in records) out.write(r)
+        keys(out, emptyList()); keys(out, emptyList())
+    }
     private fun key(input: ByteBuffer): Key {
         val key = Key(string(input), input.int, input.int)
         require(key.ppem in TIERS) { "Invalid tier request ppem" }
@@ -80,6 +98,7 @@ internal class ImportedTierFetcher(
     private val supply: (ByteArray) -> Unit,
     private val executor: Executor,
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
+    private val cache: TierGlyphCache = TierGlyphCache(),
 ) {
     @Volatile var lastError: String? = null; private set
     @Volatile var inFlight = 0; private set
@@ -102,8 +121,13 @@ internal class ImportedTierFetcher(
             val wanted = keys.filter { it.font in known }
             if (missing.isNotEmpty()) supply(TierWire.failure(missing)) // Library changed: keep the lower tier.
             if (wanted.isEmpty()) return
-            val bytes = runBlocking { rasterise(TierWire.encodeRequests(wanted), inputs) }
-            TierWire.summarize(bytes) // Validate shape and caps before handing it to native code.
+            // TEXT PERF 11: glyphs this process already received from the worker are supplied without another IPC.
+            val cached = cache.take(wanted)
+            if (cached.isNotEmpty()) supply(TierWire.reply(cached.map { it.second }))
+            val misses = if (cached.isEmpty()) wanted else cached.map { it.first }.toSet().let { hit -> wanted.filter { it !in hit } }
+            if (misses.isEmpty()) return
+            val bytes = runBlocking { rasterise(TierWire.encodeRequests(misses), inputs) }
+            cache.store(TierWire.glyphRecords(bytes)) // Also validates shape and caps before native code sees it.
             bytes
         } catch (failure: Throwable) {
             lastError = FontImportErrors.message(failure)
@@ -112,4 +136,29 @@ internal class ImportedTierFetcher(
         }
         supply(reply)
     }
+}
+
+/**
+ * TEXT PERF 11: imported-font tier glyphs the isolated worker has rasterised in this process, as exact reply records.
+ * Each renderer used to start empty: a preview rebuilt after the app returned from the background, or a font applied
+ * again, waited for the worker to rasterise every 96/192/384 ppem glyph again (over 1.5 s for 15 glyphs at 384 ppem
+ * on the A16). Key: (font identity, glyph, ppem). The identity hashes the font file, face, named instance and
+ * variation coordinates (FontLibraryRepository.resolve), and the spread follows from the ppem, so a hit is exactly the
+ * record the worker would send again. Bounded by [capBytes], least recently used first out. Failures are never cached.
+ */
+internal class TierGlyphCache(private val capBytes: Long = 16L * 1024 * 1024) {
+    private val records = LinkedHashMap<TierWire.Key, ByteArray>(64, .75f, true)
+    private var bytes = 0L
+    @Synchronized fun take(keys: List<TierWire.Key>): List<Pair<TierWire.Key, ByteArray>> =
+        keys.mapNotNull { key -> records[key]?.let { key to it } }
+    @Synchronized fun store(glyphs: List<Pair<TierWire.Key, ByteArray>>) {
+        for ((key, record) in glyphs) {
+            records.put(key, record)?.let { bytes -= it.size }
+            bytes += record.size
+        }
+        val iterator = records.entries.iterator()
+        while (bytes > capBytes && iterator.hasNext()) { bytes -= iterator.next().value.size; iterator.remove() }
+    }
+    @Synchronized fun size() = records.size
+    companion object { val shared = TierGlyphCache() }
 }

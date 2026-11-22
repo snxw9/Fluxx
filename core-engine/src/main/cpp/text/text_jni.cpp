@@ -184,6 +184,11 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_com_fluxx_android_engine_IsolatedFo
 }
 namespace {
 std::weak_ptr<FontManager> tierCatalog;
+// TEXT PERF 11: the tier catalog outlives the renderer that created it. The preview renderer is destroyed whenever
+// the surface goes away (Home, recents, export); its successor used to start with no sharp-tier glyphs and re-rasterise
+// every 96/192/384 ppem glyph during the first frames after the app came back (up to ~30 ms per 384 ppem glyph).
+// Retained memory stays within the catalog's own unpinned budget (16 MiB, 8 MiB on low-RAM devices).
+std::shared_ptr<FontManager> retainedTierCatalog;
 std::vector<fluxx::text::FontInput> bundledFonts(AAssetManager* source) {
     std::vector<fluxx::text::FontInput> fonts;
     fonts.push_back({"fluxx.sans", asset(source, "fonts/Inter-Regular.ttf")});
@@ -218,6 +223,7 @@ std::shared_ptr<FontManager> fluxx::text::acquireTierCatalog(AAssetManager* sour
         manager = std::make_shared<FontManager>(bundledFonts(source), budget, fluxx::text::tiers::Ppem[1], fluxx::text::tiers::spread(fluxx::text::tiers::Ppem[1]));
         tierCatalog = manager;
     }
+    retainedTierCatalog = manager;
     return manager;
 }
 

@@ -24,7 +24,7 @@ object ImportedTextPreparation {
             val wire=StyledTextPreparation.encode(document,font) { ref -> resolved[ref]?.id ?: "fluxx.sans" }
             val inputs=resolved.values.filterNotNull().distinctBy { it.id }
             require(inputs.size<=64) { "Prepared text supports at most 64 imported font identities" }
-            val cache=SdfDiskCache(java.io.File(context.cacheDir,"imported-sdf"))
+            val cache=SdfDiskCache.shared(java.io.File(context.cacheDir,"imported-sdf"))
             val seeds=cache.seeds(inputs.map {it.id}.toSet())
             val packet=try {FontWorkerClient(context).prepare(wire,inputs,ligatures,nominal,seeds)}
                 catch(failure: Exception) {

@@ -36,7 +36,7 @@ TextRenderer::TextRenderer(VkPhysicalDevice physical, VkDevice device, VkRenderP
 TextRenderer::~TextRenderer() {
     {
         std::lock_guard<std::mutex> lock(tierMutex_);
-        stopWorker_=true; queue_.clear();
+        stopWorker_=true; queue_.clear(); warmQueue_.clear();
     }
     tierWake_.notify_all();
     if(worker_.joinable()) worker_.join();
@@ -192,6 +192,22 @@ void TextRenderer::begin() {
     collected_.clear(); ++frame_; collectedRevision_=tierRevision_.load();
 }
 void TextRenderer::retireBatch() { vertices_.clear(); indices_.clear(); }
+bool TextRenderer::meshFits(const Layout& layout,const GlyphModifier* modifiers) const {
+    const auto found=preparedLayouts_.find(&layout);
+    if(found==preparedLayouts_.end()) return true; // mesh() reports the missing preparation.
+    const auto binding=found->second.characters.find(modifiers);
+    const size_t maximum=binding==found->second.characters.end()?layout.glyphs.size():std::max(layout.glyphs.size(),binding->second.maximumGlyphs);
+    return vertices_.size()+maximum*4<=vertices_.capacity() && indices_.size()+maximum*6<=indices_.capacity();
+}
+void TextRenderer::reserveFrame() {
+    // Called during preparation, after the previous submit's fence: resizing the GPU buffers here is safe.
+    const size_t glyphs=std::min(frameDemand_,mergedGlyphs());
+    frameDemand_=0;
+    if(vertices_.capacity()<glyphs*4) vertices_.reserve(glyphs*4);
+    if(indices_.capacity()<glyphs*6) indices_.reserve(glyphs*6);
+    buffer(vertex_,vertices_.capacity()*sizeof(TextVertex),VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    buffer(index_,indices_.capacity()*sizeof(uint32_t),VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+}
 std::shared_ptr<const Layout> TextRenderer::styledLayout(const std::string& font,const StyledInput& input,bool ligatures) {
     auto result=fonts_->shapeStyled(font,input.text,input.runs,input.uppercase,ligatures);
     std::set<Key> unique;
@@ -260,21 +276,52 @@ void TextRenderer::ensureTier(const Layout& layout,unsigned ppem,bool synchronou
     std::lock_guard<std::mutex> lock(tierMutex_);
     trimReady();
 }
+namespace { int64_t steadyNs() { return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); } }
+void TextRenderer::markFrame() { lastFrameNs_.store(steadyNs(),std::memory_order_relaxed); }
+bool TextRenderer::warmIdle() const { return steadyNs()-lastFrameNs_.load(std::memory_order_relaxed)>=WarmQuietNs; }
+void TextRenderer::warmTier(const Layout& layout,unsigned ppem) {
+    if(!tiers::valid(ppem) || ppem==tiers::BasePpem) return;
+    {
+        std::lock_guard<std::mutex> lock(tierMutex_);
+        for(unsigned tier:tiers::Ppem) {
+            if(tier==tiers::BasePpem || tier>ppem) continue;
+            for(size_t i=0;i<layout.glyphs.size();++i) {
+                Key key{layout.glyphFont(i),layout.glyphs[i].id,tier};
+                if(external(std::get<0>(key)) || retained_.count(key) || ready_.count(key) || failed_.count(key) ||
+                    queued_.count(key) || warmQueued_.count(key)) continue;
+                warmQueued_.insert(key); warmQueue_.push_back(std::move(key)); ++stats_.tierWarmQueued;
+            }
+        }
+        if(!warmQueue_.empty() && !worker_.joinable()) worker_=std::thread([this] { tierWorker(); });
+    }
+    tierWake_.notify_one();
+}
 void TextRenderer::tierWorker() {
     std::unique_lock<std::mutex> lock(tierMutex_);
     while(true) {
-        tierWake_.wait(lock,[this] { return stopWorker_ || !queue_.empty(); });
+        // Demand keys first. Warm keys (TEXT PERF 11) only while no frame has started for WarmQuietNs; re-check that
+        // at least every 250 ms while warm work is waiting.
+        tierWake_.wait_for(lock,std::chrono::milliseconds(warmQueue_.empty()?60'000:250),
+            [this] { return stopWorker_ || !queue_.empty() || (!warmQueue_.empty() && warmIdle()); });
         if(stopWorker_) return;
-        const Key key=queue_.front(); queue_.pop_front(); busy_=true;
+        Key key; bool warm=false;
+        if(!queue_.empty()) { key=queue_.front(); queue_.pop_front(); busy_=true; }
+        else if(!warmQueue_.empty() && warmIdle()) {
+            key=warmQueue_.front(); warmQueue_.pop_front(); warmQueued_.erase(key);
+            if(retained_.count(key) || ready_.count(key) || failed_.count(key) || queued_.count(key)) continue;
+            warm=true; warmBusy_=true;
+        } else continue;
         lock.unlock();
         std::shared_ptr<const SdfGlyph> glyph;
         try { glyph=tierFonts()->sdf(std::get<0>(key),std::get<1>(key),true,std::get<2>(key)); } catch(const std::exception&) {}
         lock.lock();
-        queued_.erase(key); busy_=false;
+        if(warm) { warmBusy_=false; if(glyph) ++stats_.tierWarmed; }
+        else { queued_.erase(key); busy_=false; }
         if(glyph) { readyBytes_+=glyph->pixels.size(); ready_[key]=std::move(glyph); readyUse_[key]=frame_; trimReady(); }
         else failed_.insert(key);
-        // A finished glyph may let a layout move up a tier: the next preparation re-collects.
-        if(queue_.empty()) ++tierRevision_;
+        // A finished glyph may let a layout move up a tier: the next preparation re-collects. Warm glyphs only matter once
+        // a layout asks for their tier (it then finds them ready), so they bump the revision once, when warming drains.
+        if(queue_.empty() && (!warm || warmQueue_.empty())) ++tierRevision_;
         tierIdle_.notify_all();
     }
 }
@@ -456,6 +503,7 @@ void TextRenderer::prepareMesh(const std::shared_ptr<const Layout>& layout) {
     buffer(index_,indices_.capacity()*sizeof(uint32_t),VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
     const unsigned tier=resolvedTier(layout.get());
     if (prepared.generation==stats_.generation && prepared.tier==tier) return;
+    ++stats_.placementLookups;
     prepared.glyphs.resize(layout->glyphs.size());
     for(size_t i=0;i<layout->glyphs.size();++i) {
         const Key key{layout->glyphFont(i),layout->glyphs[i].id,tier};
@@ -517,6 +565,7 @@ TextMesh TextRenderer::mesh(const Layout& layout, float size, int alignment, con
     const auto maximumGlyphs=binding?std::max(layout.glyphs.size(),binding->maximumGlyphs):layout.glyphs.size();
     if(vertices_.size()+maximumGlyphs*4>vertices_.capacity() || indices_.size()+maximumGlyphs*6>indices_.capacity())
         throw TextCapacityError("Text batch exceeds prepared mesh capacity");
+    frameDemand_+=maximumGlyphs;
     TextMesh result{static_cast<uint32_t>(indices_.size()),0};
     const double factor=static_cast<double>(size)/layout.upem;
     const double spacing=static_cast<double>(tracking)*size/1000.0;
