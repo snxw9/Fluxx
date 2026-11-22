@@ -248,7 +248,7 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                                     color = TextSecondary, style = MaterialTheme.typography.labelMedium, maxLines = 1) }) else null)
                             if (error != null) ErrorLine(error)
                         }
-                    }) { focus(address); popover = key(address) }
+                    }) { focus(address); popover = PopoverToggle.next(popover, key(address)) }
             }
             AnimateEditor.VECTOR, AnimateEditor.POSITION, AnimateEditor.SCALE -> {
                 if (spec.editor != AnimateEditor.VECTOR && !transformSliders) { TransformTile(address, spec, modifier, testTag, onLong, menu); return }
@@ -262,7 +262,7 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                             if (spec.editor == AnimateEditor.SCALE) ScaleSliders(address, v)
                             else VectorSliders(address, limit, spec.label, v, TextAnimatorEdits.defaultVector(requireNotNull(address.property)))
                         }
-                    }) { focus(address); popover = key(address) }
+                    }) { focus(address); popover = PopoverToggle.next(popover, key(address)) }
             }
             AnimateEditor.COLOUR -> {
                 val argb = TextAnimatorEdits.colour(text, address, local)
@@ -276,7 +276,7 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                                 onReset = { commit { listOf(TextAnimatorEdits.reset(it, address, local)) } },
                                 onSwatch = { c -> set(address, argb = TextColourEdit.swatch(argb, c)) })
                         }
-                    }) { focus(address); popover = key(address) }
+                    }) { focus(address); popover = PopoverToggle.next(popover, key(address)) }
             }
             AnimateEditor.CHOICE -> {
                 val v = TextAnimatorEdits.value(text, address, local)
@@ -293,7 +293,7 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                                 }
                             }
                         }
-                    }) { focus(address); popover = key(address) }
+                    }) { focus(address); popover = PopoverToggle.next(popover, key(address)) }
             }
             AnimateEditor.TOGGLE -> {
                 val v = TextAnimatorEdits.value(text, address, local)
@@ -330,7 +330,7 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                             }
                             if (seedError != null) ErrorLine(seedError)
                         }
-                    }) { focus(address); popover = key(address) }
+                    }) { focus(address); popover = PopoverToggle.next(popover, key(address)) }
             }
         }
     }

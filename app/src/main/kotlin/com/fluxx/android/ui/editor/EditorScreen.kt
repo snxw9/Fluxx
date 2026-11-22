@@ -487,16 +487,24 @@ fun EditorScreen(
                     onMarkerAction = { editor.dispatch(it) },
                     onMarkerConfigure = { previewController?.pause() },
                     onMarkerSelect = { owner, marker ->
+                        // TEXT F3.3: tapping or creating a marker never closes the inspector or changes its page / focus
+                        // (it used to call dismissInspector, so adding a marker closed the sheet). Only a marker on a
+                        // different layer moves the selection there.
                         previewController?.pause()
-                        dismissInspector()
-                        focusedProperty = null
-                        focusedAnimatorTrack = null
-                        editor.dispatch(EditorAction.Select(owner))
-                        val layer = editor.state.selectedLayer
-                        val time = Math.addExact(layer?.resolvedKeyframeAnchorUs ?: 0L, marker.timeUs)
-                        editor.dispatch(EditorAction.Seek(time))
-                        editor.dispatch(EditorAction.SelectMarker(marker.id))
-                        previewController?.seek(time)
+                        textEditor.finish {
+                            val target = com.fluxx.android.ui.timeline.MarkerEditing.selectionAfterMarker(editor.state.selectedLayerId, owner)
+                            if (target != editor.state.selectedLayerId) {
+                                editor.cancelGesture()
+                                focusedProperty = null
+                                focusedAnimatorTrack = null
+                                editor.dispatch(EditorAction.Select(target))
+                            }
+                            val anchor = if (owner == null) 0L else editor.state.project.composition.layers.firstOrNull { it.id == owner }?.resolvedKeyframeAnchorUs ?: 0L
+                            val time = Math.addExact(anchor, marker.timeUs)
+                            editor.dispatch(EditorAction.Seek(time))
+                            editor.dispatch(EditorAction.SelectMarker(marker.id))
+                            previewController?.seek(time)
+                        }
                     },
                     onDragSelect = { id ->
                         inspectorSheetVisible = false

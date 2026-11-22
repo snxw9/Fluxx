@@ -19,6 +19,8 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.fluxx.android.editor.*
@@ -125,10 +127,21 @@ class TextAnimateLayoutTest {
         assertTrue(compose.onAllNodesWithTag("animate-field-AMOUNT").fetchSemanticsNodes().isEmpty())
         // Grouping row at the end of the animator.
         checkReachable(listOf("animate-grouping-row","animate-grouping"),body,ppd,target)
-        // "+ Animator" follows the last animator, full width, scrolling with the list; the rail did not move.
+        // TEXT F3.3: "+ Animator" is hidden while the animator bar is expanded.
+        assertTrue(compose.onAllNodesWithTag("animate-add-animator").fetchSemanticsNodes().isEmpty())
+        // Collapse it: "+ Animator" returns after the last animator, full width, scrolling with the list; the bar did
+        // not move (no jump) and the rail did not move.
+        reveal("animate-animator-0-toggle");val barBefore=bounds("animate-animator-0")
+        click("animate-animator-0-toggle")
+        assertEquals("collapsing does not jump the list",barBefore.top,bounds("animate-animator-0").top,1f)
         checkReachable(listOf("animate-add-animator"),body,ppd,target)
-        assertTrue(bounds("animate-add-animator").top>=bounds("animate-grouping-row").bottom-1f)
+        assertTrue(bounds("animate-add-animator").top>=bounds("animate-animator-0").bottom-1f)
         assertTrue(bounds("animate-add-animator").width>=body.width-2f*ppd)
+        // Expanding again hides it, without moving the bar.
+        val barCollapsed=bounds("animate-animator-0")
+        click("animate-animator-0-toggle")
+        assertEquals("expanding does not jump the list",barCollapsed.top,bounds("animate-animator-0").top,1f)
+        assertTrue(compose.onAllNodesWithTag("animate-add-animator").fetchSemanticsNodes().isEmpty())
         assertEquals(rail,bounds("inspector-rail"))
         compose.onNodeWithTag("animate-list").performScrollToIndex(0);compose.waitForIdle()
         // No Done / ✓, no − / + text buttons anywhere on the page.
@@ -192,6 +205,32 @@ class TextAnimateLayoutTest {
         // A preview tap (the preview's dismissal request) closes it.
         PopoverDismissal.request();compose.waitForIdle()
         assertTrue(compose.onAllNodesWithTag("animate-popover-animate-property-OPACITY").fetchSemanticsNodes().isEmpty())
+        // TEXT F3.3 exits. The same tile again closes it (toggle) and keeps the value and the focus.
+        val opacityPopover="animate-popover-animate-property-OPACITY"
+        fun open() = compose.onAllNodesWithTag(opacityPopover).fetchSemanticsNodes().isNotEmpty()
+        click("animate-property-OPACITY");assertTrue(open())
+        click("animate-property-OPACITY");assertFalse("same tile closes",open())
+        // Empty sheet-body space (right of the last tile on the property row) closes it; the tile row stays.
+        click("animate-property-OPACITY");assertTrue(open())
+        val body=bounds("text-inspector-body");val blur=bounds("animate-property-BLUR")
+        val dp=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
+        assertTrue("empty space right of the tiles",blur.right<body.right-24f*dp)
+        compose.onNodeWithTag("text-inspector-body").performTouchInput { click(androidx.compose.ui.geometry.Offset(width-12f*density,blur.center.y-body.top)) }
+        compose.waitForIdle();assertFalse("empty sheet space closes",open())
+        // A swipe down on the popover (from its edge, not the slider track) closes it.
+        click("animate-property-OPACITY");assertTrue(open())
+        compose.onNodeWithTag(opacityPopover).performTouchInput {
+            swipe(androidx.compose.ui.geometry.Offset(2f*density,2f*density),androidx.compose.ui.geometry.Offset(2f*density,120f*density),250) }
+        compose.waitForIdle();assertFalse("swipe down closes",open())
+        // A short downward drag below the threshold does not.
+        click("animate-property-OPACITY");assertTrue(open())
+        compose.onNodeWithTag(opacityPopover).performTouchInput {
+            swipe(androidx.compose.ui.geometry.Offset(2f*density,2f*density),androidx.compose.ui.geometry.Offset(2f*density,24f*density),200) }
+        compose.waitForIdle();assertTrue("a short drag springs back",open())
+        // The rail diamond still works with it open and does not close it.
+        click("inspector-key-diamond");assertTrue(open())
+        assertTrue(text(state).animators[0].properties.first { it.property==AnimatorProperty.OPACITY }.scalar!!.isAnimated)
+        click("animate-property-OPACITY");assertFalse(open())
         // Swipe one tile sideways: that property only.
         reveal("animate-property-OPACITY")
         compose.onNodeWithTag("animate-property-OPACITY").performTouchInput { swipeLeft(startX=right-1f,endX=left-width*2,durationMillis=200) }

@@ -57,7 +57,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.drag
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
@@ -166,7 +165,13 @@ fun ElementInspectorSheet(
         val imeLift = remember { com.fluxx.android.ui.common.ImeLiftHost() }
         Surface(color = Surface, shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
             modifier = modifier.fillMaxWidth().offset { IntOffset(0, (swipeOffset - imeLift.lift).toInt()) }) {
-            BoxWithConstraints(Modifier.fillMaxSize()) {
+            // TEXT F3.3: swipe down from the top of the sheet closes it on EVERY page and sub-page (InspectorSwipe).
+            BoxWithConstraints(Modifier.fillMaxSize().inspectorSwipeDown(InspectorSwipe.enabled(section, textTyping),
+                InspectorSwipe.band(LocalDensity.current.fontScale).dp,
+                onStart = { focusManager.clearFocus(); swipeOffset = 0f },
+                onDrag = { swipeOffset = (swipeOffset + it).coerceAtLeast(0f) },
+                onEnd = { threshold -> if (swipeOffset >= threshold) dismiss() else swipeOffset = 0f },
+                onCancel = { swipeOffset = 0f })) {
                 val compactHeight = maxHeight < 320.dp
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides if (compactHeight) 40.dp else 48.dp,
                     com.fluxx.android.ui.common.LocalImeLift provides imeLift) {
@@ -174,24 +179,14 @@ fun ElementInspectorSheet(
                     // Edit Text is an ordinary inspector page: same frame, padding and height as Transform. It draws its
                     // own single header row (back, Character / Paragraph / Animate, menu) in place of the parent chrome.
                     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
-                        // Section pages: ONE header row (← | page tabs), exactly like Edit Text. Swipe it down to dismiss.
+                        // Section pages: ONE header row (← | page tabs), exactly like Edit Text.
                         if (!textTyping && section != null && !textSection) SectionHeader(sections, section!!, layer.type,
                             onBack = { focusManager.clearFocus(); section = null },
-                            onSelect = { focusManager.clearFocus(); section = it },
-                            onSwipeStart = { focusManager.clearFocus(); swipeOffset = 0f },
-                            onSwipe = { swipeOffset = (swipeOffset + it).coerceAtLeast(0f) },
-                            onSwipeEnd = { threshold -> if (swipeOffset >= threshold) dismiss() else swipeOffset = 0f },
-                            onSwipeCancel = { swipeOffset = 0f })
+                            onSelect = { focusManager.clearFocus(); section = it })
                         // The landing grid keeps its arrangement: handle, layer name with duplicate / delete, quick actions.
                         if (!textTyping && section == null) {
-                        Box(Modifier.fillMaxWidth().height(20.dp).pointerInput(Unit) {
-                            detectVerticalDragGestures(
-                                onDragStart = { focusManager.clearFocus(); swipeOffset = 0f },
-                                onVerticalDrag = { change, amount -> change.consume(); swipeOffset = (swipeOffset + amount).coerceAtLeast(0f) },
-                                onDragEnd = { if (swipeOffset >= 48.dp.toPx()) dismiss() else swipeOffset = 0f },
-                                onDragCancel = { swipeOffset = 0f }
-                            )
-                        }.semantics { contentDescription = "Swipe down to dismiss inspector" }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.fillMaxWidth().height(20.dp).semantics { contentDescription = "Swipe down to dismiss inspector" },
+                            contentAlignment = Alignment.Center) {
                             Box(Modifier.size(36.dp, 4.dp).background(Border, CircleShape))
                         }
                         Row(Modifier.fillMaxWidth().height(InspectorChromeBudget.nameRow(compactHeight).dp), verticalAlignment = Alignment.CenterVertically) {
@@ -288,17 +283,11 @@ internal fun sectionTitle(tab: InspectorSection, type: LayerType) = when (tab) {
  */
 @Composable
 private fun SectionHeader(sections: List<InspectorSection>, section: InspectorSection, type: LayerType,
-    onBack: () -> Unit, onSelect: (InspectorSection) -> Unit,
-    onSwipeStart: () -> Unit, onSwipe: (Float) -> Unit, onSwipeEnd: (Float) -> Unit, onSwipeCancel: () -> Unit) {
+    onBack: () -> Unit, onSelect: (InspectorSection) -> Unit) {
     val fontScale = LocalDensity.current.fontScale
-    val swipeStart by rememberUpdatedState(onSwipeStart); val swipe by rememberUpdatedState(onSwipe)
-    val swipeEnd by rememberUpdatedState(onSwipeEnd); val swipeCancel by rememberUpdatedState(onSwipeCancel)
-    Row(Modifier.fillMaxWidth().height(InspectorChromeBudget.header(fontScale).dp).testTag("inspector-section-header")
-        .pointerInput(Unit) {
-            detectVerticalDragGestures(onDragStart = { swipeStart() },
-                onVerticalDrag = { change, amount -> change.consume(); swipe(amount) },
-                onDragEnd = { swipeEnd(48.dp.toPx()) }, onDragCancel = { swipeCancel() })
-        }, verticalAlignment = Alignment.CenterVertically) {
+    // The swipe-down-to-close gesture is the sheet's (InspectorSwipe), not this row's, so every page has it.
+    Row(Modifier.fillMaxWidth().height(InspectorChromeBudget.header(fontScale).dp).testTag("inspector-section-header"),
+        verticalAlignment = Alignment.CenterVertically) {
         InspectorIconButton(InspectorIcons.icon("BACK"), "Back to layer tools", Modifier.testTag("inspector-section-back")) { onBack() }
         sections.forEach { tab ->
             val active = tab == section

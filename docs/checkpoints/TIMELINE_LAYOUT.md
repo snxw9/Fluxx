@@ -124,25 +124,26 @@ Phone acceptance:
 
 This section stands in for the preview action bar doc. The contract is defined in [AE parity §16](../architecture/AE_PARITY_VISION.md#16-contextual-previous--next-navigation) and implemented in `ContextualNavigation` (TEXT F3.1).
 
-**One global rule (TEXT F3.1).** Per direction, the first tier with a stop strictly earlier (Previous) or strictly later (Next) than the playhead frame wins; an exhausted tier falls through. It behaves the same on every inspector page and with the inspector closed (closed simply means nothing is focused).
+**One global rule (TEXT F3.1, tiers 1–2 split in F3.3).** Per direction, the first tier with a stop strictly earlier (Previous) or strictly later (Next) than the playhead frame wins; an exhausted tier falls through. It behaves the same on every inspector page and with the inspector closed (closed simply means nothing is focused).
 
 With a layer selected:
 
-1. **Keyframes (TEXT F3.2):** a focused property or animator field that has keyframes uses only its own keyframes. Otherwise (nothing focused, the inspector closed, or a focused field without keyframes) the stops are the union of ALL keyframe times of the selected layer: transform and text properties, animator properties, selector fields (including seed keys) and the animator enabled flag.
-2. **Markers inside the layer span** (in ≤ t ≤ out): the layer's markers and the composition's markers.
-3. **Layer in / out.**
-4. **Markers outside the layer span:** the layer's markers (including those kept outside a trimmed clip) and the composition's markers.
-5. **Timeline bounds:** start, end and every layer boundary.
+1. **Focused field (TEXT F3.3):** the focused property or animator field's own keyframes. Empty when nothing is focused, the inspector is closed, or the focused field has no keyframes.
+2. **Every other keyframe of the selected layer (TEXT F3.3):** the union of ALL keyframe times of the layer: transform and text properties, animator properties, selector fields (including seed keys) and the animator enabled flag. A focused field whose keys all lie behind the playhead therefore falls through to the layer's other keys ahead (for example Start or Tracking after a Random Seed key), never straight to the markers or the out point.
+3. **Markers inside the layer span** (in ≤ t ≤ out): the layer's markers and the composition's markers.
+4. **Layer in / out.**
+5. **Markers outside the layer span:** the layer's markers (including those kept outside a trimmed clip) and the composition's markers.
+6. **Timeline bounds:** start, end and every layer boundary.
 
 With nothing selected: composition markers, then the timeline bounds.
 
-**Deliberate behaviour change (F3.1):** a focused property no longer blocks markers (it only wins while it has keys in that direction), and a selected layer no longer hides composition markers: composition markers inside the span join tier 2, those outside join tier 4.
+**Deliberate behaviour change (F3.1):** a focused property no longer blocks markers (it only wins while it has keys in that direction), and a selected layer no longer hides composition markers: composition markers inside the span join tier 3, those outside join tier 5 (tier numbers as of F3.3).
 
 Unchanged guards: negative and overflowing times are ignored; tiers are ordered sets (lower / higher); Next stays put beyond the last bound; key times use the temporal anchor; seeking to a non-marker stop still clears marker selection.
 
 ## Preview and toolbar verification
 
-`ContextualNavigationTest` (rewritten in TEXT F3.1, tier 1 rewritten in F3.2, JVM-passing) covers every tier and edge, including layer-wide keys on transform, text, animator, selector, seed and enabled tracks with nothing focused: exactly at in and out, static and exhausted focused properties, animator fields with and without keys, layer markers outside a trimmed span, composition markers inside and outside the span, the closed inspector, nothing selected, empty projects, signed anchors and overflow. `PreviewSettingsTest` covers quality dimensions, Fit/100% behavior, zoom/pan inverse mapping and temporary anchor suppression override. Both pass in the TEXT F3.1 JVM run (435 tests, 0 failures).
+`ContextualNavigationTest` (rewritten in TEXT F3.1, tier 1 rewritten in F3.2, the focused-field → layer-keys fall-through added in F3.3, JVM-passing) covers every tier and edge, including a keyed Random Seed behind the playhead falling through to Start and Tracking keys, an unkeyed focus on every page kind, layer-wide keys on transform, text, animator, selector, seed and enabled tracks with nothing focused: exactly at in and out, static and exhausted focused properties, animator fields with and without keys, layer markers outside a trimmed span, composition markers inside and outside the span, the closed inspector, nothing selected, empty projects, signed anchors and overflow. `PreviewSettingsTest` covers quality dimensions, Fit/100% behavior, zoom/pan inverse mapping and temporary anchor suppression override. Both pass in the TEXT F3.1 JVM run (435 tests, 0 failures).
 
 - [ ] Galaxy A16 360dp: all seven icons fit with no clipping; **each icon reliably registers as itself, not its neighbor under a real thumb**. Test left/right edge icons and both preview heights.
 - [ ] Switch Full → Half → Third → Quarter while paused, playing and repeatedly in quick succession. Playback pauses on a quality change; the same frame redraws without GPU failure or tearing.

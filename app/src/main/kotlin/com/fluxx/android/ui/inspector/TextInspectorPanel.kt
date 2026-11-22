@@ -120,10 +120,6 @@ import kotlinx.coroutines.delay
         if(editScope.available(c)) onAction(EditorAction.SetTextPayload(layer.id,TextEdits.scalar(layer,time,property,if(on) 0f else 1f)))
         else message="Clear selection to edit layer ${c.label.lowercase()}"
     }
-    fun openPopover(c: TextControl) {
-        if(!editScope.available(c)) {focus(c);message="Clear selection to edit ${c.label.lowercase()}";return}
-        if(c!=TextControl.PAINT) focus(c);popoverName=c.name
-    }
     // Slider drags: one transaction per drag; typed commits and resets: one transaction each.
     fun numericBegin(c: TextControl) {focus(c);onValueBegin();activeDraft=TextNumericDraft(layer,time,frameRate,editScope,c)}
     fun numericPreview(v: Float) {activeDraft?.let {d->runCatching {d.payload(d.scrubValue(v),linkScale)}.onSuccess(onPayloadPreview).onFailure {message=it.message}}}
@@ -147,6 +143,12 @@ import kotlinx.coroutines.delay
     fun colourTarget()=if(control==TextControl.STROKE) TextControl.STROKE else TextControl.FILL
     fun colourSet(t: TextControl,argb: Int) {focus(t);colourSession.target(t);colourSession.set(currentLayer,frameRate.snap(time),currentScope,argb)}
     fun closePopover() {numericCancel();colourSession.cancel();if(axisSnapshot!=null) {onCancel();axisSnapshot=null};popoverName=null}
+    fun openPopover(c: TextControl,toggle: Boolean=true) {
+        if(!editScope.available(c)) {focus(c);message="Clear selection to edit ${c.label.lowercase()}";return}
+        // TEXT F3.3: tapping the open tile again closes its popover (toggle); the value was already committed.
+        if(c!=TextControl.PAINT) focus(c)
+        if(toggle && PopoverToggle.next(popoverName,c.name)==null) closePopover() else popoverName=c.name
+    }
     fun sourceDone() {manager.clearFocus();if(mode==TextInspectorMode.Source) {onFinish();mode=TextInspectorMode.Browse}}
     fun sourceCancel() {manager.clearFocus();if(mode==TextInspectorMode.Source) {onCancel();mode=TextInspectorMode.Browse}}
     fun closePage() {
@@ -487,7 +489,7 @@ import kotlinx.coroutines.delay
                     if(TextRailItem.RESET_STYLE in railItems) add(RailMenuItem(TextRailMenu.label(TextRailItem.RESET_STYLE,tab,scopeLabel,propertyName,animated),enabled=!finishing) {
                         if(tab==TextTab.PARAGRAPH) onParagraph(a,b) {TextParagraphStyle()} else format {TextRunStyle()}})
                     if(TextRailItem.MANUAL_SPACING in railItems) add(RailMenuItem(TextRailMenu.label(TextRailItem.MANUAL_SPACING,tab,scopeLabel,propertyName,animated),enabled=!finishing) {
-                        openPopover(TextControl.MANUAL_KERNING)})
+                        openPopover(TextControl.MANUAL_KERNING,toggle=false)})
                 },
                 confirm=if(resetAnimation) "Remove all ${owner?.name} keys, keep the value at the playhead?" to {if(owner!=null) onAction(EditorAction.ToggleAnimated(layer.id,owner,false,time))} else null,
                 onConfirmDismiss={resetAnimation=false},
@@ -501,7 +503,9 @@ import kotlinx.coroutines.delay
                     }
                 })
             Spacer(Modifier.width(TextInspectorBudget.RAIL_GAP.dp))
-            BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().testTag("text-inspector-body")) {
+            // TEXT F3.3: a tap on empty body space (not a tile, not a scroll) closes an open slider popover. The rail,
+            // timeline and transport are outside this box, so they never dismiss it.
+            BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().dismissPopoversOnEmptyTap().testTag("text-inspector-body")) {
                 val hitSize=LocalMinimumInteractiveComponentSize.current.let {if(it==Dp.Unspecified) 48.dp else it}
                 val bodyWidth=maxWidth.value;val bodyHeight=maxHeight.value
                 val metrics=TextInspectorBudget.forBody(bodyHeight,bodyWidth,hitSize<48.dp)

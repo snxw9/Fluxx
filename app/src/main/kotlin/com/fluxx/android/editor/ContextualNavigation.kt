@@ -4,19 +4,21 @@ import com.fluxx.android.model.*
 import java.util.TreeSet
 
 /**
- * Contextual Previous / Next (TEXT F3.1): one global rule, per direction. Tiers are tried in order; the first tier
- * with a stop strictly earlier (Previous) or strictly later (Next) than the playhead frame wins, and an exhausted tier
- * falls through. The same rule applies on every inspector page and with the inspector closed.
+ * Contextual Previous / Next (TEXT F3.1, F3.3): one global rule, per direction. Tiers are tried in order; the first
+ * tier with a stop strictly earlier (Previous) or strictly later (Next) than the playhead frame wins, and an exhausted
+ * tier falls through. The same rule applies on every inspector page and with the inspector closed.
  *
  * With a layer selected:
- *  1. keyframes (TEXT F3.2): the focused property or animator field while it has keyframes; otherwise (nothing
- *     focused, the inspector closed, or a static focus) the union of ALL keyframe times of the selected layer:
- *     transform and text properties, animator properties, selector fields, seed keys and the animator enabled flag;
- *  2. markers inside the layer span (in <= t <= out): the layer's own markers and the composition's markers;
- *  3. the layer in / out points;
- *  4. markers outside the layer span: the layer's markers (also those retained outside a trimmed clip) and the
+ *  1. the focused property or animator field's keyframes (empty when nothing is focused, the inspector is closed or
+ *     the focused field is static);
+ *  2. (TEXT F3.3) every keyframe time of the selected layer: transform and text properties, animator properties,
+ *     selector fields, seed keys and the animator enabled flag. So a focused field whose keys all lie behind the
+ *     playhead falls through to the layer's other keys ahead, never straight to the markers or the out point;
+ *  3. markers inside the layer span (in <= t <= out): the layer's own markers and the composition's markers;
+ *  4. the layer in / out points;
+ *  5. markers outside the layer span: the layer's markers (also those retained outside a trimmed clip) and the
  *     composition's markers;
- *  5. the timeline bounds (start, end and every layer boundary).
+ *  6. the timeline bounds (start, end and every layer boundary).
  * With nothing selected: composition markers, then the timeline bounds.
  *
  * Guards: negative and overflowing times are ignored, tiers are ordered sets (lower / higher), and Next stays put
@@ -42,14 +44,14 @@ object ContextualNavigation {
             comp.layers.forEach { add(it.timing.startUs); it.timing.endUs?.let(::add) }
         }
         if (selected == null) return listOf(compMarkers, bounds)
-        val focus = focusedKeys(selected, inspector, property, animatorTrack).ifEmpty { layerKeys(selected) }
+        val focus = focusedKeys(selected, inspector, property, animatorTrack)
         val layerMarkers = selected.markers.mapNotNull { add(selected.resolvedKeyframeAnchorUs, it.timeUs) }
         val inPoint = selected.timing.startUs
         val outPoint = selected.timing.endUs ?: Long.MAX_VALUE
         val markers = layerMarkers + compMarkers
         val inside = markers.filter { it in inPoint..outPoint }
         val outside = markers.filter { it !in inPoint..outPoint }
-        return listOf(focus, inside, listOfNotNull(selected.timing.startUs, selected.timing.endUs), outside, bounds)
+        return listOf(focus, layerKeys(selected), inside, listOfNotNull(selected.timing.startUs, selected.timing.endUs), outside, bounds)
     }
 
     /** Keys of the focused field: an animator field wins over a layer property; empty when the field is static. */

@@ -113,8 +113,8 @@ internal object PropertyLimits {
     val ANIM_SCALE = PropertyLimit("Scale", "%", 0f, 400f, -2000f, 2000f, -2000f, 2000f, 100f, detentStep = 25f, step = .1f)
     /** Animator Rotation in degrees; the read-out keeps the dial's turns notation. */
     val ANIM_ROTATION = PropertyLimit("Rotation", "°", -360f, 360f, -3600f, 3600f, -3600f, 3600f, 0f, detentStep = 45f, step = .1f)
-    /** Animator Tracking (1/1000 em); the Character tab keeps [TRACKING]. */
-    val ANIM_TRACKING = TRACKING.copy(typedMin = -1000f, typedMax = 1000f)
+    /** Animator Tracking (1/1000 em). TEXT F3.3: the slider spans the whole cap (±1000), so the thumb reaches every typed value; detents every 100. The Character tab keeps [TRACKING]. */
+    val ANIM_TRACKING = TRACKING.copy(sliderMin = -1000f, sliderMax = 1000f, typedMin = -1000f, typedMax = 1000f, detentStep = 100f)
     /** Skew: the evaluator clamps the coverage-weighted skew to ±85° per glyph (TextSelectorEngine.affine), so ±85 is the cap. */
     val ANIM_SKEW = PropertyLimit("Skew", "°", -85f, 85f, -85f, 85f, -85f, 85f, 0f, detentStep = 15f, step = .1f)
     val ANIM_ANGLE = PropertyLimit("Angle", "°", -180f, 180f, -3600f, 3600f, -3600f, 3600f, 0f, detentStep = 15f, step = .1f)

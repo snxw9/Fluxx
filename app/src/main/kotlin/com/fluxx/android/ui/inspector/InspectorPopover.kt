@@ -32,6 +32,12 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.composed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalDensity
@@ -140,11 +146,21 @@ internal object InspectorHaptics {
     }
     Popup(popupPositionProvider = provider, onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = !passive, dismissOnBackPress = !passive, dismissOnClickOutside = !passive)) {
+      // TEXT F3.3: a non-modal popover follows a downward swipe and closes past the threshold (not from its sliders).
+      val guard = remember { PopoverSwipeGuard() }
+      var swipe by remember { mutableFloatStateOf(0f) }
+      LaunchedEffect(visible) { if (visible) swipe = 0f }
       CompositionLocalProvider(LocalHostImeBottom provides hostIme, com.fluxx.android.ui.common.LocalImeLift provides null,
-          LocalPopoverTyping provides typing) {
+          LocalPopoverTyping provides typing, LocalPopoverSwipeGuard provides guard) {
         AnimatedVisibility(state, enter = scaleIn(tween(140), .8f, origin) + fadeIn(tween(110)),
             exit = scaleOut(tween(110), .8f, origin) + fadeOut(tween(90))) {
-            Surface(Modifier.testTag(testTag).widthIn(max = 344.dp), shape = RoundedCornerShape(10.dp), color = SurfaceHigh,
+            Surface(Modifier.testTag(testTag).widthIn(max = 344.dp)
+                .graphicsLayer { translationY = swipe }
+                .inspectorSwipeDown(!modal && visible, Dp.Infinity,
+                    onStart = { swipe = 0f }, onDrag = { swipe = (swipe + it).coerceAtLeast(0f) },
+                    onEnd = { threshold -> if (swipe >= threshold) currentDismiss() else swipe = 0f }, onCancel = { swipe = 0f },
+                    onDown = { guard.blocked = false }, blocked = { guard.blocked }),
+                shape = RoundedCornerShape(10.dp), color = SurfaceHigh,
                 tonalElevation = 3.dp, shadowElevation = 8.dp, border = BorderStroke(1.dp, Border)) {
                 Column(Modifier.padding(4.dp), content = content)
             }
@@ -173,15 +189,56 @@ internal val LocalHostImeBottom = compositionLocalOf { -1 }
 internal val LocalPopoverTyping = compositionLocalOf<MutableIntState?> { null }
 
 /**
- * TEXT F3.2: a tap in the preview closes non-modal popovers. The preview calls [request]; open non-modal popovers
- * wait for the next request. Timeline, transport and rail touches never call it.
+ * TEXT F3.2 / F3.3: how a non-modal (slider) popover closes. The preview and empty sheet-body space call [request];
+ * open non-modal popovers wait for the next request. Timeline, transport, rail and slider touches never call it.
  */
 internal object PopoverDismissal {
     val requests = kotlinx.coroutines.flow.MutableStateFlow(0L)
     fun request() { requests.value = requests.value + 1 }
-    /** The dismiss rule, for tests and callers: only preview taps, another tile (the host's key changes) and Back close. */
-    enum class Touch { PREVIEW, OTHER_TILE, BACK, TIMELINE, TRANSPORT, RAIL, SLIDER }
-    fun dismisses(touch: Touch) = touch == Touch.PREVIEW || touch == Touch.OTHER_TILE || touch == Touch.BACK
+    /**
+     * The dismiss rule. Closing: a preview tap, another tile (the host swaps its key), the same tile again (toggle),
+     * empty space in the sheet body, a swipe down on the popover, Back. Never: timeline, transport (play, Prev/Next),
+     * the rail (diamond) or the popover's own slider.
+     */
+    enum class Touch { PREVIEW, OTHER_TILE, SAME_TILE, EMPTY_SHEET, SWIPE_DOWN, BACK, TIMELINE, TRANSPORT, RAIL, SLIDER }
+    fun dismisses(touch: Touch) = when (touch) {
+        Touch.PREVIEW, Touch.OTHER_TILE, Touch.SAME_TILE, Touch.EMPTY_SHEET, Touch.SWIPE_DOWN, Touch.BACK -> true
+        Touch.TIMELINE, Touch.TRANSPORT, Touch.RAIL, Touch.SLIDER -> false
+    }
+    /** An empty-space tap: the down reached the sheet body unconsumed (no tile under it) and ended as a tap. */
+    fun emptyTap(downConsumed: Boolean, endedAsTap: Boolean) = !downConsumed && endedAsTap
+}
+
+/** TEXT F3.3: tapping the tile whose popover is open closes it; any other tile opens its own. */
+internal object PopoverToggle {
+    fun next(open: String?, tapped: String): String? = if (open == tapped) null else tapped
+}
+
+/**
+ * TEXT F3.3: an invisible in-sheet dismiss layer. Observes the body's taps after its children (Main pass): a tap that
+ * no tile, bar or list consumed is empty space and closes open non-modal popovers. Scrolls and drags never do.
+ */
+internal fun Modifier.dismissPopoversOnEmptyTap(): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val downConsumed = down.isConsumed
+        val up = waitForUpOrCancellation()
+        if (PopoverDismissal.emptyTap(downConsumed, up != null && !up.isConsumed)) PopoverDismissal.request()
+    }
+}
+
+/** Set by a popover's slider on its down (Initial pass, after the popover's own swipe detector): no swipe-to-close. */
+internal class PopoverSwipeGuard { var blocked = false }
+internal val LocalPopoverSwipeGuard = compositionLocalOf<PopoverSwipeGuard?> { null }
+/** A Slider moves its value on press, so a swipe that starts on its track stays a slider gesture. */
+internal fun Modifier.blocksPopoverSwipe(): Modifier = composed {
+    val guard = LocalPopoverSwipeGuard.current
+    if (guard == null) this else pointerInput(guard) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+            guard.blocked = true
+        }
+    }
 }
 
 /**
@@ -272,7 +329,7 @@ internal object PopoverDismissal {
             steps = limit.ladder?.let { (it.size - 2).coerceAtLeast(0) } ?: 0,
             colors = SliderDefaults.colors(thumbColor = TextPrimary, activeTrackColor = TextPrimary, inactiveTrackColor = Border,
                 activeTickColor = Surface, inactiveTickColor = TextSecondary),
-            modifier = Modifier.weight(1f).padding(horizontal = 4.dp).semantics { contentDescription = "$label slider" })
+            modifier = Modifier.weight(1f).padding(horizontal = 4.dp).blocksPopoverSwipe().semantics { contentDescription = "$label slider" })
         if (editing) InspectorValueField(if (mixed) "" else PropertyLimits.format(limit, live), label, limit.unit,
             { text -> editing = false; PropertyLimits.parseTyped(limit, text)?.let { v -> live = v; onTyped(v) } }, { editing = false })
         else TextButton(onClick = { editing = true }, enabled = enabled, contentPadding = PaddingValues(horizontal = 6.dp),
