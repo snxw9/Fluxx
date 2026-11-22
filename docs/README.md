@@ -2,7 +2,7 @@
 
 Start with the [roadmap](architecture/FLUXX_ROADMAP.md) for active scope. The [Phase 2 status matrix](checkpoints/PHASE_2_STATUS_AND_BACKEND.md) distinguishes implemented controls from placeholders. Feature references below own their detailed behavior and verification evidence.
 
-**Current state (2026-11-22):** Phase 2 is active. Text E1–E3, F1/F2 and T1–T4 are user-tested on the A16; FIX and EXPLODE are committed; T5 (Arabic/Hebrew RTL) is stopped pending a cross-style shaping decision ([report](checkpoints/TEXT_FIX_EXPLODE_T5.md)). The Edit Text UI rework through TEXT UI 8 is implemented in source, device-unverified ([overhaul record](checkpoints/TEXT_UI_OVERHAUL.md)). TEXT FIX 9 and TEXT PERF 10/11 were device-assisted on the A16 and record measured results and open items ([PERF 11 still open](checkpoints/TEXT_PERF_11.md#still-open)). F3 animator UI and Phase 3 effects/masks are not started. Separate 16 KB/golden checks remain outstanding.
+**Current state (2026-11-22):** Phase 2 is active. Text E1–E3, F1/F2 and T1–T4 are user-tested on the A16; FIX and EXPLODE are committed; T5 (Arabic/Hebrew RTL) is stopped pending a cross-style shaping decision ([report](checkpoints/TEXT_FIX_EXPLODE_T5.md)). The Edit Text UI rework through TEXT UI 8 is implemented in source, device-unverified ([overhaul record](checkpoints/TEXT_UI_OVERHAUL.md)). TEXT FIX 9 and TEXT PERF 10/11 were device-assisted on the A16 and record measured results and open items ([PERF 11 still open](checkpoints/TEXT_PERF_11.md#still-open)). F3 (the Animate tab) is implemented in source on `text-f3`, A16-unverified ([checkpoint](checkpoints/TEXT_F3.md)). Phase 3 effects/masks are not started. Separate 16 KB/golden checks remain outstanding.
 
 *Historical (2026-10-01):* E1b/E1c accepted; E1d lazy 2048 R8 rendering and E1e debug visual/lifecycle/resource harness implemented in source, unverified at the time. E2/E3 then followed the [approved array-overflow design](checkpoints/TEXT_LAYER.md#e2-implementation-and-approved-array-overflow).
 
@@ -48,6 +48,7 @@ Listed in build order. The text checkpoint is the main owner; the others record 
 | [TEXT FIX 9](checkpoints/TEXT_FIX_9.md) | Font import regression, overlap-safe SDF, sharp tiers and device suites |
 | [TEXT PERF 10](checkpoints/TEXT_PERF_10.md) | Single-layer text frame-time profile and fixes |
 | [TEXT PERF 11](checkpoints/TEXT_PERF_11.md) | Multi-layer text cost, resume/rotation fixes and imported-font latency |
+| [TEXT F3](checkpoints/TEXT_F3.md) | Animate tab: layout figures, full control inventory, icons, deviations and the A16 list |
 
 [Design assets](assets/) contain UI references. Vendored dependency documentation/licenses belong to their upstream packages, not this product index.
 

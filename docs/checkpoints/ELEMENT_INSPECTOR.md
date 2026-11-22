@@ -13,6 +13,15 @@
 
 > **TEXT UI 7 (2026-11-18):** section pages now have one header row (← | tabs; no name/duplicate/delete, which stay on the landing grid), controls are sized from `SectionLayout`, tiles show keyframe badges and Edit Solid uses the FULL shared colour picker. See `TEXT_UI_OVERHAUL.md`, section TEXT UI 7.
 
+**Edit Text → Animate (TEXT F3, 2026-11-22):** implemented in source, device-unverified. The Animate tab is no longer inert. Same 268/328dp sheet, same rail; nothing scrolls vertically. The page has:
+
+- an animator strip (filled = selected, hollow add tile, long-press menu, scrolls sideways);
+- a Properties | Selectors switch, with the animator's grouping and on/off tiles;
+- a paged property grid with an add popover of all 25 properties;
+- the selector strip with a Range handle strip and tiles (More for the rest), or the Wiggly face.
+
+Position, Rotation and Scale of an animator open an in-sheet sub-page with the Transform tab's own pad, dial and rulers; Back returns. The focused field drives the rail diamond, tile badges, timeline focus and Prev/Next. [Layout figures, inventory and A16 list](TEXT_F3.md).
+
 **Edit Text rework (2026-11-18):** Implemented in source, device-unverified. Edit Text is a fixed, non-scrolling sheet: every common control sits on the Character (4 rows) or Paragraph (3 rows) face; the only overlays are Case / Justify / Box width choice rows, exact numeric entry, Fonts and the colour picker, all inside the sheet, which is docked below the preview, so none hides the edited layer. While Edit Text is open the sheet uses one fixed height (344dp at font scale 1; labelled 3-column reflow at larger scales) and ignores Preview Expansion. **Back:** the editor's top-left arrow dispatches system Back while Edit Text is open; Back first leaves the innermost transient state (Explode dialog, numeric/source/colour draft, confirmation, base-alignment row, choice row, Fonts) and otherwise returns directly to this inspector's landing grid, clearing any text selection. The check mark keeps its Done behaviour. The header ⋮ holds exactly Explode Text, Reset {tab} style, Manual kerning and Relative size; the status line and Hold label are gone (the rail diamond carries key state). [Final inventory](../architecture/TEXT_UI_OVERHAUL_PLAN.md#11-rework-2026-11-18-final-surface-and-inventory), [gate and A16 user-run list](TEXT_UI_OVERHAUL.md#rework-commit-2-menu-back-status-and-icons).
 
 **Explode Text** (header ⋮): its compact dialog contains the five split modes, Skip spaces, Keep original, Group/Each pivot, a freeze/drop summary, Prepare/Confirm and explicit confirmation above 200 pieces. It uses existing pages and undo transactions; no sub-screen or frozen layout schema. [Current gate, limits and exact user-run list](TEXT_FIX_EXPLODE_T5.md).

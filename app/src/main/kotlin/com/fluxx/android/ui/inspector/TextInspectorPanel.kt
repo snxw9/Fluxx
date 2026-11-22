@@ -59,7 +59,8 @@ import kotlinx.coroutines.delay
     palette: PaletteRepository?=null,onEyedropper: (()->Unit)?=null,
     onBeginDraft: (Boolean,(CompositionLayer)->Unit)->Unit={_,ready->onValueBegin();ready(layer)},finishing: Boolean=false,strokeClamp: String?=null,
     sampleColour: (((Int?)->Unit)->Unit)?=null,cancelSample: ()->Unit={},
-    onSourceSelection: (String,TextSelectionRange)->Unit={_,r->onSelection(r)}) {
+    onSourceSelection: (String,TextSelectionRange)->Unit={_,r->onSelection(r)},
+    compositionHeight: Int=0,onAnimatorFocus: (AnimatorTrackAddress?)->Unit={}) {
     val local=Math.subtractExact(time,layer.resolvedKeyframeAnchorUs)
     val document=layer.text.source.evaluateDocument(local)
     val editScope=TextEditScope(selection)
@@ -98,6 +99,15 @@ import kotlinx.coroutines.delay
     val currentScope by rememberUpdatedState(editScope)
     // The action bar's Prev/Next keyframe buttons follow this owner (last touched control or the open popover).
     LaunchedEffect(owner) {onFocus(owner)}
+    // Animate tab (TEXT F3): the focused animator field owns the rail diamond, timeline focus and Prev/Next.
+    val animateState=rememberAnimatePageState(layer.id)
+    val shownAnimator=AnimateSelection.animator(layer.text,animateState.animatorId)
+    val animOwner=if(tab==TextTab.ANIMATE) AnimateSelection.focus(layer.text,shownAnimator,animateState.focus) else null
+    val animAnimated=animOwner?.let {TextAnimatorEdits.animated(layer.text,it)} ?: false
+    val animOnKey=animOwner?.let {ownerLocal in TextAnimatorEdits.keyTimes(layer,it)} ?: false
+    LaunchedEffect(animOwner) {onAnimatorFocus(animOwner)}
+    DisposableEffect(layer.id) {onDispose {onAnimatorFocus(null)}}
+    fun animatorAction(edit: AnimatorEdit) {onAction(TextAnimatorEdits.action(layer.id,listOf(edit)))}
 
     fun focus(c: TextControl) {controlName=c.name;message=null}
     fun format(change: (TextRunStyle)->TextRunStyle) {onCharacter(a,b,change)}
@@ -406,7 +416,7 @@ import kotlinx.coroutines.delay
                 val selectedTab=t==tab
                 Box(Modifier.weight(1f).fillMaxHeight().clickable(enabled=!finishing,role=Role.Tab) {
                     closePopover();tabIndex=t.ordinal;page=0
-                }.semantics {selected=selectedTab;if(t==TextTab.ANIMATE) stateDescription="Animator controls not yet available"},contentAlignment=Alignment.Center) {
+                }.semantics {selected=selectedTab}.testTag("text-tab-${t.name}"),contentAlignment=Alignment.Center) {
                     Text(t.name.lowercase().replaceFirstChar {it.uppercase()},color=if(selectedTab) TextPrimary else TextSecondary,
                         style=MaterialTheme.typography.labelMedium,maxLines=1)
                     if(selectedTab) Box(Modifier.align(Alignment.BottomCenter).padding(bottom=4.dp).size(24.dp,2.dp).background(TextPrimary,RoundedCornerShape(1.dp)))
@@ -424,7 +434,31 @@ import kotlinx.coroutines.delay
             val discrete=owner in TextKeyState.HOLD_OWNERS
             val propertyName=editScope.title(TextFocus.control(control,popover))
             val railItems=TextRailMenu.items(owner,animated,onKey,tab)
-            InspectorUtilityRail(resetLabel=TextRailMenu.label(TextRailItem.RESET_VALUE,tab,scopeLabel,propertyName,animated),onReset=::resetValue,
+            if(tab==TextTab.ANIMATE) {
+                // The focused animator field: same rail, same key model (AnimatorEdit.Key), Hold squares for discrete fields.
+                val name=animOwner?.let {AnimateFields.spec(it).label}
+                val hold=animOwner!=null && TextAnimatorEdits.isHold(animOwner)
+                InspectorUtilityRail(resetLabel=if(name!=null) "Reset $name value" else "Reset value",
+                    onReset={animOwner?.let {a->runCatching {TextAnimatorEdits.reset(layer.text,a,ownerLocal)}.onSuccess(::animatorAction).onFailure {message=it.message}}
+                        ?: run {message="Choose an animator field to reset"}},
+                    isAnimated=animAnimated,hasKeyframeAtPlayhead=animOnKey,
+                    onToggleKeyframe=if(animOwner==null || finishing) null else ({animatorAction(TextAnimatorEdits.toggleKey(layer.text,animOwner,ownerLocal,animOnKey))}),
+                    show3D=false,keyIcon=InspectorIcons.icon(AnimateRail.keyIcon(animOwner,animAnimated,animOnKey)),
+                    keyLabel=AnimateRail.keyLabel(name,animAnimated,animOnKey),
+                    keyState=AnimateRail.keyState(name,hold,animAnimated,animOnKey,CompositionTimecode.format(time,frameRate)),
+                    extraItems=buildList {
+                        if(animOwner!=null) {
+                            add(RailMenuItem(if(animAnimated) "Freeze at playhead" else "Enable animation",enabled=!finishing) {
+                                animatorAction(if(animAnimated) TextAnimatorEdits.freeze(animOwner,ownerLocal) else TextAnimatorEdits.enable(animOwner,ownerLocal))})
+                            if(animAnimated) add(RailMenuItem("Reset animation…",enabled=!finishing) {resetAnimation=true})
+                            if(hold) add(RailMenuItem("Hold (discrete)",enabled=false) {})
+                            else if(animAnimated && animOnKey) EasingPreset.entries.forEach {easing->add(RailMenuItem(easing.name,enabled=!finishing) {
+                                animatorAction(TextAnimatorEdits.easing(animOwner,ownerLocal,easing))})}
+                        }
+                    },
+                    confirm=if(resetAnimation && animOwner!=null) "Remove all $name keys, keep the value at the playhead?" to {animatorAction(TextAnimatorEdits.freeze(animOwner,ownerLocal))} else null,
+                    onConfirmDismiss={resetAnimation=false})
+            } else InspectorUtilityRail(resetLabel=TextRailMenu.label(TextRailItem.RESET_VALUE,tab,scopeLabel,propertyName,animated),onReset=::resetValue,
                 isAnimated=animated,hasKeyframeAtPlayhead=onKey,
                 onToggleKeyframe=if(owner==null || finishing) null else ({
                     onAction(if(!animated) EditorAction.ToggleAnimated(layer.id,owner,true,time) else if(onKey) EditorAction.RemoveKeyframe(layer.id,owner,ownerLocal)
@@ -478,8 +512,9 @@ import kotlinx.coroutines.delay
                         }},axisFinish={if(axisSnapshot!=null) {onFinish();axisSnapshot=null}},axisCancel={if(axisSnapshot!=null) {onCancel();axisSnapshot=null}},busy=finishing,
                         baseFont=if(editScope.selected) null else {id->focus(TextControl.BASE_FONT);onBeginDraft(false) {fresh->onPayloadPreview(fresh.text.copy(fontId=id));onFinish()}},
                         hit=hitSize,modifier=Modifier.fillMaxSize())
-                    face==null->Text("Text animators arrive with F3. No animator controls are available yet.",Modifier.padding(8.dp).semantics {disabled()},
-                        style=MaterialTheme.typography.bodySmall,color=TextSecondary)
+                    face==null->TextAnimatePage(layer,time,frameRate,compositionWidth,compositionHeight,animateState,finishing,palette,
+                        onAction=onAction,onValueBegin=onValueBegin,onPayloadPreview=onPayloadPreview,onFinish=onFinish,onCancel=onCancel,
+                        onMessage={message=it},metrics=AnimateMetrics(bodyHeight,bodyWidth,hitSize<48.dp),modifier=Modifier.fillMaxSize())
                     large->{
                         // Large font scales: labelled 3-column reflow of the same controls; whole rows page from a button.
                         val pitch=TextInspectorBudget.LABELLED_PITCH

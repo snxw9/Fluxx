@@ -257,11 +257,13 @@ internal val LocalHostImeBottom = compositionLocalOf { -1 }
 @Composable internal fun InspectorTile(vector: ImageVector?, label: String, modifier: Modifier = Modifier, hit: Dp = 40.dp, active: Boolean = false,
     enabled: Boolean = true, caption: String? = null, text: String? = null, state: String? = null, testTag: String? = null,
     onLongClick: (() -> Unit)? = null, iconContent: (@Composable () -> Unit)? = null, fill: PaddingValues? = null,
-    badge: KeyBadge = KeyBadge.NONE, popover: @Composable () -> Unit = {}, click: () -> Unit) {
+    badge: KeyBadge = KeyBadge.NONE, filled: Boolean = false, hollow: Boolean = false,
+    popover: @Composable () -> Unit = {}, click: () -> Unit) {
     var tooltip by remember { mutableStateOf(false) }
     val interactions = remember { MutableInteractionSource() }
     val pressed by interactions.collectIsPressedAsState()
-    val ink = if (!enabled) TextDisabled else if (active) TextPrimary else TextSecondary
+    // [filled]: a selected strip item (inverted ink). [hollow]: an add tile (outline only, no fill).
+    val ink = if (!enabled) TextDisabled else if (filled) Surface else if (active) TextPrimary else TextSecondary
     val shape = RoundedCornerShape(if (fill != null) 8.dp else 10.dp)
     Box((if (fill != null) modifier else modifier.heightIn(min = hit).widthIn(min = hit)).then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
         .combinedClickable(interactionSource = interactions, indication = null, enabled = enabled, role = Role.Button, onClick = click,
@@ -272,8 +274,10 @@ internal val LocalHostImeBottom = compositionLocalOf { -1 }
         }, contentAlignment = Alignment.Center) {
         val visual = if (fill != null) Modifier.fillMaxSize().padding(fill)
             else Modifier.then(if (text != null) Modifier.fillMaxWidth().padding(horizontal = (hit - 40.dp).coerceAtLeast(0.dp) / 2) else Modifier.size(40.dp)).height(40.dp)
-        Box(visual.clip(shape).background(if (pressed) Surface else SurfaceHigh)
-            .border(1.dp, if (active) TextPrimary else if (pressed) Border else Color.Transparent, shape), contentAlignment = Alignment.Center) {
+        val background = when { filled && enabled -> TextPrimary; filled -> TextDisabled; hollow -> if (pressed) SurfaceHigh else Color.Transparent
+            pressed -> Surface; else -> SurfaceHigh }
+        Box(visual.clip(shape).background(background)
+            .border(1.dp, if (active || filled) TextPrimary else if (hollow || pressed) Border else Color.Transparent, shape), contentAlignment = Alignment.Center) {
             if (text != null) Row(Modifier.fillMaxSize().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 vector?.let { Icon(it, null, Modifier.size(InspectorIcons.INLINE), tint = ink) } ?: iconContent?.invoke()
                 Text(text, Modifier.weight(1f).padding(start = 4.dp), color = ink, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -282,7 +286,7 @@ internal val LocalHostImeBottom = compositionLocalOf { -1 }
                 vector?.let { Icon(it, null, Modifier.size(InspectorIcons.SIZE), tint = ink) } ?: iconContent?.invoke()
                 // Keyframe badge: top-right corner, above the icon, below (and never overlapping) the bottom caption.
                 KeyBadgeGlyph(badge, ink, Modifier.align(Alignment.TopEnd))
-                caption?.let { Text(it, Modifier.align(Alignment.BottomEnd).padding(end = 3.dp, bottom = 1.dp), color = TextSecondary,
+                caption?.let { Text(it, Modifier.align(Alignment.BottomEnd).padding(end = 3.dp, bottom = 1.dp), color = if (filled) Surface else TextSecondary,
                     fontSize = 8.sp, lineHeight = 9.sp, maxLines = 1, overflow = TextOverflow.Clip) }
             }
             if (text != null) KeyBadgeGlyph(badge, ink, Modifier.align(Alignment.TopEnd))

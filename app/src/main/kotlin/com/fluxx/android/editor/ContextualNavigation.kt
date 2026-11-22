@@ -6,15 +6,15 @@ import java.util.TreeSet
 /** Each priority tier is independent; an exhausted direction falls through, never clamps a tier. */
 object ContextualNavigation {
     fun findPrevious(project: ProjectDocument, selectedLayer: CompositionLayer?, isInspectorOpen: Boolean,
-        activeProperty: AnimPropertyType?, playheadUs: Long, selectedMarkerId: Long? = null): Long =
-        find(project, selectedLayer, isInspectorOpen, activeProperty, playheadUs, false, selectedMarkerId)
+        activeProperty: AnimPropertyType?, playheadUs: Long, selectedMarkerId: Long? = null, animatorTrack: AnimatorTrackAddress? = null): Long =
+        find(project, selectedLayer, isInspectorOpen, activeProperty, playheadUs, false, selectedMarkerId, animatorTrack)
 
     fun findNext(project: ProjectDocument, selectedLayer: CompositionLayer?, isInspectorOpen: Boolean,
-        activeProperty: AnimPropertyType?, playheadUs: Long, selectedMarkerId: Long? = null): Long =
-        find(project, selectedLayer, isInspectorOpen, activeProperty, playheadUs, true, selectedMarkerId)
+        activeProperty: AnimPropertyType?, playheadUs: Long, selectedMarkerId: Long? = null, animatorTrack: AnimatorTrackAddress? = null): Long =
+        find(project, selectedLayer, isInspectorOpen, activeProperty, playheadUs, true, selectedMarkerId, animatorTrack)
 
     private fun find(project: ProjectDocument, selected: CompositionLayer?, inspector: Boolean,
-        property: AnimPropertyType?, time: Long, next: Boolean, selectedMarkerId: Long?): Long {
+        property: AnimPropertyType?, time: Long, next: Boolean, selectedMarkerId: Long?, animatorTrack: AnimatorTrackAddress? = null): Long {
         fun candidate(times: Iterable<Long>): Long? {
             val tier = TreeSet<Long>().apply { addAll(times.filter { it >= 0 }) }
             return if (next) tier.higher(time) else tier.lower(time)
@@ -23,14 +23,19 @@ object ContextualNavigation {
         val markers = selected?.markers ?: comp.markers
         val anchor = selected?.resolvedKeyframeAnchorUs ?: 0L
         val frame = comp.frameRate.nearestFrame(time)
-        // Markers are reachable from any frame. A focused property still owns keyframe navigation.
-        if (!inspector || property == null) {
+        // Markers are reachable from any frame. A focused property (or animator field) still owns keyframe navigation.
+        val animator = animatorTrack?.takeIf { inspector && selected != null && selected.type == LayerType.TEXT &&
+            TextAnimatorEdits.exists(selected.text, it) }
+        if (!inspector || (property == null && animator == null)) {
             val times = markers.map { Math.addExact(anchor, it.timeUs) }.filter { it >= 0 }
                 .filter { if (next) comp.frameRate.nearestFrame(it) > frame else comp.frameRate.nearestFrame(it) < frame }
             candidate(times)?.let { return it }
         }
         if (inspector && selected != null && property != null) {
             candidate(keyframeTimes(selected, property))?.let { return it }
+        }
+        if (selected != null && animator != null) {
+            candidate(TextAnimatorActions.keyTimes(selected, animator).filter { it >= 0 })?.let { return it }
         }
         if (selected != null) candidate(listOfNotNull(selected.timing.startUs, selected.timing.endUs))?.let { return it }
         val duration = project.composition.resolvedDurationUs

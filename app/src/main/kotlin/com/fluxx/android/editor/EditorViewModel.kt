@@ -110,13 +110,14 @@ class EditorViewModel : ViewModel() {
     }
 
     /** Resolve and apply transport navigation from one current snapshot, at click time. */
-    fun navigateBoundary(next: Boolean, isInspectorOpen: Boolean, activeProperty: AnimPropertyType?): Long {
+    fun navigateBoundary(next: Boolean, isInspectorOpen: Boolean, activeProperty: AnimPropertyType?,
+        animatorTrack: AnimatorTrackAddress? = null): Long {
         commitGesture()
         val current = state
         val target = if (next) ContextualNavigation.findNext(current.project, current.selectedLayer,
-            isInspectorOpen, activeProperty, current.playheadUs, current.selectedMarkerId)
+            isInspectorOpen, activeProperty, current.playheadUs, current.selectedMarkerId, animatorTrack)
         else ContextualNavigation.findPrevious(current.project, current.selectedLayer,
-            isInspectorOpen, activeProperty, current.playheadUs, current.selectedMarkerId)
+            isInspectorOpen, activeProperty, current.playheadUs, current.selectedMarkerId, animatorTrack)
         dispatch(EditorAction.Seek(target))
         return state.playheadUs
     }

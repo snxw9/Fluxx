@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.vector.VectorPath
 import com.fluxx.android.editor.ClipQuickAction
 import com.fluxx.android.model.LayerType
 import com.fluxx.android.model.ParagraphAlignment
+import com.fluxx.android.model.SelectorMode
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
@@ -28,12 +29,13 @@ class InspectorIconFamilyTest {
             assertEquals(24f,v.viewportWidth,0f);assertEquals(24f,v.viewportHeight,0f)
             val drawn=paths(v.root)
             assertTrue(v.name,drawn.isNotEmpty())
-            for(p in drawn) {
+            assertEquals(v.name,if(v.name in InspectorIcons.REGIONS) 2 else 1,drawn.size)
+            drawn.forEachIndexed {i,p->
                 assertEquals(v.name,InspectorIcons.STROKE,p.strokeLineWidth,0f)
                 assertEquals(v.name,StrokeCap.Round,p.strokeLineCap)
                 assertEquals(v.name,StrokeJoin.Round,p.strokeLineJoin)
-                // Hollow by default; only state glyphs are filled.
-                assertEquals(v.name,v.name in InspectorIcons.FILLED,p.fill!=null)
+                // Hollow by default; only state glyphs are filled, and region glyphs fill only their second (region) path.
+                assertEquals("${v.name} path $i",v.name in InspectorIcons.FILLED || i==1,p.fill!=null)
             }
         }
         assertEquals(setOf("FILL","PAINT","KEY_ON","HOLD_ON"),InspectorIcons.FILLED)
@@ -58,6 +60,8 @@ class InspectorIconFamilyTest {
             val sub=InspectorIcons.path(name).split('M').filter {it.isNotBlank()}
             for(s in sub) if(s.trim().endsWith("Z")) assertTrue("$name has a sharp closed shape: M$s",s.contains('A') || s.contains('Q') || s.contains('C'))
         }
+        for((name,region) in InspectorIcons.REGIONS) for(sub in region.split('M').filter {it.isNotBlank()})
+            assertTrue("$name region is a closed rounded shape: M$sub",sub.trim().endsWith("Z") && (sub.contains('A') || sub.contains('Q')))
         // Rounded rectangles keep a corner radius of at least 2 units.
         assertTrue(IconPath().rect(4f,4f,16f,16f,.5f).build().contains("A2,2"))
     }
@@ -76,6 +80,22 @@ class InspectorIconFamilyTest {
         // Mirrored pairs really are mirrors (same structure, different glyph).
         for((a,b) in listOf("UNDO" to "REDO","MOVE_IN" to "MOVE_OUT","INDENT_LEFT" to "INDENT_RIGHT","LTR" to "RTL"))
             assertEquals(InspectorIcons.path(a).count {it=='M'},InspectorIcons.path(b).count {it=='M'})
+    }
+    @Test fun selectorModeIconsAreDistinctFilledRegionGlyphs() {
+        val modes=AnimateFields.MODES.map {it.icon}
+        assertEquals(SelectorMode.entries.size,modes.size)
+        assertEquals(setOf("MODE_ADD","MODE_SUBTRACT","MODE_INTERSECT","MODE_MIN","MODE_MAX","MODE_DIFFERENCE"),modes.toSet())
+        for(name in modes) {
+            assertTrue(name,name in InspectorIcons.REGIONS && name !in InspectorIcons.FILLED)
+            // No text glyphs: the outline is two circles or two rounded bars, every closed shape rounded.
+            assertTrue(name,InspectorIcons.path(name).split('M').filter {it.isNotBlank()}.all {it.trim().endsWith("Z") && it.contains('A')})
+        }
+        assertEquals(modes.size,modes.map {InspectorIcons.glyph(it)}.toSet().size)
+        // Set modes share one outline and differ only in the filled region; min/max share the bars.
+        assertEquals(1,listOf("MODE_ADD","MODE_SUBTRACT","MODE_INTERSECT","MODE_DIFFERENCE").map {InspectorIcons.path(it)}.toSet().size)
+        assertEquals(InspectorIcons.path("MODE_MIN"),InspectorIcons.path("MODE_MAX"))
+        // The difference glyph is two crescents (two closed sub-paths).
+        assertEquals(2,InspectorIcons.REGIONS.getValue("MODE_DIFFERENCE").count {it=='Z'})
     }
     @Test fun everySurfaceResolvesToAFamilyIcon() {
         for(tab in TextTab.entries) for(c in TextInspectorLayout.inventory(tab)) {
