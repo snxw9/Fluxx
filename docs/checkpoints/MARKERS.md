@@ -1,8 +1,6 @@
 # Composition and Layer Markers
 
-> **TEXT UI 8 (2026-11-18):** the centred marker dialog is gone. Adding a marker (tap or hold on the playhead) places it immediately (one undo) and opens ONE popover anchored to the marker: a description field plus the COMPACT picker with marker swatches. Description and colour apply live, with one undo per session. Tapping outside or pressing Back closes it without discarding. There are no Add/Save/Delete/X buttons and no staged-until-Save state. Removal is unchanged (tap the playhead on a marker). Statements below about the dialog, its staging, X and Delete are superseded. See `TEXT_UI_OVERHAUL.md`, section TEXT UI 8.
-
-> **TEXT UI 7 (2026-11-18):** the marker colour is now edited with the COMPACT shared picker in a popover anchored to the colour control of the marker editor (never centred; marker swatches). Staging until Add/Save, persistence and undo are unchanged. See `TEXT_UI_OVERHAUL.md`, section TEXT UI 7.
+> **TEXT UI 8 (2026-11-18), current editor:** the centred marker dialog is gone. Adding a marker (tap or hold on the playhead) places it immediately (one undo) and opens ONE popover anchored to the marker: a description field plus the COMPACT picker with marker swatches. Description and colour apply live, with one undo per session. Tapping outside or pressing Back closes it without discarding. There are no Add/Save/Delete/X buttons and no staged-until-Save state. Removal is unchanged (tap the playhead on a marker). Statements below about the dialog, its staging, X and Delete are superseded. See `TEXT_UI_OVERHAUL.md`, section TEXT UI 8.
 
 Implemented in source for Phase 2 C/D, September 29, 2026. Android debug Kotlin compilation subsequently passed during E1b/E1c; marker-specific JVM tests, allocation profiling and phone acceptance remain pending. No build, packaging, installation, or device launch was performed for this change.
 
@@ -30,13 +28,11 @@ Updated geometry: see [Timeline Layout](TIMELINE_LAYOUT.md). The ruler and playh
 
 The ruler, playhead, and layer marker targets override Compose's minimum touch-target expansion to zero, preserving their exact vertical partitions. See the [Compose ViewConfiguration contract](https://developer.android.com/reference/kotlin/androidx/compose/ui/platform/ViewConfiguration). Keyframe diamonds remain at their existing y=14dp centre. The visual time chip uses 10sp text with a 12sp line height at y=1dp, above the ticks; enlarged-font geometry still needs device review.
 
-Layer selection determines creation scope. An out-of-range playhead (or snapped frame outside the half-open clip interval) produces “Playhead outside selected layer” and creates nothing. Holding on an existing retained marker can still edit/delete it outside trimmed bounds. Negative composition-time markers are preserved but cannot be selected or sought, even when quantization would put them on frame zero. Tapping the playhead on an existing scoped marker removes it in one undo step; tapping an already-parked ruler/layer flag does the same. Configuration stages colour and text locally until Add/Save; the top-right X, outside tap, or Back dismisses without saving. There is no Cancel button. Descriptions render beside flags, eliding before the next marker/clip edge. Existing markers can be deleted from the dialog.
+Layer selection determines creation scope. An out-of-range playhead (or snapped frame outside the half-open clip interval) produces “Playhead outside selected layer” and creates nothing. Holding on an existing retained marker can still edit it outside trimmed bounds; the popover then anchors to the playhead target. Negative composition-time markers are preserved but cannot be selected or sought, even when quantization would put them on frame zero. Tapping the playhead on an existing scoped marker removes it in one undo step; tapping an already-parked ruler/layer flag does the same. Descriptions render beside flags, eliding before the next marker/clip edge.
 
 ## Colour picker and lookup
 
-The live picker formula was read from `FluxxColorPicker.kt`: `minOf(140.dp, height, (maxWidth - 26.dp - 10.dp - 135.dp).coerceAtLeast(40.dp))`.
-
-The custom Dialog disables platform default width. Its outer width is capped at 360dp, with 12dp margins and 12dp content padding on each side. At the 360dp floor, the Surface is 336dp and the picker receives 312dp. The formula gives a 140dp SV box and a 136dp right column at the explicit 208dp picker height. This is a source geometry check, not an on-device measurement. Keyboard visibility, landscape, enlarged fonts, and narrower windows remain acceptance checks.
+The marker colour is edited in the anchored popover with the COMPACT `FluxxColourPicker` and marker swatches; geometry and IME rules are in [TEXT UI 8](TEXT_UI_OVERHAUL.md#1-marker-editor-one-anchored-popover).
 
 Binary search compares frame indices and returns the existing Marker object, avoiding a boxed nullable colour. The selected layer wins over composition colour when both match. Line, time text, and chip outline restore to white off-marker. `FrameRate.nearestFrame` uses exact Long arithmetic when multiplication/addition fit, retaining BigInteger as an extreme-value fallback. Tests check result identity and arithmetic parity; they do not prove zero allocations at runtime.
 
@@ -64,8 +60,8 @@ Navigation follow-up: user testing established that navigation worked after sele
 - [ ] Build and run JVM tests in Android Studio.
 - [ ] Park a focused first-row keyframe directly under the playhead; tap and long-press drag it without creating a marker.
 - [ ] Tap the playhead with/without layer selection; verify scope, same-frame tap-to-remove, undo restoration, and out-of-range feedback.
-- [ ] Hold the playhead to add/edit colour and description; verify X/outside dismissal, Delete, undo, and redo.
-- [ ] On the 360dp profile, measure the full 140dp SV box; check hex input, sliders, buttons, keyboard, and enlarged text for clipping.
+- [ ] Tap or hold the playhead to add a marker; verify the anchored popover, live description/colour edits, outside-tap/Back closing without discarding, one undo per session, and redo.
+- [ ] On the 360dp profile, check the popover's COMPACT picker, in-place hex/alpha entry, keyboard lift and enlarged text for clipping.
 - [ ] At a coincident keyframe and marker, top-zone taps select the marker; focus the property again and verify lower-zone keyframe tap/drag.
 - [ ] Tap ruler flags within the 32dp zone; empty ruler and clip taps clear selection as specified.
 - [ ] At 30fps and 30000/1001fps, verify frame-quantized tint, selected-layer colour priority, and white restoration off-frame.
