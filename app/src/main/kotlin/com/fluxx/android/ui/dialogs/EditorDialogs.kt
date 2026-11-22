@@ -104,6 +104,19 @@ fun ExportDialog(
                     ) {
                         Text("Open exported video", color = Color.Black, style = MaterialTheme.typography.labelMedium)
                     }
+                    // TEXT F3.2: a finished export can be started again without closing the dialog.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(SurfaceVariant)
+                            .border(1.dp, Border, RoundedCornerShape(4.dp))
+                            .clickable { onStartExport() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Export again", color = TextPrimary, style = MaterialTheme.typography.labelMedium)
+                    }
                 } else {
                     Text(
                         "Ready to export composition. Renders full layered Vulkan composition with mixed audio.",

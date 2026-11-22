@@ -60,6 +60,28 @@ object TextCharacterPreparation {
     }
     fun fonts(font: String,documents: Array<TextSourceDocument>)=
         documents.flatMap { it.runs.map { run->run.style.font ?: TextFontRef(font) } }.distinct().toTypedArray()
+
+    /**
+     * TEXT F3.1 pre-check: the reason [text]'s Character offset / value animation cannot be prepared (the 4,096
+     * reachable-codepoint cap or the 16,384 font × codepoint catalogue cap), or null when it can. Pure arithmetic over
+     * the same reachability [codepoints] uses; no fonts are opened. Used before committing an edit and by the UI.
+     */
+    fun problem(text: TextProperties): String? {
+        if(!needed(text)) return null
+        return try {
+            val documents=StyledTextPreparation.alternatives(text.source)
+            val cps=codepoints(text,documents).size
+            val fonts=fonts(text.fontId,documents).size
+            if(fonts.toLong()*cps>MAX_CATALOGUE_GLYPHS) "Too many characters for Character animation: $fonts fonts × $cps characters exceeds $MAX_CATALOGUE_GLYPHS" else null
+        } catch(e: IllegalArgumentException) {
+            if(e.message?.contains("4096")==true) "Too many characters for Character animation (over $MAX_CODEPOINTS reachable); narrow the value or the text"
+            else e.message ?: "Character animation cannot be prepared"
+        }
+    }
+    /** [text] without Character offset / value overrides: what the layer renders when they cannot be prepared. */
+    fun withoutCharacters(text: TextProperties): TextProperties = if(!needed(text)) text else text.copy(animators=FrozenList.of(text.animators.map { a->
+        a.copy(properties=FrozenList.of(a.properties.filter { it.property!=AnimatorProperty.CHARACTER_OFFSET && it.property!=AnimatorProperty.CHARACTER_VALUE }))
+    }))
 }
 
 /** One standalone glyph per sorted codepoint, in common 1000-unit metrics. */

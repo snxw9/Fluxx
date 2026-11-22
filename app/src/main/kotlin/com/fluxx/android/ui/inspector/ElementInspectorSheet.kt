@@ -323,8 +323,8 @@ internal fun CompactValueBox(
     suffix: String = "",
     onCommitValue: (Float) -> Unit,
     modifier: Modifier = Modifier,
-    keyboardType: KeyboardType = KeyboardType.Decimal,
-    parse: (String) -> Float? = { it.replace(',', '.').toFloatOrNull() },
+    keyboardType: KeyboardType = KeyboardType.DecimalSigned,
+    parse: (String) -> Float? = { ValueParsing.number(it)?.toFloat()?.takeIf { v -> v.isFinite() } },
     height: Dp? = null,
     large: Boolean = false
 ) {
@@ -469,7 +469,7 @@ internal fun RotationDialController(
 }
 
 /** n x degrees is a count of complete turns plus a remainder, not multiplication. */
-private fun formatRotation(degrees: Float): String {
+internal fun formatRotation(degrees: Float): String {
     val turns = kotlin.math.floor(degrees.toDouble() / 360.0).toLong()
     val remainder = degrees.toDouble() - turns * 360.0
     return "${turns}x${number(remainder.toFloat())}"
@@ -478,7 +478,7 @@ private fun formatRotation(degrees: Float): String {
 private fun parseRotation(input: String): Float? {
     val text = input.trim().removeSuffix("\u00b0").replace(',', '.')
     val parts = text.lowercase().split('x', '\u00d7')
-    if (parts.size == 1) return parts[0].toFloatOrNull()?.takeIf { it.isFinite() }
+    if (parts.size == 1) return ValueParsing.number(parts[0])?.toFloat()?.takeIf { it.isFinite() }
     if (parts.size != 2) return null
     val turns = parts[0].trim().toLongOrNull() ?: return null
     val remainder = parts[1].trim().toDoubleOrNull()?.takeIf { it in 0.0..360.0 } ?: return null
@@ -1176,7 +1176,7 @@ private fun NumericInputDialog(
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.DecimalSigned),
                 suffix = if (suffix.isNotEmpty()) { { Text(suffix, color = TextSecondary) } } else null,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = TextPrimary,
@@ -1189,7 +1189,7 @@ private fun NumericInputDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    val parsed = text.toFloatOrNull()
+                    val parsed = ValueParsing.number(text)?.toFloat()?.takeIf { it.isFinite() }
                     if (parsed != null) {
                         onConfirm(parsed)
                     }

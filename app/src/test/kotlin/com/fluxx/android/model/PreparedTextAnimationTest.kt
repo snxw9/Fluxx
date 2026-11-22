@@ -22,12 +22,41 @@ class PreparedTextAnimationTest {
         assertEquals(plain.inkBounds[0]-10,anchored.inkBounds[0],.001f)
         assertEquals(plain.inkBounds[1]-20,anchored.inkBounds[1],.001f)
     }
-    @Test fun trackingAndLineAnchorShiftWholeLineWithoutRecursiveWidth() {
-        for(anchor in listOf(0f,50f,100f)) {
+    /**
+     * TEXT F3.2: the animated tracking total of a line is shifted by the alignment factor (0 left, .5 centre, 1 right),
+     * like the Character tab's static tracking: centred text spreads ±total/2, left grows right, right grows left.
+     * Line anchor stays an additional shift on top.
+     */
+    @Test fun trackingFollowsAlignmentAndLineAnchorShiftsWholeLine() {
+        for(alignment in TextAlignment.entries) for(anchor in listOf(0f,50f,100f)) {
+            val align=alignment.ordinal/2f
             val animation=evaluate(text(TextPropertyOverride(AnimatorProperty.TRACKING,scalar=scalar(100f)),
-                TextPropertyOverride(AnimatorProperty.LINE_ANCHOR,scalar=scalar(anchor))))
-            assertEquals(-anchor/100*10,animation.modifiers.getFloat(24),.0001f)
-            assertEquals(10-anchor/100*10,animation.modifiers.getFloat(PreparedTextAnimation.STRIDE+24),.0001f)
+                TextPropertyOverride(AnimatorProperty.LINE_ANCHOR,scalar=scalar(anchor))).copy(alignment=alignment))
+            assertEquals("$alignment anchor $anchor first",-anchor/100*10-align*10,animation.modifiers.getFloat(24),.0001f)
+            assertEquals("$alignment anchor $anchor last",10-anchor/100*10-align*10,animation.modifiers.getFloat(PreparedTextAnimation.STRIDE+24),.0001f)
+        }
+    }
+    @Test fun centredTrackingSpreadsSymmetricallyFromTheCentre() {
+        for(amount in listOf(100f,-100f)) {
+            val plain=evaluate(text())
+            val tracked=evaluate(text(TextPropertyOverride(AnimatorProperty.TRACKING,scalar=scalar(amount))))
+            val total=amount/10 // 100/1000 em at size 100, one inter-glyph boundary
+            assertEquals(-total/2,tracked.modifiers.getFloat(24),.0001f)
+            assertEquals(total/2,tracked.modifiers.getFloat(PreparedTextAnimation.STRIDE+24),.0001f)
+            assertEquals(plain.inkBounds[0]+plain.inkBounds[2]/2,tracked.inkBounds[0]+tracked.inkBounds[2]/2,.001f)
+            assertEquals(plain.inkBounds[2]+total,tracked.inkBounds[2],.001f)
+        }
+    }
+    @Test fun animatedTrackingThroughARangeSelectorStaysAligned() {
+        val keyed=AnimatableProperty1D(true,0f,FrozenList.of(listOf(Keyframe1D(0,0f,EasingPreset.LINEAR),Keyframe1D(1_000_000,100f,EasingPreset.LINEAR))))
+        val base=text(TextPropertyOverride(AnimatorProperty.TRACKING,scalar=keyed))
+        // Amount 50% weights the per-glyph tracking; the shift uses the same weighted total at that time.
+        val half=base.copy(animators=FrozenList.of(listOf(base.animators[0].copy(selectors=FrozenList.of(listOf(TextRangeSelector(2,amount=scalar(50f))))))))
+        for((text,weight) in listOf(base to 1f,half to .5f)) for(time in listOf(0L,250_000L,500_000L,1_000_000L)) {
+            val a=PreparedTextAnimation(text,metrics(),SelectorEaseTable.shared).also { it.evaluate(time) }
+            val total=time/1_000_000f*10*weight
+            assertEquals("w $weight t $time",-total/2,a.modifiers.getFloat(24),.0001f)
+            assertEquals("w $weight t $time",total/2,a.modifiers.getFloat(PreparedTextAnimation.STRIDE+24),.0001f)
         }
     }
     @Test fun orderedMatricesGroupingAndNegativeSpatialInfluence() {

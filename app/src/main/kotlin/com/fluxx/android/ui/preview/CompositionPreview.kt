@@ -23,6 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -97,6 +100,15 @@ fun CompositionPreview(
         modifier = modifier
             .fillMaxWidth()
             .background(Background)
+            // TEXT F3.2: a tap in the preview closes non-modal slider popovers (observed on the Initial pass, never consumed).
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(false, PointerEventPass.Initial)
+                    val up = waitForUpOrCancellation(PointerEventPass.Initial)
+                    if (up != null && (up.position - down.position).getDistance() < viewConfiguration.touchSlop)
+                        com.fluxx.android.ui.inspector.PopoverDismissal.request()
+                }
+            }
     ) {
         // Main canvas workspace with letterboxing exactly like the Alight Motion reference
         BoxWithConstraints(

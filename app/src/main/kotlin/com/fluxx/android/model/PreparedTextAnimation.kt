@@ -110,6 +110,8 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
     var selectorNs=0L;private set
     var geometryNs=0L;private set
     val coverageBuilds get()=engines.sumOf { it.coverageBuilds }
+    /** TEXT F3.2: a selector reaches more seeds than it may prepare (old/external document); it renders clamped. */
+    val seedWarning: String?=engines.firstOrNull { it.seedsClamped }?.let { TextSeedRange.message(it.seedCap) }
     val linePermutationBuilds get()=linePool.builds
     val linePermutationBytes get()=linePool.bytes
     init {
@@ -123,6 +125,8 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
     private var size=0.0;private var factor=0.0;private var tracking=0.0;private var baseline=0.0;private var step=0.0
     private var workingLines=0;private var baseFill=0;private var baseStroke=0;private var baseWidth=0.0
     private var rawMax=0.0;private var newMax=0.0
+    /** Widest line without animator tracking: the static box the lines align in (TEXT F3.2). */
+    private var baseMax=0.0
     /** Modifier records staged as floats and copied to [modifiers] in one bulk write (no per-float JNI poke). */
     private val records=FloatArray(clusters*(STRIDE/4))
     private val recordView=modifiers.asFloatBuffer()
@@ -225,6 +229,7 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
             baseAdvances[l]=if(paragraph!=null) paragraph.lineAdvances[l]+characterTotals[l] else rawAdvances[l]+runTotals[l]
             advances[l]=baseAdvances[l]+lineTotals[l];oldMax=max(oldMax,baseAdvances[l]);newMax=max(newMax,advances[l])
         }
+        baseMax=oldMax
         val last=(lines-1).coerceAtLeast(0)*step
         logicalBounds[0]=0f;logicalBounds[1]=(-data[1]*factor+min(0.0,last)).toFloat()
         logicalBounds[2]=oldMax.coerceAtLeast(0.0).toFloat();logicalBounds[3]=(abs(last)+(data[1]-data[2])*factor).toFloat()
@@ -262,7 +267,9 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
                 clusterX[c]=paragraph.x[c]+pen+lineShift[l]-(lineTotals[l]+characterTotals[l])*paragraph.align[l]
                 offset[c]=clusterX[c]-rawX;yOffsets[c]=paragraph.y[c]+lineOffsets[l]-rawLine*step-runBaseline[c]
             } else {
-                offset[c]=pen+lineShift[l]+((newMax-advances[l])-(rawMax-rawAdvances[l]))*align
+                // TEXT F3.2: lines align inside the static box (baseMax), so animated tracking spreads from the alignment
+                // point like the Character tab's tracking (centre: ±total/2; right: grows left), as the paragraph branch does.
+                offset[c]=pen+lineShift[l]+((baseMax-advances[l])-(rawMax-rawAdvances[l]))*align
                 clusterX[c]=rawX+offset[c];yOffsets[c]=lineOffsets[l]-runBaseline[c]
             }
             pen+=boundary[c]

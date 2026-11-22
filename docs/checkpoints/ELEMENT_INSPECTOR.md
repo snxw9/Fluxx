@@ -13,14 +13,17 @@
 
 > **TEXT UI 7 (2026-11-18):** section pages now have one header row (← | tabs; no name/duplicate/delete, which stay on the landing grid), controls are sized from `SectionLayout`, tiles show keyframe badges and Edit Solid uses the FULL shared colour picker. See `TEXT_UI_OVERHAUL.md`, section TEXT UI 7.
 
-**Edit Text → Animate (TEXT F3, 2026-11-22):** implemented in source, device-unverified. The Animate tab is no longer inert. Same 268/328dp sheet, same rail; nothing scrolls vertically. The page has:
+**Edit Text → Animate (TEXT F3.1, 2026-11-22):** implemented in source; A16 instrumented layout and render tests pass, phone acceptance pending. Same 268/328dp sheet and the same fixed rail. **The Animate body scrolls vertically** (the one deviation from the no-scroll rule). The page has:
 
-- an animator strip (filled = selected, hollow add tile, long-press menu, scrolls sideways);
-- a Properties | Selectors switch, with the animator's grouping and on/off tiles;
-- a paged property grid with an add popover of all 25 properties;
-- the selector strip with a Range handle strip and tiles (More for the rest), or the Wiggly face.
+- a centred add-animator control over a persistent faded Animate glyph;
+- one collapsible bar per animator (grip, chevron, name, duplicate, eye), with only one expanded at a time. Inside are:
+  - **Property** [+] with Transform / Colour / Text / Advanced group bars of icon tiles;
+  - **Selector** [+] with Range/Wiggly selector bars. Each holds its primary tiles plus a collapsed Advanced group.
+  - **Grouping**: the Anchor point grouping tile.
+- Grip long-press-drag reorders with the timeline hierarchy rule (one undo). Swiping a bar deletes it (undo restores). Long-pressing an animator bar offers Rename.
+- Position, Rotation and Scale use slider popovers by default, or the Transform tab's pad, dial and rulers via rail ⋮ "Controls: …" (an app preference).
 
-Position, Rotation and Scale of an animator open an in-sheet sub-page with the Transform tab's own pad, dial and rulers; Back returns. The focused field drives the rail diamond, tile badges, timeline focus and Prev/Next. [Layout figures, inventory and A16 list](TEXT_F3.md).
+The focused field drives the rail diamond, tile badges, timeline focus and Prev/Next. [Layout figures, hidden fields, limits and A16 list](TEXT_F3_1.md); F3 history in [TEXT F3](TEXT_F3.md).
 
 **Edit Text rework (2026-11-18):** Implemented in source, device-unverified. Edit Text is a fixed, non-scrolling sheet: every common control sits on the Character (4 rows) or Paragraph (3 rows) face; the only overlays are Case / Justify / Box width choice rows, exact numeric entry, Fonts and the colour picker, all inside the sheet, which is docked below the preview, so none hides the edited layer. While Edit Text is open the sheet uses one fixed height (344dp at font scale 1; labelled 3-column reflow at larger scales) and ignores Preview Expansion. **Back:** the editor's top-left arrow dispatches system Back while Edit Text is open; Back first leaves the innermost transient state (Explode dialog, numeric/source/colour draft, confirmation, base-alignment row, choice row, Fonts) and otherwise returns directly to this inspector's landing grid, clearing any text selection. The check mark keeps its Done behaviour. The header ⋮ holds exactly Explode Text, Reset {tab} style, Manual kerning and Relative size; the status line and Hold label are gone (the rail diamond carries key state). [Final inventory](../architecture/TEXT_UI_OVERHAUL_PLAN.md#11-rework-2026-11-18-final-surface-and-inventory), [gate and A16 user-run list](TEXT_UI_OVERHAUL.md#rework-commit-2-menu-back-status-and-icons).
 

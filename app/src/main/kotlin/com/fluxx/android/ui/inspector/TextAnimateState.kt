@@ -4,9 +4,6 @@ import androidx.compose.runtime.saveable.Saver
 import com.fluxx.android.editor.*
 import com.fluxx.android.model.*
 
-/** Animate page sub-switch for the selected animator. */
-internal enum class AnimateTab { PROPERTIES, SELECTORS }
-
 /** How a field is edited. */
 internal enum class AnimateEditor { SLIDER, POSITION, SCALE, ROTATION, VECTOR, COLOUR, CHOICE, TOGGLE, SEED }
 
@@ -45,8 +42,8 @@ internal object AnimateFields {
 
     fun property(p: AnimatorProperty): AnimateFieldSpec = when (p) {
         AnimatorProperty.POSITION -> AnimateFieldSpec("Position", "POSITION", AnimateEditor.POSITION, PropertyLimits.ANIM_OFFSET, short = "Pos")
-        AnimatorProperty.SCALE -> AnimateFieldSpec("Scale", "SCALE", AnimateEditor.SCALE, PropertyLimits.LAYER_SCALE, short = "Scale")
-        AnimatorProperty.ROTATION -> AnimateFieldSpec("Rotation", "ROTATION", AnimateEditor.ROTATION, PropertyLimits.ROTATION, short = "Rot")
+        AnimatorProperty.SCALE -> AnimateFieldSpec("Scale", "SCALE", AnimateEditor.SCALE, PropertyLimits.ANIM_SCALE, short = "Scale")
+        AnimatorProperty.ROTATION -> AnimateFieldSpec("Rotation", "ROTATION", AnimateEditor.ROTATION, PropertyLimits.ANIM_ROTATION, short = "Rot")
         AnimatorProperty.OPACITY -> AnimateFieldSpec("Opacity", "OPACITY", AnimateEditor.SLIDER, PropertyLimits.ANIM_PERCENT.copy(name = "Opacity", default = 100f), short = "Opac")
         AnimatorProperty.SKEW -> AnimateFieldSpec("Skew", "SKEW", AnimateEditor.SLIDER, PropertyLimits.ANIM_SKEW, short = "Skew")
         AnimatorProperty.SKEW_AXIS -> AnimateFieldSpec("Skew axis", "SKEW_AXIS", AnimateEditor.SLIDER, PropertyLimits.ANIM_ANGLE.copy(name = "Skew axis"), short = "Axis")
@@ -54,7 +51,7 @@ internal object AnimateFields {
         AnimatorProperty.FILL -> AnimateFieldSpec("Fill colour", "FILL", AnimateEditor.COLOUR, short = "Fill")
         AnimatorProperty.STROKE_COLOUR -> AnimateFieldSpec("Stroke colour", "STROKE", AnimateEditor.COLOUR, short = "Strk")
         AnimatorProperty.STROKE_WIDTH -> AnimateFieldSpec("Stroke width", "STROKE_WIDTH", AnimateEditor.SLIDER, PropertyLimits.STROKE_DELTA.copy(name = "Stroke width"), short = "Width")
-        AnimatorProperty.TRACKING -> AnimateFieldSpec("Tracking", "TRACKING", AnimateEditor.SLIDER, PropertyLimits.TRACKING, short = "Track")
+        AnimatorProperty.TRACKING -> AnimateFieldSpec("Tracking", "TRACKING", AnimateEditor.SLIDER, PropertyLimits.ANIM_TRACKING, short = "Track")
         AnimatorProperty.LINE_ANCHOR -> AnimateFieldSpec("Line anchor", "LINE_ANCHOR", AnimateEditor.SLIDER, PropertyLimits.ANIM_PERCENT.copy(name = "Line anchor"), short = "LnAn")
         AnimatorProperty.BLUR -> AnimateFieldSpec("Blur", "BLUR", AnimateEditor.SLIDER, PropertyLimits.ANIM_BLUR, short = "Blur")
         AnimatorProperty.FILL_OPACITY -> AnimateFieldSpec("Fill opacity", "FILL_OPACITY", AnimateEditor.SLIDER, PropertyLimits.ANIM_PERCENT.copy(name = "Fill opacity", default = 100f), short = "F op")
@@ -72,7 +69,7 @@ internal object AnimateFields {
     }
 
     fun selector(f: SelectorField): AnimateFieldSpec = when (f) {
-        SelectorField.ENABLED -> AnimateFieldSpec("Selector on", "ENABLED", AnimateEditor.TOGGLE, short = "On")
+        SelectorField.ENABLED -> AnimateFieldSpec("Selector on", "EYE", AnimateEditor.TOGGLE, short = "On")
         SelectorField.START -> AnimateFieldSpec("Start", "RANGE_START", AnimateEditor.SLIDER, PropertyLimits.SELECTOR_RANGE.copy(name = "Start"))
         SelectorField.END -> AnimateFieldSpec("End", "RANGE_END", AnimateEditor.SLIDER, PropertyLimits.SELECTOR_RANGE.copy(name = "End", default = 100f))
         SelectorField.OFFSET -> AnimateFieldSpec("Offset", "RANGE_OFFSET", AnimateEditor.SLIDER, PropertyLimits.SELECTOR_OFFSET)
@@ -95,7 +92,7 @@ internal object AnimateFields {
         SelectorField.LOCK_DIMENSIONS -> AnimateFieldSpec("Lock dimensions", "LOCK", AnimateEditor.TOGGLE, short = "Lock")
     }
     val SEED = AnimateFieldSpec("Random seed", "SEED", AnimateEditor.SEED, short = "Seed")
-    val ANIMATOR_ENABLED = AnimateFieldSpec("Animator on", "ENABLED", AnimateEditor.TOGGLE, short = "On")
+    val ANIMATOR_ENABLED = AnimateFieldSpec("Animator on", "EYE", AnimateEditor.TOGGLE, short = "On")
     val ANCHOR_GROUPING = AnimateFieldSpec("Anchor point grouping", "GROUPING", AnimateEditor.CHOICE, choices = GROUPING, short = "Grp")
 
     fun spec(address: AnimatorTrackAddress): AnimateFieldSpec = when {
@@ -109,27 +106,74 @@ internal object AnimateFields {
     fun icon(spec: AnimateFieldSpec, value: Float): String =
         spec.choices.firstOrNull { it.value == value }?.icon ?: spec.icon
 
-    /** Add-property popover groups. Every [AnimatorProperty] appears exactly once. */
-    val GROUPS: List<Pair<String, List<AnimatorProperty>>> = listOf(
-        "Transform" to listOf(AnimatorProperty.ANCHOR, AnimatorProperty.POSITION, AnimatorProperty.SCALE, AnimatorProperty.SKEW,
-            AnimatorProperty.SKEW_AXIS, AnimatorProperty.ROTATION, AnimatorProperty.OPACITY),
-        "Colour" to listOf(AnimatorProperty.FILL, AnimatorProperty.FILL_OPACITY, AnimatorProperty.FILL_HUE, AnimatorProperty.FILL_SATURATION,
-            AnimatorProperty.FILL_BRIGHTNESS, AnimatorProperty.STROKE_COLOUR, AnimatorProperty.STROKE_OPACITY, AnimatorProperty.STROKE_HUE,
-            AnimatorProperty.STROKE_SATURATION, AnimatorProperty.STROKE_BRIGHTNESS, AnimatorProperty.STROKE_WIDTH),
-        "Text" to listOf(AnimatorProperty.TRACKING, AnimatorProperty.LINE_ANCHOR, AnimatorProperty.LINE_SPACING, AnimatorProperty.GROUPING_ALIGNMENT,
-            AnimatorProperty.BLUR, AnimatorProperty.CHARACTER_OFFSET, AnimatorProperty.CHARACTER_VALUE))
+    /**
+     * Add-property popover groups (TEXT F3.1), in order. Colour has a collapsed Colour shift sub-group (relative hue /
+     * saturation / brightness shifts of the existing colour, not second colour properties); Advanced is collapsed.
+     * Every [AnimatorProperty] appears exactly once.
+     */
+    val GROUPS: List<AnimatePropertyGroup> = listOf(
+        AnimatePropertyGroup("Transform", listOf(AnimatorProperty.ANCHOR, AnimatorProperty.POSITION, AnimatorProperty.SCALE, AnimatorProperty.SKEW,
+            AnimatorProperty.SKEW_AXIS, AnimatorProperty.ROTATION, AnimatorProperty.OPACITY)),
+        AnimatePropertyGroup("Colour", listOf(AnimatorProperty.FILL, AnimatorProperty.STROKE_COLOUR, AnimatorProperty.FILL_OPACITY,
+            AnimatorProperty.STROKE_OPACITY, AnimatorProperty.STROKE_WIDTH),
+            sub = AnimatePropertyGroup("Colour shift", listOf(AnimatorProperty.FILL_HUE, AnimatorProperty.FILL_SATURATION, AnimatorProperty.FILL_BRIGHTNESS,
+                AnimatorProperty.STROKE_HUE, AnimatorProperty.STROKE_SATURATION, AnimatorProperty.STROKE_BRIGHTNESS), collapsed = true)),
+        AnimatePropertyGroup("Text", listOf(AnimatorProperty.TRACKING, AnimatorProperty.LINE_ANCHOR, AnimatorProperty.LINE_SPACING,
+            AnimatorProperty.GROUPING_ALIGNMENT, AnimatorProperty.BLUR)),
+        AnimatePropertyGroup("Advanced", listOf(AnimatorProperty.CHARACTER_OFFSET, AnimatorProperty.CHARACTER_VALUE), collapsed = true))
+    /** Page group header of a property: Transform / Colour (colour shifts included) / Text / Advanced. */
+    fun pageGroup(p: AnimatorProperty): String = GROUPS.first { p in it.all }.name
 
     /**
-     * Face order of a selector's tiles; `null` is the random seed tile (the seed is not a [SelectorField]). Range keeps its
-     * start/end/offset on the handle strip, so their exact-entry tiles come after the primary tiles.
+     * Selector tiles (TEXT F3.1). `null` is the random seed tile (the seed is not a [SelectorField]). The on/off
+     * ([SelectorField.ENABLED]) lives on the selector bar; [SelectorField.KIND] is chosen when the selector is added.
+     * Range hides Min / Max amount (redundant with Amount; After Effects' Range selector has only Amount) and shows
+     * Smoothness only while the Shape is Square (the engine ignores it otherwise). Wiggly hides Amount (it only scales
+     * Min and Max; After Effects' Wiggly has none). Hidden fields stay in the document and the engine still reads them.
      */
-    fun selectorTiles(kind: TextSelectorKind): List<SelectorField?> = when (kind) {
-        TextSelectorKind.RANGE -> listOf(SelectorField.SHAPE, SelectorField.BASED_ON, SelectorField.MODE, SelectorField.AMOUNT, SelectorField.UNITS,
-            SelectorField.RANDOMIZE_ORDER, null, SelectorField.START, SelectorField.END, SelectorField.OFFSET, SelectorField.SMOOTHNESS,
-            SelectorField.EASE_HIGH, SelectorField.EASE_LOW, SelectorField.MIN_AMOUNT, SelectorField.MAX_AMOUNT, SelectorField.ENABLED)
-        TextSelectorKind.WIGGLY -> listOf(SelectorField.MAX_AMOUNT, SelectorField.MIN_AMOUNT, SelectorField.BASED_ON, SelectorField.MODE,
-            SelectorField.WIGGLES_PER_SECOND, SelectorField.CORRELATION, SelectorField.TEMPORAL_PHASE, SelectorField.SPATIAL_PHASE,
-            SelectorField.LOCK_DIMENSIONS, null, SelectorField.AMOUNT, SelectorField.ENABLED)
+    fun primary(kind: TextSelectorKind): List<SelectorField> = when (kind) {
+        TextSelectorKind.RANGE -> listOf(SelectorField.START, SelectorField.END, SelectorField.OFFSET, SelectorField.SHAPE)
+        TextSelectorKind.WIGGLY -> listOf(SelectorField.MAX_AMOUNT, SelectorField.MIN_AMOUNT, SelectorField.WIGGLES_PER_SECOND, SelectorField.CORRELATION)
+    }
+    fun advanced(kind: TextSelectorKind, square: Boolean): List<SelectorField?> = when (kind) {
+        TextSelectorKind.RANGE -> listOfNotNull(SelectorField.UNITS, SelectorField.BASED_ON, SelectorField.MODE, SelectorField.AMOUNT,
+            SelectorField.SMOOTHNESS.takeIf { square }, SelectorField.EASE_HIGH, SelectorField.EASE_LOW, SelectorField.RANDOMIZE_ORDER) + listOf(null)
+        TextSelectorKind.WIGGLY -> listOf(SelectorField.BASED_ON, SelectorField.MODE, SelectorField.TEMPORAL_PHASE, SelectorField.SPATIAL_PHASE,
+            SelectorField.LOCK_DIMENSIONS, null)
+    }
+    /** Fields the UI never shows as tiles for [kind] (besides ENABLED, which is the bar eye, and KIND, fixed at add time). */
+    fun hidden(kind: TextSelectorKind): List<SelectorField> = when (kind) {
+        TextSelectorKind.RANGE -> listOf(SelectorField.MIN_AMOUNT, SelectorField.MAX_AMOUNT)
+        TextSelectorKind.WIGGLY -> listOf(SelectorField.AMOUNT)
+    }
+    /** Every tile a selector can show (Smoothness included), for inventory checks. */
+    fun selectorTiles(kind: TextSelectorKind): List<SelectorField?> = primary(kind) + advanced(kind, true)
+    /** The Advanced tiles of [s] at [local]: Smoothness only while the Shape is Square. */
+    fun advanced(s: TextRangeSelector, local: Long): List<SelectorField?> =
+        advanced(TextAnimatorEdits.kind(s), s.shape.hold(local) == SelectorShape.SQUARE.ordinal.toFloat())
+}
+
+/** One add-property popover group; [sub] is a nested collapsible group, [collapsed] its default state. */
+internal data class AnimatePropertyGroup(val name: String, val properties: List<AnimatorProperty>, val sub: AnimatePropertyGroup? = null,
+    val collapsed: Boolean = false) {
+    val all: List<AnimatorProperty> get() = properties + sub?.properties.orEmpty()
+}
+
+/**
+ * Hidden selector fields whose stored value differs from the backend default or is keyed. The engine still honours
+ * them; the selector's Advanced group shows one hint tile (with a one-undo Reset) only while this list is not empty.
+ */
+internal object AnimateHidden {
+    fun active(s: TextRangeSelector): List<SelectorField> = AnimateFields.hidden(TextAnimatorEdits.kind(s)).filter { f ->
+        val t = s.tracks[f.ordinal]
+        t.isAnimated || t.staticValue != TextRangeSelector(1).tracks[f.ordinal].staticValue
+    }
+    /** One edit that resets every active hidden field of [s] to its default and drops its keys. */
+    fun reset(animatorId: Long, s: TextRangeSelector): AnimatorEdit.PutSelector {
+        val defaults = TextRangeSelector(1).tracks
+        var out = s
+        for (f in active(s)) out = TextAnimatorEdits.withField(out, f, defaults[f.ordinal])
+        return AnimatorEdit.PutSelector(animatorId, out)
     }
 }
 
@@ -150,66 +194,105 @@ internal object AnimateCaption {
 }
 
 /**
- * Exact Animate page geometry (dp) for one body. Top to bottom: animator strip (one pitch), sub-switch row (one pitch),
- * group gap, content rows (whole pitches). Horizontally the content is [columns] equal cells. Pure arithmetic; JVM tested
- * at 268 / 328 and font scales 1 / 1.3. The page never scrolls; only the animator and selector strips scroll sideways.
+ * Animate page geometry (dp) for one body (TEXT F3.1). Every row (add, bars, row labels, group headers, tile rows) is
+ * one [pitch]; tiles sit in [columns] equal cells. The body scrolls vertically when the open content is taller than
+ * it (the one deviation from the no-scroll sheet rule); the sheet height never changes. Pure arithmetic, JVM tested.
  */
 internal data class AnimateMetrics(val body: Float, val width: Float, val compact: Boolean) {
     val tile get() = if (compact) TextInspectorBudget.TILE_COMPACT else TextInspectorBudget.TILE_STANDARD
     val gap get() = TextInspectorBudget.GRID_GAP
-    val groupGap get() = TextInspectorBudget.GROUP_GAP
     val pitch get() = tile + gap
     val columns get() = kotlin.math.max(4, kotlin.math.floor((width + 1e-3f) / MIN_CELL).toInt()).coerceAtMost(8)
     val cell get() = width / columns
-    val strip get() = pitch
-    val switchRow get() = pitch
-    val content get() = (body - strip - switchRow - groupGap).coerceAtLeast(0f)
-    /** Whole content rows; at least one. */
-    val rows get() = kotlin.math.floor((content + 1e-3f) / pitch).toInt().coerceAtLeast(1)
-    /** Leftover content height, split above and below the rows so the group sits centred. */
-    val slack get() = (content - rows * pitch).coerceAtLeast(0f)
-    val fits get() = strip + switchRow + groupGap + rows * pitch <= body + 1e-3f && pitch >= TextInspectorBudget.MIN_TARGET && cell >= TextInspectorBudget.MIN_TARGET
-    /** Property grid capacity (the add tile included). */
-    val gridCells get() = rows * columns
-    /** Selectors tab: selector strip, then the selected selector's controls. */
-    val selectorRows get() = (rows - 1).coerceAtLeast(1)
+    /** Whole rows visible at once without scrolling. */
+    val visibleRows get() = kotlin.math.floor((body + 1e-3f) / pitch).toInt()
+    fun tileRows(cells: Int) = (cells + columns - 1) / columns
+    /** Cells and pitch are touch sized and the body shows at least the add row plus one animator bar. */
+    val fits get() = pitch >= TextInspectorBudget.MIN_TARGET && cell >= TextInspectorBudget.MIN_TARGET && visibleRows >= 2
+    /** True when [rows] list rows are taller than the body (the body then scrolls; the sheet does not grow). */
+    fun scrolls(rows: Int) = rows * pitch > body + 1e-3f
     companion object { const val MIN_CELL = 48f }
 }
 
 /**
- * Lays cells into pages of [capacity]. When everything fits there is one page. Otherwise each page keeps its last cell
- * for the pager tile, so no cell is ever hidden behind a scroll.
+ * Transient bar state of the Animate list: never document state, never undo. One animator is expanded at a time;
+ * selectors, property groups and Advanced groups expand independently. Ids that no longer exist are dropped. Focus
+ * is held separately, so collapsing or expanding never loses it.
  */
-internal object AnimatePaging {
-    fun <T> pages(items: List<T>, capacity: Int): List<List<T>> {
-        val c = capacity.coerceAtLeast(2)
-        if (items.size <= c) return listOf(items)
-        return items.chunked(c - 1)
+internal data class AnimateBars(val animator: Long? = null, val selectors: Set<Long> = emptySet(),
+    val collapsedGroups: Set<String> = emptySet(), val advanced: Set<Long> = emptySet()) {
+    fun toggleAnimator(id: Long) = copy(animator = if (animator == id) null else id)
+    fun expandAnimator(id: Long) = copy(animator = id)
+    fun toggleSelector(id: Long) = copy(selectors = if (id in selectors) selectors - id else selectors + id)
+    fun expandSelector(id: Long) = copy(selectors = selectors + id)
+    fun toggleGroup(animatorId: Long, group: String) = groupKey(animatorId, group).let { k ->
+        copy(collapsedGroups = if (k in collapsedGroups) collapsedGroups - k else collapsedGroups + k) }
+    fun groupOpen(animatorId: Long, group: String) = groupKey(animatorId, group) !in collapsedGroups
+    fun toggleAdvanced(selectorId: Long) = copy(advanced = if (selectorId in advanced) advanced - selectorId else advanced + selectorId)
+    /** Drop ids that undo / delete removed. */
+    fun resolve(text: TextProperties): AnimateBars {
+        val animators = text.animators.map { it.id }.toSet()
+        val selectorIds = text.animators.flatMap { a -> a.selectors.map { it.id } }.toSet()
+        val next = AnimateBars(animator?.takeIf { it in animators }, selectors.filterTo(HashSet()) { it in selectorIds },
+            collapsedGroups.filterTo(HashSet()) { it.substringBefore(':').toLongOrNull() in animators }, advanced.filterTo(HashSet()) { it in selectorIds })
+        return if (next == this) this else next
+    }
+    fun save(): List<Any> = listOf(animator ?: 0L, selectors.toLongArray(), ArrayList(collapsedGroups), advanced.toLongArray())
+    companion object {
+        fun groupKey(animatorId: Long, group: String) = "$animatorId:$group"
+        @Suppress("UNCHECKED_CAST")
+        fun restore(v: List<Any>) = AnimateBars((v[0] as Long).takeIf { it != 0L }, (v[1] as LongArray).toSet(),
+            (v[2] as List<String>).toSet(), (v[3] as LongArray).toSet())
+        val saver = Saver<AnimateBars, List<Any>>(save = { it.save() }, restore = { runCatching { restore(it) }.getOrNull() })
     }
 }
 
 /**
- * Selector face: Range keeps [primary] tiles on the face (after the handle strip) and the rest behind "More";
- * Wiggly has no strip, so all rows hold tiles. [capacity] counts tile cells, the More tile included.
+ * Grip reorder (TEXT F3.1), the timeline hierarchy rule: the target is the pointer's absolute position against the
+ * siblings' slot centres captured when the drag began (never their animated positions); the dragged row follows the
+ * finger. One preview per target change, one undo entry on release, cancel restores.
  */
-internal data class SelectorFace(val strip: Boolean, val face: List<SelectorField?>, val more: List<SelectorField?>)
-internal object SelectorFaces {
-    fun layout(kind: TextSelectorKind, rows: Int, columns: Int): SelectorFace {
-        val tiles = AnimateFields.selectorTiles(kind)
-        val strip = kind == TextSelectorKind.RANGE
-        val capacity = ((if (strip) rows - 1 else rows).coerceAtLeast(1)) * columns
-        return if (tiles.size <= capacity) SelectorFace(strip, tiles, emptyList())
-        else SelectorFace(strip, tiles.take(capacity - 1), tiles.drop(capacity - 1))
+internal object AnimateReorder {
+    /** Target index of [dragged] among [order] (ids in their current order) for pointer [y] and the drag-start slot centres. */
+    fun target(order: List<Long>, dragged: Long, centres: Map<Long, Float>, y: Float): Int =
+        order.filter { it != dragged }.count { id -> (centres[id] ?: Float.MAX_VALUE) < y }
+}
+
+/** Animator Position / Rotation / Scale controls: slider popovers (default) or the Transform tab's pad, dial, rulers. */
+internal enum class AnimateControls { SLIDERS, PAD;
+    val label get() = if (this == SLIDERS) "Sliders" else "Pad, dial, rulers"
+}
+
+/** Key/value storage for app preferences (SharedPreferences on device, a map in JVM tests). */
+internal interface PreferenceStore { fun get(key: String): String?; fun put(key: String, value: String) }
+
+/** App preference (not project state, no schema): which [AnimateControls] the animator transform tiles use. Survives restart. */
+internal class AnimateControlsPreference(private val store: PreferenceStore) {
+    private val mutable = kotlinx.coroutines.flow.MutableStateFlow(read())
+    val value: kotlinx.coroutines.flow.StateFlow<AnimateControls> = mutable
+    private fun read() = store.get(KEY)?.let { runCatching { AnimateControls.valueOf(it) }.getOrNull() } ?: AnimateControls.SLIDERS
+    fun set(controls: AnimateControls) { store.put(KEY, controls.name); mutable.value = controls }
+    companion object {
+        const val KEY = "animate_transform_controls"
+        /** The tiles the preference applies to. */
+        val PROPERTIES = setOf(AnimatorProperty.POSITION, AnimatorProperty.ROTATION, AnimatorProperty.SCALE)
+        @Volatile private var instance: AnimateControlsPreference? = null
+        /** Tests only: use [replacement] (an in-memory store) instead of the app's file; returns the previous instance. */
+        internal fun replaceForTest(replacement: AnimateControlsPreference?): AnimateControlsPreference? = synchronized(this) { instance.also { instance = replacement } }
+        fun get(context: android.content.Context): AnimateControlsPreference = instance ?: synchronized(this) {
+            instance ?: AnimateControlsPreference(object : PreferenceStore {
+                private val prefs = context.applicationContext.getSharedPreferences("inspector_preferences", android.content.Context.MODE_PRIVATE)
+                override fun get(key: String) = prefs.getString(key, null)
+                override fun put(key: String, value: String) { prefs.edit().putString(key, value).apply() }
+            }).also { instance = it }
+        }
     }
 }
 
-/** Transient Animate page selection: never document state, never undo. Resolves stale ids after undo or delete. */
+/** Transient Animate page focus: never document state, never undo. A focus survives collapsing; it clears when its field is gone. */
 internal object AnimateSelection {
-    fun animator(text: TextProperties, id: Long?): TextAnimator? = text.animators.firstOrNull { it.id == id } ?: text.animators.firstOrNull()
-    fun selector(animator: TextAnimator?, id: Long?): TextRangeSelector? = animator?.selectors?.let { list -> list.firstOrNull { it.id == id } ?: list.firstOrNull() }
-    /** The focused field, only while it still exists and belongs to the shown animator. */
-    fun focus(text: TextProperties, animator: TextAnimator?, address: AnimatorTrackAddress?): AnimatorTrackAddress? =
-        address?.takeIf { animator != null && it.animatorId == animator.id && TextAnimatorEdits.exists(text, it) }
+    fun focus(text: TextProperties, address: AnimatorTrackAddress?): AnimatorTrackAddress? =
+        address?.takeIf { TextAnimatorEdits.exists(text, it) }
 }
 
 /** Saved state for the focused field: a token list (bundle-safe), restored only while the field still exists. */
@@ -243,4 +326,81 @@ internal object AnimateRail {
         onKey -> "$name: on key at $timecode" + if (hold) ", Hold" else ""
         else -> "$name: animated, between keys" + if (hold) ", Hold" else ""
     }
+    /** The rail ⋮ entry that switches the Position / Rotation / Scale control style (shown on those fields only). */
+    fun controlsLabel(current: AnimateControls) =
+        "Controls: ${current.label} → ${(if (current == AnimateControls.SLIDERS) AnimateControls.PAD else AnimateControls.SLIDERS).label}"
+}
+
+/** One selector tile: a field, the seed ([field] null), or the hidden-values hint ([hint]). */
+internal data class SelectorCell(val field: SelectorField?, val hint: Boolean = false)
+
+/**
+ * The Animate list, one [AnimateMetrics.pitch] per row (TEXT F3.1). Pure: built from the document and the transient
+ * [AnimateBars], so expansion, grouping and the selector tile sets are JVM tested. [animatorId] / [selectorId] mark the
+ * block a row belongs to (a dragged bar moves its whole block).
+ */
+internal sealed class AnimateRow(val key: String, val animatorId: Long? = null, val selectorId: Long? = null) {
+    object Add : AnimateRow("add")
+    class AnimatorBar(val animator: TextAnimator, val index: Int, val expanded: Boolean) : AnimateRow("a:${animator.id}", animator.id)
+    /** TEXT F3.2: the Property bar, a dropdown header (chevron, count, trash for all tiles, add). */
+    class PropertyLabel(id: Long, val full: Boolean, val count: Int = 0, val open: Boolean = true) : AnimateRow("p:$id", id)
+    /** Property tiles in insertion order (the order added), [AnimateMetrics.columns] per row. */
+    class PropertyTiles(id: Long, row: Int, val properties: List<AnimatorProperty>) : AnimateRow("pt:$id:$row", id)
+    class SelectorLabel(id: Long, val full: Boolean) : AnimateRow("sl:$id", id)
+    class SelectorBar(id: Long, val selector: TextRangeSelector, val index: Int, val expanded: Boolean) : AnimateRow("s:${selector.id}", id, selector.id)
+    class SelectorTiles(id: Long, val selector: TextRangeSelector, section: String, row: Int, val cells: List<SelectorCell>) :
+        AnimateRow("st:${selector.id}:$section:$row", id, selector.id)
+    class AdvancedHeader(id: Long, val selector: TextRangeSelector, val open: Boolean) : AnimateRow("sa:${selector.id}", id, selector.id)
+    class GroupingRow(id: Long) : AnimateRow("g:$id", id)
+}
+
+internal object AnimateRows {
+    /** The Property bar's open/closed key in [AnimateBars.collapsedGroups]. */
+    const val PROPERTIES = "Properties"
+    /**
+     * TEXT F3.2: with no animators the "+ Animator" bar is the first (only) row; otherwise it follows the last animator,
+     * scrolling with the list. Property tiles keep insertion order under one collapsible Property bar.
+     */
+    fun build(text: TextProperties, bars: AnimateBars, local: Long, columns: Int): List<AnimateRow> {
+        val out = mutableListOf<AnimateRow>()
+        if (text.animators.isEmpty()) out += AnimateRow.Add
+        text.animators.forEachIndexed { i, a ->
+            val open = bars.animator == a.id
+            out += AnimateRow.AnimatorBar(a, i, open)
+            if (!open) return@forEachIndexed
+            val propertiesOpen = bars.groupOpen(a.id, PROPERTIES)
+            out += AnimateRow.PropertyLabel(a.id, a.properties.size >= AnimatorProperty.entries.size, a.properties.size, propertiesOpen)
+            if (propertiesOpen) a.properties.map { it.property }.chunked(columns).forEachIndexed { r, line -> out += AnimateRow.PropertyTiles(a.id, r, line) }
+            out += AnimateRow.SelectorLabel(a.id, a.selectors.size >= TextAnimatorEdits.MAX_SELECTORS)
+            a.selectors.forEachIndexed { j, s ->
+                val sOpen = s.id in bars.selectors
+                out += AnimateRow.SelectorBar(a.id, s, j, sOpen)
+                if (!sOpen) return@forEachIndexed
+                val kind = TextAnimatorEdits.kind(s)
+                AnimateFields.primary(kind).map { SelectorCell(it) }.chunked(columns).forEachIndexed { r, line ->
+                    out += AnimateRow.SelectorTiles(a.id, s, "p", r, line) }
+                val advancedOpen = s.id in bars.advanced
+                out += AnimateRow.AdvancedHeader(a.id, s, advancedOpen)
+                if (advancedOpen) {
+                    val cells = AnimateFields.advanced(s, local).map { SelectorCell(it) } +
+                        if (AnimateHidden.active(s).isNotEmpty()) listOf(SelectorCell(null, hint = true)) else emptyList()
+                    cells.chunked(columns).forEachIndexed { r, line -> out += AnimateRow.SelectorTiles(a.id, s, "x", r, line) }
+                }
+            }
+            out += AnimateRow.GroupingRow(a.id)
+        }
+        if (text.animators.isNotEmpty()) out += AnimateRow.Add
+        return out
+    }
+    /** Every selector field a built list shows (for the "hidden fields never appear" checks). */
+    fun shownFields(rows: List<AnimateRow>): Set<SelectorField> =
+        rows.filterIsInstance<AnimateRow.SelectorTiles>().flatMap { r -> r.cells.mapNotNull { it.field } }.toSet()
+}
+
+/** TEXT F3.2: the faded Animate glyph, centred and fixed in the body (smaller than F3.1's 60%). */
+internal object AnimateGlyph { const val FRACTION = .4f }
+
+/** Swipe-to-delete threshold (bars, selector bars, property tiles): past 40% of the width and at least [min] px. */
+internal object AnimateSwipe {
+    fun deletes(distance: Float, width: Float, min: Float) = kotlin.math.abs(distance) > maxOf(width * .4f, min)
 }

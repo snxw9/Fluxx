@@ -147,10 +147,11 @@ class MarkersTest {
                 assertEquals(rate.frameTimeUs(60), next())
                 vm.dispatch(EditorAction.Seek(rate.frameTimeUs(50)))
                 assertEquals(rate.frameTimeUs(if (layerId == null) 30 else 45), previous())
+                // TEXT F3.1: a selected layer also reaches composition markers inside its span (30 and 90 here).
                 vm.dispatch(EditorAction.Seek(0))
-                assertEquals(rate.frameTimeUs(if (layerId == null) 30 else 45), next())
+                assertEquals(rate.frameTimeUs(30), next())
                 vm.dispatch(EditorAction.Seek(rate.frameTimeUs(100)))
-                assertEquals(rate.frameTimeUs(if (layerId == null) 90 else 75), previous())
+                assertEquals(rate.frameTimeUs(90), previous())
                 for (offset in listOf(0L, 1L)) {
                     vm.dispatch(EditorAction.Select(layerId))
                     vm.dispatch(EditorAction.Seek(rate.frameTimeUs(60) + offset))

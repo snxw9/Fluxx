@@ -101,8 +101,10 @@ import kotlinx.coroutines.delay
     LaunchedEffect(owner) {onFocus(owner)}
     // Animate tab (TEXT F3): the focused animator field owns the rail diamond, timeline focus and Prev/Next.
     val animateState=rememberAnimatePageState(layer.id)
-    val shownAnimator=AnimateSelection.animator(layer.text,animateState.animatorId)
-    val animOwner=if(tab==TextTab.ANIMATE) AnimateSelection.focus(layer.text,shownAnimator,animateState.focus) else null
+    val animOwner=if(tab==TextTab.ANIMATE) AnimateSelection.focus(layer.text,animateState.focus) else null
+    // TEXT F3.1: Position / Rotation / Scale control style, an app preference switched from the rail menu.
+    val controlsPreference=AnimateControlsPreference.get(androidx.compose.ui.platform.LocalContext.current)
+    val animateControls by controlsPreference.value.collectAsState()
     val animAnimated=animOwner?.let {TextAnimatorEdits.animated(layer.text,it)} ?: false
     val animOnKey=animOwner?.let {ownerLocal in TextAnimatorEdits.keyTimes(layer,it)} ?: false
     LaunchedEffect(animOwner) {onAnimatorFocus(animOwner)}
@@ -229,7 +231,7 @@ import kotlinx.coroutines.delay
         val title=editScope.title(c)
         InspectorTile(InspectorIcons.control(c),"$title, ${editScope.unit(c)}",modifier,active=popover==c,enabled=enabled,
             caption=if(d.mixed) "—" else tileCaption(limit,d.initial),text=text,testTag="text-tile-${c.name}",fill=inset,badge=badge(c),popover={
-                AnchoredPopover(popover==c,::closePopover,"text-popover-${c.name}") {
+                AnchoredPopover(popover==c,::closePopover,"text-popover-${c.name}",modal=false) {
                     SliderPopoverContent(limit,d.initial,d.mixed,title,onReset={numericSet(c,d.default)},onBegin={numericBegin(c)},
                         onPreview=::numericPreview,onFinish=::numericFinish,onCancel=::numericCancel,onTyped={numericSet(c,it)},enabled=enabled,
                         extras=when(c) {
@@ -447,6 +449,8 @@ import kotlinx.coroutines.delay
                     keyLabel=AnimateRail.keyLabel(name,animAnimated,animOnKey),
                     keyState=AnimateRail.keyState(name,hold,animAnimated,animOnKey,CompositionTimecode.format(time,frameRate)),
                     extraItems=buildList {
+                        if(animOwner?.property in AnimateControlsPreference.PROPERTIES) add(RailMenuItem(AnimateRail.controlsLabel(animateControls)) {
+                            controlsPreference.set(if(animateControls==AnimateControls.SLIDERS) AnimateControls.PAD else AnimateControls.SLIDERS)})
                         if(animOwner!=null) {
                             add(RailMenuItem(if(animAnimated) "Freeze at playhead" else "Enable animation",enabled=!finishing) {
                                 animatorAction(if(animAnimated) TextAnimatorEdits.freeze(animOwner,ownerLocal) else TextAnimatorEdits.enable(animOwner,ownerLocal))})
@@ -490,7 +494,7 @@ import kotlinx.coroutines.delay
                 menuAnchor={
                     // Manual spacing opens anchored on the ⋮ it was chosen from.
                     val d=TextNumericDraft(layer,time,frameRate,editScope,TextControl.MANUAL_KERNING)
-                    AnchoredPopover(popover==TextControl.MANUAL_KERNING,::closePopover,"text-popover-MANUAL_KERNING") {
+                    AnchoredPopover(popover==TextControl.MANUAL_KERNING,::closePopover,"text-popover-MANUAL_KERNING",modal=false) {
                         SliderPopoverContent(requireNotNull(d.limit),d.initial,d.mixed,editScope.title(TextControl.MANUAL_KERNING),
                             onReset={closePopover();format {it.copy(manualKerning=FrozenList.empty())}},onBegin={numericBegin(TextControl.MANUAL_KERNING)},
                             onPreview=::numericPreview,onFinish=::numericFinish,onCancel=::numericCancel,onTyped={numericSet(TextControl.MANUAL_KERNING,it)},enabled=!finishing)
@@ -512,7 +516,7 @@ import kotlinx.coroutines.delay
                         }},axisFinish={if(axisSnapshot!=null) {onFinish();axisSnapshot=null}},axisCancel={if(axisSnapshot!=null) {onCancel();axisSnapshot=null}},busy=finishing,
                         baseFont=if(editScope.selected) null else {id->focus(TextControl.BASE_FONT);onBeginDraft(false) {fresh->onPayloadPreview(fresh.text.copy(fontId=id));onFinish()}},
                         hit=hitSize,modifier=Modifier.fillMaxSize())
-                    face==null->TextAnimatePage(layer,time,frameRate,compositionWidth,compositionHeight,animateState,finishing,palette,
+                    face==null->TextAnimatePage(layer,time,frameRate,compositionWidth,compositionHeight,animateState,finishing,palette,animateControls,
                         onAction=onAction,onValueBegin=onValueBegin,onPayloadPreview=onPayloadPreview,onFinish=onFinish,onCancel=onCancel,
                         onMessage={message=it},metrics=AnimateMetrics(bodyHeight,bodyWidth,hitSize<48.dp),modifier=Modifier.fillMaxSize())
                     large->{

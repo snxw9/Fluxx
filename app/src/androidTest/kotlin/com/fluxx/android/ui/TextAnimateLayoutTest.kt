@@ -9,29 +9,43 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.fluxx.android.editor.*
 import com.fluxx.android.model.*
-import com.fluxx.android.ui.inspector.InspectorSheetBudget
-import com.fluxx.android.ui.inspector.TextInspectorPanel
+import com.fluxx.android.ui.inspector.*
+import org.junit.After
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
 /**
- * TEXT F3, source-only: real Compose bounds of the Animate page at 360dp inside the shared inspector frame (268 and 328,
- * font scale 1 and 1.3). Edits go through the real reducer so the add tiles really add. Not a claim of device acceptance.
+ * TEXT F3.1 (updated for F3.2: add bar, Property bar, swipe and trash, non-modal popovers), source-only: real Compose bounds of the Animate list at 360dp inside the shared inspector frame (268 and
+ * 328, font scale 1 and 1.3) with an animator expanded (Property groups, a selector expanded, Grouping row). The body
+ * scrolls; every tile scrolled into view sits inside the body at full touch size. Edits go through the real reducer.
+ * The controls preference uses an in-memory store (nothing is written to the app's files). Not a device acceptance claim.
  */
 class TextAnimateLayoutTest {
     @get:Rule val compose=createComposeRule()
     private val start=EditorState(ProjectDocument(com.fluxx.android.model.Composition(durationUs=4_000_000,layers=FrozenList.of(listOf(
         CompositionLayer(1,LayerType.TEXT,timing=ClipTiming(durationUs=4_000_000),text=TextProperties(source=AnimatableString(staticValue="Animate me"))))))),1)
+    private val memory=HashMap<String,String>()
+    private val preference=AnimateControlsPreference(object: PreferenceStore {
+        override fun get(key: String)=memory[key]; override fun put(key: String,value: String) { memory[key]=value } })
+    private var previous: AnimateControlsPreference?=null
+    @Before fun usePreferenceInMemory() { previous=AnimateControlsPreference.replaceForTest(preference) }
+    @After fun restorePreference() { AnimateControlsPreference.replaceForTest(previous) }
 
     @Composable private fun Frame(state: MutableState<EditorState>,expanded: Boolean,scale: Float) {
         val height=InspectorSheetBudget.height(expanded,scale)
@@ -44,54 +58,81 @@ class TextAnimateLayoutTest {
         }
     }
     private fun bounds(tag: String): Rect=compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
-    private fun all(prefix: String)=compose.onAllNodesWithTag(prefix,useUnmergedTree=false).fetchSemanticsNodes()
+    private fun click(tag: String) { compose.onNodeWithTag(tag).performClick();compose.waitForIdle() }
+    private fun reveal(tag: String) { compose.onNodeWithTag("animate-list").performScrollToNode(hasTestTag(tag));compose.waitForIdle() }
 
-    private fun checkInside(tags: List<String>,body: Rect,ppd: Float,minTarget: Float) {
+    /** Scroll [tags] into view one by one: each is inside the body (no clipping) and a full touch target. */
+    private fun checkReachable(tags: List<String>,body: Rect,ppd: Float,minTarget: Float) {
         for(tag in tags) {
+            reveal(tag)
             val r=bounds(tag)
             assertTrue("$tag inside the body ($r vs $body)",r.top>=body.top-1f && r.bottom<=body.bottom+1f && r.left>=body.left-1f && r.right<=body.right+1f)
-            assertTrue("$tag is a full touch target",r.height/ppd>=minTarget-1f && r.width/ppd>=minTarget-1f)
+            assertTrue("$tag is a full touch target (${r.width/ppd} x ${r.height/ppd})",r.height/ppd>=minTarget-1f && r.width/ppd>=minTarget-1f)
         }
     }
+    private fun text(state: MutableState<EditorState>)=state.value.selectedLayer!!.text
 
     private fun run(expanded: Boolean,scale: Float) {
         val state=mutableStateOf(start)
         var ppd=1f
         compose.setContent {ppd=LocalDensity.current.density;CompositionLocalProvider(LocalDensity provides Density(ppd,scale)) {Frame(state,expanded,scale)}}
-        compose.onNodeWithTag("text-tab-ANIMATE").performClick();compose.waitForIdle()
+        click("text-tab-ANIMATE")
         val body=bounds("text-inspector-body")
         if(scale==1f) assertEquals(if(expanded) 212f else 272f,body.height/ppd,1f)
         val target=if(InspectorSheetBudget.compact(InspectorSheetBudget.height(expanded,scale))) 40f else 48f
-        // Empty state: one add tile, an icon hint, no paragraph text.
-        compose.onNodeWithTag("animate-empty").assertExists()
-        checkInside(listOf("animate-add-animator"),body,ppd,target)
-        compose.onNodeWithTag("animate-add-animator").performClick();compose.waitForIdle()
-        assertEquals(1,state.value.selectedLayer!!.text.animators.size)
-        // Properties: add three properties through the popover, then every tile sits inside the body.
+        val rail=bounds("inspector-rail")
+        // TEXT F3.2 empty state: a full-width "+ Animator" bar at the top; the smaller glyph centred in the body.
+        val page=bounds("animate-page");val glyph=bounds("animate-glyph")
+        assertEquals("glyph is centred",(page.top+page.bottom)/2,(glyph.top+glyph.bottom)/2,4f*ppd)
+        assertTrue("glyph is smaller than F3.1's 60%",glyph.height<=minOf(page.height,page.width)*.45f)
+        val add=bounds("animate-add-animator")
+        assertEquals("add bar on top",page.top,add.top,2f*ppd)
+        assertTrue("add bar is full width (${add.width/ppd}dp of ${page.width/ppd}dp)",add.width>=page.width-2f*ppd)
+        click("animate-add-animator")
+        assertEquals(1,text(state).animators.size)
+        // With animators the glyph stays fixed in the centre.
+        assertEquals(glyph,bounds("animate-glyph"))
+        // Property groups: Position and Opacity (Transform), Fill (Colour).
         for(p in listOf(AnimatorProperty.POSITION,AnimatorProperty.OPACITY,AnimatorProperty.FILL)) {
-            compose.onNodeWithTag("animate-add-property").performClick();compose.waitForIdle()
-            compose.onNodeWithTag("animate-add-${p.name}").performClick();compose.waitForIdle()
+            reveal("animate-add-property");click("animate-add-property");click("animate-add-${p.name}")
         }
-        assertEquals(3,state.value.selectedLayer!!.text.animators[0].properties.size)
-        checkInside(listOf("animate-animator-0","animate-add-animator","animate-tab-PROPERTIES","animate-tab-SELECTORS","animate-grouping","animate-enabled",
-            "animate-property-POSITION","animate-property-OPACITY","animate-property-FILL","animate-add-property"),body,ppd,target)
-        val strip=bounds("animate-animator-strip");val switch=bounds("animate-switch");val grid=bounds("animate-properties")
-        assertTrue(strip.bottom<=switch.top+1f && switch.bottom<=grid.top+1f && grid.bottom<=body.bottom+1f)
-        // Selectors: the range handle strip and the selector face fit; More holds the rest.
-        compose.onNodeWithTag("animate-tab-SELECTORS").performClick();compose.waitForIdle()
-        checkInside(listOf("animate-selector-0","animate-add-selector","animate-range-strip","animate-field-SHAPE","animate-field-BASED_ON","animate-field-MODE",
-            "animate-field-AMOUNT"),body,ppd,target-8f)
-        val controls=bounds("animate-selector-controls")
-        assertTrue("selector controls inside the body",controls.bottom<=body.bottom+1f)
-        // Wiggly: add one; its whole face (no strip) fits.
-        compose.onNodeWithTag("animate-add-selector").performClick();compose.waitForIdle()
-        compose.onNodeWithTag("animate-add-WIGGLY").performClick();compose.waitForIdle()
-        assertEquals(2,state.value.selectedLayer!!.text.animators[0].selectors.size)
-        compose.onNodeWithTag("animate-selector-1").performClick();compose.waitForIdle()
-        checkInside(listOf("animate-field-MAX_AMOUNT","animate-field-WIGGLES_PER_SECOND","animate-field-SEED","animate-field-ENABLED"),body,ppd,target)
+        assertEquals(3,text(state).animators[0].properties.size)
+        checkReachable(listOf("animate-animator-0","animate-animator-0-grip","animate-animator-0-duplicate","animate-animator-0-eye","animate-add-property",
+            "animate-delete-properties","animate-property-toggle","animate-property-POSITION","animate-property-OPACITY","animate-property-FILL"),body,ppd,target)
+        // Insertion order on one row: Position, Opacity, Fill (no category headers).
+        assertTrue(bounds("animate-property-POSITION").right<=bounds("animate-property-OPACITY").left+1f)
+        assertTrue(bounds("animate-property-OPACITY").right<=bounds("animate-property-FILL").left+1f)
+        assertTrue(compose.onAllNodesWithTag("animate-group-Transform").fetchSemanticsNodes().isEmpty())
+        // Range selector (expanded on add): primary tiles, then the Advanced group.
+        val range=text(state).animators[0].selectors[0].id
+        checkReachable(listOf("animate-selector-row","animate-add-selector","animate-selector-0","animate-field-START","animate-field-END","animate-field-OFFSET",
+            "animate-field-SHAPE"),body,ppd,target)
+        assertTrue(compose.onAllNodesWithTag("animate-field-AMOUNT").fetchSemanticsNodes().isEmpty())
+        reveal("animate-advanced-$range");click("animate-advanced-$range")
+        checkReachable(listOf("animate-field-UNITS","animate-field-BASED_ON","animate-field-MODE","animate-field-AMOUNT","animate-field-SMOOTHNESS",
+            "animate-field-EASE_HIGH","animate-field-EASE_LOW","animate-field-RANDOMIZE_ORDER","animate-field-SEED"),body,ppd,target)
+        for(hidden in listOf("animate-field-MIN_AMOUNT","animate-field-MAX_AMOUNT","animate-field-ENABLED"))
+            assertTrue(hidden,compose.onAllNodesWithTag(hidden).fetchSemanticsNodes().isEmpty())
+        // Wiggly: collapse Range, add Wiggly (expanded on add), primary and Advanced tiles reachable.
+        reveal("animate-selector-0-toggle");click("animate-selector-0-toggle")
+        reveal("animate-add-selector");click("animate-add-selector");click("animate-add-WIGGLY")
+        assertEquals(2,text(state).animators[0].selectors.size)
+        val wiggly=text(state).animators[0].selectors[1].id
+        checkReachable(listOf("animate-selector-1","animate-field-MAX_AMOUNT","animate-field-MIN_AMOUNT","animate-field-WIGGLES_PER_SECOND","animate-field-CORRELATION"),body,ppd,target)
+        reveal("animate-advanced-$wiggly");click("animate-advanced-$wiggly")
+        checkReachable(listOf("animate-field-BASED_ON","animate-field-MODE","animate-field-TEMPORAL_PHASE","animate-field-SPATIAL_PHASE","animate-field-LOCK_DIMENSIONS",
+            "animate-field-SEED"),body,ppd,target)
+        assertTrue(compose.onAllNodesWithTag("animate-field-AMOUNT").fetchSemanticsNodes().isEmpty())
+        // Grouping row at the end of the animator.
+        checkReachable(listOf("animate-grouping-row","animate-grouping"),body,ppd,target)
+        // "+ Animator" follows the last animator, full width, scrolling with the list; the rail did not move.
+        checkReachable(listOf("animate-add-animator"),body,ppd,target)
+        assertTrue(bounds("animate-add-animator").top>=bounds("animate-grouping-row").bottom-1f)
+        assertTrue(bounds("animate-add-animator").width>=body.width-2f*ppd)
+        assertEquals(rail,bounds("inspector-rail"))
+        compose.onNodeWithTag("animate-list").performScrollToIndex(0);compose.waitForIdle()
         // No Done / ✓, no − / + text buttons anywhere on the page.
         for(gone in listOf("Done","−","+")) assertTrue(gone,compose.onAllNodesWithText(gone).fetchSemanticsNodes().isEmpty())
-        assertTrue(all("inspector-rail").isNotEmpty())
     }
 
     @Test fun animatePageFitsAt268Scale1()=run(true,1f)
@@ -99,17 +140,83 @@ class TextAnimateLayoutTest {
     @Test fun animatePageFitsAt268Scale13()=run(true,1.3f)
     @Test fun animatePageFitsAt328Scale13()=run(false,1.3f)
 
-    @Test fun positionOpensTheTransformControlsInPlaceAndBackReturns() {
+    @Test fun barIconsDuplicateAndEyeAndBothTransformControlStyles() {
         val state=mutableStateOf(start)
         compose.setContent {Frame(state,true,1f)}
-        compose.onNodeWithTag("text-tab-ANIMATE").performClick()
-        compose.onNodeWithTag("animate-add-animator").performClick()
-        compose.onNodeWithTag("animate-add-property").performClick()
-        compose.onNodeWithTag("animate-add-POSITION").performClick()
-        compose.onNodeWithTag("animate-property-POSITION").performClick();compose.waitForIdle()
+        click("text-tab-ANIMATE");click("animate-add-animator")
+        click("animate-add-property");click("animate-add-POSITION")
+        // Default: sliders in an anchored popover.
+        assertEquals(AnimateControls.SLIDERS,preference.value.value)
+        reveal("animate-property-POSITION");click("animate-property-POSITION")
+        compose.onNodeWithTag("animate-popover-animate-property-POSITION").assertExists()
+        compose.onAllNodesWithTag("animate-position-pad").fetchSemanticsNodes().let { assertTrue(it.isEmpty()) }
+        // Pad, dial, rulers: the same tile opens the Transform tab's pad in place of the list; back returns.
+        preference.set(AnimateControls.PAD);compose.waitForIdle()
+        compose.onNodeWithTag("animate-list").performScrollToIndex(0);compose.waitForIdle()
+        reveal("animate-property-POSITION");click("animate-property-POSITION")
         val body=bounds("text-inspector-body");val pad=bounds("animate-position-pad")
         assertTrue("pad inside the body",pad.top>=body.top-1f && pad.bottom<=body.bottom+1f)
-        compose.onNodeWithTag("animate-subpage-back").performClick();compose.waitForIdle()
-        compose.onNodeWithTag("animate-properties").assertExists()
+        click("animate-subpage-back")
+        compose.onNodeWithTag("animate-list").assertExists()
+        assertEquals("PAD",memory[AnimateControlsPreference.KEY])
+        // Duplicate on the bar: one tap, a second animator with the same property.
+        compose.onNodeWithTag("animate-list").performScrollToIndex(0);compose.waitForIdle()
+        click("animate-animator-0-duplicate")
+        assertEquals(2,text(state).animators.size)
+        assertEquals(text(state).animators[0].properties,text(state).animators[1].properties)
+        // Eye: animator off keeps its properties and selectors.
+        val before=text(state).animators[0]
+        click("animate-animator-0-eye")
+        val after=text(state).animators[0]
+        assertEquals(0f,after.enabled.staticValue,0f);assertEquals(before.properties,after.properties);assertEquals(before.selectors,after.selectors)
+    }
+
+    /** TEXT F3.2: slider popovers are non-modal; X/Y glyphs; swipe a tile, trash all tiles. */
+    @Test fun popoverStaysOpenForTheRailAndTilesDeleteBySwipeAndTrash() {
+        val state=mutableStateOf(start)
+        compose.setContent {Frame(state,false,1f)}
+        click("text-tab-ANIMATE");click("animate-add-animator")
+        for(p in listOf(AnimatorProperty.POSITION,AnimatorProperty.OPACITY,AnimatorProperty.BLUR)) { reveal("animate-add-property");click("animate-add-property");click("animate-add-${p.name}") }
+        // Position popover: X and Y rows lead with their axis glyphs.
+        reveal("animate-property-POSITION");click("animate-property-POSITION")
+        compose.onNodeWithTag("animate-popover-animate-property-POSITION").assertExists()
+        compose.onNodeWithTag("slider-axis-AXIS_X").assertExists();compose.onNodeWithTag("slider-axis-AXIS_Y").assertExists()
+        // The rail diamond keys the focused property and does not close the popover.
+        click("inspector-key-diamond")
+        assertTrue(text(state).animators[0].properties.first { it.property==AnimatorProperty.POSITION }.vector!!.isAnimated)
+        compose.onNodeWithTag("animate-popover-animate-property-POSITION").assertExists()
+        // Another tile replaces it.
+        click("animate-property-OPACITY")
+        assertTrue(compose.onAllNodesWithTag("animate-popover-animate-property-POSITION").fetchSemanticsNodes().isEmpty())
+        compose.onNodeWithTag("animate-popover-animate-property-OPACITY").assertExists()
+        // A preview tap (the preview's dismissal request) closes it.
+        PopoverDismissal.request();compose.waitForIdle()
+        assertTrue(compose.onAllNodesWithTag("animate-popover-animate-property-OPACITY").fetchSemanticsNodes().isEmpty())
+        // Swipe one tile sideways: that property only.
+        reveal("animate-property-OPACITY")
+        compose.onNodeWithTag("animate-property-OPACITY").performTouchInput { swipeLeft(startX=right-1f,endX=left-width*2,durationMillis=200) }
+        compose.waitForIdle()
+        assertEquals(listOf(AnimatorProperty.POSITION,AnimatorProperty.BLUR),text(state).animators[0].properties.map { it.property })
+        // A tap is not a swipe.
+        click("animate-property-BLUR");PopoverDismissal.request();compose.waitForIdle()
+        assertEquals(2,text(state).animators[0].properties.size)
+        // The Property bar's trash removes every tile at once and then hides.
+        reveal("animate-delete-properties");click("animate-delete-properties")
+        assertTrue(text(state).animators[0].properties.isEmpty())
+        assertTrue(compose.onAllNodesWithTag("animate-delete-properties").fetchSemanticsNodes().isEmpty())
+        // The hold menu is gone.
+        assertTrue(compose.onAllNodesWithTag("animate-property-menu").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test fun characterOffsetAddsWithoutCrashing() {
+        val state=mutableStateOf(start)
+        compose.setContent {Frame(state,true,1f)}
+        click("text-tab-ANIMATE");click("animate-add-animator")
+        click("animate-add-property");click("animate-add-group-Advanced");click("animate-add-CHARACTER_OFFSET")
+        click("animate-add-property");click("animate-add-group-Advanced");click("animate-add-CHARACTER_VALUE")
+        val props=text(state).animators[0].properties.map { it.property }
+        assertTrue(AnimatorProperty.CHARACTER_OFFSET in props && AnimatorProperty.CHARACTER_VALUE in props)
+        reveal("animate-property-CHARACTER_OFFSET")
+        compose.onNodeWithTag("animate-property-CHARACTER_OFFSET").assertExists()
     }
 }

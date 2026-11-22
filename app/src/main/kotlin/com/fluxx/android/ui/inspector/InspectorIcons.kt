@@ -230,6 +230,14 @@ internal object InspectorIcons {
         put("RANGE", p().line(3f, 18f, 7f, 18f, 10f, 7f, 14f, 7f, 17f, 18f, 21f, 18f).build())
         put("WIGGLY", p().cubic(3f, 12f, 6f, 4f, 9f, 4f, 12f, 12f).cubic(12f, 12f, 15f, 20f, 18f, 20f, 21f, 12f).build())
         put("ENABLED", p().arc(8f, 7f, 7f, 7f, 1, 0, 16f, 7f).line(12f, 3f, 12f, 11f).build())
+        // TEXT F3.1 bars: eye (on/off, the timeline eye's almond and pupil), grip (hold and drag), expanded chevron.
+        put("EYE", p().cubic(3f, 12f, 7f, 5.5f, 17f, 5.5f, 21f, 12f).cubic(21f, 12f, 17f, 18.5f, 7f, 18.5f, 3f, 12f).circle(12f, 12f, 2.8f).build())
+        put("EYE_OFF", p().cubic(3f, 12f, 7f, 5.5f, 17f, 5.5f, 21f, 12f).cubic(21f, 12f, 17f, 18.5f, 7f, 18.5f, 3f, 12f).line(5f, 19f, 19f, 5f).build())
+        put("GRIP", p().line(6f, 8.5f, 18f, 8.5f).line(6f, 12f, 18f, 12f).line(6f, 15.5f, 18f, 15.5f).build())
+        put("EXPANDED", p().line(5f, 9f, 12f, 16f, 19f, 9f).build())
+        // TEXT F3.2: axis glyphs at the start of each two-axis slider row (Position, Anchor point, Scale X/Y).
+        put("AXIS_X", p().line(7f, 7f, 17f, 17f).line(17f, 7f, 7f, 17f).build())
+        put("AXIS_Y", p().line(7f, 6f, 12f, 12f).line(17f, 6f, 12f, 12f).line(12f, 12f, 12f, 18f).build())
         put("GROUPING", p().rect(3f, 7f, 8f, 10f, 2f).rect(13f, 7f, 8f, 10f, 2f).circle(7f, 12f, 1f).circle(17f, 12f, 1f).build())
         put("GROUPING_ALL", p().rect(3f, 6f, 18f, 12f, 3f).circle(12f, 12f, 1.2f).build())
         // Selector shapes: the coverage profile over the selected range.

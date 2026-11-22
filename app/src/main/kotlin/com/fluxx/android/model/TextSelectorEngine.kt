@@ -179,7 +179,7 @@ class LinePermutationPool {
 /** Sparse execution; immutable animator snapshot makes invalidation explicit: rebuild on edits.
  * All four maps/permutations exist before evaluation. Units changes need no extra permutation. */
 class PreparedSelectorEngine(private val animator: TextAnimator, private val membership: SelectorMembership,
-    private val ease: SelectorEaseTable,linePool: LinePermutationPool?=null,lineMinimum: Int=0,lineMaximum: Int=membership.counts[3],
+    private val ease: SelectorEaseTable,private val linePool: LinePermutationPool?=null,private val lineMinimum: Int=0,private val lineMaximum: Int=membership.counts[3],
     memo: TrackMemo=TrackMemo()) {
     /** TEXT PERF 11: the selector tracks as shared memo slots (equal tracks across layers evaluate once per time). */
     private class Slots(memo: TrackMemo,p: TextRangeSelector) {
@@ -195,12 +195,27 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
     private val slots=Array(animator.selectors.size) { Slots(memo,animator.selectors[it]) }
     private val weights=DoubleArray(membership.characterCount)
     private val pool=linePool ?: LinePermutationPool()
+    private fun lineRandom(selector: TextRangeSelector)=linePool!=null &&
+        (selector.randomizeOrder.staticValue!=0f || selector.randomizeOrder.keyframes.any { it.value!=0f }) &&
+        (selector.basedOn.staticValue==3f || selector.basedOn.keyframes.any { it.value==3f })
+    /** Permutation bytes one prepared seed costs this selector (all four variants, plus wrapped-line ranks). */
+    private fun bytesPerSeed(selector: TextRangeSelector): Long {
+        var bytes=4L*membership.counts.sum()
+        if(lineRandom(selector)) for(c in lineMinimum..lineMaximum) bytes+=4L*c
+        return bytes
+    }
+    /**
+     * TEXT F3.2: every distinct integer seed the interpolated seed track reaches, ascending (TextSeedRange), capped
+     * at min(256, what fits the 32 MiB pool). Over the cap the selector degrades (nearest prepared seed) and
+     * [seedsClamped] reports it; it never throws, so a loaded document always prepares.
+     */
     private val seeds=Array(animator.selectors.size) { s ->
         val p=animator.selectors[s]
-        (listOf(p.seed)+p.seedKeyframes.map { it.seed }).distinct().toLongArray().also {
-            require(it.size<=64) { "Selector exceeds 64 distinct prepared seeds; reduce seed alternatives" }
-        }
+        TextSeedRange.prepared(p,TextSeedRange.cap(bytesPerSeed(p)))
     }
+    /** A selector's reachable seeds exceeded its cap; evaluation uses the nearest prepared seed. */
+    val seedsClamped=animator.selectors.indices.any { s -> TextSeedRange.reachable(animator.selectors[s])>seeds[s].size }
+    val seedCap get()=animator.selectors.minOfOrNull { TextSeedRange.cap(bytesPerSeed(it)) } ?: TextSeedRange.MAX_SEEDS
     private val ranks=Array(animator.selectors.size) { s -> Array(seeds[s].size) { k ->
         Array(4) { v -> pool.rank(seeds[s][k],membership.counts[v]) }
     } }
@@ -213,10 +228,7 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
     private val ready=BooleanArray(animator.selectors.size)
     private val revisions=LongArray(animator.selectors.size) { -1 }
     private val lineRanks=Array(animator.selectors.size) { s ->
-        val selector=animator.selectors[s]
-        val random=selector.randomizeOrder.staticValue!=0f || selector.randomizeOrder.keyframes.any { it.value!=0f }
-        val lines=selector.basedOn.staticValue==3f || selector.basedOn.keyframes.any { it.value==3f }
-        if(linePool!=null && random && lines) Array(seeds[s].size) { k -> pool.prepare(seeds[s][k],lineMinimum,lineMaximum) } else null
+        if(lineRandom(animator.selectors[s])) Array(seeds[s].size) { k -> pool.prepare(seeds[s][k],lineMinimum,lineMaximum) } else null
     }
     var coverageBuilds: Long = 0; private set
     fun evaluate(time: Long,out: DoubleArray,dimension: Int=0) {
@@ -246,7 +258,7 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
         if(t.kind.hold(time)==1f) {
             val a=t.minAmount.evaluate(time).toDouble();val b=t.maxAmount.evaluate(time).toDouble()
             val lo=min(a,b)/100;val hi=max(a,b)/100;val amount=t.amount.evaluate(time)/100.0
-            val seed=p.seedAt(time);val frequency=t.wiggles.evaluate(time).toDouble()
+            val seed=seeds[index][TextSeedRange.nearest(seeds[index],p.seedAt(time))];val frequency=t.wiggles.evaluate(time).toDouble()
             val correlation=t.correlation.evaluate(time).toDouble();val temporal=t.temporal.evaluate(time).toDouble()
             val spatial=t.spatial.evaluate(time).toDouble();val locked=t.lock.hold(time)!=0f
             for(i in out.indices) {
@@ -259,15 +271,16 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
         val factor=if(t.units.hold(time)==0f) n/100.0 else 1.0
         val a=(t.start.evaluate(time).toDouble()+t.offset.evaluate(time))*factor
         val b=(t.end.evaluate(time).toDouble()+t.offset.evaluate(time))*factor
-        if(n==0 || b<=a) { out.fill(0.0);return }
         val shape=SelectorShape.entries[t.shape.hold(time).toInt()]
+        // TEXT F3.2 (AE parity): Ramp Up fully selects everything after End, Ramp Down everything before Start.
+        val rampUp=shape==SelectorShape.RAMP_UP;val rampDown=shape==SelectorShape.RAMP_DOWN
+        if(n==0 || (b<=a && !rampUp && !rampDown)) { out.fill(0.0);return }
         val smooth=t.smoothness.evaluate(time)/200.0
         val low=t.easeLow.evaluate(time).toDouble();val high=t.easeHigh.evaluate(time).toDouble()
         val av=t.minAmount.evaluate(time).toDouble();val bv=t.maxAmount.evaluate(time).toDouble()
         val lo=min(av,bv);val hi=max(av,bv);val amount=t.amount.evaluate(time)/100.0
         val random=t.randomize.hold(time)!=0f
-        val seed=p.seedAt(time);var seedIndex=0
-        while(seeds[index][seedIndex]!=seed) seedIndex++
+        val seedIndex=TextSeedRange.nearest(seeds[index],p.seedAt(time))
         for(i in out.indices) {
             val member=membership.maps[variant][i]
             if(member<0) { out[i]=0.0;continue }
@@ -281,7 +294,8 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
                     SelectorMath.smooth(SelectorMath.clamp((x-a+smooth)/(2*smooth),0.0,1.0))*
                     SelectorMath.smooth(SelectorMath.clamp((b+smooth-x)/(2*smooth),0.0,1.0))
                 e=ease.evaluate(e,low,high)
-            } else if(x<a || x>=b) e=0.0
+            } else if(x>=b) { if(!rampUp) e=0.0 } // Ramp Up: v stays 1 (ease(1)=1) past End.
+            else if(x<a) { if(!rampDown) e=0.0 } // Ramp Down: v stays 1 before Start.
             else v=ease.evaluate(SelectorMath.shape(shape,(x-a)/(b-a)),low,high)
             out[i]=SelectorMath.clamp(amount*e*(lo/100+(hi-lo)/100*v),-1.0,1.0)
         }

@@ -171,6 +171,12 @@ class MainActivity : ComponentActivity() {
             catch(e:CancellationException) { throw e }
             catch(e:Exception) { Toast.makeText(this@MainActivity,e.message ?: "Could not load palettes",Toast.LENGTH_LONG).show() }
         }
+        // TEXT F3.2: the preview is stopped for an export; rebuild it as soon as the export ends (saved, failed or
+        // cancelled) so playback works right away. Before, only onResume rebuilt it, so playback stayed dead.
+        lifecycleScope.launch {
+            var previous: com.fluxx.android.export.ExportState? = null
+            ExportService.state.collect { s -> if (com.fluxx.android.export.ExportRules.rebuildPreview(previous, s)) refreshPreview(); previous = s }
+        }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.rgb(18, 18, 18))
@@ -427,6 +433,8 @@ class MainActivity : ComponentActivity() {
     private suspend fun openProject(file: File): Result<Unit> {
         ProjectSaveQueue.awaitPending()
         return projectManager.loadProject(file).map { doc ->
+            // TEXT F3.2: a finished export never carries into the next opened project (no stale done dialog).
+            ExportService.reset()
             editor.dispatch(EditorAction.Load(doc))
             preview?.update(editor.state.project, 0L, false)
             currentDestination = AppDestination.Editor(file)
