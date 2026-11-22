@@ -231,7 +231,7 @@ import kotlinx.coroutines.delay
         val title=editScope.title(c)
         InspectorTile(InspectorIcons.control(c),"$title, ${editScope.unit(c)}",modifier,active=popover==c,enabled=enabled,
             caption=if(d.mixed) "—" else tileCaption(limit,d.initial),text=text,testTag="text-tile-${c.name}",fill=inset,badge=badge(c),popover={
-                AnchoredPopover(popover==c,::closePopover,"text-popover-${c.name}") {
+                AnchoredPopover(popover==c,::closePopover,"text-popover-${c.name}",modal=false) {
                     SliderPopoverContent(limit,d.initial,d.mixed,title,onReset={numericSet(c,d.default)},onBegin={numericBegin(c)},
                         onPreview=::numericPreview,onFinish=::numericFinish,onCancel=::numericCancel,onTyped={numericSet(c,it)},enabled=enabled,
                         extras=when(c) {
@@ -494,7 +494,7 @@ import kotlinx.coroutines.delay
                 menuAnchor={
                     // Manual spacing opens anchored on the ⋮ it was chosen from.
                     val d=TextNumericDraft(layer,time,frameRate,editScope,TextControl.MANUAL_KERNING)
-                    AnchoredPopover(popover==TextControl.MANUAL_KERNING,::closePopover,"text-popover-MANUAL_KERNING") {
+                    AnchoredPopover(popover==TextControl.MANUAL_KERNING,::closePopover,"text-popover-MANUAL_KERNING",modal=false) {
                         SliderPopoverContent(requireNotNull(d.limit),d.initial,d.mixed,editScope.title(TextControl.MANUAL_KERNING),
                             onReset={closePopover();format {it.copy(manualKerning=FrozenList.empty())}},onBegin={numericBegin(TextControl.MANUAL_KERNING)},
                             onPreview=::numericPreview,onFinish=::numericFinish,onCancel=::numericCancel,onTyped={numericSet(TextControl.MANUAL_KERNING,it)},enabled=!finishing)

@@ -130,8 +130,22 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
         }.onFailure(::fail)
     }
     fun guardOf(address: AnimatorTrackAddress) = address.property?.takeIf { it in CHARACTER_PROPERTIES }
-    fun set(address: AnimatorTrackAddress, value: Float = 0f, y: Float? = null, argb: Int? = null, seed: Long? = null) =
+    /** TEXT F3.2: seed edits whose interpolated seed range would exceed the per-selector cap are refused inline. */
+    var seedRefused by remember(layer.id) { mutableStateOf<Pair<AnimatorTrackAddress, String>?>(null) }
+    val seedProblem = remember(text) { TextSeedRange.problem(text) }
+    fun setSeed(address: AnimatorTrackAddress, seed: Long) {
+        if (finishing) return
+        runCatching {
+            val edits = listOf(TextAnimatorEdits.set(currentLayer.text, address, local, seedValue = seed))
+            val problem = TextSeedRange.problem(TextAnimatorEdits.payload(currentLayer, frameRate, edits))
+            if (problem != null && seedProblem == null) { seedRefused = address to problem; onMessage(problem) }
+            else { if (seedRefused?.first == address) seedRefused = null; onAction(TextAnimatorEdits.action(currentLayer.id, edits)) }
+        }.onFailure(::fail)
+    }
+    fun set(address: AnimatorTrackAddress, value: Float = 0f, y: Float? = null, argb: Int? = null, seed: Long? = null) {
+        if (address.seed && seed != null) { setSeed(address, seed); return }
         commit(guardOf(address)) { listOf(TextAnimatorEdits.set(it, address, local, value, y, argb, seed)) }
+    }
     /** Drag session: begin once on the captured layer, previews on that base, then finish (one undo) or cancel. */
     fun begin(address: AnimatorTrackAddress?) {
         if (finishing || draft != null) return
@@ -163,14 +177,14 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
         var base by remember { mutableStateOf(v) }
         SliderPopoverContent(limit, v[0], false, "$label X", onReset = { set(address, default, v[1]) },
             onBegin = { base = v; begin(address) }, onPreview = { x -> preview { t -> TextAnimatorEdits.set(t, address, local, limit.hard(x), base[1]) } },
-            onFinish = ::finish, onCancel = ::cancel, onTyped = { x -> set(address, limit.hard(x), v[1]) }, enabled = !finishing)
+            onFinish = ::finish, onCancel = ::cancel, onTyped = { x -> set(address, limit.hard(x), v[1]) }, enabled = !finishing, axis = "AXIS_X")
         SliderPopoverContent(limit, v[1], false, "$label Y", onReset = { set(address, v[0], default) },
             onBegin = { base = v; begin(address) }, onPreview = { y -> preview { t -> TextAnimatorEdits.set(t, address, local, base[0], limit.hard(y)) } },
-            onFinish = ::finish, onCancel = ::cancel, onTyped = { y -> set(address, v[0], limit.hard(y)) }, enabled = !finishing)
+            onFinish = ::finish, onCancel = ::cancel, onTyped = { y -> set(address, v[0], limit.hard(y)) }, enabled = !finishing, axis = "AXIS_Y")
     }
     /** Scale as sliders with the Transform tab's link: linked = one Scale slider keeping the X:Y ratio; unlinked = X and Y. */
     @Composable fun ScaleSliders(address: AnimatorTrackAddress, v: FloatArray) {
-        val limit = PropertyLimits.LAYER_SCALE
+        val limit = PropertyLimits.ANIM_SCALE
         var base by remember { mutableStateOf(v) }
         val linked = state.linkScale
         fun linkedY(b: FloatArray, x: Float) = ScaleRulerMath.linkedY(b[0] / 100f, b[1] / 100f, x / 100f) * 100f
@@ -182,17 +196,17 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
             onBegin = { base = v; begin(address) },
             onPreview = { x -> preview { t -> TextAnimatorEdits.set(t, address, local, limit.hard(x), if (linked) limit.hard(linkedY(base, x)) else base[1]) } },
             onFinish = ::finish, onCancel = ::cancel, onTyped = { x -> set(address, limit.hard(x), if (linked) limit.hard(linkedY(v, x)) else v[1]) },
-            enabled = !finishing, extras = if (linked) link else null)
+            enabled = !finishing, extras = if (linked) link else null, axis = if (linked) null else "AXIS_X")
         if (!linked) SliderPopoverContent(limit, v[1], false, "Scale Y", onReset = { set(address, v[0], 100f) },
             onBegin = { base = v; begin(address) }, onPreview = { y -> preview { t -> TextAnimatorEdits.set(t, address, local, base[0], limit.hard(y)) } },
-            onFinish = ::finish, onCancel = ::cancel, onTyped = { y -> set(address, v[0], limit.hard(y)) }, enabled = !finishing, extras = link)
+            onFinish = ::finish, onCancel = ::cancel, onTyped = { y -> set(address, v[0], limit.hard(y)) }, enabled = !finishing, extras = link, axis = "AXIS_Y")
     }
 
     /** Controls: Pad, dial, rulers — the tile opens the Transform tab's own control in place of the list. */
     @Composable fun TransformTile(address: AnimatorTrackAddress, spec: AnimateFieldSpec, modifier: Modifier, testTag: String, onLong: (() -> Unit)?,
         menu: @Composable () -> Unit) {
         val caption = when (spec.editor) {
-            AnimateEditor.ROTATION -> AnimateCaption.scalar(PropertyLimits.ROTATION, TextAnimatorEdits.value(text, address, local))
+            AnimateEditor.ROTATION -> AnimateCaption.scalar(PropertyLimits.ANIM_ROTATION, TextAnimatorEdits.value(text, address, local))
             else -> TextAnimatorEdits.vector(text, address, local).let { AnimateCaption.vector(requireNotNull(spec.limit), it[0], it[1]) }
         }
         InspectorTile(InspectorIcons.icon(spec.icon), "${spec.label}, open ${spec.label.lowercase()} pad, dial or rulers", modifier, active = state.focus == address,
@@ -222,7 +236,7 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                     active = open || focused, enabled = !finishing, caption = caption, testTag = testTag, fill = fill, badge = b, onLongClick = onLong,
                     state = error?.let { "Error: $it" }, popover = {
                         menu()
-                        AnchoredPopover(open, ::close, "animate-popover-$testTag") {
+                        AnchoredPopover(open, ::close, "animate-popover-$testTag", modal = false) {
                             val rotation = spec.editor == AnimateEditor.ROTATION
                             SliderPopoverContent(limit, v, false, spec.label, onReset = { commit(character) { listOf(TextAnimatorEdits.reset(it, address, local)) } },
                                 onBegin = { begin(address) }, onPreview = { x -> preview(character) { t -> TextAnimatorEdits.set(t, address, local, limit.hard(x)) } },
@@ -242,7 +256,7 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                     active = open || focused, enabled = !finishing, caption = AnimateCaption.vector(limit, v[0], v[1]), testTag = testTag, fill = fill, badge = b,
                     onLongClick = onLong, popover = {
                         menu()
-                        AnchoredPopover(open, ::close, "animate-popover-$testTag") {
+                        AnchoredPopover(open, ::close, "animate-popover-$testTag", modal = false) {
                             if (spec.editor == AnimateEditor.SCALE) ScaleSliders(address, v)
                             else VectorSliders(address, limit, spec.label, v, TextAnimatorEdits.defaultVector(requireNotNull(address.property)))
                         }
@@ -291,7 +305,10 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
             }
             AnimateEditor.SEED -> {
                 val seed = TextAnimatorEdits.seedValue(text, address, local)
-                InspectorTile(InspectorIcons.icon("SEED"), "${spec.label}, ${java.lang.Long.toUnsignedString(seed)}", modifier, active = open || focused, enabled = !finishing,
+                val over = TextAnimatorEdits.selector(text, address)?.let { TextSeedRange.reachable(it) > TextSeedRange.MAX_SEEDS } == true
+                val seedError = seedRefused?.takeIf { it.first == address }?.second ?: seedProblem?.takeIf { over }
+                InspectorTile(InspectorIcons.icon(if (seedError != null) "WARNING" else "SEED"), "${spec.label}, ${java.lang.Long.toUnsignedString(seed)}", modifier,
+                    active = open || focused, enabled = !finishing, state = seedError?.let { "Error: $it" },
                     caption = AnimateCaption.seed(seed), testTag = testTag, fill = fill, badge = b, onLongClick = onLong, popover = {
                         menu()
                         AnchoredPopover(open, ::close, "animate-seed-$testTag") {
@@ -309,6 +326,7 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                                     Text(java.lang.Long.toUnsignedString(seed), color = TextPrimary, style = MaterialTheme.typography.labelLarge, maxLines = 1)
                                 }
                             }
+                            if (seedError != null) ErrorLine(seedError)
                         }
                     }) { focus(address); popover = key(address) }
             }
@@ -318,7 +336,7 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
     Box(modifier.testTag("animate-page")) {
         // Persistent faded Animate glyph behind the page: monochrome, low contrast, no semantics, never takes touches
         // and never moves layout (tiles draw their own surfaces on top, so they stay fully legible).
-        Icon(InspectorIcons.icon("ANIMATOR"), null, Modifier.align(Alignment.Center).size(minOf(metrics.body, metrics.width).times(.6f).dp)
+        Icon(InspectorIcons.icon("ANIMATOR"), null, Modifier.align(Alignment.Center).size(minOf(metrics.body, metrics.width).times(AnimateGlyph.FRACTION).dp)
             .testTag("animate-glyph"), tint = TextPrimary.copy(alpha = .05f))
 
         // ---- Sub-page: the Transform tab's own Position / Rotation / Scale controls (Controls: Pad, dial, rulers) ----
@@ -389,32 +407,16 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
         @Composable fun Bar(label: String, index: Int, expanded: Boolean, enabledAddress: AnimatorTrackAddress, tag: String, grip: Modifier,
             onToggle: () -> Unit, onDuplicate: (() -> Unit)?, onDelete: () -> Unit, onLong: (() -> Unit)?, menu: @Composable () -> Unit = {}) {
             val on = TextAnimatorEdits.value(text, enabledAddress, local) != 0f
-            var swipe by remember { mutableFloatStateOf(0f) }
-            var swiping by remember { mutableStateOf(false) }
-            val shown by animateFloatAsState(if (swiping) swipe else 0f, label = "swipe")
             val chevron by animateFloatAsState(if (expanded) 0f else -90f, label = "chevron")
-            var width by remember { mutableFloatStateOf(1f) }
-            val barShape = RoundedCornerShape(8.dp)
-            Box(Modifier.fillMaxWidth().height(pitch).onSizeChanged { width = it.width.toFloat() }) {
-                // Revealed under a swipe: the delete glyph on the side the bar leaves.
-                Row(Modifier.matchParentSize().padding(inset).clip(barShape).background(Border), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = if (shown > 0) Arrangement.Start else Arrangement.End) {
-                    Icon(InspectorIcons.icon("DELETE"), null, Modifier.padding(horizontal = 12.dp).size(InspectorIcons.INLINE), tint = TextPrimary)
-                }
+            SwipeToDelete(tag, Modifier.fillMaxWidth().height(pitch), inset, onDelete = onDelete, enabled = !finishing) { swiped ->
                 // The drawn bar is inset by half a gap like the tiles; its controls use the whole row pitch as touch targets.
-                Row(Modifier.matchParentSize().offset { IntOffset(shown.roundToInt(), 0) }
+                Row(swiped
                     .drawBehind {
                         val h = half.toPx()
                         val r = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx())
                         drawRoundRect(SurfaceHigh, androidx.compose.ui.geometry.Offset(h, h), androidx.compose.ui.geometry.Size(size.width - 2 * h, size.height - 2 * h), r)
                         if (expanded) drawRoundRect(TextSecondary.copy(alpha = .5f), androidx.compose.ui.geometry.Offset(h, h),
                             androidx.compose.ui.geometry.Size(size.width - 2 * h, size.height - 2 * h), r, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
-                    }
-                    .pointerInput(tag) {
-                        detectHorizontalDragGestures(onDragStart = { swiping = true; swipe = 0f },
-                            onHorizontalDrag = { change, amount -> change.consume(); swipe += amount },
-                            onDragEnd = { if (kotlin.math.abs(swipe) > width * .4f) onDelete(); swiping = false; swipe = 0f },
-                            onDragCancel = { swiping = false; swipe = 0f })
                     }
                     .testTag(tag), verticalAlignment = Alignment.CenterVertically) {
                     Box(grip.size(pitch, pitch).semantics { contentDescription = "Hold and drag to reorder $label" }.testTag("$tag-grip"),
@@ -438,6 +440,14 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                 }
             }
         }
+        /** TEXT F3.2 small add control: a 28dp drawn tile inside a touch target at least 48dp wide and one row pitch tall. */
+        val addWidth = maxOf(cell, 48.dp)
+        val smallFill = PaddingValues(horizontal = (addWidth - 28.dp) / 2, vertical = ((pitch - 28.dp) / 2).coerceAtLeast(0.dp))
+        @Composable fun SmallAdd(label: String, tag: String, active: Boolean, enabled: Boolean, popover: @Composable () -> Unit, click: () -> Unit) {
+            InspectorTile(null, label, Modifier.size(addWidth, pitch), hollow = true, active = active, enabled = enabled, testTag = tag, fill = smallFill,
+                iconContent = { Icon(InspectorIcons.icon("ADD"), null, Modifier.size(16.dp), tint = if (enabled) TextSecondary else TextDisabled) },
+                popover = popover, click = click)
+        }
         /** Row label with its own add control ("Property [+]", "Selector [+]"). */
         @Composable fun LabelRow(label: String, tag: String, content: @Composable RowScope.() -> Unit) {
             Row(Modifier.fillMaxWidth().height(pitch).padding(start = 12.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically) {
@@ -459,19 +469,25 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
         LazyColumn(Modifier.fillMaxSize().testTag("animate-list"), state = list, userScrollEnabled = drag.id == null) {
             items(rows, key = { it.key }) { row ->
                 val dragged = blockOffset(row) != 0f || (drag.id != null && (row.animatorId == drag.id && drag.parent == null || row.selectorId == drag.id))
+                // TEXT F3.2: an expanded animator's rows are one opaque block in the sheet colour (the glyph stays visible
+                // only in the half-gap margins between bars); the expanded bar's lower half joins the block.
+                val block = row.animatorId != null && row.animatorId == bars.animator && row !is AnimateRow.AnimatorBar
+                val openBar = row is AnimateRow.AnimatorBar && row.expanded
                 val itemModifier = (if (dragged) Modifier else Modifier.animateItem())
                     .zIndex(if (dragged) 1f else 0f).graphicsLayer { translationY = blockOffset(row) }
+                    .then(if (block || openBar) Modifier.drawBehind {
+                        val h = half.toPx(); val top = if (openBar) size.height / 2 else 0f
+                        drawRect(Surface, androidx.compose.ui.geometry.Offset(h, top), androidx.compose.ui.geometry.Size(size.width - 2 * h, size.height - top))
+                    } else Modifier)
                 Box(itemModifier) {
                     when (row) {
-                        AnimateRow.Add -> {
-                            val empty = text.animators.isEmpty()
-                            Box(Modifier.fillMaxWidth().then(if (empty) Modifier.fillParentMaxHeight() else Modifier.height(pitch)), contentAlignment = Alignment.Center) {
-                                if (text.animators.size < TextAnimatorEdits.MAX_ANIMATORS) InspectorTile(InspectorIcons.icon("ADD"), "Add animator",
-                                    Modifier.size(cell, pitch), hollow = true, enabled = !finishing, state = "${text.animators.size} of ${TextAnimatorEdits.MAX_ANIMATORS}",
-                                    testTag = "animate-add-animator", fill = inset) {
-                                    commit { t -> listOf(TextAnimatorEdits.addAnimator(t).also { put ->
-                                        state.bars = state.bars.expandAnimator(put.animator.id).expandSelector(put.animator.selectors.first().id) }) }
-                                }
+                        // TEXT F3.2: a full-width "+ Animator" bar: on top when there are no animators, else after the last one.
+                        AnimateRow.Add -> Box(Modifier.fillMaxWidth().height(pitch)) {
+                            if (text.animators.size < TextAnimatorEdits.MAX_ANIMATORS) InspectorTile(InspectorIcons.icon("ADD"), "Add animator",
+                                Modifier.fillMaxSize(), hollow = true, enabled = !finishing, text = "Animator",
+                                state = "${text.animators.size} of ${TextAnimatorEdits.MAX_ANIMATORS}", testTag = "animate-add-animator", fill = inset) {
+                                commit { t -> listOf(TextAnimatorEdits.addAnimator(t).also { put ->
+                                    state.bars = state.bars.expandAnimator(put.animator.id).expandSelector(put.animator.selectors.first().id) }) }
                             }
                         }
                         is AnimateRow.AnimatorBar -> {
@@ -495,44 +511,54 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                         }
                         is AnimateRow.PropertyLabel -> {
                             val a = requireNotNull(text.animators.firstOrNull { it.id == row.animatorId })
-                            LabelRow("Property", "animate-property-row") {
-                                InspectorTile(InspectorIcons.icon("ADD"), "Add property", Modifier.size(cell, pitch), hollow = true, active = popover == "add-property:${a.id}",
-                                    enabled = !finishing && !row.full, testTag = "animate-add-property", fill = inset, popover = {
-                                        AnchoredPopover(popover == "add-property:${a.id}", { popover = null }, "animate-add-property-popover") {
-                                            AddPropertyContent(a) { p ->
-                                                popover = null
-                                                val added = a.properties.any { it.property == p }
-                                                if (!added) commit(p.takeIf { it in CHARACTER_PROPERTIES }) { t -> listOfNotNull(TextAnimatorEdits.addProperty(t, a.id, p)) }
-                                                focus(TextAnimatorEdits.property(a.id, p))
-                                                if (!state.bars.groupOpen(a.id, AnimateFields.pageGroup(p))) state.bars = state.bars.toggleGroup(a.id, AnimateFields.pageGroup(p))
-                                            }
+                            // TEXT F3.2 Property bar: chevron + count (dropdown for the tiles), trash for all tiles, small +.
+                            val chevron by animateFloatAsState(if (row.open) 0f else -90f, label = "chevron")
+                            Row(Modifier.fillMaxWidth().height(pitch).testTag("animate-property-row"), verticalAlignment = Alignment.CenterVertically) {
+                                Row(Modifier.weight(1f).fillMaxHeight().padding(start = 12.dp)
+                                    .clickable(enabled = !finishing) { state.bars = state.bars.toggleGroup(a.id, AnimateRows.PROPERTIES) }
+                                    .semantics(mergeDescendants = true) { contentDescription = "Property, ${row.count}"; stateDescription = if (row.open) "Expanded" else "Collapsed"; role = Role.Button }
+                                    .testTag("animate-property-toggle"), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(InspectorIcons.icon("EXPANDED"), null, Modifier.size(InspectorIcons.INLINE).graphicsLayer { rotationZ = chevron }, tint = TextSecondary)
+                                    Text("Property", Modifier.padding(start = 6.dp).weight(1f).semantics { heading() }, color = TextSecondary,
+                                        style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                                    if (row.count > 0) Text("${row.count}", Modifier.padding(end = 8.dp), color = TextSecondary, fontSize = 11.sp, maxLines = 1)
+                                }
+                                if (row.count > 0) InspectorTile(null, "Delete all ${row.count} properties of ${a.name}", Modifier.size(addWidth, pitch), enabled = !finishing,
+                                    testTag = "animate-delete-properties", fill = smallFill,
+                                    iconContent = { Icon(InspectorIcons.icon("DELETE"), null, Modifier.size(16.dp), tint = if (!finishing) TextSecondary else TextDisabled) }) {
+                                    // One undo step: every RemoveProperty in one action.
+                                    commit { t -> t.animators.firstOrNull { it.id == a.id }?.properties?.map { AnimatorEdit.RemoveProperty(a.id, it.property) }.orEmpty() }
+                                }
+                                SmallAdd("Add property", "animate-add-property", popover == "add-property:${a.id}", !finishing && !row.full, popover = {
+                                    AnchoredPopover(popover == "add-property:${a.id}", { popover = null }, "animate-add-property-popover") {
+                                        AddPropertyContent(a) { p ->
+                                            popover = null
+                                            val added = a.properties.any { it.property == p }
+                                            if (!added) commit(p.takeIf { it in CHARACTER_PROPERTIES }) { t -> listOfNotNull(TextAnimatorEdits.addProperty(t, a.id, p)) }
+                                            focus(TextAnimatorEdits.property(a.id, p))
+                                            if (!state.bars.groupOpen(a.id, AnimateRows.PROPERTIES)) state.bars = state.bars.toggleGroup(a.id, AnimateRows.PROPERTIES)
                                         }
-                                    }) { popover = "add-property:${a.id}" }
+                                    }
+                                }) { popover = "add-property:${a.id}" }
                             }
                         }
-                        is AnimateRow.GroupHeader -> HeaderRow(row.group, "${row.count}", row.open, "animate-group-${row.group}") {
-                            state.bars = state.bars.toggleGroup(requireNotNull(row.animatorId), row.group)
-                        }
+                        // Property tiles in insertion order. Swipe a tile sideways to delete it (one undo step): the body scrolls
+                        // vertically and the tile row does not scroll, so sideways is the direction that never conflicts.
                         is AnimateRow.PropertyTiles -> Row(Modifier.fillMaxWidth().height(pitch)) {
                             val id = requireNotNull(row.animatorId)
                             row.properties.forEach { p ->
                                 val address = TextAnimatorEdits.property(id, p)
-                                val menuKey = "menu-prop:$id:${p.name}"
-                                FieldTile(address, Modifier.width(cell).fillMaxHeight(), "animate-property-${p.name}", onLong = { focus(address); popover = menuKey }) {
-                                    DropdownMenu(popover == menuKey, { popover = null }, Modifier.testTag("animate-property-menu")) {
-                                        DropdownMenuItem(text = { Text("Reset ${AnimateFields.property(p).label} value") }, onClick = {
-                                            popover = null; commit { t -> listOf(TextAnimatorEdits.reset(t, address, local)) } })
-                                        DropdownMenuItem(text = { Text("Remove ${AnimateFields.property(p).label}") }, onClick = {
-                                            popover = null; commit { listOf(AnimatorEdit.RemoveProperty(id, p)) } })
-                                    }
+                                SwipeToDelete("animate-swipe-${p.name}", Modifier.width(cell).fillMaxHeight(), inset, minDistance = 40.dp, enabled = !finishing,
+                                    label = "Remove ${AnimateFields.property(p).label}", compact = true,
+                                    onDelete = { if (state.focus == address) state.focus = null; popover = null; commit { listOf(AnimatorEdit.RemoveProperty(id, p)) } }) { swiped ->
+                                    FieldTile(address, swiped, "animate-property-${p.name}")
                                 }
                             }
                         }
                         is AnimateRow.SelectorLabel -> {
                             val id = requireNotNull(row.animatorId)
                             LabelRow("Selector", "animate-selector-row") {
-                                InspectorTile(InspectorIcons.icon("ADD"), "Add selector", Modifier.size(cell, pitch), hollow = true, active = popover == "add-selector:$id",
-                                    enabled = !finishing && !row.full, testTag = "animate-add-selector", fill = inset, popover = {
+                                SmallAdd("Add selector", "animate-add-selector", popover == "add-selector:$id", !finishing && !row.full, popover = {
                                         AnchoredPopover(popover == "add-selector:$id", { popover = null }, "animate-add-selector-popover") {
                                             Row {
                                                 TextSelectorKind.entries.forEach { k ->
@@ -582,6 +608,36 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                 }
             }
         }
+    }
+}
+
+/**
+ * Swipe sideways to delete (TEXT F3.1 animator bars; TEXT F3.2 shares it with selector bars and property tiles). The
+ * content follows the finger over the revealed delete glyph; past 40% of the width (and at least [minDistance]) the
+ * release deletes. Undo restores; there is no confirmation. [label] adds a Delete accessibility action.
+ */
+@Composable private fun SwipeToDelete(tag: String, modifier: Modifier, inset: PaddingValues, onDelete: () -> Unit, enabled: Boolean = true,
+    minDistance: androidx.compose.ui.unit.Dp = 0.dp, label: String? = null, compact: Boolean = false, content: @Composable (Modifier) -> Unit) {
+    var swipe by remember { mutableFloatStateOf(0f) }
+    var swiping by remember { mutableStateOf(false) }
+    val shown by animateFloatAsState(if (swiping) swipe else 0f, label = "swipe")
+    var width by remember { mutableFloatStateOf(1f) }
+    val min = with(LocalDensity.current) { minDistance.toPx() }
+    val currentDelete by rememberUpdatedState(onDelete)
+    Box(modifier.onSizeChanged { width = it.width.toFloat() }
+        .then(if (label != null) Modifier.semantics { customActions = listOf(CustomAccessibilityAction(label) { currentDelete(); true }) } else Modifier)) {
+        // Revealed under a swipe: the delete glyph on the side the content leaves.
+        if (shown != 0f) Row(Modifier.matchParentSize().padding(inset).clip(RoundedCornerShape(8.dp)).background(Border).testTag("$tag-reveal"),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = if (shown > 0) Arrangement.Start else Arrangement.End) {
+            Icon(InspectorIcons.icon("DELETE"), null, Modifier.padding(horizontal = if (compact) 4.dp else 12.dp).size(InspectorIcons.INLINE), tint = TextPrimary)
+        }
+        content(Modifier.matchParentSize().offset { IntOffset(shown.roundToInt(), 0) }.pointerInput(tag, enabled) {
+            if (!enabled) return@pointerInput
+            detectHorizontalDragGestures(onDragStart = { swiping = true; swipe = 0f },
+                onHorizontalDrag = { change, amount -> change.consume(); swipe += amount },
+                onDragEnd = { if (AnimateSwipe.deletes(swipe, width, min)) currentDelete(); swiping = false; swipe = 0f },
+                onDragCancel = { swiping = false; swipe = 0f })
+        })
     }
 }
 
@@ -669,15 +725,15 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                 AnimatorProperty.ROTATION -> {
                     val v = TextAnimatorEdits.value(text, address, local)
                     Box(Modifier.size(SectionLayout.DIAL.dp).testTag("animate-rotation-dial")) {
-                        RotationDialController(v, onBegin, { onPreview(PropertyLimits.ROTATION.hard(it), null) }, onFinish, onCancel,
-                            { onSet(PropertyLimits.ROTATION.typed(it), null) }, valueHeight = SectionLayout.valueBox(fontScale).dp)
+                        RotationDialController(v, onBegin, { onPreview(PropertyLimits.ANIM_ROTATION.hard(it), null) }, onFinish, onCancel,
+                            { onSet(PropertyLimits.ANIM_ROTATION.typed(it), null) }, valueHeight = SectionLayout.valueBox(fontScale).dp)
                     }
                 }
                 AnimatorProperty.SCALE -> {
                     val v = TextAnimatorEdits.vector(text, address, local)
                     Box(Modifier.fillMaxWidth().testTag("animate-scale")) {
-                        ScaleController(v[0] / 100f, v[1] / 100f, linked, onBegin, { x, y -> onPreview(PropertyLimits.LAYER_SCALE.hard(x * 100f), PropertyLimits.LAYER_SCALE.hard(y * 100f)) },
-                            onFinish, onCancel, { x, y -> onSet(PropertyLimits.LAYER_SCALE.typed(x * 100f), PropertyLimits.LAYER_SCALE.typed(y * 100f)) },
+                        ScaleController(v[0] / 100f, v[1] / 100f, linked, onBegin, { x, y -> onPreview(PropertyLimits.ANIM_SCALE.hard(x * 100f), PropertyLimits.ANIM_SCALE.hard(y * 100f)) },
+                            onFinish, onCancel, { x, y -> onSet(PropertyLimits.ANIM_SCALE.typed(x * 100f), PropertyLimits.ANIM_SCALE.typed(y * 100f)) },
                             SectionLayout.ruler(fontScale)) {
                             InspectorIconButton(InspectorIcons.icon(if (linked) "LINK" else "LINK_OFF"), if (linked) "Unlink width and height" else "Link width and height",
                                 selected = linked) { onLink(!linked) }

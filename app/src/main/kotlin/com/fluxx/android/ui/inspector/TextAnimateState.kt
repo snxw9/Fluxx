@@ -42,8 +42,8 @@ internal object AnimateFields {
 
     fun property(p: AnimatorProperty): AnimateFieldSpec = when (p) {
         AnimatorProperty.POSITION -> AnimateFieldSpec("Position", "POSITION", AnimateEditor.POSITION, PropertyLimits.ANIM_OFFSET, short = "Pos")
-        AnimatorProperty.SCALE -> AnimateFieldSpec("Scale", "SCALE", AnimateEditor.SCALE, PropertyLimits.LAYER_SCALE, short = "Scale")
-        AnimatorProperty.ROTATION -> AnimateFieldSpec("Rotation", "ROTATION", AnimateEditor.ROTATION, PropertyLimits.ROTATION, short = "Rot")
+        AnimatorProperty.SCALE -> AnimateFieldSpec("Scale", "SCALE", AnimateEditor.SCALE, PropertyLimits.ANIM_SCALE, short = "Scale")
+        AnimatorProperty.ROTATION -> AnimateFieldSpec("Rotation", "ROTATION", AnimateEditor.ROTATION, PropertyLimits.ANIM_ROTATION, short = "Rot")
         AnimatorProperty.OPACITY -> AnimateFieldSpec("Opacity", "OPACITY", AnimateEditor.SLIDER, PropertyLimits.ANIM_PERCENT.copy(name = "Opacity", default = 100f), short = "Opac")
         AnimatorProperty.SKEW -> AnimateFieldSpec("Skew", "SKEW", AnimateEditor.SLIDER, PropertyLimits.ANIM_SKEW, short = "Skew")
         AnimatorProperty.SKEW_AXIS -> AnimateFieldSpec("Skew axis", "SKEW_AXIS", AnimateEditor.SLIDER, PropertyLimits.ANIM_ANGLE.copy(name = "Skew axis"), short = "Axis")
@@ -51,7 +51,7 @@ internal object AnimateFields {
         AnimatorProperty.FILL -> AnimateFieldSpec("Fill colour", "FILL", AnimateEditor.COLOUR, short = "Fill")
         AnimatorProperty.STROKE_COLOUR -> AnimateFieldSpec("Stroke colour", "STROKE", AnimateEditor.COLOUR, short = "Strk")
         AnimatorProperty.STROKE_WIDTH -> AnimateFieldSpec("Stroke width", "STROKE_WIDTH", AnimateEditor.SLIDER, PropertyLimits.STROKE_DELTA.copy(name = "Stroke width"), short = "Width")
-        AnimatorProperty.TRACKING -> AnimateFieldSpec("Tracking", "TRACKING", AnimateEditor.SLIDER, PropertyLimits.TRACKING, short = "Track")
+        AnimatorProperty.TRACKING -> AnimateFieldSpec("Tracking", "TRACKING", AnimateEditor.SLIDER, PropertyLimits.ANIM_TRACKING, short = "Track")
         AnimatorProperty.LINE_ANCHOR -> AnimateFieldSpec("Line anchor", "LINE_ANCHOR", AnimateEditor.SLIDER, PropertyLimits.ANIM_PERCENT.copy(name = "Line anchor"), short = "LnAn")
         AnimatorProperty.BLUR -> AnimateFieldSpec("Blur", "BLUR", AnimateEditor.SLIDER, PropertyLimits.ANIM_BLUR, short = "Blur")
         AnimatorProperty.FILL_OPACITY -> AnimateFieldSpec("Fill opacity", "FILL_OPACITY", AnimateEditor.SLIDER, PropertyLimits.ANIM_PERCENT.copy(name = "Fill opacity", default = 100f), short = "F op")
@@ -342,9 +342,10 @@ internal data class SelectorCell(val field: SelectorField?, val hint: Boolean = 
 internal sealed class AnimateRow(val key: String, val animatorId: Long? = null, val selectorId: Long? = null) {
     object Add : AnimateRow("add")
     class AnimatorBar(val animator: TextAnimator, val index: Int, val expanded: Boolean) : AnimateRow("a:${animator.id}", animator.id)
-    class PropertyLabel(id: Long, val full: Boolean) : AnimateRow("p:$id", id)
-    class GroupHeader(id: Long, val group: String, val count: Int, val open: Boolean) : AnimateRow("pg:$id:$group", id)
-    class PropertyTiles(id: Long, group: String, row: Int, val properties: List<AnimatorProperty>) : AnimateRow("pt:$id:$group:$row", id)
+    /** TEXT F3.2: the Property bar, a dropdown header (chevron, count, trash for all tiles, add). */
+    class PropertyLabel(id: Long, val full: Boolean, val count: Int = 0, val open: Boolean = true) : AnimateRow("p:$id", id)
+    /** Property tiles in insertion order (the order added), [AnimateMetrics.columns] per row. */
+    class PropertyTiles(id: Long, row: Int, val properties: List<AnimatorProperty>) : AnimateRow("pt:$id:$row", id)
     class SelectorLabel(id: Long, val full: Boolean) : AnimateRow("sl:$id", id)
     class SelectorBar(id: Long, val selector: TextRangeSelector, val index: Int, val expanded: Boolean) : AnimateRow("s:${selector.id}", id, selector.id)
     class SelectorTiles(id: Long, val selector: TextRangeSelector, section: String, row: Int, val cells: List<SelectorCell>) :
@@ -354,21 +355,22 @@ internal sealed class AnimateRow(val key: String, val animatorId: Long? = null, 
 }
 
 internal object AnimateRows {
+    /** The Property bar's open/closed key in [AnimateBars.collapsedGroups]. */
+    const val PROPERTIES = "Properties"
+    /**
+     * TEXT F3.2: with no animators the "+ Animator" bar is the first (only) row; otherwise it follows the last animator,
+     * scrolling with the list. Property tiles keep insertion order under one collapsible Property bar.
+     */
     fun build(text: TextProperties, bars: AnimateBars, local: Long, columns: Int): List<AnimateRow> {
-        val out = mutableListOf<AnimateRow>(AnimateRow.Add)
+        val out = mutableListOf<AnimateRow>()
+        if (text.animators.isEmpty()) out += AnimateRow.Add
         text.animators.forEachIndexed { i, a ->
             val open = bars.animator == a.id
             out += AnimateRow.AnimatorBar(a, i, open)
             if (!open) return@forEachIndexed
-            out += AnimateRow.PropertyLabel(a.id, a.properties.size >= AnimatorProperty.entries.size)
-            val added = a.properties.map { it.property }.toSet()
-            for (g in AnimateFields.GROUPS) {
-                val shown = g.all.filter { it in added }
-                if (shown.isEmpty()) continue
-                val groupOpen = bars.groupOpen(a.id, g.name)
-                out += AnimateRow.GroupHeader(a.id, g.name, shown.size, groupOpen)
-                if (groupOpen) shown.chunked(columns).forEachIndexed { r, line -> out += AnimateRow.PropertyTiles(a.id, g.name, r, line) }
-            }
+            val propertiesOpen = bars.groupOpen(a.id, PROPERTIES)
+            out += AnimateRow.PropertyLabel(a.id, a.properties.size >= AnimatorProperty.entries.size, a.properties.size, propertiesOpen)
+            if (propertiesOpen) a.properties.map { it.property }.chunked(columns).forEachIndexed { r, line -> out += AnimateRow.PropertyTiles(a.id, r, line) }
             out += AnimateRow.SelectorLabel(a.id, a.selectors.size >= TextAnimatorEdits.MAX_SELECTORS)
             a.selectors.forEachIndexed { j, s ->
                 val sOpen = s.id in bars.selectors
@@ -387,9 +389,18 @@ internal object AnimateRows {
             }
             out += AnimateRow.GroupingRow(a.id)
         }
+        if (text.animators.isNotEmpty()) out += AnimateRow.Add
         return out
     }
     /** Every selector field a built list shows (for the "hidden fields never appear" checks). */
     fun shownFields(rows: List<AnimateRow>): Set<SelectorField> =
         rows.filterIsInstance<AnimateRow.SelectorTiles>().flatMap { r -> r.cells.mapNotNull { it.field } }.toSet()
+}
+
+/** TEXT F3.2: the faded Animate glyph, centred and fixed in the body (smaller than F3.1's 60%). */
+internal object AnimateGlyph { const val FRACTION = .4f }
+
+/** Swipe-to-delete threshold (bars, selector bars, property tiles): past 40% of the width and at least [min] px. */
+internal object AnimateSwipe {
+    fun deletes(distance: Float, width: Float, min: Float) = kotlin.math.abs(distance) > maxOf(width * .4f, min)
 }

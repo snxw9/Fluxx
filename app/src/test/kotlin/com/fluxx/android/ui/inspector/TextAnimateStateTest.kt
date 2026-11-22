@@ -47,23 +47,30 @@ class TextAnimateStateTest {
 
     @Test fun listStructureFollowsTheBarsAndOneAnimatorIsExpandedAtATime() {
         var t=sample();val first=t.animators[0]
+        // TEXT F3.2: with no animators the "+ Animator" bar is the only (top) row.
+        assertEquals(listOf("add"),AnimateRows.build(t.copy(animators=FrozenList.empty()),AnimateBars(),0,6).map { it.key })
         t=put(t,listOf(TextAnimatorEdits.addAnimator(t,ids)));val second=t.animators[1]
-        // Collapsed: add + one bar per animator, nothing else.
-        assertEquals(listOf("add","a:${first.id}","a:${second.id}"),AnimateRows.build(t,AnimateBars(),0,6).map { it.key })
+        // Collapsed: one bar per animator, then the add bar at the bottom.
+        assertEquals(listOf("a:${first.id}","a:${second.id}","add"),AnimateRows.build(t,AnimateBars(),0,6).map { it.key })
         var bars=AnimateBars().toggleAnimator(first.id)
         val rows=AnimateRows.build(t,bars,0,6)
-        // Property row, Transform group (Position, Opacity), Advanced group (Character offset), Selector row, two selector bars, Grouping.
-        assertEquals(listOf("add","a:${first.id}","p:${first.id}","pg:${first.id}:Transform","pt:${first.id}:Transform:0","pg:${first.id}:Advanced",
-            "pt:${first.id}:Advanced:0","sl:${first.id}","s:${first.selectors[0].id}","s:${first.selectors[1].id}","g:${first.id}","a:${second.id}"),rows.map { it.key })
-        assertEquals(listOf(AnimatorProperty.POSITION,AnimatorProperty.OPACITY),(rows[4] as AnimateRow.PropertyTiles).properties)
+        // Property bar, its tiles in insertion order (no category groups), Selector row, two selector bars, Grouping.
+        assertEquals(listOf("a:${first.id}","p:${first.id}","pt:${first.id}:0","sl:${first.id}","s:${first.selectors[0].id}",
+            "s:${first.selectors[1].id}","g:${first.id}","a:${second.id}","add"),rows.map { it.key })
+        assertEquals(first.properties.map { it.property },(rows[2] as AnimateRow.PropertyTiles).properties)
+        assertEquals(first.properties.size,(rows[1] as AnimateRow.PropertyLabel).count)
+        // Insertion order is kept even across categories (Opacity added before Position stays first).
+        val reordered=first.copy(properties=FrozenList.of(first.properties.reversed()))
+        val t2=t.copy(animators=FrozenList.of(listOf(reordered,second)))
+        assertEquals(reordered.properties.map { it.property },(AnimateRows.build(t2,bars,0,6)[2] as AnimateRow.PropertyTiles).properties)
         // Expanding the second collapses the first; toggling again collapses all.
         bars=bars.toggleAnimator(second.id);assertEquals(second.id,bars.animator)
         assertEquals(1,AnimateRows.build(t,bars,0,6).count { it is AnimateRow.PropertyLabel })
         assertNull(bars.toggleAnimator(second.id).animator)
-        // Group headers collapse their tiles only.
-        val grouped=AnimateBars().expandAnimator(first.id).toggleGroup(first.id,"Transform")
-        assertTrue(AnimateRows.build(t,grouped,0,6).none { it.key=="pt:${first.id}:Transform:0" })
-        assertTrue(AnimateRows.build(t,grouped,0,6).any { it.key=="pg:${first.id}:Transform" })
+        // The Property bar collapses its tiles only.
+        val closed=AnimateBars().expandAnimator(first.id).toggleGroup(first.id,AnimateRows.PROPERTIES)
+        assertTrue(AnimateRows.build(t,closed,0,6).none { it is AnimateRow.PropertyTiles })
+        assertFalse((AnimateRows.build(t,closed,0,6).first { it is AnimateRow.PropertyLabel } as AnimateRow.PropertyLabel).open)
         // Focus is separate from the bars: collapsing keeps it (and the rail) on the same field.
         val focus=TextAnimatorEdits.property(first.id,AnimatorProperty.OPACITY)
         assertEquals(focus,AnimateSelection.focus(t,focus))
@@ -158,19 +165,19 @@ class TextAnimateStateTest {
     @Test fun limitsTable() {
         fun row(l: PropertyLimit?)=l?.let { listOf(it.sliderMin,it.sliderMax,it.typedMin,it.typedMax,it.hardMin,it.hardMax) }
         val properties=mapOf(
-            AnimatorProperty.ANCHOR to listOf(-500f,500f,-1e5f,1e5f,-1e5f,1e5f), AnimatorProperty.POSITION to listOf(-500f,500f,-1e5f,1e5f,-1e5f,1e5f),
-            AnimatorProperty.SCALE to listOf(PropertyLimits.LAYER_SCALE.sliderMin,PropertyLimits.LAYER_SCALE.sliderMax,-5e4f,5e4f,-5e4f,5e4f),
+            AnimatorProperty.ANCHOR to listOf(-500f,500f,-1e4f,1e4f,-1e4f,1e4f), AnimatorProperty.POSITION to listOf(-500f,500f,-1e4f,1e4f,-1e4f,1e4f),
+            AnimatorProperty.SCALE to listOf(0f,400f,-2000f,2000f,-2000f,2000f),
             AnimatorProperty.SKEW to listOf(-85f,85f,-85f,85f,-85f,85f), AnimatorProperty.SKEW_AXIS to listOf(-180f,180f,-3600f,3600f,-3600f,3600f),
-            AnimatorProperty.ROTATION to listOf(-360f,360f,-36000f,36000f,-36000f,36000f), AnimatorProperty.OPACITY to listOf(0f,100f,0f,100f,0f,100f),
+            AnimatorProperty.ROTATION to listOf(-360f,360f,-3600f,3600f,-3600f,3600f), AnimatorProperty.OPACITY to listOf(0f,100f,0f,100f,0f,100f),
             AnimatorProperty.FILL to null, AnimatorProperty.STROKE_COLOUR to null,
             AnimatorProperty.FILL_OPACITY to listOf(0f,100f,0f,100f,0f,100f), AnimatorProperty.STROKE_OPACITY to listOf(0f,100f,0f,100f,0f,100f),
             AnimatorProperty.STROKE_WIDTH to listOf(-50f,50f,-200f,200f,-200f,200f),
             AnimatorProperty.FILL_HUE to listOf(-180f,180f,-3600f,3600f,-3600f,3600f), AnimatorProperty.STROKE_HUE to listOf(-180f,180f,-3600f,3600f,-3600f,3600f),
             AnimatorProperty.FILL_SATURATION to listOf(-100f,100f,-100f,100f,-100f,100f), AnimatorProperty.FILL_BRIGHTNESS to listOf(-100f,100f,-100f,100f,-100f,100f),
             AnimatorProperty.STROKE_SATURATION to listOf(-100f,100f,-100f,100f,-100f,100f), AnimatorProperty.STROKE_BRIGHTNESS to listOf(-100f,100f,-100f,100f,-100f,100f),
-            AnimatorProperty.TRACKING to listOf(-100f,100f,-500f,500f,-1000f,1000f), AnimatorProperty.LINE_ANCHOR to listOf(0f,100f,0f,100f,0f,100f),
+            AnimatorProperty.TRACKING to listOf(-100f,100f,-1000f,1000f,-1000f,1000f), AnimatorProperty.LINE_ANCHOR to listOf(0f,100f,0f,100f,0f,100f),
             AnimatorProperty.LINE_SPACING to listOf(-100f,100f,-2000f,2000f,-2000f,2000f), AnimatorProperty.GROUPING_ALIGNMENT to listOf(-100f,100f,-1000f,1000f,-1000f,1000f),
-            AnimatorProperty.BLUR to listOf(0f,50f,0f,100f,0f,100f),
+            AnimatorProperty.BLUR to listOf(0f,50f,0f,250f,0f,250f),
             AnimatorProperty.CHARACTER_OFFSET to listOf(-100f,100f,-1114111f,1114111f,-1114111f,1114111f),
             AnimatorProperty.CHARACTER_VALUE to listOf(32f,591f,0f,1114111f,0f,1114111f))
         assertEquals(AnimatorProperty.entries.toSet(),properties.keys)
@@ -188,7 +195,7 @@ class TextAnimateStateTest {
         for(f in SelectorField.entries-selectors.keys) assertNull(f.name,AnimateFields.selector(f).limit)
         // Structural caps.
         assertEquals(16,TextAnimatorEdits.MAX_ANIMATORS);assertEquals(8,TextAnimatorEdits.MAX_SELECTORS);assertEquals(128,TextAnimatorEdits.NAME_LIMIT)
-        assertEquals(64,TextAnimatorEdits.MAX_SEEDS)
+        assertEquals(256,TextAnimatorEdits.MAX_SEEDS)
         assertEquals(4096,TextCharacterPreparation.MAX_CODEPOINTS);assertEquals(16384,TextCharacterPreparation.MAX_CATALOGUE_GLYPHS)
         val a=TextAnimator(1)
         assertThrows(IllegalArgumentException::class.java) { a.copy(selectors=FrozenList.of((1L..9L).map { TextRangeSelector(it+10) })) }

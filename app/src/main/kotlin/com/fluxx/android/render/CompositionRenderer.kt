@@ -126,6 +126,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 RenderBridge.upsertPreparedText(session,packet).also { characterHandles.add(it) }
             }?.toLongArray()
             val animations=Array(layouts.size) { requireNotNull(layouts[it].metrics.prepareAnimation(animatedText,selectorEase,sources[it/2],linePool,catalogue?.catalogue,memo)) }
+            // TEXT F3.2: a seed animation over the per-selector cap renders clamped (nearest prepared seed); warn in the preview.
+            if(interactive) animations.firstNotNullOfOrNull { it.seedWarning }?.let { characterErrors.putIfAbsent(layer.id,it) }
             if(handles!=null) for(i in animations.indices) animations[i].characters?.let { characters->
                 RenderBridge.bindTextCharacters(session,layouts[i].handle,handles,characters.catalogue.codepoints,characters.fontIndices,
                     sources[i/2].text,animations[i].modifiers,characters.codes)

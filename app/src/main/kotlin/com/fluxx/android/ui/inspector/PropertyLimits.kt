@@ -104,8 +104,17 @@ internal object PropertyLimits {
     }
 
     // ---- Text animators (TEXT F3). Slider = comfortable range, typed/hard = what the backend accepts and renders. ----
+    // TEXT F3.2 caps: Position/Anchor ±10,000 px, Scale ±2,000 %, Rotation ±3,600° (10 turns), Tracking ±1,000, Blur 250 px.
+    // The thumb pins at the slider end for typed values beyond the soft range. The model is unbounded for these
+    // (validateRange −MAX..MAX), so no backend range changed; every value stays finite in evaluation.
     /** Animator Position / Anchor offsets in layer pixels (the model is unbounded; this is the UI cap). */
-    val ANIM_OFFSET = PropertyLimit("Offset", "px", -500f, 500f, -100000f, 100000f, -100000f, 100000f, 0f, detentStep = 50f, step = .1f)
+    val ANIM_OFFSET = PropertyLimit("Offset", "px", -500f, 500f, -10000f, 10000f, -10000f, 10000f, 0f, detentStep = 50f, step = .1f)
+    /** Animator Scale, percent; the slider is 0–400 % (negative scale flips, typed only). */
+    val ANIM_SCALE = PropertyLimit("Scale", "%", 0f, 400f, -2000f, 2000f, -2000f, 2000f, 100f, detentStep = 25f, step = .1f)
+    /** Animator Rotation in degrees; the read-out keeps the dial's turns notation. */
+    val ANIM_ROTATION = PropertyLimit("Rotation", "°", -360f, 360f, -3600f, 3600f, -3600f, 3600f, 0f, detentStep = 45f, step = .1f)
+    /** Animator Tracking (1/1000 em); the Character tab keeps [TRACKING]. */
+    val ANIM_TRACKING = TRACKING.copy(typedMin = -1000f, typedMax = 1000f)
     /** Skew: the evaluator clamps the coverage-weighted skew to ±85° per glyph (TextSelectorEngine.affine), so ±85 is the cap. */
     val ANIM_SKEW = PropertyLimit("Skew", "°", -85f, 85f, -85f, 85f, -85f, 85f, 0f, detentStep = 15f, step = .1f)
     val ANIM_ANGLE = PropertyLimit("Angle", "°", -180f, 180f, -3600f, 3600f, -3600f, 3600f, 0f, detentStep = 15f, step = .1f)
@@ -114,9 +123,11 @@ internal object PropertyLimits {
     /**
      * Per-glyph edge softness (an SDF shader parameter, not a Gaussian layer blur). PreparedTextAnimation.writeRecords
      * clamps it to the glyph's SDF budget: 10% of the glyph's font size (7.5% with faux bold) minus half the stroke width.
-     * At the 1,000px maximum layer size that is 100px, so 100 is the typed cap.
+     * TEXT F3.2: typed cap 250px. Above the budget the clamp holds the value, so 250 is artefact-free and costs the same
+     * (a per-glyph shader parameter); on a 1,000px layer the visible softness still stops at 100px, and larger values
+     * only show on runs whose relative size takes the glyph past 1,000px.
      */
-    val ANIM_BLUR = PropertyLimit("Blur", "px", 0f, 50f, 0f, 100f, 0f, 100f, 0f, detentStep = 5f, step = .5f)
+    val ANIM_BLUR = PropertyLimit("Blur", "px", 0f, 50f, 0f, 250f, 0f, 250f, 0f, detentStep = 5f, step = .5f)
     /** Hue in degrees (wraps modulo 360 in the evaluator). */
     val ANIM_HUE = PropertyLimit("Hue", "°", -180f, 180f, -3600f, 3600f, -3600f, 3600f, 0f, detentStep = 30f)
     /** Saturation / brightness in percentage points; the evaluator clamps the result, so ±100 is the useful range. */
@@ -152,9 +163,9 @@ internal object PropertyLimits {
         else -> null
     }
 
-    /** Parse a typed entry: comma decimals accepted; result clamped to the typed range. Null if not a finite number. */
+    /** Parse a typed entry leniently ([ValueParsing]); result clamped to the typed range. Null if not a finite number. */
     fun parseTyped(limit: PropertyLimit, input: String): Float? =
-        input.trim().removeSuffix(limit.unit).trim().removeSuffix("%").replace(',', '.').toFloatOrNull()?.takeIf { it.isFinite() }?.let(limit::typed)
+        ValueParsing.number(input, limit.unit)?.toFloat()?.takeIf { it.isFinite() }?.let(limit::typed)
 
     fun format(limit: PropertyLimit, value: Float): String {
         if (!value.isFinite()) return "—"
@@ -162,4 +173,33 @@ internal object PropertyLimits {
         return if (v == v.toLong().toFloat()) v.toLong().toString()
         else String.format(java.util.Locale.ROOT, "%.2f", v).trimEnd('0').trimEnd('.')
     }
+}
+
+/**
+ * TEXT F3.2 lenient number entry for every typed value field (signed number pads: KeyboardType.DecimalSigned /
+ * NumberSigned, which not every keyboard honours). Accepts: a Unicode minus (U+2212) or dash for "-", a leading
+ * "+", a sign typed after the digits ("50-", the Samsung "." / "-" key order), comma decimals, spaces and a unit
+ * suffix. A lone sign, a lone separator, a sign inside the digits or two separators is not a number: the caller
+ * keeps the last valid value. Never throws.
+ */
+internal object ValueParsing {
+    private val DASHES = charArrayOf('−', '‐', '‑', '‒', '–', '—', '﹣', '－')
+    fun number(input: String, unit: String = ""): Double? {
+        var s = input.trim()
+        for (suffix in listOfNotNull(unit.takeIf { it.isNotEmpty() }, "%", "°", "px")) s = s.removeSuffix(suffix).trim()
+        s = s.filterNot { it.isWhitespace() || it == ' ' || it == ' ' }
+        for (d in DASHES) s = s.replace(d, '-')
+        s = s.replace('．', '.').replace('，', ',')
+        // Comma decimals; with both separators present the comma is a thousands separator.
+        s = if ('.' in s) s.replace(",", "") else s.replace(',', '.')
+        var negative = false
+        while (s.isNotEmpty() && (s.first() == '-' || s.first() == '+')) { if (s.first() == '-') negative = !negative; s = s.drop(1) }
+        while (s.isNotEmpty() && (s.last() == '-' || s.last() == '+')) { if (s.last() == '-') negative = !negative; s = s.dropLast(1) }
+        if (s.isEmpty() || s == "." || s.count { it == '.' } > 1 || s.any { !(it.isDigit() || it == '.' || it == 'e' || it == 'E') }) return null
+        if (s.any { it == 'e' || it == 'E' } && !Regex("[0-9.]+[eE][0-9]+").matches(s)) return null
+        val v = s.toDoubleOrNull()?.takeIf { it.isFinite() } ?: return null
+        return if (negative) -v else v
+    }
+    /** Whole numbers for integer fields; null for fractions or malformed input. */
+    fun integer(input: String): Long? = number(input)?.takeIf { it == kotlin.math.floor(it) && kotlin.math.abs(it) < 9.0e15 }?.toLong()
 }

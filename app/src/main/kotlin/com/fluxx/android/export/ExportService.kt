@@ -38,7 +38,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 data class ExportState(val running: Boolean = false, val percent: Int? = null,
-    val message: String = "", val output: Uri? = null)
+    val message: String = "", val output: Uri? = null,
+    /** TEXT F3.2: non-zero, unique per terminal state (saved, failed, cancelled); 0 while idle or running. */
+    val completion: Long = 0L)
 
 @UnstableApi
 class ExportService : Service() {
@@ -51,14 +53,16 @@ class ExportService : Service() {
         private const val NOTIFICATION = 1001
         private const val START = "com.fluxx.android.action.START_EXPORT"
         private const val STOP = "com.fluxx.android.action.STOP_EXPORT"
-        private val mutableState = MutableStateFlow(ExportState())
+        private val store = ExportStateStore()
         private val requestGeneration = java.util.concurrent.atomic.AtomicLong()
-        val state = mutableState.asStateFlow()
+        val state = store.state
+        /** TEXT F3.2: back to idle when the done dialog is dismissed or a project is opened (never while running). */
+        fun reset() = store.reset()
 
         suspend fun start(context: Context, project: ProjectDocument) = withContext(Dispatchers.Main.immediate) {
-            if (mutableState.value.running) return@withContext
+            if (store.value.running) return@withContext
             val request = requestGeneration.incrementAndGet()
-            mutableState.value = ExportState(running = true, message = "Preparing export")
+            store.running(message = "Preparing export")
             var snapshot: File? = null
             try {
                 withContext(Dispatchers.IO) {
@@ -69,14 +73,14 @@ class ExportService : Service() {
                 }
                 if (requestGeneration.get() != request) {
                     withContext(NonCancellable + Dispatchers.IO) { snapshot?.delete() }
-                    mutableState.value = ExportState(message = "Export cancelled")
+                    store.finish("Export cancelled")
                     return@withContext
                 }
                 ContextCompat.startForegroundService(context, Intent(context, ExportService::class.java)
                     .setAction(START).putExtra("snapshot", requireNotNull(snapshot).name))
             } catch (e: Exception) {
                 withContext(NonCancellable + Dispatchers.IO) { snapshot?.delete() }
-                mutableState.value = ExportState(message = "Export failed: "+e.message)
+                store.finish("Export failed: "+e.message)
                 throw e
             }
         }
@@ -118,7 +122,7 @@ class ExportService : Service() {
                 }
             job = scope.launch {
                 var temporary: File? = null
-                var terminal = ExportState(message = "Export cancelled")
+                var terminalMessage = "Export cancelled"; var terminalOutput: Uri? = null
                 try {
                     val project = ProjectManager(this@ExportService).loadProject(snapshot).getOrThrow()
                     val output = withContext(Dispatchers.IO) {
@@ -128,32 +132,32 @@ class ExportService : Service() {
                     CompositionExporter(this@ExportService).export(project, output) { percent ->
                         if (percent == lastPercent) return@export
                         lastPercent = percent ?: -1
-                        mutableState.value = ExportState(true, percent, "Exporting composition")
+                        store.running(percent, "Exporting composition")
                         getSystemService(NotificationManager::class.java).notify(NOTIFICATION,
                             notification("Exporting video", percent))
                     }
-                    mutableState.value = ExportState(true, 99, "Saving to Movies/Fluxx")
+                    store.running(99, "Saving to Movies/Fluxx")
                     val uri = publish(output)
-                    terminal = ExportState(message = "Saved to Movies/Fluxx", output = uri)
+                    terminalMessage = "Saved to Movies/Fluxx"; terminalOutput = uri
                     Log.i("ExportService", "Export saved: $uri")
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     Log.e("ExportService", "Export failed", e)
-                    terminal = ExportState(message = "Export failed: ${e.message ?: e.javaClass.simpleName}")
+                    terminalMessage = "Export failed: ${e.message ?: e.javaClass.simpleName}"
                 } finally {
                     withContext(NonCancellable + Dispatchers.IO) { temporary?.delete(); snapshot.delete() }
                     releaseWakeLock()
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
                     // Do not allow another start until cleanup and stopSelf have completed.
-                    mutableState.value = terminal
+                    store.finish(terminalMessage, terminalOutput)
                 }
             }
         } catch (e: Exception) {
             Log.e("ExportService", "Could not start export", e)
             pendingSnapshot?.delete()
-            mutableState.value = ExportState(message = "Export failed: ${e.message}")
+            store.finish("Export failed: ${e.message}")
             releaseWakeLock()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()

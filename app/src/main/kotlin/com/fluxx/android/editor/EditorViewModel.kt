@@ -167,11 +167,24 @@ class EditorViewModel : ViewModel() {
         // Pointer cancellation and lazy-item disposal can precede a queued final drag callback.
         // An ended gesture must not crash or recreate a preview against the committed document.
         val base=gestureBase ?: return
-        require(action is EditorAction.SetAnchorPoint || action is EditorAction.SetColor || action is EditorAction.ReorderLayer || action is EditorAction.Batch || action is EditorAction.Move || action is EditorAction.Trim || action is EditorAction.SetTransform ||
-            action is EditorAction.MoveKeyframe || action is EditorAction.SetKeyframe || action is EditorAction.SetKeyframe2D) { "Unsupported transient edit" }
-        transientState=EditorReducer.reduce(base,action)
+        // TEXT F3.2: the timeline's keyframe drag sends EditTextAnimator(Key MOVE) for an animator-focused field; it was
+        // missing here, so the require threw on the main thread (A16 crash 17:47). Failures never crash: an unsupported or
+        // invalid preview keeps the last valid one and publishes [gestureError]; the document is untouched.
+        if (!transientAllowed(action)) { gestureError = "Unsupported transient edit"; return }
+        val next = try { EditorReducer.reduce(base,action) } catch (error: RuntimeException) {
+            gestureError = error.message ?: "Edit failed"; return
+        }
+        transientState=next
         gestureAction=action
     }
+    private fun transientAllowed(action: EditorAction) = action is EditorAction.SetAnchorPoint || action is EditorAction.SetColor ||
+        action is EditorAction.ReorderLayer || action is EditorAction.Batch || action is EditorAction.Move || action is EditorAction.Trim ||
+        action is EditorAction.SetTransform || action is EditorAction.MoveKeyframe || action is EditorAction.SetKeyframe ||
+        action is EditorAction.SetKeyframe2D || action is EditorAction.EditTextAnimator
+    /** The last gesture preview/commit that failed (shown once by the screen, then [clearGestureError]). */
+    var gestureError by mutableStateOf<String?>(null)
+        private set
+    fun clearGestureError() { gestureError = null }
     fun commitGesture(gestureId: Long? = null) {
         if (gestureId != null && gestureId != activeGestureId) return
         val action=gestureAction
@@ -179,9 +192,11 @@ class EditorViewModel : ViewModel() {
         val changed = transientState?.project != base?.project
         cancelGesture()
         if(action!=null && base!=null && changed) {
+            val reduced = try { EditorReducer.reduce(base, action) } catch (error: RuntimeException) {
+                gestureError = error.message ?: "Edit failed"; return
+            }
             undoStack.add(base.historyEntry())
             redoStack.clear()
-            val reduced = EditorReducer.reduce(base, action)
             val time = state.playheadUs.coerceAtMost(reduced.project.composition.resolvedDurationUs)
             state = reduced.copy(playheadUs = time,
                 selectedMarkerId = reduced.selectedMarkerId.takeIf { time == reduced.playheadUs })

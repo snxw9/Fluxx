@@ -128,7 +128,7 @@ This section stands in for the preview action bar doc. The contract is defined i
 
 With a layer selected:
 
-1. **Focused property or animator field, only while it has keyframes:** its keyframes. A focused property with no keyframes counts as unfocused.
+1. **Keyframes (TEXT F3.2):** a focused property or animator field that has keyframes uses only its own keyframes. Otherwise (nothing focused, the inspector closed, or a focused field without keyframes) the stops are the union of ALL keyframe times of the selected layer: transform and text properties, animator properties, selector fields (including seed keys) and the animator enabled flag.
 2. **Markers inside the layer span** (in ≤ t ≤ out): the layer's markers and the composition's markers.
 3. **Layer in / out.**
 4. **Markers outside the layer span:** the layer's markers (including those kept outside a trimmed clip) and the composition's markers.
@@ -142,7 +142,7 @@ Unchanged guards: negative and overflowing times are ignored; tiers are ordered 
 
 ## Preview and toolbar verification
 
-`ContextualNavigationTest` (rewritten in TEXT F3.1, JVM-passing) covers every tier and edge: exactly at in and out, static and exhausted focused properties, animator fields with and without keys, layer markers outside a trimmed span, composition markers inside and outside the span, the closed inspector, nothing selected, empty projects, signed anchors and overflow. `PreviewSettingsTest` covers quality dimensions, Fit/100% behavior, zoom/pan inverse mapping and temporary anchor suppression override. Both pass in the TEXT F3.1 JVM run (435 tests, 0 failures).
+`ContextualNavigationTest` (rewritten in TEXT F3.1, tier 1 rewritten in F3.2, JVM-passing) covers every tier and edge, including layer-wide keys on transform, text, animator, selector, seed and enabled tracks with nothing focused: exactly at in and out, static and exhausted focused properties, animator fields with and without keys, layer markers outside a trimmed span, composition markers inside and outside the span, the closed inspector, nothing selected, empty projects, signed anchors and overflow. `PreviewSettingsTest` covers quality dimensions, Fit/100% behavior, zoom/pan inverse mapping and temporary anchor suppression override. Both pass in the TEXT F3.1 JVM run (435 tests, 0 failures).
 
 - [ ] Galaxy A16 360dp: all seven icons fit with no clipping; **each icon reliably registers as itself, not its neighbor under a real thumb**. Test left/right edge icons and both preview heights.
 - [ ] Switch Full → Half → Third → Quarter while paused, playing and repeatedly in quick succession. Playback pauses on a quality change; the same frame redraws without GPU failure or tearing.

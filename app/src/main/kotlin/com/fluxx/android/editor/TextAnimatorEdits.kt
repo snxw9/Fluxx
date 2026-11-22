@@ -13,8 +13,8 @@ object TextAnimatorEdits {
     const val MAX_ANIMATORS=16
     const val MAX_SELECTORS=8
     const val NAME_LIMIT=128
-    /** Distinct seeds (static + held keys) one selector may prepare (TextSelectorEngine preparation). */
-    const val MAX_SEEDS=64
+    /** Distinct integer seeds one selector may reach (TEXT F3.2 interpolated seed; TextSeedRange). */
+    const val MAX_SEEDS=TextSeedRange.MAX_SEEDS
 
     /** Discrete fields: Hold keys (the same set [TextAnimatorActions] samples with hold). */
     val HOLD_FIELDS=setOf(SelectorField.ENABLED,SelectorField.UNITS,SelectorField.BASED_ON,SelectorField.SHAPE,SelectorField.MODE,

@@ -178,8 +178,9 @@ class TextAnimatorEditsTest {
         val focused=s.project.composition.layers.first()
         assertEquals(500_000L,ContextualNavigation.findNext(s.project,focused,true,null,0,animatorTrack=start))
         assertEquals(0L,ContextualNavigation.findPrevious(s.project,focused,true,null,500_000,animatorTrack=end))
-        // A stale (deleted) field falls back to the ordinary tiers.
+        // A stale (deleted) field counts as unfocused: TEXT F3.2 tier 1 is then every key of the layer (0.5 s here).
         val stale=TextAnimatorEdits.selectorField(a.id,9999,SelectorField.START)
-        assertEquals(4_000_000L,ContextualNavigation.findNext(s.project,focused,true,null,0,animatorTrack=stale))
+        assertEquals(500_000L,ContextualNavigation.findNext(s.project,focused,true,null,0,animatorTrack=stale))
+
     }
 }

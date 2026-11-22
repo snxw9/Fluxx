@@ -17,6 +17,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.fluxx.android.editor.*
@@ -29,7 +31,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * TEXT F3.1, source-only: real Compose bounds of the Animate list at 360dp inside the shared inspector frame (268 and
+ * TEXT F3.1 (updated for F3.2: add bar, Property bar, swipe and trash, non-modal popovers), source-only: real Compose bounds of the Animate list at 360dp inside the shared inspector frame (268 and
  * 328, font scale 1 and 1.3) with an animator expanded (Property groups, a selector expanded, Grouping row). The body
  * scrolls; every tile scrolled into view sits inside the body at full touch size. Edits go through the real reducer.
  * The controls preference uses an in-memory store (nothing is written to the app's files). Not a device acceptance claim.
@@ -79,20 +81,28 @@ class TextAnimateLayoutTest {
         if(scale==1f) assertEquals(if(expanded) 212f else 272f,body.height/ppd,1f)
         val target=if(InspectorSheetBudget.compact(InspectorSheetBudget.height(expanded,scale))) 40f else 48f
         val rail=bounds("inspector-rail")
-        // Empty state: one centred add control over the persistent glyph.
-        compose.onNodeWithTag("animate-glyph").assertExists()
+        // TEXT F3.2 empty state: a full-width "+ Animator" bar at the top; the smaller glyph centred in the body.
+        val page=bounds("animate-page");val glyph=bounds("animate-glyph")
+        assertEquals("glyph is centred",(page.top+page.bottom)/2,(glyph.top+glyph.bottom)/2,4f*ppd)
+        assertTrue("glyph is smaller than F3.1's 60%",glyph.height<=minOf(page.height,page.width)*.45f)
         val add=bounds("animate-add-animator")
-        assertEquals("add control is centred",(body.left+body.right)/2,(add.left+add.right)/2,4f*ppd)
+        assertEquals("add bar on top",page.top,add.top,2f*ppd)
+        assertTrue("add bar is full width (${add.width/ppd}dp of ${page.width/ppd}dp)",add.width>=page.width-2f*ppd)
         click("animate-add-animator")
         assertEquals(1,text(state).animators.size)
-        compose.onNodeWithTag("animate-glyph").assertExists()
+        // With animators the glyph stays fixed in the centre.
+        assertEquals(glyph,bounds("animate-glyph"))
         // Property groups: Position and Opacity (Transform), Fill (Colour).
         for(p in listOf(AnimatorProperty.POSITION,AnimatorProperty.OPACITY,AnimatorProperty.FILL)) {
             reveal("animate-add-property");click("animate-add-property");click("animate-add-${p.name}")
         }
         assertEquals(3,text(state).animators[0].properties.size)
         checkReachable(listOf("animate-animator-0","animate-animator-0-grip","animate-animator-0-duplicate","animate-animator-0-eye","animate-add-property",
-            "animate-group-Transform","animate-property-POSITION","animate-property-OPACITY","animate-group-Colour","animate-property-FILL"),body,ppd,target)
+            "animate-delete-properties","animate-property-toggle","animate-property-POSITION","animate-property-OPACITY","animate-property-FILL"),body,ppd,target)
+        // Insertion order on one row: Position, Opacity, Fill (no category headers).
+        assertTrue(bounds("animate-property-POSITION").right<=bounds("animate-property-OPACITY").left+1f)
+        assertTrue(bounds("animate-property-OPACITY").right<=bounds("animate-property-FILL").left+1f)
+        assertTrue(compose.onAllNodesWithTag("animate-group-Transform").fetchSemanticsNodes().isEmpty())
         // Range selector (expanded on add): primary tiles, then the Advanced group.
         val range=text(state).animators[0].selectors[0].id
         checkReachable(listOf("animate-selector-row","animate-add-selector","animate-selector-0","animate-field-START","animate-field-END","animate-field-OFFSET",
@@ -115,9 +125,10 @@ class TextAnimateLayoutTest {
         assertTrue(compose.onAllNodesWithTag("animate-field-AMOUNT").fetchSemanticsNodes().isEmpty())
         // Grouping row at the end of the animator.
         checkReachable(listOf("animate-grouping-row","animate-grouping"),body,ppd,target)
-        // The body scrolled (the add control is off screen) and the rail did not move.
-        assertTrue(compose.onAllNodesWithTag("animate-add-animator").fetchSemanticsNodes().isEmpty() ||
-            bounds("animate-add-animator").bottom<=body.top+1f)
+        // "+ Animator" follows the last animator, full width, scrolling with the list; the rail did not move.
+        checkReachable(listOf("animate-add-animator"),body,ppd,target)
+        assertTrue(bounds("animate-add-animator").top>=bounds("animate-grouping-row").bottom-1f)
+        assertTrue(bounds("animate-add-animator").width>=body.width-2f*ppd)
         assertEquals(rail,bounds("inspector-rail"))
         compose.onNodeWithTag("animate-list").performScrollToIndex(0);compose.waitForIdle()
         // No Done / ✓, no − / + text buttons anywhere on the page.
@@ -158,6 +169,43 @@ class TextAnimateLayoutTest {
         click("animate-animator-0-eye")
         val after=text(state).animators[0]
         assertEquals(0f,after.enabled.staticValue,0f);assertEquals(before.properties,after.properties);assertEquals(before.selectors,after.selectors)
+    }
+
+    /** TEXT F3.2: slider popovers are non-modal; X/Y glyphs; swipe a tile, trash all tiles. */
+    @Test fun popoverStaysOpenForTheRailAndTilesDeleteBySwipeAndTrash() {
+        val state=mutableStateOf(start)
+        compose.setContent {Frame(state,false,1f)}
+        click("text-tab-ANIMATE");click("animate-add-animator")
+        for(p in listOf(AnimatorProperty.POSITION,AnimatorProperty.OPACITY,AnimatorProperty.BLUR)) { reveal("animate-add-property");click("animate-add-property");click("animate-add-${p.name}") }
+        // Position popover: X and Y rows lead with their axis glyphs.
+        reveal("animate-property-POSITION");click("animate-property-POSITION")
+        compose.onNodeWithTag("animate-popover-animate-property-POSITION").assertExists()
+        compose.onNodeWithTag("slider-axis-AXIS_X").assertExists();compose.onNodeWithTag("slider-axis-AXIS_Y").assertExists()
+        // The rail diamond keys the focused property and does not close the popover.
+        click("inspector-key-diamond")
+        assertTrue(text(state).animators[0].properties.first { it.property==AnimatorProperty.POSITION }.vector!!.isAnimated)
+        compose.onNodeWithTag("animate-popover-animate-property-POSITION").assertExists()
+        // Another tile replaces it.
+        click("animate-property-OPACITY")
+        assertTrue(compose.onAllNodesWithTag("animate-popover-animate-property-POSITION").fetchSemanticsNodes().isEmpty())
+        compose.onNodeWithTag("animate-popover-animate-property-OPACITY").assertExists()
+        // A preview tap (the preview's dismissal request) closes it.
+        PopoverDismissal.request();compose.waitForIdle()
+        assertTrue(compose.onAllNodesWithTag("animate-popover-animate-property-OPACITY").fetchSemanticsNodes().isEmpty())
+        // Swipe one tile sideways: that property only.
+        reveal("animate-property-OPACITY")
+        compose.onNodeWithTag("animate-property-OPACITY").performTouchInput { swipeLeft(startX=right-1f,endX=left-width*2,durationMillis=200) }
+        compose.waitForIdle()
+        assertEquals(listOf(AnimatorProperty.POSITION,AnimatorProperty.BLUR),text(state).animators[0].properties.map { it.property })
+        // A tap is not a swipe.
+        click("animate-property-BLUR");PopoverDismissal.request();compose.waitForIdle()
+        assertEquals(2,text(state).animators[0].properties.size)
+        // The Property bar's trash removes every tile at once and then hides.
+        reveal("animate-delete-properties");click("animate-delete-properties")
+        assertTrue(text(state).animators[0].properties.isEmpty())
+        assertTrue(compose.onAllNodesWithTag("animate-delete-properties").fetchSemanticsNodes().isEmpty())
+        // The hold menu is gone.
+        assertTrue(compose.onAllNodesWithTag("animate-property-menu").fetchSemanticsNodes().isEmpty())
     }
 
     @Test fun characterOffsetAddsWithoutCrashing() {

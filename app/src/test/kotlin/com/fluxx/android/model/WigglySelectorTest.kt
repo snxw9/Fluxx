@@ -34,7 +34,9 @@ class WigglySelectorTest {
     @Test fun seedBitsKeysCodecRebaseAndNavigationRoundTrip() {
         val s=selector().copy(seedKeyframes=FrozenList.of(listOf(TextSeedKeyframe(0,Long.MIN_VALUE),TextSeedKeyframe(1_000_000,-1))))
         val original=project(s);assertEquals(original,ProjectCodec.decode(ProjectCodec.encode(original)))
-        assertEquals(Long.MIN_VALUE,s.seedAt(999999));assertEquals(-1L,s.seedAt(1000000))
+        // TEXT F3.2: the seed interpolates between keys (was Hold); the keyed ends stay exact.
+        assertEquals(Long.MIN_VALUE,s.seedAt(0));assertEquals(-1L,s.seedAt(1000000))
+        assertTrue(s.seedAt(999999).let { it>Long.MIN_VALUE && it<-1L })
         assertEquals(-500000L,s.rebase(500000).seedKeyframes[0].timeUs)
         val editor=EditorViewModel();editor.dispatch(EditorAction.Load(original))
         val address=AnimatorTrackAddress(1,2,seed=true)

@@ -50,6 +50,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.foundation.layout.WindowInsets
+import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.layout.ime
 import com.fluxx.android.ui.theme.*
 import kotlin.math.roundToInt
@@ -101,9 +102,24 @@ internal object InspectorHaptics {
  * sheet. Scales out from the anchor; tap outside or Back closes it. Focusable so its value field can take the IME.
  */
 @Composable internal fun AnchoredPopover(visible: Boolean, onDismiss: () -> Unit, testTag: String = "inspector-popover",
-    content: @Composable ColumnScope.() -> Unit) {
+    modal: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
     val state = remember { MutableTransitionState(false) }
     state.targetState = visible
+    // TEXT F3.2 non-modal (slider) popovers: the popup window is not focusable, so touches outside it reach the
+    // timeline, transport and rail (keyframe diamond) while it stays open. It becomes focusable only while its value
+    // field is typing (IME). It closes on a preview tap ([PopoverDismissal]), another tile (the host swaps its key) or Back.
+    val typing = remember { mutableIntStateOf(0) }
+    val currentDismiss by rememberUpdatedState(onDismiss)
+    val passive = !modal && typing.intValue == 0
+    if (!modal) {
+        LaunchedEffect(visible) {
+            if (!visible) return@LaunchedEffect
+            val start = PopoverDismissal.requests.value
+            PopoverDismissal.requests.first { it != start }
+            currentDismiss()
+        }
+        androidx.activity.compose.BackHandler(enabled = visible && passive) { currentDismiss() }
+    }
     if (!state.currentState && !state.targetState && state.isIdle) return
     val density = LocalDensity.current
     val visibleBottom = rememberVisibleBottom()
@@ -122,8 +138,10 @@ internal object InspectorHaptics {
             }
         }
     }
-    Popup(popupPositionProvider = provider, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
-      CompositionLocalProvider(LocalHostImeBottom provides hostIme, com.fluxx.android.ui.common.LocalImeLift provides null) {
+    Popup(popupPositionProvider = provider, onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = !passive, dismissOnBackPress = !passive, dismissOnClickOutside = !passive)) {
+      CompositionLocalProvider(LocalHostImeBottom provides hostIme, com.fluxx.android.ui.common.LocalImeLift provides null,
+          LocalPopoverTyping provides typing) {
         AnimatedVisibility(state, enter = scaleIn(tween(140), .8f, origin) + fadeIn(tween(110)),
             exit = scaleOut(tween(110), .8f, origin) + fadeOut(tween(90))) {
             Surface(Modifier.testTag(testTag).widthIn(max = 344.dp), shape = RoundedCornerShape(10.dp), color = SurfaceHigh,
@@ -151,12 +169,27 @@ internal class TypedEntry(private val onCommit: (String) -> Unit, private val on
 /** The host window's keyboard height, passed into popup windows (which may not receive IME insets themselves). */
 internal val LocalHostImeBottom = compositionLocalOf { -1 }
 
+/** Value fields typing inside the current popover (a non-modal popover takes focus only while this is above 0). */
+internal val LocalPopoverTyping = compositionLocalOf<MutableIntState?> { null }
+
+/**
+ * TEXT F3.2: a tap in the preview closes non-modal popovers. The preview calls [request]; open non-modal popovers
+ * wait for the next request. Timeline, transport and rail touches never call it.
+ */
+internal object PopoverDismissal {
+    val requests = kotlinx.coroutines.flow.MutableStateFlow(0L)
+    fun request() { requests.value = requests.value + 1 }
+    /** The dismiss rule, for tests and callers: only preview taps, another tile (the host's key changes) and Back close. */
+    enum class Touch { PREVIEW, OTHER_TILE, BACK, TIMELINE, TRANSPORT, RAIL, SLIDER }
+    fun dismisses(touch: Touch) = touch == Touch.PREVIEW || touch == Touch.OTHER_TILE || touch == Touch.BACK
+}
+
 /**
  * Inline numeric field: select-all on focus, numeric IME, commit on IME Done or focus loss, Escape cancels.
  * The caller decides how Back cancels (it hides the IME first, then closes the popover without committing).
  */
 @Composable internal fun InspectorValueField(initial: String, label: String, unit: String, onCommit: (String) -> Unit, onCancel: () -> Unit,
-    modifier: Modifier = Modifier, keyboardType: KeyboardType = KeyboardType.Decimal) {
+    modifier: Modifier = Modifier, keyboardType: KeyboardType = KeyboardType.DecimalSigned) {
     var field by remember { mutableStateOf(TextFieldValue(initial, TextRange(0, initial.length))) }
     val requester = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
@@ -164,7 +197,15 @@ internal val LocalHostImeBottom = compositionLocalOf { -1 }
     val entry = remember { TypedEntry({ currentCommit(it) }, { currentCancel() }) }
     fun commit() = entry.commit(field.text)
     fun cancel() = entry.cancel()
-    LaunchedEffect(Unit) { requester.requestFocus() }
+    // A non-modal popover turns focusable while this field exists; request focus once the window has updated.
+    val typing = LocalPopoverTyping.current
+    DisposableEffect(typing) { typing?.let { it.intValue++ }; onDispose { typing?.let { it.intValue-- } } }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) {
+        if (typing != null) { withFrameNanos { }; withFrameNanos { } }
+        runCatching { requester.requestFocus() }
+        if (typing != null) keyboard?.show()
+    }
     val hostIme = LocalHostImeBottom.current
     val ime = if (hostIme >= 0) hostIme else WindowInsets.ime.getBottom(LocalDensity.current)
     LaunchedEffect(ime) { entry.keyboard(ime > 0) }
@@ -192,10 +233,12 @@ internal val LocalHostImeBottom = compositionLocalOf { -1 }
  * `[reset ↺]  slider ----●  [value]`. One undo entry per drag (begin on first move, finish on release) and per
  * typed commit. Live preview is conflated to one publish per frame, exactly like the old scrub.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable internal fun SliderPopoverContent(limit: PropertyLimit, value: Float, mixed: Boolean, label: String,
     onReset: () -> Unit, onBegin: () -> Unit, onPreview: (Float) -> Unit, onFinish: () -> Unit, onCancel: () -> Unit,
-    onTyped: (Float) -> Unit, enabled: Boolean = true, extras: (@Composable RowScope.() -> Unit)? = null) {
+    onTyped: (Float) -> Unit, enabled: Boolean = true, extras: (@Composable RowScope.() -> Unit)? = null, axis: String? = null) {
     val view = LocalView.current
+    val interaction = remember { MutableInteractionSource() }
     var dragging by remember { mutableStateOf(false) }
     var live by remember { mutableFloatStateOf(value) }
     var pending by remember { mutableStateOf<Float?>(null) }
@@ -206,9 +249,16 @@ internal val LocalHostImeBottom = compositionLocalOf { -1 }
     LaunchedEffect(value) { if (!dragging) live = value }
     LaunchedEffect(dragging) { while (dragging) { withFrameNanos { }; pending?.let { pending = null; preview(it) } } }
     DisposableEffect(Unit) { onDispose { if (dragging) cancel() } }
-    Row(Modifier.height(48.dp).widthIn(min = 280.dp), verticalAlignment = Alignment.CenterVertically) {
+    // TEXT F3.2: compact rows (thin track, small thumb, 240dp) that keep a 48dp touch target; two-axis rows lead with X / Y.
+    Row(Modifier.height(SliderPopoverMetrics.ROW).widthIn(min = SliderPopoverMetrics.MIN_WIDTH), verticalAlignment = Alignment.CenterVertically) {
+        if (axis != null) Icon(InspectorIcons.icon(axis), null, Modifier.padding(start = 4.dp).size(SliderPopoverMetrics.AXIS).testTag("slider-axis-$axis"), tint = TextSecondary)
         InspectorIconButton(InspectorIcons.icon("RESET"), "Reset $label to default", enabled = enabled) { onReset() }
-        Slider(value = limit.fraction(live), enabled = enabled,
+        Slider(value = limit.fraction(live), enabled = enabled, interactionSource = interaction,
+            thumb = { SliderDefaults.Thumb(interaction, colors = SliderDefaults.colors(thumbColor = TextPrimary), enabled = enabled,
+                thumbSize = androidx.compose.ui.unit.DpSize(SliderPopoverMetrics.THUMB_WIDTH, SliderPopoverMetrics.THUMB_HEIGHT)) },
+            track = { s -> SliderDefaults.Track(s, Modifier.height(SliderPopoverMetrics.TRACK), enabled = enabled,
+                colors = SliderDefaults.colors(activeTrackColor = TextPrimary, inactiveTrackColor = Border, activeTickColor = Surface, inactiveTickColor = TextSecondary),
+                thumbTrackGapSize = 2.dp) },
             onValueChange = { f ->
                 val next = limit.valueAt(f)
                 if (!dragging) { dragging = true; InspectorHaptics.press(view); onBegin() }
@@ -232,6 +282,17 @@ internal val LocalHostImeBottom = compositionLocalOf { -1 }
         }
     }
     if (extras != null) Row(Modifier.height(40.dp), verticalAlignment = Alignment.CenterVertically, content = extras)
+}
+
+/** TEXT F3.2 slider popover sizes (was: 48dp row, 280dp wide, M3 default 16dp track and 44dp thumb). */
+internal object SliderPopoverMetrics {
+    /** The row is the touch target: never below 48dp. */
+    val ROW = 48.dp
+    val MIN_WIDTH = 240.dp
+    val TRACK = 4.dp
+    val THUMB_WIDTH = 4.dp
+    val THUMB_HEIGHT = 22.dp
+    val AXIS = 16.dp
 }
 
 /** Small monochrome icon button used inside popovers and the rail. */

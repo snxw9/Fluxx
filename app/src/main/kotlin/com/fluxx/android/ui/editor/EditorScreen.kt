@@ -104,6 +104,11 @@ fun EditorScreen(
     DisposableEffect(textEditor) { onDispose { textEditor.cancel() } }
     val textErrors by TextLayerErrors.state.collectAsState()
     val characterErrors by TextLayerErrors.characters.collectAsState()
+    // TEXT F3.2: a gesture preview/commit the reducer refused (e.g. a keyframe drag) is shown, never thrown.
+    val gestureError = editor.gestureError
+    LaunchedEffect(gestureError) {
+        if (gestureError != null) { android.widget.Toast.makeText(context, gestureError, android.widget.Toast.LENGTH_SHORT).show(); editor.clearGestureError() }
+    }
     val displayedState = editor.displayedState
     val project = displayedState.project
     val composition = project.composition
@@ -283,10 +288,12 @@ fun EditorScreen(
         }
     }
 
-    LaunchedEffect(exportState.output) {
-        if (exportState.output != null) {
-            exportDialogVisible = true
-        }
+    // TEXT F3.2: the done dialog opens for a NEW completion only (keyed to its completion id), never for a stale output
+    // left in the process-global export state when a project is reopened.
+    var seenExport by androidx.compose.runtime.saveable.rememberSaveable { mutableLongStateOf(exportState.completion) }
+    LaunchedEffect(exportState.completion) {
+        if (com.fluxx.android.export.ExportRules.showDone(exportState, seenExport)) exportDialogVisible = true
+        if (exportState.completion != 0L) seenExport = exportState.completion
     }
 
     Scaffold(
@@ -854,7 +861,11 @@ fun EditorScreen(
             },
             onCancelExport = onExportCancel,
             onOpenExportedVideo = onOpenExportedVideo,
-            onDismiss = { exportDialogVisible = false }
+            onDismiss = {
+                exportDialogVisible = false
+                // TEXT F3.2: dismissing a finished export returns the dialog to its Start state.
+                if (!exportState.running) com.fluxx.android.export.ExportService.reset()
+            }
         )
     }
 

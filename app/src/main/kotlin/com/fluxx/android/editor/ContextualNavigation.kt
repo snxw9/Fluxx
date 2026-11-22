@@ -9,7 +9,9 @@ import java.util.TreeSet
  * falls through. The same rule applies on every inspector page and with the inspector closed.
  *
  * With a layer selected:
- *  1. the focused property or animator field, only while it has keyframes (a static focus counts as unfocused);
+ *  1. keyframes (TEXT F3.2): the focused property or animator field while it has keyframes; otherwise (nothing
+ *     focused, the inspector closed, or a static focus) the union of ALL keyframe times of the selected layer:
+ *     transform and text properties, animator properties, selector fields, seed keys and the animator enabled flag;
  *  2. markers inside the layer span (in <= t <= out): the layer's own markers and the composition's markers;
  *  3. the layer in / out points;
  *  4. markers outside the layer span: the layer's markers (also those retained outside a trimmed clip) and the
@@ -40,7 +42,7 @@ object ContextualNavigation {
             comp.layers.forEach { add(it.timing.startUs); it.timing.endUs?.let(::add) }
         }
         if (selected == null) return listOf(compMarkers, bounds)
-        val focus = focusedKeys(selected, inspector, property, animatorTrack)
+        val focus = focusedKeys(selected, inspector, property, animatorTrack).ifEmpty { layerKeys(selected) }
         val layerMarkers = selected.markers.mapNotNull { add(selected.resolvedKeyframeAnchorUs, it.timeUs) }
         val inPoint = selected.timing.startUs
         val outPoint = selected.timing.endUs ?: Long.MAX_VALUE
@@ -70,6 +72,9 @@ object ContextualNavigation {
         }
         return if (next) maxOf(time, project.composition.resolvedDurationUs) else 0L
     }
+
+    /** Every keyframe time of [layer] (aggregateKeyTimes: transform, text, animator properties, selectors, seeds, enabled). */
+    internal fun layerKeys(layer: CompositionLayer): List<Long> = layer.aggregateKeyTimes().mapNotNull { add(layer.resolvedKeyframeAnchorUs, it) }
 
     private fun add(a: Long, b: Long): Long? = try { Math.addExact(a, b).takeIf { it >= 0 } } catch (_: ArithmeticException) { null }
 

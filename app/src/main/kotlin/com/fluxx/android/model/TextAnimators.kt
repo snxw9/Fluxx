@@ -62,11 +62,19 @@ data class TextRangeSelector(
         temporalPhase.validateRange(-Float.MAX_VALUE,Float.MAX_VALUE);spatialPhase.validateRange(-Float.MAX_VALUE,Float.MAX_VALUE)
         require(seedKeyframes.size<=4096 && seedKeyframes.zipWithNext().all { (a,b)->a.timeUs<b.timeUs })
     }
+    /**
+     * TEXT F3.2 (AE parity): the seed interpolates linearly between keys and rounds to the nearest integer seed
+     * (k0 + Math.round((k1-k0)·f), ties toward +∞), so a keyed 0→25 seed reshuffles on every frame (the flicker).
+     * Before the first / after the last key the end seed holds. A segment whose signed difference does not fit a Long
+     * holds its first seed (such a span is far over [TextSeedRange.MAX_SEEDS] and is refused or clamped anyway).
+     */
     fun seedAt(time: Long): Long {
         if(seedKeyframes.isEmpty()) return seed
         var lo=0;var hi=seedKeyframes.size
         while(lo<hi) { val mid=(lo+hi) ushr 1;if(seedKeyframes[mid].timeUs<=time) lo=mid+1 else hi=mid }
-        return seedKeyframes[(lo-1).coerceAtLeast(0)].seed
+        if(lo==0) return seedKeyframes[0].seed
+        if(lo==seedKeyframes.size) return seedKeyframes[lo-1].seed
+        return TextSeedRange.between(seedKeyframes[lo-1],seedKeyframes[lo],time)
     }
     fun rebase(delta: Long) = copy(enabled=enabled.shift(delta),start=start.shift(delta),end=end.shift(delta),
         offset=offset.shift(delta),units=units.shift(delta),basedOn=basedOn.shift(delta),shape=shape.shift(delta),
@@ -75,6 +83,73 @@ data class TextRangeSelector(
         kind=kind.shift(delta),wigglesPerSecond=wigglesPerSecond.shift(delta),correlation=correlation.shift(delta),
         temporalPhase=temporalPhase.shift(delta),spatialPhase=spatialPhase.shift(delta),lockDimensions=lockDimensions.shift(delta),
         seedKeyframes=FrozenList.of(seedKeyframes.map { it.copy(timeUs=Math.subtractExact(it.timeUs,delta)) }))
+}
+
+/**
+ * TEXT F3.2: interpolated Random Seed. One selector prepares one cached permutation set per distinct integer seed it
+ * can reach, so evaluation never allocates; the reachable set is bounded by [MAX_SEEDS] and the 32 MiB permutation pool.
+ */
+object TextSeedRange {
+    /** Distinct prepared seeds per selector (a 0→200 ramp reaches 201). */
+    const val MAX_SEEDS=256
+    fun between(k0: TextSeedKeyframe,k1: TextSeedKeyframe,time: Long): Long {
+        val d=try { Math.subtractExact(k1.seed,k0.seed) } catch(_: ArithmeticException) { return k0.seed }
+        val f=(time-k0.timeUs).toDouble()/(k1.timeUs-k0.timeUs).toDouble()
+        return k0.seed+Math.round(d.toDouble()*f).coerceIn(minOf(0L,d),maxOf(0L,d))
+    }
+    /** Inclusive seed spans the selector reaches, merged and ascending. */
+    private fun spans(s: TextRangeSelector): List<LongArray> {
+        val keys=s.seedKeyframes
+        if(keys.isEmpty()) return listOf(longArrayOf(s.seed,s.seed))
+        val raw=ArrayList<LongArray>()
+        raw.add(longArrayOf(keys[0].seed,keys[0].seed))
+        for(i in 1 until keys.size) {
+            val a=keys[i-1].seed;val b=keys[i].seed
+            val overflow=try { Math.subtractExact(b,a);false } catch(_: ArithmeticException) { true }
+            if(overflow) { raw.add(longArrayOf(a,a));raw.add(longArrayOf(b,b)) } else raw.add(longArrayOf(minOf(a,b),maxOf(a,b)))
+        }
+        raw.sortBy { it[0] }
+        val merged=ArrayList<LongArray>()
+        for(r in raw) { val last=merged.lastOrNull()
+            if(last!=null && (r[0]<=last[1] || r[0]==last[1]+1)) last[1]=maxOf(last[1],r[1]) else merged.add(r.copyOf()) }
+        return merged
+    }
+    /** Distinct integer seeds the selector can reach (saturating at Long.MAX_VALUE). */
+    fun reachable(s: TextRangeSelector): Long {
+        var total=0L
+        for(r in spans(s)) {
+            val n=try { Math.addExact(Math.subtractExact(r[1],r[0]),1L) } catch(_: ArithmeticException) { return Long.MAX_VALUE }
+            total=try { Math.addExact(total,n) } catch(_: ArithmeticException) { return Long.MAX_VALUE }
+        }
+        return total
+    }
+    /** Per-selector cap: [MAX_SEEDS], or fewer when one seed's permutations ([bytesPerSeed]) would not fit the pool. */
+    fun cap(bytesPerSeed: Long)=if(bytesPerSeed<=0) MAX_SEEDS else minOf(MAX_SEEDS.toLong(),maxOf(1L,LinePermutationPool.MAX_BYTES/bytesPerSeed)).toInt()
+    /**
+     * The seeds to prepare, ascending, at most [cap]. Over the cap (only an old or external document; edits are refused
+     * first) the keyed seeds are kept first and evaluation uses the nearest prepared seed ([nearest]).
+     */
+    fun prepared(s: TextRangeSelector,cap: Int): LongArray {
+        require(cap>=1)
+        if(reachable(s)<=cap) {
+            val out=LongArray(reachable(s).toInt());var i=0
+            for(r in spans(s)) { var v=r[0];while(true) { out[i++]=v;if(v==r[1]) break;v++ } }
+            return out
+        }
+        val chosen=java.util.TreeSet<Long>()
+        for(k in s.seedKeyframes) { if(chosen.size>=cap) break;chosen.add(k.seed) }
+        outer@ for(r in spans(s)) { var v=r[0];while(chosen.size<cap) { chosen.add(v);if(v==r[1]) continue@outer;v++ };break }
+        return chosen.toLongArray()
+    }
+    /** Index in sorted [seeds] of [seed], or of the nearest prepared seed below it (the first when none is below). No allocation. */
+    fun nearest(seeds: LongArray,seed: Long): Int {
+        val i=java.util.Arrays.binarySearch(seeds,seed)
+        return if(i>=0) i else maxOf(0,-i-2)
+    }
+    fun message(cap: Int)="Random seed animation reaches more than $cap seeds per selector; keep keyed seeds within $cap of each other"
+    /** Edit-time pre-check (the Animate page refuses the edit with this line), like TextCharacterPreparation.problem. */
+    fun problem(text: TextProperties): String? =
+        if(text.animators.any { a -> a.selectors.any { reachable(it)>MAX_SEEDS } }) message(MAX_SEEDS) else null
 }
 
 data class TextPropertyOverride(val property: AnimatorProperty,
