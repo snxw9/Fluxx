@@ -2,7 +2,7 @@
 
 Start with the [roadmap](architecture/FLUXX_ROADMAP.md) for active scope. The [Phase 2 status matrix](checkpoints/PHASE_2_STATUS_AND_BACKEND.md) distinguishes implemented controls from placeholders. Feature references below own their detailed behavior and verification evidence.
 
-**Current state (2026-11-22):** Phase 2 is active. **The text phase is complete**; the next big item is the graph editor. Every text plan, spec and stage record is consolidated in the [text record](checkpoints/TEXT.md): E1–E3, F1/F2, T1–T4 and the Edit Text UI were user-tested; FIX and EXPLODE are committed; T5 (Arabic/Hebrew RTL) is stopped pending a cross-style shaping decision; TEXT FIX 9 and PERF 10/11 were device-assisted A16 passes; F3 (the Animate tab) and F3.1–F3.3 are merged to master (`c8109d9`, `67df5f3`) with **phone acceptance of F3.1–F3.3 done**; F3.4 (the Character Tracking cap and the docs consolidation) is merged from the single `text` branch. Open items carried forward are listed at the top of the text record. Phase 3 effects/masks are not started.
+**Current state (2026-11-22):** Phase 2 is active. **The text phase is complete**; the graph editor is in progress, with G1 (curve backend + Ease view, schema v13) implemented in source and awaiting phone acceptance ([record](checkpoints/GRAPH_G1.md)). Every text plan, spec and stage record is consolidated in the [text record](checkpoints/TEXT.md): E1–E3, F1/F2, T1–T4 and the Edit Text UI were user-tested; FIX and EXPLODE are committed; T5 (Arabic/Hebrew RTL) is stopped pending a cross-style shaping decision; TEXT FIX 9 and PERF 10/11 were device-assisted A16 passes; F3 (the Animate tab) and F3.1–F3.3 are merged to master (`c8109d9`, `67df5f3`) with **phone acceptance of F3.1–F3.3 done**; F3.4 (the Character Tracking cap and the docs consolidation) is merged from the single `text` branch. Open items carried forward are listed at the top of the text record. Phase 3 effects/masks are not started.
 
 *Historical (2026-10-01):* E1b/E1c accepted; E1d lazy 2048 R8 rendering and E1e debug visual/lifecycle/resource harness implemented in source, unverified at the time. E2/E3 then followed the [approved array-overflow design](checkpoints/TEXT.md#e2-implementation-and-approved-array-overflow).
 
@@ -24,6 +24,7 @@ Start with the [roadmap](architecture/FLUXX_ROADMAP.md) for active scope. The [P
 | [Element inspector](checkpoints/ELEMENT_INSPECTOR.md) | Inspector navigation, transforms/anchor, layer actions, trim/extend/split |
 | [Global colour picker](checkpoints/GLOBAL_COLOUR_PICKER.md) | Shared picker, palettes and eyedropper ownership |
 | [Keyframe animation](checkpoints/KEYFRAME_ANIMATION.md) | Transform evaluator, tracks, editing and interpolation contracts |
+| [Graph editor G1](checkpoints/GRAPH_G1.md) | Easing model (schema v13: Hold, Custom bezier, Bounce, Elastic), evaluator and overshoot clamps, `SetKeyEasing`, the Graph page's Ease view, verification and the A16 test list |
 | [Markers](checkpoints/MARKERS.md) | Scope, creation/deletion, navigation, persistence and hit routing |
 | [Media browser](checkpoints/MEDIA_BROWSER.md) | MediaStore browsing, selection, import and read-only audio |
 | [Autosave](checkpoints/AUTOSAVE.md) | Save queue, lifecycle, atomicity and recovery limits |

@@ -173,12 +173,12 @@ object TextEdits {
         TextLimits.validateSize(value)
         val p = layer.text.size; val t = local(layer, time)
         return layer.text.copy(size = if (!p.isAnimated) p.copy(staticValue = value) else p.copy(keyframes = FrozenList.of(
-            (p.keyframes.filterNot { it.timeUs == t } + Keyframe1D(t, value, p.keyframes.firstOrNull { it.timeUs == t }?.easing ?: EasingPreset.EASY_EASE)).sortedBy { it.timeUs })))
+            (p.keyframes.filterNot { it.timeUs == t } + p.keyframes.firstOrNull { it.timeUs == t }.let { rekey1D(it, t, value, it?.easing ?: EasingPreset.EASY_EASE) }).sortedBy { it.timeUs })))
     }
     fun scalar(layer: CompositionLayer, time: Long, property: AnimPropertyType, value: Float): TextProperties {
         val p = layer.text.scalar(property); val t = local(layer, time)
         return layer.text.withScalar(property, if (!p.isAnimated) p.copy(staticValue = value) else p.copy(keyframes = FrozenList.of(
-            (p.keyframes.filterNot { it.timeUs == t } + Keyframe1D(t, value, p.keyframes.firstOrNull { it.timeUs == t }?.easing ?: EasingPreset.EASY_EASE)).sortedBy { it.timeUs })))
+            (p.keyframes.filterNot { it.timeUs == t } + p.keyframes.firstOrNull { it.timeUs == t }.let { rekey1D(it, t, value, it?.easing ?: EasingPreset.EASY_EASE) }).sortedBy { it.timeUs })))
     }
     fun colour(layer: CompositionLayer, time: Long, property: AnimPropertyType, argb: Int): EditorAction {
         val p = layer.text.colour(property); val t = local(layer, time)

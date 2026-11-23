@@ -16,7 +16,13 @@ data class StringKeyframe(val timeUs: Long, val value: String,val document: Text
     val sourceDocument=document ?: TextSourceDocument(value)
     init { TextLimits.validateSource(value);require(sourceDocument.text==value) }
 }
-data class ColourKeyframe(val timeUs: Long, val argb: Int, val easing: EasingPreset = EasingPreset.EASY_EASE)
+data class ColourKeyframe(val timeUs: Long, val argb: Int, val easing: EasingPreset = EasingPreset.EASY_EASE,
+    val curveA: Float = EasingLimits.defaultA(easing), val curveB: Float = EasingLimits.defaultB(easing),
+    val curveC: Float = EasingLimits.defaultC(easing), val curveD: Float = EasingLimits.defaultD(easing)) {
+    init { EasingLimits.validate(easing, curveA, curveB, curveC, curveD) }
+    val curve: EasingCurve get() = EasingCurve(easing, curveA, curveB, curveC, curveD)
+    fun withCurve(c: EasingCurve) = copy(easing = c.type, curveA = c.a, curveB = c.b, curveC = c.c, curveD = c.d)
+}
 data class AnimatableString(val isAnimated: Boolean = false, val staticValue: String = "",
     val keyframes: FrozenList<StringKeyframe> = FrozenList.empty(),val document: TextSourceDocument?=null) {
     val sourceDocument=document ?: TextSourceDocument(staticValue)
@@ -37,7 +43,12 @@ data class AnimatableColour(val isAnimated: Boolean = false, val staticValue: In
         val a = keyframes[i]; val b = keyframes[i + 1]
         if (timeUs == a.timeUs) return a.argb
         val progress = ((timeUs.toDouble() - a.timeUs) / (b.timeUs.toDouble() - a.timeUs)).toFloat()
-        return interpolateColour(a.argb, b.argb, KeyframeEvaluator.easeProgress(progress, a.easing))
+        val e = a.easing
+        // GRAPH G1: colour channels never overshoot. Custom/Elastic progress is clamped to [0, 1] (the curve still
+        // drives the timing); Hold steps; Linear/Easy Ease keep their unchanged fast path.
+        val eased = if (e == EasingPreset.EASY_EASE || e == EasingPreset.LINEAR) KeyframeEvaluator.easeProgress(progress, e)
+            else KeyframeEvaluator.ease(progress, e, a.curveA, a.curveB, a.curveC, a.curveD).coerceIn(0f, 1f)
+        return interpolateColour(a.argb, b.argb, eased)
     }
 }
 
@@ -89,7 +100,13 @@ data class TextProperties(
     }
     val layoutAnimated get() = source.isAnimated || size.isAnimated || tracking.isAnimated || leading.isAnimated || baselineShift.isAnimated || ligatures.isAnimated || animators.isNotEmpty()
     fun effectiveLigatures(time: Long) = ligatures.hold(time) == 1f && tracking.evaluate(time) == 0f
-    fun effectiveStrokeWidth(time: Long): Float = TextSdfLimits.strokeWidth(strokeWidth.evaluate(time), size.evaluate(time))
+    fun effectiveStrokeWidth(time: Long): Float = TextSdfLimits.strokeWidth(strokeWidthAt(time), sizeAt(time))
+    /**
+     * GRAPH G1 overshoot: a Custom/Elastic segment can evaluate outside the stored key range. Consumers read the
+     * clamped size (8–1000) and stroke width (>= 0), as layer opacity is clamped at the layer; stored data is unchanged.
+     */
+    fun sizeAt(time: Long): Float = TextLimits.clampSize(size.evaluate(time))
+    fun strokeWidthAt(time: Long): Float = strokeWidth.evaluate(time).coerceAtLeast(0f)
     fun paintOrder(time: Long): Int = strokeOverFill.hold(time).toInt()
     fun rebase(delta: Long) = copy(
         source = source.copy(keyframes = FrozenList.of(source.keyframes.map { it.copy(timeUs = Math.subtractExact(it.timeUs, delta)) })),
@@ -128,6 +145,8 @@ object TextLimits {
     const val MAX_DOCUMENT_BYTES = 1024L * 1024
     fun validateSize(value: Float) { require(value.isFinite() && value in MIN_SIZE..MAX_SIZE) { "Text size must be 8–1000px" } }
     fun decodeSize(value: Float): Float { require(value.isFinite()) { "Nonfinite text size" }; return value.coerceIn(MIN_SIZE, MAX_SIZE) }
+    /** Evaluation-time clamp (overshooting curves); identity for every in-range value. */
+    fun clampSize(value: Float): Float = if (value < MIN_SIZE) MIN_SIZE else if (value > MAX_SIZE) MAX_SIZE else value
     fun ordered(times: List<Long>) { require(times.zipWithNext().all { it.first < it.second }) { "Text keys must be ordered and unique" } }
     fun validateSource(value: String) {
         require(value.length <= MAX_SOURCE_UNITS) { "Text exceeds 4096 UTF-16 units" }

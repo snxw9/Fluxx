@@ -216,7 +216,7 @@ import kotlinx.coroutines.delay
 
     val fontScale=density.fontScale
     val large=TextInspectorBudget.large(fontScale)
-    val requestedStroke=layer.text.strokeWidth.evaluate(local)+if(editScope.selected) style.strokeDelta else 0f
+    val requestedStroke=layer.text.strokeWidthAt(local)+if(editScope.selected) style.strokeDelta else 0f
     val strokeNote=TextFeedback.strokeClampFull(requestedStroke,strokeClamp)
     val feedback=error ?: message
     val fillArgb=style.fill?.takeIf {editScope.selected} ?: layer.text.fill.evaluate(local)
@@ -458,12 +458,12 @@ import kotlinx.coroutines.delay
                                 animatorAction(if(animAnimated) TextAnimatorEdits.freeze(animOwner,ownerLocal) else TextAnimatorEdits.enable(animOwner,ownerLocal))})
                             if(animAnimated) add(RailMenuItem("Reset animation…",enabled=!finishing) {resetAnimation=true})
                             if(hold) add(RailMenuItem("Hold (discrete)",enabled=false) {})
-                            else if(animAnimated && animOnKey) EasingPreset.entries.forEach {easing->add(RailMenuItem(easing.name,enabled=!finishing) {
+                            else if(animAnimated && animOnKey) RAIL_EASINGS.forEach {easing->add(RailMenuItem(easing.name,enabled=!finishing) {
                                 animatorAction(TextAnimatorEdits.easing(animOwner,ownerLocal,easing))})}
                         }
                     },
                     confirm=if(resetAnimation && animOwner!=null) "Remove all $name keys, keep the value at the playhead?" to {animatorAction(TextAnimatorEdits.freeze(animOwner,ownerLocal))} else null,
-                    onConfirmDismiss={resetAnimation=false})
+                    onConfirmDismiss={resetAnimation=false},graphTarget=animOwner?.let {GraphTarget(animator=it)})
             } else InspectorUtilityRail(resetLabel=TextRailMenu.label(TextRailItem.RESET_VALUE,tab,scopeLabel,propertyName,animated),onReset=::resetValue,
                 isAnimated=animated,hasKeyframeAtPlayhead=onKey,
                 onToggleKeyframe=if(owner==null || finishing) null else ({
@@ -481,7 +481,7 @@ import kotlinx.coroutines.delay
                     if(TextRailItem.RESET_ANIMATION in railItems) add(RailMenuItem(TextRailMenu.label(TextRailItem.RESET_ANIMATION,tab,scopeLabel,propertyName,animated)) {resetAnimation=true})
                     if(owner!=null && TextRailItem.EASING in railItems) {
                         if(discrete) add(RailMenuItem("Hold (discrete)",enabled=false) {})
-                        else EasingPreset.entries.forEach {easing->add(RailMenuItem(easing.name) {
+                        else RAIL_EASINGS.forEach {easing->add(RailMenuItem(easing.name) {
                             onAction(if(owner==AnimPropertyType.FILL_COLOUR || owner==AnimPropertyType.STROKE_COLOUR) EditorAction.SetColourKeyframe(layer.id,ownerLocal,layer.text.colour(owner).evaluate(local),easing,owner)
                                 else EditorAction.SetKeyframe(layer.id,owner,ownerLocal,layer.text.scalarValue(owner,local),easing))})}
                     }
@@ -501,7 +501,7 @@ import kotlinx.coroutines.delay
                             onReset={closePopover();format {it.copy(manualKerning=FrozenList.empty())}},onBegin={numericBegin(TextControl.MANUAL_KERNING)},
                             onPreview=::numericPreview,onFinish=::numericFinish,onCancel=::numericCancel,onTyped={numericSet(TextControl.MANUAL_KERNING,it)},enabled=!finishing)
                     }
-                })
+                },graphTarget=owner?.takeIf {!editScope.selected}?.let {GraphTarget(it)})
             Spacer(Modifier.width(TextInspectorBudget.RAIL_GAP.dp))
             // TEXT F3.3: a tap on empty body space (not a tile, not a scroll) closes an open slider popover. The rail,
             // timeline and transport are outside this box, so they never dismiss it.
@@ -594,7 +594,7 @@ internal fun textColourPayload(layer: CompositionLayer,time: Long,scope: TextEdi
     val p=if(c==TextControl.FILL) AnimPropertyType.FILL_COLOUR else AnimPropertyType.STROKE_COLOUR
     val track=layer.text.colour(p)
     return layer.text.withColour(p,if(track.isAnimated) track.copy(keyframes=FrozenList.of((track.keyframes.filterNot {it.timeUs==local}+
-        ColourKeyframe(local,argb,track.keyframes.firstOrNull {it.timeUs==local}?.easing ?: EasingPreset.EASY_EASE)).sortedBy {it.timeUs})) else track.copy(staticValue=argb))
+        track.keyframes.firstOrNull {it.timeUs==local}.let {rekeyColour(it,local,argb,it?.easing ?: EasingPreset.EASY_EASE)}).sortedBy {it.timeUs})) else track.copy(staticValue=argb))
 }
 
 internal val TEXT_DEFAULT_SWATCHES=listOf(0xFFFFFFFF,0xFFBDBDBD,0xFF757575,0xFF212121,0xFF000000,0xFFE53935,0xFFFB8C00,0xFFFDD835,0xFF43A047,0xFF1E88E5,0xFF8E24AA,0xFFD81B60).map {it.toInt()}
@@ -681,3 +681,6 @@ private fun alignmentLabel(a: ParagraphAlignment)=when(a) {
     ParagraphAlignment.JUSTIFY_LAST_LEFT->"Justify, last line left";ParagraphAlignment.JUSTIFY_LAST_CENTRE->"Justify, last line centre"
     ParagraphAlignment.JUSTIFY_LAST_RIGHT->"Justify, last line right";ParagraphAlignment.JUSTIFY_ALL->"Justify all lines"
 }
+
+/** The rail ⋮ easing items are unchanged by GRAPH G1 (the enum grew; the Graph page edits every type). */
+internal val RAIL_EASINGS=listOf(EasingPreset.EASY_EASE,EasingPreset.LINEAR)

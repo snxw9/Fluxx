@@ -256,10 +256,11 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
         val t=slots[index]
         val variant=t.basedOn.hold(time).toInt();val n=membership.counts[variant]
         if(t.kind.hold(time)==1f) {
-            val a=t.minAmount.evaluate(time).toDouble();val b=t.maxAmount.evaluate(time).toDouble()
-            val lo=min(a,b)/100;val hi=max(a,b)/100;val amount=t.amount.evaluate(time)/100.0
-            val seed=seeds[index][TextSeedRange.nearest(seeds[index],p.seedAt(time))];val frequency=t.wiggles.evaluate(time).toDouble()
-            val correlation=t.correlation.evaluate(time).toDouble();val temporal=t.temporal.evaluate(time).toDouble()
+            // GRAPH G1: evaluated fields stay in their validated ranges under overshooting curves (AnimatorLimits).
+            val a=AnimatorLimits.amount(t.minAmount.evaluate(time));val b=AnimatorLimits.amount(t.maxAmount.evaluate(time))
+            val lo=min(a,b)/100;val hi=max(a,b)/100;val amount=AnimatorLimits.amount(t.amount.evaluate(time))/100.0
+            val seed=seeds[index][TextSeedRange.nearest(seeds[index],p.seedAt(time))];val frequency=AnimatorLimits.wiggles(t.wiggles.evaluate(time))
+            val correlation=AnimatorLimits.correlation(t.correlation.evaluate(time));val temporal=t.temporal.evaluate(time).toDouble()
             val spatial=t.spatial.evaluate(time).toDouble();val locked=t.lock.hold(time)!=0f
             for(i in out.indices) {
                 val member=membership.maps[variant][i]
@@ -275,10 +276,10 @@ class PreparedSelectorEngine(private val animator: TextAnimator, private val mem
         // TEXT F3.2 (AE parity): Ramp Up fully selects everything after End, Ramp Down everything before Start.
         val rampUp=shape==SelectorShape.RAMP_UP;val rampDown=shape==SelectorShape.RAMP_DOWN
         if(n==0 || (b<=a && !rampUp && !rampDown)) { out.fill(0.0);return }
-        val smooth=t.smoothness.evaluate(time)/200.0
-        val low=t.easeLow.evaluate(time).toDouble();val high=t.easeHigh.evaluate(time).toDouble()
-        val av=t.minAmount.evaluate(time).toDouble();val bv=t.maxAmount.evaluate(time).toDouble()
-        val lo=min(av,bv);val hi=max(av,bv);val amount=t.amount.evaluate(time)/100.0
+        val smooth=AnimatorLimits.smoothness(t.smoothness.evaluate(time))/200.0
+        val low=AnimatorLimits.amount(t.easeLow.evaluate(time));val high=AnimatorLimits.amount(t.easeHigh.evaluate(time))
+        val av=AnimatorLimits.amount(t.minAmount.evaluate(time));val bv=AnimatorLimits.amount(t.maxAmount.evaluate(time))
+        val lo=min(av,bv);val hi=max(av,bv);val amount=AnimatorLimits.amount(t.amount.evaluate(time))/100.0
         val random=t.randomize.hold(time)!=0f
         val seedIndex=TextSeedRange.nearest(seeds[index],p.seedAt(time))
         for(i in out.indices) {

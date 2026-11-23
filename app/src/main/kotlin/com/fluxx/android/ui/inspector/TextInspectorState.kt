@@ -248,11 +248,11 @@ internal class TextNumericDraft(val layer: CompositionLayer,time: Long,val frame
     private val paragraph=document.paragraphs.getOrNull(document.text.take(start).count {it=='\n'}) ?: TextParagraphStyle()
     val limit: PropertyLimit? get()=PropertyLimits.forControl(control,scope.selected)
     val initial: Float=when(control) {
-        TextControl.SIZE->if(scope.selected) style.sizeFactor*100 else layer.text.size.evaluate(local)
+        TextControl.SIZE->if(scope.selected) style.sizeFactor*100 else layer.text.sizeAt(local)
         TextControl.RELATIVE_SIZE->style.sizeFactor*100
         TextControl.TRACKING->if(scope.selected) style.trackingDelta else layer.text.tracking.evaluate(local)
         TextControl.BASELINE->if(scope.selected) style.baselineDelta else layer.text.baselineShift.evaluate(local)
-        TextControl.STROKE_WIDTH->if(scope.selected) style.strokeDelta else layer.text.strokeWidth.evaluate(local)
+        TextControl.STROKE_WIDTH->if(scope.selected) style.strokeDelta else layer.text.strokeWidthAt(local)
         TextControl.LEADING->layer.text.leading.evaluate(local)
         TextControl.H_SCALE->style.horizontalScale;TextControl.V_SCALE->style.verticalScale
         TextControl.MANUAL_KERNING->style.manualKerning.firstOrNull {it.character>=start}?.amount ?: 0f

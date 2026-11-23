@@ -177,7 +177,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
             val index = entry.index(source,layer.text.effectiveLigatures(local))
             entry.lastIndex=index
             val layout = entry.layouts[index]; val text = layer.text
-            val size = text.size.evaluate(local); val tracking = text.tracking.evaluate(local)
+            val size = text.sizeAt(local); val tracking = text.tracking.evaluate(local)
             val leading = text.leading.evaluate(local); val baseline = text.baselineShift.evaluate(local)
             val animation=entry.animations[index]
             val evaluating = System.nanoTime(); animation.evaluate(local); stageNs[STAGE_EVALUATE] += System.nanoTime() - evaluating
@@ -187,7 +187,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
             if (staged == 4) flush()
             val meshing = System.nanoTime()
             check(RenderBridge.textLayer(session,layout.handle,matrix,size,text.alignment.ordinal,text.fill.evaluate(local),opacity,
-                tracking,leading,baseline,text.strokeColour.evaluate(local),text.strokeWidth.evaluate(local),text.paintOrder(local),modifiers=animation.modifiers))
+                tracking,leading,baseline,text.strokeColour.evaluate(local),text.strokeWidthAt(local),text.paintOrder(local),modifiers=animation.modifiers))
             stageNs[STAGE_MESH] += System.nanoTime() - meshing
             stageNs[STAGE_LAYERS]++
             staged++
@@ -245,7 +245,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
             val index = entry.index(source, layer.text.effectiveLigatures(local))
             val tier = if (!active) SdfAtlasTiers.BASE else {
                 layer.evaluatedTransformInto(timeUs, evaluatedTransform)
-                val size = layer.text.size.evaluate(local)
+                val size = layer.text.sizeAt(local)
                 val runs = source.runs
                 var runScale = 0f; var bold = false
                 for (r in 0 until runs.size) { val style = runs[r].style
@@ -258,7 +258,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 val projection = maxOf(comp.width.toFloat() / referenceWidth, comp.height.toFloat() / referenceHeight)
                 val layerScale = maxOf(kotlin.math.abs(evaluatedTransform[2]), kotlin.math.abs(evaluatedTransform[3])) * projection
                 val px = SdfAtlasTiers.pixelsPerEm(size, runScale, animation.maxGlyphScale(), layerScale, outputScale)
-                val distance = SdfAtlasTiers.distanceEm(layer.text.strokeWidth.evaluate(local), size, bold,
+                val distance = SdfAtlasTiers.distanceEm(layer.text.strokeWidthAt(local), size, bold,
                     animation.maxModifierDistanceEm())
                 // TEXT PERF 11: the tiers this layer reaches as its keyframed size grows (the current tier included).
                 if (interactive) tierWarm[e] = minOf(SdfAtlasTiers.ideal(if (size > 0f && entry.sizeMax > size) px * (entry.sizeMax / size) else px),
@@ -547,14 +547,14 @@ class CompositionRenderer(private val context: Context, private val repository: 
             if(layer.type == LayerType.TEXT) {
                 val local = timeUs - layer.resolvedKeyframeAnchorUs
                 val layout = requireNotNull(textForFrame[layer.id])
-                val size = layer.text.size.evaluate(local)
+                val size = layer.text.sizeAt(local)
                 val animation=requireNotNull(textAnimationsForFrame[layer.id]);animation.evaluate(local)
                 layer.evaluatedTransformInto(timeUs,evaluatedTransform)
                 LayerGeometry.textMatrixInto(matrix, evaluatedTransform, animation.logicalBounds,
                     comp.width, comp.height, referenceWidth, referenceHeight, layer.anchorX, layer.anchorY)
                 check(RenderBridge.textLayer(session, layout.handle, matrix, size, layer.text.alignment.ordinal,
                     layer.text.fill.evaluate(local), opacity, layer.text.tracking.evaluate(local), layer.text.leading.evaluate(local),
-                    layer.text.baselineShift.evaluate(local), layer.text.strokeColour.evaluate(local), layer.text.strokeWidth.evaluate(local), layer.text.paintOrder(local),modifiers=animation.modifiers)) { "Could not composite text" }
+                    layer.text.baselineShift.evaluate(local), layer.text.strokeColour.evaluate(local), layer.text.strokeWidthAt(local), layer.text.paintOrder(local),modifiers=animation.modifiers)) { "Could not composite text" }
             } else if(layer.type == LayerType.VIDEO) {
                 val uri=requireNotNull(layer.asset?.uri)
                 val decoder=decoder(uri)

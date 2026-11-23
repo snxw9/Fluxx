@@ -763,6 +763,12 @@ fun EditorScreen(
                             }
                         },
                         onTextEditVisible = { textEditOpen = it },
+                        // GRAPH G1: Graph page drags preview SetKeyEasing inside the existing begin/commit/cancel gesture.
+                        onGesturePreview = { action ->
+                            textEditor.finish { editor.previewGesture(action)
+                            previewController?.update(editor.displayedState.project, playheadUs, false)
+                            }
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }

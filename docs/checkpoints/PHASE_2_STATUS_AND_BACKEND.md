@@ -70,7 +70,7 @@ This matrix maps every editor control to its underlying engine state, distinguis
 | **3D Utility Rail Icon** | Visible, disabled & inert | 3D transform math, camera projection, and engine evaluation. |
 | **Composition & Layer Markers** | **Functional in source** (ruler/layer flags, playhead tint, Global Colour Picker, split partitioning, marker navigation) | [Marker checkpoint](MARKERS.md); tests, allocation profiling and phone review pending. |
 | **Keyframe Diamonds** | **Functional** (Inspector rail toggle/add/remove, timeline markers, magnetic snap) | Integrated into FlatBuffers schema, unified Kotlin Bezier evaluator, and UI. |
-| **Graph Editor Icons** | Visible, disabled & inert | Full SDD dual Value/Speed Graph Editor and curve backend. |
+| **Graph Editor** | **G1 in source:** curve backend (schema v13: Hold, Linear, Easy Ease, Custom bezier, Bounce, Elastic) and the Graph page's Ease view; rail Graph icons enabled for continuous properties with ≥ 2 keys. JVM 518/518; A16 layout and render tests pass; phone acceptance pending ([GRAPH G1](GRAPH_G1.md)). | G2 Value graph (key selection, key drag, zoom/pan), G3 Speed graph, G4 preset libraries and convert-to-keys. |
 | **Solid Layers & Colour Picker** | **Functional** (SV box, hue strip, sliders, hex, alpha, draggable eyedropper, custom palettes) | Fully integrated into renderer, FlatBuffers schema, and UI. |
 | **Palette System** | Implemented in source (create/switch/rename/delete/edit palettes, save swatches, AtomicFile JSON); tests pending | App-level data independent of project FlatBuffers. |
 | **Palette Import (External)** | Not implemented | External .ase/.gpl swatch import is deferred. |

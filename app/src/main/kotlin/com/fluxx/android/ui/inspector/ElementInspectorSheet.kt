@@ -74,7 +74,9 @@ enum class InspectorSection {
     BLENDING_OPACITY,
     TIMING,
     AUDIO,
-    CONTEXTUAL_EDIT, EFFECTS, LAYER_STYLES, TRACK_MATTES, MOTION_BLUR
+    CONTEXTUAL_EDIT, EFFECTS, LAYER_STYLES, TRACK_MATTES, MOTION_BLUR,
+    /** GRAPH G1: the Graph Editor page (Ease view), opened from the rail's Graph icon of the page it returns to. */
+    GRAPH
 }
 
 enum class TransformSubMode {
@@ -140,19 +142,41 @@ fun ElementInspectorSheet(
     textSelection: TextSelectionRange?=null,onTextSelection: (TextSelectionRange?)->Unit = {},
     onExplodePrepare: (TextExplodeOptions,(Result<TextExplodePlan>)->Unit)->Unit = {_,reply->reply(Result.failure(IllegalStateException("Explode preparation unavailable")))},
     onExplodeCommit: (TextExplodePlan,(String?)->Unit)->Unit = {_,reply->reply("Explode unavailable")},
-    onTextEditVisible: (Boolean)->Unit = {}
+    onTextEditVisible: (Boolean)->Unit = {},
+    /** GRAPH G1: live preview of a Graph page drag (SetKeyEasing) inside the begin/commit/cancel gesture. */
+    onGesturePreview: (EditorAction) -> Unit = {}
 ) {
     key(layer.id) {
         var section by rememberSaveable { mutableStateOf<InspectorSection?>(null) }
+        // GRAPH G1: the Graph page's property and the page it returns to. The return page's saveable state (tab, focused
+        // field, transform mode) is kept by [pages] while the Graph page is open and dropped on any other navigation.
+        var graphTarget by remember { mutableStateOf<GraphTarget?>(null) }
+        var graphReturn by rememberSaveable { mutableStateOf<InspectorSection?>(null) }
+        val pages = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+        val currentLayer by rememberUpdatedState(layer)
+        val graphHost = remember {
+            GraphHost({ currentLayer }, { graphTarget },
+                open = { target -> if (section != InspectorSection.GRAPH) graphReturn = section; graphTarget = target; section = InspectorSection.GRAPH },
+                close = { section = graphReturn; graphTarget = null })
+        }
+        // A restored GRAPH page without its target (process death) returns to the page it came from.
+        if (section == InspectorSection.GRAPH && graphTarget == null) LaunchedEffect(Unit) { section = graphReturn }
         val textEditVisible by rememberUpdatedState(onTextEditVisible)
-        // Edit Text uses one fixed sheet height; the editor needs to know when it is showing.
-        LaunchedEffect(section) { textEditVisible(layer.type == LayerType.TEXT && section == InspectorSection.CONTEXTUAL_EDIT) }
+        // Edit Text uses one fixed sheet height; the editor needs to know when it is showing (the Graph page opened from
+        // it keeps the editor's top-bar Back routing).
+        LaunchedEffect(section) { textEditVisible(layer.type == LayerType.TEXT && (section == InspectorSection.CONTEXTUAL_EDIT ||
+            (section == InspectorSection.GRAPH && graphReturn == InspectorSection.CONTEXTUAL_EDIT))) }
         DisposableEffect(Unit) { onDispose { textEditVisible(false) } }
         var textColourProperty by remember { mutableStateOf(AnimPropertyType.FILL_COLOUR) }
         val focusManager = LocalFocusManager.current
         val focusCallback by rememberUpdatedState(onPropertyFocus)
-        LaunchedEffect(section) {
-            if (section != InspectorSection.TRANSFORM) focusCallback(if (section == InspectorSection.BLENDING_OPACITY) AnimPropertyType.OPACITY else null)
+        val animatorFocusCallback by rememberUpdatedState(onAnimatorFocus)
+        LaunchedEffect(section, graphTarget) {
+            // The Graph page keeps the timeline focus and Prev/Next on the property it edits.
+            if (section == InspectorSection.GRAPH) { graphTarget?.let { focusCallback(it.property); animatorFocusCallback(it.animator) } }
+            else if (section != InspectorSection.TRANSFORM) focusCallback(if (section == InspectorSection.BLENDING_OPACITY) AnimPropertyType.OPACITY else null)
+            // Leaving a page other than for the Graph page forgets its kept state (unchanged navigation behaviour).
+            if (section != InspectorSection.GRAPH) InspectorSection.entries.filter { it != section }.forEach { pages.removeState(it.name) }
         }
         DisposableEffect(layer.id) { onDispose { focusCallback(null) } }
         val dismiss by rememberUpdatedState(onDismiss)
@@ -180,7 +204,7 @@ fun ElementInspectorSheet(
                     // own single header row (back, Character / Paragraph / Animate, menu) in place of the parent chrome.
                     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
                         // Section pages: ONE header row (← | page tabs), exactly like Edit Text.
-                        if (!textTyping && section != null && !textSection) SectionHeader(sections, section!!, layer.type,
+                        if (!textTyping && section != null && !textSection && section != InspectorSection.GRAPH) SectionHeader(sections, section!!, layer.type,
                             onBack = { focusManager.clearFocus(); section = null },
                             onSelect = { focusManager.clearFocus(); section = it })
                         // The landing grid keeps its arrangement: handle, layer name with duplicate / delete, quick actions.
@@ -232,7 +256,9 @@ fun ElementInspectorSheet(
                             onAction(action)
                         }
                         }
-                        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = if(textSection) 0.dp else InspectorChromeBudget.CONTENT_TOP.dp)) {
+                        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = if(textSection || section == InspectorSection.GRAPH) 0.dp else InspectorChromeBudget.CONTENT_TOP.dp)) {
+                          CompositionLocalProvider(LocalGraphHost provides graphHost) {
+                          pages.SaveableStateProvider(section?.name ?: "landing") {
                             when (section) {
                                 null -> InspectorLandingGrid(layer.type) { section=it }
                                 InspectorSection.TRANSFORM -> OverhauledTransformSectionContent(
@@ -257,8 +283,14 @@ fun ElementInspectorSheet(
                                     onBegin = onTransformBegin, onPreview = { onColorPreview(it) }, onFinish = onTransformCommit,
                                     onCancel = onTransformCancel, modifier = Modifier.fillMaxSize(), name = "solid colour",
                                     palette = paletteRepository, onEyedropper = onEyedropperRequest)
+                                InspectorSection.GRAPH -> graphTarget?.let { target ->
+                                    GraphPage(layer, target, playheadUs, textFrameRate, onAction, onTransformBegin, onGesturePreview,
+                                        onTransformCommit, onTransformCancel, onClose = graphHost.close)
+                                }
                                 else -> Unit // Disabled categories cannot be opened.
                             }
+                          }
+                          }
                         }
                     }
                 }
@@ -591,9 +623,15 @@ internal fun InspectorUtilityRail(resetLabel: String, onReset: () -> Unit,
     hasKeyframeAtPlayhead: Boolean = false, onToggleKeyframe: (() -> Unit)? = null,
     show3D: Boolean = true, keyIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     keyLabel: String? = null, keyState: String? = null, extraItems: List<RailMenuItem> = emptyList(),
-    confirm: Pair<String, () -> Unit>? = null, onConfirmDismiss: () -> Unit = {}, menuAnchor: @Composable () -> Unit = {}) {
+    confirm: Pair<String, () -> Unit>? = null, onConfirmDismiss: () -> Unit = {}, menuAnchor: @Composable () -> Unit = {},
+    graphTarget: GraphTarget? = null) {
     var menu by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
+    // GRAPH G1: the Graph icon opens the Graph page for this rail's focused property (continuous, >= 2 keys) and,
+    // on the Graph page itself, returns to the page it was opened from. Otherwise it stays visible and disabled.
+    val graphHost = LocalGraphHost.current
+    val graphOpen = graphHost != null && graphTarget != null && graphHost.openTarget == graphTarget
+    val graphEnabled = graphOpen || (graphHost != null && graphTarget != null && GraphModel.enabled(graphHost.layer(), graphTarget))
     BoxWithConstraints(Modifier.width(RailBudget.TILE.dp).fillMaxHeight().testTag("inspector-rail")) {
         val disabledCount = if (show3D) 2 else 1
         val placeholder = RailBudget.disabledHeight(maxHeight.value, 2, disabledCount).dp
@@ -604,7 +642,17 @@ internal fun InspectorUtilityRail(resetLabel: String, onReset: () -> Unit,
                 Modifier.testTag("inspector-key-diamond").semantics {
                     if (keyState != null) { stateDescription = keyState; liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }
                 }, enabled = onToggleKeyframe != null, tint = tint) { focus.clearFocus(); onToggleKeyframe?.invoke() }
-            Box(Modifier.size(RailBudget.TILE.dp, placeholder).semantics { contentDescription = "Graph editor (not yet available)"; disabled() }.testTag("inspector-rail-graph"),
+            if (graphEnabled) Box(Modifier.size(RailBudget.TILE.dp, placeholder).clip(RoundedCornerShape(10.dp))
+                .background(if (graphOpen) Surface else Color.Transparent)
+                .clickable(role = Role.Button, onClickLabel = if (graphOpen) "Close graph editor" else "Open graph editor") {
+                    focus.clearFocus(); PopoverDismissal.request()
+                    if (graphOpen) graphHost!!.close() else graphHost!!.open(graphTarget!!)
+                }
+                .semantics { contentDescription = "Graph editor"; stateDescription = if (graphOpen) "Open" else "Closed"; selected = graphOpen }
+                .testTag("inspector-rail-graph"), contentAlignment = Alignment.Center) {
+                Icon(InspectorIcons.icon("GRAPH"), null, Modifier.size(minOf(InspectorIcons.SIZE, placeholder)), tint = if (graphOpen) Highlight else TextSecondary)
+            }
+            else Box(Modifier.size(RailBudget.TILE.dp, placeholder).semantics { contentDescription = "Graph editor (needs a continuous property with two keys)"; disabled() }.testTag("inspector-rail-graph"),
                 contentAlignment = Alignment.Center) { Icon(InspectorIcons.icon("GRAPH"), null, Modifier.size(minOf(InspectorIcons.SIZE, placeholder)), tint = TextDisabled) }
             if (show3D) Box(Modifier.size(RailBudget.TILE.dp, placeholder).semantics { contentDescription = "3D layer controls (not yet available)"; disabled() }.testTag("inspector-rail-3d"),
                 contentAlignment = Alignment.Center) { Icon(InspectorIcons.icon("CUBE"), null, Modifier.size(minOf(InspectorIcons.SIZE, placeholder)), tint = TextDisabled) }
@@ -639,12 +687,13 @@ private fun OverhauledTransformSectionContent(
     onAnchorModeChange: (Boolean) -> Unit,
     onAnchorPreview: (EditorAction.SetAnchorPoint) -> Unit
 ) {
-    var mode by remember { mutableStateOf(TransformSubMode.POSITION) }
-    var isAnchorMode by remember { mutableStateOf(false) }
+    // GRAPH G1: saveable, so returning from the Graph page restores the mode it was opened from.
+    var mode by rememberSaveable { mutableStateOf(TransformSubMode.POSITION) }
+    var isAnchorMode by rememberSaveable { mutableStateOf(false) }
     val anchorModeCallback by rememberUpdatedState(onAnchorModeChange)
     SideEffect { anchorModeCallback(isAnchorMode) }
     DisposableEffect(Unit) { onDispose { anchorModeCallback(false) } }
-    var linked by remember { mutableStateOf(true) }
+    var linked by rememberSaveable { mutableStateOf(true) }
     val focusManager = LocalFocusManager.current
     val currentTransform = remember(layer, playheadUs) { layer.evaluatedTransform(playheadUs) }
     val transform = currentTransform
@@ -766,7 +815,8 @@ private fun OverhauledTransformSectionContent(
                     }
                 }
               }
-            }
+            },
+            graphTarget = if (isAnchorMode) null else GraphTarget(currentProp)
         )
         // The active mode's control group is centred vertically in the content area and horizontally between the
         // rail and the mode column (CentredSectionGroup); sizes are SectionLayout constants, never the sheet height.
@@ -904,7 +954,8 @@ private fun CompactOpacitySectionContent(
                 } else {
                     onAction(EditorAction.SetKeyframe(layer.id, AnimPropertyType.OPACITY, localTimeUs, opacity))
                 }
-            }
+            },
+            graphTarget = GraphTarget(AnimPropertyType.OPACITY)
         )
         // Fixed sizes (SectionLayout): a 40dp blend-mode row and one slider row (20 label + 48 touch), centred.
         Box(Modifier.weight(1f).fillMaxHeight()) {

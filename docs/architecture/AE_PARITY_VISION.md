@@ -591,6 +591,8 @@ Plan for:
 
 Fluxx's existing trackpad interaction system could potentially be used to provide more precise graph manipulation on mobile.
 
+**Implementation update — GRAPH G1 (2026-11-23):** Implemented in source; phone acceptance pending. The curve backend (Hold, Linear, Easy Ease, Custom bezier with overshoot, Bounce, Elastic; schema v13) and the Graph page's **Ease view** (normalised curve of the segment at the playhead, type chooser, 32 standard presets, handles with a loupe, snap / mirror / invert, numeric entry, `cubic-bezier()` copy/paste, apply to all keys) are in. The Value and Speed graphs are visible, disabled placeholders (G2/G3). The trackpad idea is used as relative handle drag: after selecting a handle, a drag on empty canvas moves it at reduced sensitivity. It is implemented in the Graph canvas because `PositionTrackpad` is a complete Position control, not a reusable drag core. See [GRAPH G1](../checkpoints/GRAPH_G1.md).
+
 ---
 
 # 21. Expressions

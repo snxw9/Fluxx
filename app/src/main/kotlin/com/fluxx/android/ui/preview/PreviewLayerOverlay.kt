@@ -73,7 +73,7 @@ internal fun PreviewLayerOverlay(project: ProjectDocument, selected: Composition
         val rw = layer.referenceWidth.takeIf { it > 0 } ?: comp.width
         val rh = layer.referenceHeight.takeIf { it > 0 } ?: comp.height
         val geometry = if (layer.type == LayerType.SOLID) OverlaySource(rw, rh) else source
-        val textSize = layer.text.size.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs)
+        val textSize = layer.text.sizeAt(playheadUs - layer.resolvedKeyframeAnchorUs)
         val textBounds = textMetrics?.bounds(layer.text, playheadUs - layer.resolvedKeyframeAnchorUs)
         val hasGeometry = if (layer.type == LayerType.TEXT) textBounds?.empty == false else
             geometry != null && geometry.width > 0 && geometry.height > 0 && geometry.pixelAspect.isFinite() && geometry.pixelAspect > 0f

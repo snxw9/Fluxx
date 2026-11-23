@@ -75,7 +75,7 @@ internal object TextPropertyActions {
                 val sampled = text.scalarValue(property, local)
                 val value = (action as? EditorAction.SetKeyframe)?.value ?: sampled
                 val keys = edit(track.keyframes, { it.timeUs }, { k, t -> k.copy(timeUs = t) }) {
-                    Keyframe1D(time, value, (action as? EditorAction.SetKeyframe)?.easing ?: EasingPreset.EASY_EASE) }
+                    rekey1D(track.keyframes.firstOrNull { it.timeUs == time }, time, value, (action as? EditorAction.SetKeyframe)?.easing ?: EasingPreset.EASY_EASE) }
                 text.withScalar(property, AnimatableProperty1D(keys.isNotEmpty(), if (action is EditorAction.ResetPropertyAnimation) (when(property) { AnimPropertyType.FONT_SIZE -> 72f; AnimPropertyType.LIGATURES -> 1f; else -> 0f }) else sampled, keys))
             }
             AnimPropertyType.FILL_COLOUR, AnimPropertyType.STROKE_COLOUR -> {
@@ -83,7 +83,7 @@ internal object TextPropertyActions {
                 val sampled = track.evaluate(local)
                 val value = (action as? EditorAction.SetColourKeyframe)?.argb ?: sampled
                 val keys = edit(track.keyframes, { it.timeUs }, { k, t -> k.copy(timeUs = t) }) {
-                    ColourKeyframe(time, value, (action as? EditorAction.SetColourKeyframe)?.easing ?: EasingPreset.EASY_EASE) }
+                    rekeyColour(track.keyframes.firstOrNull { it.timeUs == time }, time, value, (action as? EditorAction.SetColourKeyframe)?.easing ?: EasingPreset.EASY_EASE) }
                 text.withColour(property, AnimatableColour(keys.isNotEmpty(), if (action is EditorAction.ResetPropertyAnimation) (if (property == AnimPropertyType.FILL_COLOUR) -1 else 0xff000000.toInt()) else sampled, keys))
             }
             else -> error("Not a text property")
@@ -121,8 +121,14 @@ fun TextProperties.scalar(property: AnimPropertyType): AnimatableProperty1D = wh
     AnimPropertyType.LIGATURES -> ligatures
     else -> error("Not a scalar text property")
 }
-fun TextProperties.scalarValue(property: AnimPropertyType, time: Long): Float =
-    if (property == AnimPropertyType.STROKE_OVER_FILL || property == AnimPropertyType.LIGATURES) scalar(property).hold(time) else scalar(property).evaluate(time)
+/** The value at [time] as edits sample it: hold for the discrete tracks, and (GRAPH G1) clamped to the property's legal
+ * range, so an overshooting curve can never be written back into a validated key or static value. */
+fun TextProperties.scalarValue(property: AnimPropertyType, time: Long): Float = when (property) {
+    AnimPropertyType.STROKE_OVER_FILL, AnimPropertyType.LIGATURES -> scalar(property).hold(time)
+    AnimPropertyType.FONT_SIZE -> sizeAt(time)
+    AnimPropertyType.STROKE_WIDTH -> strokeWidthAt(time)
+    else -> scalar(property).evaluate(time)
+}
 fun TextProperties.colour(property: AnimPropertyType): AnimatableColour = when (property) {
     AnimPropertyType.FILL_COLOUR -> fill
     AnimPropertyType.STROKE_COLOUR -> strokeColour

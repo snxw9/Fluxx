@@ -43,6 +43,26 @@ class ColourKeyframe : Table() {
             val o = __offset(8)
             return if(o != 0) bb.get(o + bb_pos) else 1
         }
+    val curveA : Float
+        get() {
+            val o = __offset(10)
+            return if(o != 0) bb.getFloat(o + bb_pos) else 0.33f
+        }
+    val curveB : Float
+        get() {
+            val o = __offset(12)
+            return if(o != 0) bb.getFloat(o + bb_pos) else 0.0f
+        }
+    val curveC : Float
+        get() {
+            val o = __offset(14)
+            return if(o != 0) bb.getFloat(o + bb_pos) else 0.67f
+        }
+    val curveD : Float
+        get() {
+            val o = __offset(16)
+            return if(o != 0) bb.getFloat(o + bb_pos) else 1.0f
+        }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_25_2_10()
         fun getRootAsColourKeyframe(_bb: ByteBuffer): ColourKeyframe = getRootAsColourKeyframe(_bb, ColourKeyframe())
@@ -50,17 +70,25 @@ class ColourKeyframe : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createColourKeyframe(builder: FlatBufferBuilder, timeUs: Long, argb: Int, easing: Byte) : Int {
-            builder.startTable(3)
+        fun createColourKeyframe(builder: FlatBufferBuilder, timeUs: Long, argb: Int, easing: Byte, curveA: Float, curveB: Float, curveC: Float, curveD: Float) : Int {
+            builder.startTable(7)
             addTimeUs(builder, timeUs)
+            addCurveD(builder, curveD)
+            addCurveC(builder, curveC)
+            addCurveB(builder, curveB)
+            addCurveA(builder, curveA)
             addArgb(builder, argb)
             addEasing(builder, easing)
             return endColourKeyframe(builder)
         }
-        fun startColourKeyframe(builder: FlatBufferBuilder) = builder.startTable(3)
+        fun startColourKeyframe(builder: FlatBufferBuilder) = builder.startTable(7)
         fun addTimeUs(builder: FlatBufferBuilder, timeUs: Long) = builder.addLong(0, timeUs, 0L)
         fun addArgb(builder: FlatBufferBuilder, argb: Int) = builder.addInt(1, argb, -1)
         fun addEasing(builder: FlatBufferBuilder, easing: Byte) = builder.addByte(2, easing, 1)
+        fun addCurveA(builder: FlatBufferBuilder, curveA: Float) = builder.addFloat(3, curveA, 0.33)
+        fun addCurveB(builder: FlatBufferBuilder, curveB: Float) = builder.addFloat(4, curveB, 0.0)
+        fun addCurveC(builder: FlatBufferBuilder, curveC: Float) = builder.addFloat(5, curveC, 0.67)
+        fun addCurveD(builder: FlatBufferBuilder, curveD: Float) = builder.addFloat(6, curveD, 1.0)
         fun endColourKeyframe(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

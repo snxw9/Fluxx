@@ -107,6 +107,23 @@ internal object InspectorIcons {
     private fun direction(m: Boolean) = p(m).line(10f, 4f, 10f, 13f).line(14f, 4f, 14f, 13f).line(16f, 4f, 9f, 4f).arc(9f, 4f, 3f, 3f, 0, 0, 9f, 10f)
         .line(9f, 10f, 10f, 10f).line(4f, 18f, 20f, 18f).line(17.5f, 15.5f, 20f, 18f, 17.5f, 20.5f).build()
     private fun keyDiamond(b: IconPath) = b.poly(2f, 12f, 3f, 21f, 12f, 12f, 21f, 3f, 12f)
+    /** An eased curve as one open polyline on the grid (x 4..20; [low]..[high] mapped to y 20..4). */
+    private fun sampled(b: IconPath, f: (Float) -> Float, low: Float, high: Float, steps: Int = 32): IconPath {
+        val points = FloatArray((steps + 1) * 2)
+        for (i in 0..steps) {
+            val t = i / steps.toFloat()
+            points[i * 2] = 4f + 16f * t
+            points[i * 2 + 1] = 20f - (f(t).coerceIn(low, high) - low) / (high - low) * 16f
+        }
+        return b.line(*points)
+    }
+    /**
+     * GRAPH G1 preset strip glyphs: the curve itself in the family's stroke, caps and joins (built once per key and
+     * cached). Not part of [VISIBLE]: presets are data, drawn from their own values.
+     */
+    fun curve(key: String, ease: (Float) -> Float, low: Float = -.7f, high: Float = 1.7f): ImageVector = synchronized(cache) {
+        cache.getOrPut("curve.$key") { build("curve.$key", sampled(p(), ease, low, high, 40).build(), false) }
+    }
 
     /** Path data for every named icon. Unknown names fail loudly in tests (no silent default glyph). */
     val PATHS: Map<String, String> = buildMap {
@@ -141,6 +158,27 @@ internal object InspectorIcons {
         put("HOLD_ANIM", p().rect(5f, 5f, 14f, 14f, 3f).poly(1f, 12f, 9f, 15f, 12f, 12f, 15f, 9f, 12f).build())
         put("HOLD_ON", p().rect(5f, 5f, 14f, 14f, 3f).build())
         put("GRAPH", p().line(4f, 4f, 4f, 20f, 20f, 20f).cubic(6.5f, 17f, 11.5f, 17f, 11.5f, 7f, 19f, 7f).build())
+        // GRAPH G1: Graph page modes (Value | Speed | Ease), the Ease view's type chooser and tools.
+        put("GRAPH_VALUE", p().line(4f, 4f, 4f, 20f, 20f, 20f).cubic(6f, 17f, 8.5f, 7f, 12f, 8f, 12f, 8f).cubic(12f, 8f, 15.5f, 9f, 16f, 15f, 20f, 12f).build())
+        put("GRAPH_SPEED", p().line(4f, 4f, 4f, 20f, 20f, 20f).cubic(6f, 18f, 9.5f, 18f, 10f, 7f, 12.5f, 7f).cubic(12.5f, 7f, 15f, 7f, 15.5f, 18f, 20f, 18f).build())
+        put("GRAPH_EASE", p().rect(4f, 4f, 16f, 16f, 2.5f).cubic(4f, 20f, 13f, 20f, 11f, 4f, 20f, 4f).build())
+        put("EASE_HOLD", p().line(4f, 19f, 12f, 19f, 12f, 5f, 20f, 5f).build())
+        put("EASE_LINEAR", p().line(4f, 19f, 20f, 5f).circle(4f, 19f, 1f).circle(20f, 5f, 1f).build())
+        put("EASE_EASY", p().cubic(4f, 19f, 9.3f, 19f, 14.7f, 5f, 20f, 5f).build())
+        put("EASE_IN", p().cubic(4f, 19f, 10.7f, 19f, 20f, 5f, 20f, 5f).build())
+        put("EASE_OUT", p().cubic(4f, 19f, 4f, 19f, 13.3f, 5f, 20f, 5f).build())
+        put("EASE_CUSTOM", p().cubic(4f, 19f, 9f, 11f, 15f, 13f, 20f, 5f).line(4f, 19f, 9f, 11f).circle(9f, 11f, 1.5f)
+            .line(20f, 5f, 15f, 13f).circle(15f, 13f, 1.5f).build())
+        put("EASE_BOUNCE", sampled(p(), { com.fluxx.android.model.EasingMath.bounce(it, 3f, .5f) }, -.1f, 1.1f).build())
+        put("EASE_ELASTIC", sampled(p(), { com.fluxx.android.model.EasingMath.elastic(it, 2f, .25f) }, -.1f, 1.6f).build())
+        put("EASE_SNAP", p().rect(4f, 4f, 16f, 16f, 2.5f).line(4f, 12f, 20f, 12f).line(12f, 4f, 12f, 20f).circle(16f, 8f, 1.5f).build())
+        put("EASE_MIRROR", p().line(12f, 3f, 12f, 21f).poly(1.5f, 9.5f, 6f, 9.5f, 18f, 3.5f, 18f).poly(1.5f, 14.5f, 6f, 20.5f, 18f, 14.5f, 18f).build())
+        put("EASE_INVERT", p().line(4f, 8f, 18f, 8f).line(15f, 5f, 18f, 8f, 15f, 11f).line(20f, 16f, 6f, 16f).line(9f, 13f, 6f, 16f, 9f, 19f).build())
+        put("EASE_APPLY_ALL", p().poly(1f, 6f, 8.5f, 9f, 11.5f, 6f, 14.5f, 3f, 11.5f).poly(1f, 12f, 8.5f, 15f, 11.5f, 12f, 14.5f, 9f, 11.5f)
+            .poly(1f, 18f, 8.5f, 21f, 11.5f, 18f, 14.5f, 15f, 11.5f).line(3f, 19f, 21f, 19f).build())
+        put("EASE_COPY", p().rect(9f, 9f, 11f, 11f, 2.5f).rect(4f, 4f, 11f, 11f, 2.5f).build())
+        put("EASE_NUMERIC", p().rect(3f, 7f, 18f, 10f, 2.5f).line(6.5f, 10f, 8f, 9.5f, 8f, 14.5f).line(10.5f, 10f, 12.5f, 9.5f, 12.5f, 12f, 10.5f, 14.5f, 13f, 14.5f)
+            .line(16.5f, 9f, 16.5f, 15f).build())
         put("CUBE", p().poly(2f, 12f, 3f, 20f, 7.5f, 20f, 16.5f, 12f, 21f, 4f, 16.5f, 4f, 7.5f).line(4.6f, 7.9f, 12f, 12f, 19.4f, 7.9f).line(12f, 12f, 12f, 20.3f).build())
         // ---- Landing grid categories --------------------------------------------------------------------
         put("TRANSFORM", p().line(3f, 12f, 21f, 12f).line(12f, 3f, 12f, 21f).line(6f, 9f, 3f, 12f, 6f, 15f).line(18f, 9f, 21f, 12f, 18f, 15f)

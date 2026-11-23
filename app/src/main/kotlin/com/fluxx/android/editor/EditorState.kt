@@ -76,6 +76,15 @@ sealed interface EditorAction {
     data class RemoveKeyframe(val id: Long, val property: AnimPropertyType, val localTimeUs: Long) : EditorAction
     data class MoveKeyframe(val id: Long, val property: AnimPropertyType? = null, val oldTimeUs: Long, val newTimeUs: Long) : EditorAction
     data class ResetPropertyAnimation(val id: Long, val property: AnimPropertyType) : EditorAction
+    /**
+     * GRAPH G1 (the one additive easing action): write [curve] onto the departing key of segments of ONE animatable
+     * property, addressed exactly like the existing keyframe actions: [property] for transform and text-layer tracks,
+     * or [animator] for an animator property / selector field (exactly one of the two). [keyTimes] are local
+     * (anchor-relative) key times; null means every segment of the property (every key except the last, whose easing
+     * is unused). Missing times are ignored. Position/Scale share one curve for X and Y.
+     */
+    data class SetKeyEasing(val id: Long, val property: AnimPropertyType? = null, val animator: AnimatorTrackAddress? = null,
+        val keyTimes: List<Long>? = null, val curve: EasingCurve) : EditorAction
 }
 
 object EditorReducer {
@@ -402,12 +411,14 @@ object EditorReducer {
                 val newAnimTransform = when (action.property) {
                     AnimPropertyType.ROTATION -> {
                         val filtered = at.rotation.keyframes.filterNot { it.timeUs == action.localTimeUs }
-                        val updated = (filtered + Keyframe1D(action.localTimeUs, action.value, action.easing)).sortedBy { it.timeUs }
+                        val updated = (filtered + rekey1D(at.rotation.keyframes.firstOrNull { it.timeUs == action.localTimeUs },
+                            action.localTimeUs, action.value, action.easing)).sortedBy { it.timeUs }
                         at.copy(rotation = at.rotation.copy(isAnimated = true, staticValue = layer.transform.rotationDegrees, keyframes = FrozenList.of(updated)))
                     }
                     AnimPropertyType.OPACITY -> {
                         val filtered = at.opacity.keyframes.filterNot { it.timeUs == action.localTimeUs }
-                        val updated = (filtered + Keyframe1D(action.localTimeUs, action.value, action.easing)).sortedBy { it.timeUs }
+                        val updated = (filtered + rekey1D(at.opacity.keyframes.firstOrNull { it.timeUs == action.localTimeUs },
+                            action.localTimeUs, action.value, action.easing)).sortedBy { it.timeUs }
                         at.copy(opacity = at.opacity.copy(isAnimated = true, staticValue = layer.transform.opacity, keyframes = FrozenList.of(updated)))
                     }
                     else -> at
@@ -419,12 +430,14 @@ object EditorReducer {
                 val newAnimTransform = when (action.property) {
                     AnimPropertyType.POSITION -> {
                         val filtered = at.position.keyframes.filterNot { it.timeUs == action.localTimeUs }
-                        val updated = (filtered + Keyframe2D(action.localTimeUs, action.x, action.y, action.easing)).sortedBy { it.timeUs }
+                        val updated = (filtered + rekey2D(at.position.keyframes.firstOrNull { it.timeUs == action.localTimeUs },
+                            action.localTimeUs, action.x, action.y, action.easing)).sortedBy { it.timeUs }
                         at.copy(position = at.position.copy(isAnimated = true, staticX = layer.transform.positionX, staticY = layer.transform.positionY, keyframes = FrozenList.of(updated)))
                     }
                     AnimPropertyType.SCALE -> {
                         val filtered = at.scale.keyframes.filterNot { it.timeUs == action.localTimeUs }
-                        val updated = (filtered + Keyframe2D(action.localTimeUs, action.x, action.y, action.easing)).sortedBy { it.timeUs }
+                        val updated = (filtered + rekey2D(at.scale.keyframes.firstOrNull { it.timeUs == action.localTimeUs },
+                            action.localTimeUs, action.x, action.y, action.easing)).sortedBy { it.timeUs }
                         at.copy(scale = at.scale.copy(isAnimated = true, staticX = layer.transform.scaleX, staticY = layer.transform.scaleY, keyframes = FrozenList.of(updated)))
                     }
                     else -> at
@@ -504,6 +517,7 @@ object EditorReducer {
                 }
                 layer.copy(animTransform = at)
             }
+            is EditorAction.SetKeyEasing -> update(action.id) { KeyEasingActions.apply(it, action) }
             is EditorAction.ResetPropertyAnimation -> update(action.id) { layer ->
                 val at = layer.animTransform
                 val (newAnimTransform, newTransform) = when (action.property) {

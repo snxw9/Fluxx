@@ -34,7 +34,8 @@ internal object InspectorSwipe {
             null, // landing grid (handle + layer name)
             InspectorSection.TRANSFORM, InspectorSection.BLENDING_OPACITY, InspectorSection.TIMING, InspectorSection.AUDIO,
             InspectorSection.CONTEXTUAL_EDIT, // Edit Text (all tabs and sub-pages) and Edit Solid
-            InspectorSection.EFFECTS, InspectorSection.LAYER_STYLES, InspectorSection.TRACK_MATTES, InspectorSection.MOTION_BLUR -> true
+            InspectorSection.EFFECTS, InspectorSection.LAYER_STYLES, InspectorSection.TRACK_MATTES, InspectorSection.MOTION_BLUR,
+            InspectorSection.GRAPH -> true // GRAPH G1: the Graph page closes the sheet like every other page.
         }
     }
 

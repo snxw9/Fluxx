@@ -1,6 +1,6 @@
 # Fluxx Roadmap: v0.1 → Full Vision
 
-**Current status (2026-11-22):** Phase 2 remains active. **The text phase is complete** and the next big item is the [graph editor](#next-big-item-graph-editor-planned-not-started). Every text plan, spec and stage record is now one document, the [text record](../checkpoints/TEXT.md). In brief: E1–E3, F1, T1–T4 and the Edit Text UI were user-tested; FIX/EXPLODE are committed; T5 is stopped (below); TEXT FIX 9 and PERF 10/11 were device-assisted A16 passes (`4c85cb2`). F3 (the Animate tab) and its F3.1–F3.3 follow-ups are merged to master (F3.1/F3.2 in `c8109d9`, F3.3 in `67df5f3`), with A16 instrumented tests passing and **phone acceptance of F3.1–F3.3 done** (user-confirmed). F3.4 (the Character Tracking cap and these docs fixes) is on the single `text` branch, merged to master. Open decisions: T5 cross-style shaping ownership; a non-debuggable measurement build; animator threading or a batch/draw contract change for 30 animated layers under 16.6 ms p95. Stage-by-stage evidence is in the text record.
+**Current status (2026-11-22):** Phase 2 remains active. **The text phase is complete** and the current big item is the [graph editor](#graph-editor-in-progress-g1-in-source): G1 (curve backend + Ease view) is implemented in source, phone acceptance pending. Every text plan, spec and stage record is now one document, the [text record](../checkpoints/TEXT.md). In brief: E1–E3, F1, T1–T4 and the Edit Text UI were user-tested; FIX/EXPLODE are committed; T5 is stopped (below); TEXT FIX 9 and PERF 10/11 were device-assisted A16 passes (`4c85cb2`). F3 (the Animate tab) and its F3.1–F3.3 follow-ups are merged to master (F3.1/F3.2 in `c8109d9`, F3.3 in `67df5f3`), with A16 instrumented tests passing and **phone acceptance of F3.1–F3.3 done** (user-confirmed). F3.4 (the Character Tracking cap and these docs fixes) is on the single `text` branch, merged to master. Open decisions: T5 cross-style shaping ownership; a non-debuggable measurement build; animator threading or a batch/draw contract change for 30 animated layers under 16.6 ms p95. Stage-by-stage evidence is in the text record.
 
 **Current T5 stop (2026-10-09):** FIX `85b9de4` and EXPLODE `59a54a0` passed their compile/JVM/host gates and are implemented in source, device-unverified. T5 is dropped under the approved droppable-stage rule. The user's indivisible cursive-word decision resolves the historical emergency-wrap finding, but a new host proof shows mandatory Arabic lam-alef is lost across separate style items even with full source context and optional ligatures off. Cross-style shaping requires a further style-ownership decision beyond the approved wrapping change. No partial RTL code or production fonts remain; stored RTL still receives the existing rendering error. The diagnostic and this report remain uncommitted after the two feature commits. [Evidence, limits and exact manual tests](../checkpoints/TEXT.md#rec-text-fix-explode-t5). Earlier checkpoint statements below retain their historical context.
 
@@ -145,9 +145,13 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.
 
-### Next big item: graph editor (planned, not started)
+### Graph editor (in progress: G1 in source)
 
-The graph editor (value and speed curves for keyframes, reached from the rail's placeholder) is the next big item now that the text phase is complete.
+The graph editor (value and speed curves for keyframes, reached from the rail's Graph icon) is the current big item. It is planned in four passes:
+- [x] **G1: curve backend + Ease view** — schema v13 easing (Hold, Linear, Easy Ease, Custom bezier with overshoot, Bounce, Elastic), `SetKeyEasing`, overshoot-safe consumers, and the Graph page's Ease view with presets, handles, numeric entry and `cubic-bezier()` clipboard. Implemented in source on `graph-g1`; JVM 518/518 and the targeted A16 layout/render tests pass; phone acceptance pending ([record](../checkpoints/GRAPH_G1.md)).
+- [ ] **G2: Value graph** — key selection, key dragging with the Key MOVE reducer, handles, zoom/pan/fit, loupe.
+- [ ] **G3: Speed graph** and "smooth through key".
+- [ ] **G4: preset libraries**, convert Bounce/Elastic to keys, pinned presets. Later: separate X/Y dimensions (a further schema bump) and multi-select.
 
 ### Timeline productivity (parked)
 

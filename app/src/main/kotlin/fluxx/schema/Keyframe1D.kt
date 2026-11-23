@@ -43,6 +43,26 @@ class Keyframe1D : Table() {
             val o = __offset(8)
             return if(o != 0) bb.get(o + bb_pos) else 1
         }
+    val curveA : Float
+        get() {
+            val o = __offset(10)
+            return if(o != 0) bb.getFloat(o + bb_pos) else 0.33f
+        }
+    val curveB : Float
+        get() {
+            val o = __offset(12)
+            return if(o != 0) bb.getFloat(o + bb_pos) else 0.0f
+        }
+    val curveC : Float
+        get() {
+            val o = __offset(14)
+            return if(o != 0) bb.getFloat(o + bb_pos) else 0.67f
+        }
+    val curveD : Float
+        get() {
+            val o = __offset(16)
+            return if(o != 0) bb.getFloat(o + bb_pos) else 1.0f
+        }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_25_2_10()
         fun getRootAsKeyframe1D(_bb: ByteBuffer): Keyframe1D = getRootAsKeyframe1D(_bb, Keyframe1D())
@@ -50,17 +70,25 @@ class Keyframe1D : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createKeyframe1D(builder: FlatBufferBuilder, timeUs: Long, value: Float, easing: Byte) : Int {
-            builder.startTable(3)
+        fun createKeyframe1D(builder: FlatBufferBuilder, timeUs: Long, value: Float, easing: Byte, curveA: Float, curveB: Float, curveC: Float, curveD: Float) : Int {
+            builder.startTable(7)
             addTimeUs(builder, timeUs)
+            addCurveD(builder, curveD)
+            addCurveC(builder, curveC)
+            addCurveB(builder, curveB)
+            addCurveA(builder, curveA)
             addValue(builder, value)
             addEasing(builder, easing)
             return endKeyframe1D(builder)
         }
-        fun startKeyframe1D(builder: FlatBufferBuilder) = builder.startTable(3)
+        fun startKeyframe1D(builder: FlatBufferBuilder) = builder.startTable(7)
         fun addTimeUs(builder: FlatBufferBuilder, timeUs: Long) = builder.addLong(0, timeUs, 0L)
         fun addValue(builder: FlatBufferBuilder, value: Float) = builder.addFloat(1, value, 0.0)
         fun addEasing(builder: FlatBufferBuilder, easing: Byte) = builder.addByte(2, easing, 1)
+        fun addCurveA(builder: FlatBufferBuilder, curveA: Float) = builder.addFloat(3, curveA, 0.33)
+        fun addCurveB(builder: FlatBufferBuilder, curveB: Float) = builder.addFloat(4, curveB, 0.0)
+        fun addCurveC(builder: FlatBufferBuilder, curveC: Float) = builder.addFloat(5, curveC, 0.67)
+        fun addCurveD(builder: FlatBufferBuilder, curveD: Float) = builder.addFloat(6, curveD, 1.0)
         fun endKeyframe1D(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

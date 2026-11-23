@@ -148,7 +148,7 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         evaluatedTime=time;hasEvaluation=true
     }
     private fun evaluateSelectors(time: Long) {
-        size=sizeTrack.evaluate(time).toDouble();factor=size/data[0]
+        size=TextLimits.clampSize(sizeTrack.evaluate(time)).toDouble();factor=size/data[0]
         tracking=trackingTrack.evaluate(time).toDouble()*size/1000
         val leading=leadingTrack.evaluate(time).toDouble();baseline=baselineTrack.evaluate(time).toDouble()
         step=(data[1]-data[2]+max(0.0,data[3]))*factor+leading
@@ -164,7 +164,7 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         characterTotals.fill(0.0);characters?.begin()
         for(c in 0 until clusters) lineCharacters[clusterLines[c]]+=ends[c]-starts[c]
         baseFill=fillTrack.evaluate(time);baseStroke=strokeTrack.evaluate(time)
-        baseWidth=strokeWidthTrack.evaluate(time).toDouble()
+        baseWidth=strokeWidthTrack.evaluate(time).coerceAtLeast(0f).toDouble()
         if(paragraph==null) for(c in 0 until clusters) {
             val spacingScale=runSizes[c]*styles[c].horizontalScale/100
             val delta=runManual[c]*size*spacingScale/1000+(if(nextInLine[c]) runSpacing[c]*size*spacingScale/1000+tracking*(spacingScale-1) else 0.0)
@@ -198,7 +198,8 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
             val i=p.property.ordinal
             val scalar=scalars[j];val vectorSlot=vectors[j]
             when {
-                scalar!=null -> values[a][i*2]=scalar.evaluate(time).toDouble()
+                // GRAPH G1: percent properties (0–100) stay in range under overshooting curves; others are unbounded.
+                scalar!=null -> values[a][i*2]=AnimatorLimits.clamp(p.property,scalar.evaluate(time)).toDouble()
                 vectorSlot!=null -> { vectorSlot.evaluate(time,vector,0);values[a][i*2]=vector[0].toDouble();values[a][i*2+1]=vector[1].toDouble() }
                 else -> colours[a][i]=requireNotNull(colourSlots[j]).evaluate(time)
             }

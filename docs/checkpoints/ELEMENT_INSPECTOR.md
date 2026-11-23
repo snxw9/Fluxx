@@ -79,7 +79,7 @@ The inspector reports the focused Position/Rotation/Scale/Opacity property to th
 - **Quick-Navigation Bar:** Selecting a functional category reveals persistent tabs to quickly switch between active sections (Transform, Timing, Blending & Opacity, Contextual Edit for Solids) without returning to the landing view. Inert placeholder categories do not appear in the tab bar to prevent false affordances.
 - **Shared Utility Rail:** Every applicable tab receives the same left-side utility rail containing:
   1. Keyframe diamond button (toggle/add/remove keyframe)
-  2. Graph editor icon (visible, disabled & inert)
+  2. Graph editor icon: **enabled (GRAPH G1)** when the rail's focused property is continuous and has two or more keys; opens the Graph page (Ease view) in the same sheet, and tapping it again returns. Visible and disabled otherwise (including discrete properties). See [GRAPH G1](GRAPH_G1.md#5-ui-the-graph-page-ease-view).
   3. **3D icon** (visible, disabled & inert; positioned below Graph, above Overflow)
   4. Overflow dots icon (Reset options menu)
 - **Sheet Placement & Alignment:**
@@ -132,7 +132,7 @@ Transform mode provides a right rail to toggle between **Position**, **Rotation*
 ### Blending & Opacity (formerly Opacity)
 - **Blend Mode Row:** Inert placeholder row showing "Blend Mode: Normal" (styled with `TextDisabled` and non-clickable), reserving the visual slot for future blend-mode selection (see [AE_PARITY_VISION.md](../architecture/AE_PARITY_VISION.md) §26).
 - **Opacity Slider:** Dedicated horizontal slider with fine scrub (0–100%).
-- **Utility Rail:** Shared rail with keyframe diamond, disabled Graph icon, disabled 3D icon, and overflow menu with **Reset opacity** (resets to 100%).
+- **Utility Rail:** Shared rail with keyframe diamond, Graph icon (enabled for animated Opacity with two or more keys, GRAPH G1), disabled 3D icon, and overflow menu with **Reset opacity** (resets to 100%).
 - **Value Box:** Direct numeric entry with percentage display.
 
 ### Contextual Edit (Edit Solid / Edit Footage)
@@ -196,7 +196,7 @@ The following controls are rendered as inert/disabled placeholders pending futur
 - **Blend Mode Row:** Inert "Blend Mode: Normal" row in the Blending & Opacity tab.
 - **Z-Position & XYZ Rotation:** Planned for 3D engine support.
 - **Keyframe Diamonds:** Now enabled by Phase 2 Step D; see [keyframe implementation](KEYFRAME_ANIMATION.md). Property focus also controls timeline marker prominence and interaction.
-- **Graph Editor Icons:** Visible in Transform and Opacity rails; disabled pending the dual Value/Speed Graph Editor.
+- **Graph Editor Icons:** Visible in every rail with a diamond (Transform, Blending & Opacity, Edit Text pages, Animate). GRAPH G1: enabled for a continuous focused property with two or more keys; opens the **Graph page** (`InspectorSection.GRAPH`): a Value | Speed | Ease header (Value and Speed visible, disabled), the Ease view for the segment at the playhead (type chooser, 32 built-in presets, handles with loupe and relative drag, snap / mirror / invert, numeric popover, cubic-bezier copy/paste, apply to all keys). Non-modal; the Graph icon or Back returns to the page it came from with its state. [Record](GRAPH_G1.md).
 
 ---
 
@@ -272,7 +272,7 @@ Video Extend In clamps to `max(0, start - sourceIn)`. Images and solids extend t
 
 ### Persistence
 
-Signed key times and persistent animation origins were introduced in **version 5**; the current writer uses v12. Versions 1-4 still load, with absent anchors resolving to clip start.
+Signed key times and persistent animation origins were introduced in **version 5**; the current writer uses v13 (GRAPH G1 easing). Versions 1-4 still load, with absent anchors resolving to clip start.
 
 The additive Layer fields are `keyframe_anchor_us:long=-1` and `has_keyframe_anchor:bool=false`. The presence bit is necessary: moving a trimmed clip earlier can create a legitimate negative anchor, including exactly -1. Null remains null on round-trip; explicit -1 survives as an explicit value. Decoding also accepts a non-sentinel anchor without the presence flag.
 
