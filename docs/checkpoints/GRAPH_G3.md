@@ -6,7 +6,7 @@ Branch `graph-g3`, on top of TL1 (`4eae6ac`), from `graph-g2-1` (not merged into
 
 **Status:** implemented in source.
 - **JVM:** 581 tests, 0 failures, in one full run.
-- **A16 (SM-A165F):** `GraphSpeedTest` passes (7 tests). `GraphPlayheadTest` has a new Speed test. The final sweep results are in §Tests.
+- **A16 (SM-A165F):** `GraphSpeedTest` passes (7 tests). The final sweep was **stopped part-way** (host low on memory), with 13 passed and 2 failed (§Tests), so `GraphPlayheadTest`'s new Speed test has not run yet.
 - **Phone acceptance:** pending (§Phone test list).
 
 ## Hard rules kept
@@ -98,7 +98,7 @@ For the selected bezier segment `(x1, y1, x2, y2)` (`SpeedHandles`):
 | JVM `GraphG3Test` (+ icon family, G2, G2.1; iteration) | 101 s, then 15 s | 3 test tolerances / format, then green |
 | JVM full suite (once) + installs | 127 s | **581 / 0** |
 | A16 `GraphSpeedTest` | 33 s | 6/7. The failing test needed to scroll the type strip to Bounce; re-run alone 14 s, green |
-| A16 final sweep (Graph, layout, render suites) | see below | see below |
+| A16 final sweep (Graph, layout, render suites) | stopped part-way | **incomplete**: the host ran low on memory and stopped the adb process. The run kept going on the phone until stopped with `am force-stop` (no data touched). Before that: 13 passed, 2 failed (below). |
 
 - **JVM `GraphG3Test` (10):**
   - speed = D/Δt × slope, and Position's combined length;
@@ -119,7 +119,12 @@ For the selected bezier segment `(x1, y1, x2, y2)` (`SpeedHandles`):
   - **Position:** one combined curve with no X | Y toggle, shown in px/s.
   - **Navigation and types:** pinch zoom and double-tap fit; Bounce and Hold remove the handles and disable the tiles ("Edit in Ease").
   - **Tab memory:** remembered across closing and reopening the page.
-- **`GraphPlayheadTest.speedGraphEditsKeepThePlayhead`:** on the real editor, Smooth on, a handle drag that changes two keys, a typed speed, pan, pinch and fit. The playhead, the clip and the selection stay unchanged.
+- **The partial sweep's two failures:**
+  - `GraphValueTest.valueTabOpensWithKeysAndKeepsEveryBound` still asserted the G2 rule "Speed tab disabled". G3 enables it, so the assertion is updated. Not re-run.
+  - `GraphLibraryTest.railReorderLiftsFollowsAndWritesOnce` is the known G2.1 flaky test, with the same signature (index 7 in a full-suite run).
+
+  Not reached, so **not verified** in this run: the rest of `GraphLibraryTest`, `GraphPageLayoutTest`, `GraphPlayheadTest` (including the new Speed test below), `GraphCurveRenderTest`, `InspectorSwipeLayoutTest`, `TextInspectorLayoutTest` and `TextAnimateLayoutTest`.
+- **`GraphPlayheadTest.speedGraphEditsKeepThePlayhead` (not run yet):** on the real editor, Smooth on, a handle drag that changes two keys, a typed speed, pan, pinch and fit. The playhead, the clip and the selection stay unchanged.
 
 ## Not verified
 
