@@ -176,3 +176,5 @@ Changed:
 - Should the dot move, or stay put, while a handle is dragged? Option: hide the dot during a drag and keep only the vertical playhead line, so the curve visibly moves under a fixed playhead.
 - Right rail at 268dp: 7 type tiles do not all fit without scrolling. Should Hold/Linear move into the ⋮, or is scrolling fine?
 - User presets (G4): a "save current curve" tile at the top of the right rail, or in the ⋮?
+
+**Next:** user curves moved into [GRAPH G2L](GRAPH_G2L.md) (Ease view layout rework + curve library), which answers the right-rail and user-preset questions above.

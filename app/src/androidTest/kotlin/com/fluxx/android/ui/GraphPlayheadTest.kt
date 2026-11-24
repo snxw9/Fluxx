@@ -12,6 +12,7 @@ import com.fluxx.android.model.*
 import com.fluxx.android.render.PreviewController
 import com.fluxx.android.ui.editor.EditorScreen
 import com.fluxx.android.ui.inspector.EasePlot
+import com.fluxx.android.editor.CurveLibraryStore
 import com.fluxx.android.ui.theme.FluxxTheme
 import org.junit.Assert.*
 import org.junit.Rule
@@ -26,6 +27,11 @@ class GraphPlayheadTest {
     @get:Rule val compose = createComposeRule()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val arbitrary = 1_744_321L
+
+    // G2L: an in-memory curve library, so device tests never write the app's own library file.
+    private var previousLibrary: CurveLibraryStore? = null
+    @org.junit.Before fun inMemoryLibrary() { previousLibrary = CurveLibraryStore.replaceForTest(CurveLibraryStore.inMemory()) }
+    @org.junit.After fun restoreLibrary() { CurveLibraryStore.replaceForTest(previousLibrary) }
 
     private fun host(layer: CompositionLayer): EditorViewModel {
         val editor = EditorViewModel()
@@ -78,8 +84,8 @@ class GraphPlayheadTest {
         fun curve() = editor.state.project.composition.layers[0].animTransform.rotation.keyframes[1].curve
         dragHandle(curve(), 0, -.6f, 0f)
         assertNotEquals(EasingCurve.EASY_EASE, curve())
-        for (tag in listOf("graph-type-BOUNCE", "graph-type-LINEAR", "graph-preset-css.ease")) {
-            compose.onNodeWithTag("graph-right-rail").performScrollToNode(hasTestTag(tag))
+        for (tag in listOf("graph-type-BOUNCE", "graph-type-LINEAR", "graph-pinned-preset:back.out")) {
+            compose.onNodeWithTag(if (tag.startsWith("graph-type")) "graph-type-strip" else "graph-pinned-rail").performScrollToNode(hasTestTag(tag))
             compose.onNodeWithTag(tag, useUnmergedTree = true).performClick(); settle()
         }
         assertEquals(arbitrary, editor.state.playheadUs); assertEquals(clip, clipX(label)); assertEquals(1L, editor.state.selectedLayerId)
@@ -151,7 +157,7 @@ class GraphPlayheadTest {
         android.util.Log.d("GraphPlayhead", "on target: state=${editor.state.playheadUs} marker=${editor.state.selectedMarkerId}")
         compose.onNodeWithTag("transform-mode-ROTATION").performClick(); compose.waitForIdle()
         compose.onNodeWithTag("inspector-rail-graph", useUnmergedTree = true).performClick(); settle()
-        compose.onNodeWithTag("graph-right-rail").performScrollToNode(hasTestTag("graph-type-LINEAR"))
+        compose.onNodeWithTag("graph-type-strip").performScrollToNode(hasTestTag("graph-type-LINEAR"))
         compose.onNodeWithTag("graph-type-LINEAR", useUnmergedTree = true).performClick(); settle()
         val before = editor.state.playheadUs
         android.util.Log.d("GraphPlayhead", "start at=$at markers=$markers before=$before selectedMarker=${editor.state.selectedMarkerId}")

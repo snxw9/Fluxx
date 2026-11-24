@@ -32,6 +32,11 @@ class GraphPageLayoutTest {
     private lateinit var vm: EditorViewModel
     private val selected = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Selected")
 
+    // G2L: an in-memory curve library, so device tests never write the app's own library file.
+    private var previousLibrary: CurveLibraryStore? = null
+    @org.junit.Before fun inMemoryLibrary() { previousLibrary = CurveLibraryStore.replaceForTest(CurveLibraryStore.inMemory()) }
+    @org.junit.After fun restoreLibrary() { CurveLibraryStore.replaceForTest(previousLibrary) }
+
     private fun rotationLayer() = CompositionLayer(1, LayerType.TEXT, timing = ClipTiming(0, 0, 4_000_000),
         text = TextProperties(source = AnimatableString(staticValue = "Graph"), size = AnimatableProperty1D(true, 72f,
             FrozenList.of(listOf(Keyframe1D(0, 40f), Keyframe1D(2_000_000, 120f))))),
@@ -63,7 +68,8 @@ class GraphPageLayoutTest {
         Rect(it.left.value, it.top.value, it.right.value, it.bottom.value) }
     private fun click(tag: String) {
         // The right rail is a vertical list: scroll its tile into view first, as a user does.
-        if (tag.startsWith("graph-type-") || tag.startsWith("graph-preset-")) compose.onNodeWithTag("graph-right-rail").performScrollToNode(hasTestTag(tag))
+        if (tag.startsWith("graph-type-")) compose.onNodeWithTag("graph-type-strip").performScrollToNode(hasTestTag(tag))
+        if (tag.startsWith("graph-pinned-")) compose.onNodeWithTag("graph-pinned-rail").performScrollToNode(hasTestTag(tag))
         compose.onNodeWithTag(tag, useUnmergedTree = true).performClick(); compose.waitForIdle()
     }
     private fun curve(i: Int = 0) = vm.state.project.composition.layers[0].animTransform.rotation.keyframes[i].curve
@@ -90,7 +96,7 @@ class GraphPageLayoutTest {
             assertEquals("header top at $at", transformHeader.top, bounds("graph-header").top, .5f)
             assertTrue(bounds("graph-header").bottom <= bounds("graph-left-rail").top + .5f)
             for (tag in listOf("graph-back", "graph-mode-GRAPH_VALUE", "graph-mode-GRAPH_SPEED", "graph-mode-GRAPH_EASE", "graph-segment-label",
-                "graph-left-rail", "graph-centre", "graph-right-rail", "graph-ease-canvas", "graph-values-bar")) {
+                "graph-left-rail", "graph-centre", "graph-type-strip", "graph-pinned-rail", "graph-library", "graph-ease-canvas", "graph-values-bar")) {
                 val b = bounds(tag)
                 assertTrue("$tag inside the sheet at $at: $b", b.left >= sheet.left - .5f && b.right <= sheet.right + .5f && b.top >= sheet.top - .5f && b.bottom <= sheet.bottom + .5f)
             }
@@ -101,10 +107,13 @@ class GraphPageLayoutTest {
             assertTrue(order.last().bottom <= bounds("graph-left-rail").bottom + .5f)
             // One centre item: touchpad over values bar, same width, inside one container.
             val centre = bounds("graph-centre"); val pad = bounds("graph-ease-canvas"); val bar = bounds("graph-values-bar")
-            assertEquals(pad.width, bar.width, .5f); assertEquals(centre.width, pad.width, .5f)
+            assertEquals(pad.width, bar.width, .5f); assertEquals(bounds("graph-pad-column").width, pad.width, .5f)
+            // G2L: the type strip is inside the same container, on its right edge.
+            val strip = bounds("graph-type-strip")
+            assertTrue(strip.left >= pad.right - .5f && strip.right <= centre.right + .5f && strip.top >= centre.top - .5f)
             assertTrue(pad.top >= centre.top - .5f && bar.bottom <= centre.bottom + .5f && pad.bottom <= bar.top + .5f)
-            assertTrue("touchpad at $at: $pad", pad.height >= (if (h == 268f) 150f else 210f) - .5f && pad.width >= 200f - .5f)
-            assertTrue(bounds("graph-left-rail").right <= centre.left + .5f && centre.right <= bounds("graph-right-rail").left + .5f)
+            assertTrue("touchpad at $at: $pad", pad.height >= (if (h == 268f) 150f else 210f) - .5f && pad.width >= 170f - .5f)
+            assertTrue(bounds("graph-left-rail").right <= centre.left + .5f && centre.right <= bounds("graph-pinned-rail").left + .5f)
             compose.onNodeWithTag("graph-segment-label", useUnmergedTree = true).assertTextContains("Key 1 to 2", substring = true)
             // Back arrow returns to Transform in the Rotation mode, like the Graph icon.
             click("graph-back")
@@ -134,9 +143,9 @@ class GraphPageLayoutTest {
         vm.undo(); assertEquals(EasingCurve.EASY_EASE, curve()); assertFalse(vm.canUndo)
         compose.waitForIdle()
         // A preset tap and a typed value: one action each, playhead unchanged.
-        click("graph-preset-css.ease")
-        assertEquals(EasingCurve.bezier(.25f, .1f, .25f, 1f), curve()); assertEquals(before, vm.state.playheadUs)
-        compose.onNodeWithTag("graph-preset-css.ease").assert(selected)
+        click("graph-pinned-preset:css.ease_in_out")
+        assertEquals(EasingCurve.bezier(.42f, 0f, .58f, 1f), curve()); assertEquals(before, vm.state.playheadUs)
+        compose.onNodeWithTag("graph-pinned-preset:css.ease_in_out").assert(selected)
         click("graph-type-EASE_IN"); compose.onNodeWithTag("graph-type-EASE_IN").assert(selected)
         click("graph-value-1")
         compose.onNodeWithContentDescription("y1, exact value in ", substring = true).performTextReplacement("0.8")

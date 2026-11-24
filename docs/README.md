@@ -24,6 +24,7 @@ Start with the [roadmap](architecture/FLUXX_ROADMAP.md) for active scope. The [P
 | [Element inspector](checkpoints/ELEMENT_INSPECTOR.md) | Inspector navigation, transforms/anchor, layer actions, trim/extend/split |
 | [Global colour picker](checkpoints/GLOBAL_COLOUR_PICKER.md) | Shared picker, palettes and eyedropper ownership |
 | [Keyframe animation](checkpoints/KEYFRAME_ANIMATION.md) | Transform evaluator, tracks, editing and interpolation contracts |
+| [Graph editor G2L](checkpoints/GRAPH_G2L.md) | Ease view rework (type strip, pinned rail, library morph) and the curve library: user curves, pinning, `.fluxxcurves` import/export, storage, verification and the A16 test list |
 | [Graph editor G1.1](checkpoints/GRAPH_G1_1.md) | Graph page layout rework (header row, rails, touchpad + values bar, XY pad), the playhead investigation, verification and the A16 test list |
 | [Graph editor G1](checkpoints/GRAPH_G1.md) | Easing model (schema v13: Hold, Custom bezier, Bounce, Elastic), evaluator and overshoot clamps, `SetKeyEasing`, the Graph page's Ease view, verification and the A16 test list |
 | [Markers](checkpoints/MARKERS.md) | Scope, creation/deletion, navigation, persistence and hit routing |

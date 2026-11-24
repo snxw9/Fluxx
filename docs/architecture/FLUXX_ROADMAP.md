@@ -145,14 +145,15 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.
 
-### Graph editor (in progress: G1 in source)
+### Graph editor (in progress: G1, G1.1 and G2L in source)
 
-The graph editor (value and speed curves for keyframes, reached from the rail's Graph icon) is the current big item. It is planned in four passes:
+The graph editor (value and speed curves for keyframes, reached from the rail's Graph icon) is the current big item. It is planned in these passes:
 - [x] **G1: curve backend + Ease view** — schema v13 easing (Hold, Linear, Easy Ease, Custom bezier with overshoot, Bounce, Elastic), `SetKeyEasing`, overshoot-safe consumers, and the Graph page's Ease view with presets, handles, numeric entry and `cubic-bezier()` clipboard. Implemented in source on `graph-g1`; JVM 518/518 and the targeted A16 layout/render tests pass; phone acceptance pending ([record](../checkpoints/GRAPH_G1.md)).
 - [x] **G1.1: Graph page layout rework** — shared header row, Graph-only left rail with a Tools popover, touchpad + values bar as one item, Bounce/Elastic XY pad, right rail of types and presets; loupe, tile grid, numeric popover and preset strip removed. The reported playhead jump was a stale Graph drag callback that re-sent the playhead from when the page opened (after Prev/Next); fixed at the call sites and guarded by an A16 test that fails without the fix. JVM 524/524, A16 Graph and layout suites pass; phone acceptance pending ([record](../checkpoints/GRAPH_G1_1.md)).
-- [ ] **G2: Value graph** — key selection, key dragging with the Key MOVE reducer, handles, zoom/pan/fit, loupe.
+- [x] **G2L: Ease view layout rework + curve library** — type strip inside the centre box, a pinned rail (up to 15, drag to pin/reorder/replace/unpin), a library that morphs over the strip + rail without resizing the touchpad, user curves (save, rename, delete, 60 max, app-level store), `.fluxxcurves` import/export via SAF, and a "Show playhead dot" toggle. The user-preset part of the old G4 moved here. No schema change, no new action. JVM 531/531; A16 Graph, layout and render suites pass; phone acceptance pending ([record](../checkpoints/GRAPH_G2L.md)).
+- [ ] **G2: Value graph** — key selection, key dragging with the Key MOVE reducer, handles, zoom/pan/fit.
 - [ ] **G3: Speed graph** and "smooth through key".
-- [ ] **G4: preset libraries**, convert Bounce/Elastic to keys, pinned presets. Later: separate X/Y dimensions (a further schema bump) and multi-select.
+- [ ] **G4: convert Bounce/Elastic to keys**, share-sheet export of curves. Later: separate X/Y dimensions (a further schema bump) and multi-select.
 
 ### Timeline productivity (parked)
 
@@ -166,6 +167,7 @@ Still parked after the text phase. These are user ideas recorded for planning; n
 
 ### Parked / follow-ups
 
+- **Interface size setting** (from GRAPH G2L): an app-level size for inspector tiles and thumbnails; several Graph widths (strip, rail, library) now follow fixed tile sizes.
 - **Landscape editor layout.** Rotation now keeps the project open, but the landscape layout is cramped and the preview distorts.
 - **T5 right-to-left text.** Stopped; needs the cross-style shaping ownership decision.
 - **Shapes and masks from text.**

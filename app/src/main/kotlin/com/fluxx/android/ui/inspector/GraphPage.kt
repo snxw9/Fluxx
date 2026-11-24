@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -84,16 +85,40 @@ internal object GraphLayout {
     fun leftRailFits(content: Float) = LEFT_TILES * leftTile(content) + (LEFT_TILES - 1) * LEFT_GAP <= content + 1e-3f
     fun bar(fontScale: Float) = BAR * fontScale.coerceAtLeast(1f)
 
-    data class Metrics(val content: Float, val leftTile: Float, val centreWidth: Float, val padWidth: Float, val padHeight: Float, val bar: Float)
+    /** GRAPH G2L: the type strip inside the centre item, its minimum, and the touchpad width it must leave at 360dp. */
+    const val STRIP = 40f
+    const val STRIP_MIN = 36f
+    const val PAD_MIN_WIDTH = 170f
+    /** Library header row (no title) and its icons' touch width; thumbnail drawing height and name lines. */
+    const val LIBRARY_HEADER = 28f
+    const val THUMB = 40f
+    const val THUMB_NAME_LINE = 9f
+    const val CAPTION = 14f
+
+    /**
+     * [padWidth] is the touchpad (and values bar) width, identical with the library closed and open. The right region
+     * ([right]) holds hairline + type strip + gap + pinned rail when closed and the library column when open, so the
+     * library is exactly the strip's + rail's combined width.
+     */
+    data class Metrics(val content: Float, val leftTile: Float, val centreWidth: Float, val padWidth: Float, val padHeight: Float, val bar: Float,
+        val strip: Float, val right: Float, val libraryFraction: Float)
     /** [width] / [height] are the content area below the header (sheet frame and CONTENT_TOP already removed). */
     fun compute(width: Float, height: Float, fontScale: Float = 1f): Metrics {
         val bar = bar(fontScale)
-        val centre = (width - 2 * RAIL - 2 * RAIL_GAP).coerceAtLeast(0f)
+        val centre = (width - RAIL - RAIL_GAP).coerceAtLeast(0f)
         val padHeight = (height - bar - HAIRLINE).coerceAtLeast(0f)
-        // Wider than 2:1 is left as margin around the centre item.
-        val padWidth = minOf(centre, padHeight * MAX_ASPECT)
-        return Metrics(height, leftTile(height), centre, padWidth, padHeight, bar)
+        // Narrow the strip (not below 36dp) only if the touchpad would drop under 170dp.
+        val strip = (centre - (HAIRLINE + RAIL_GAP + RAIL) - PAD_MIN_WIDTH).coerceIn(STRIP_MIN, STRIP)
+        val right = HAIRLINE + strip + RAIL_GAP + RAIL
+        // Wider than 2:1 is left as margin after the centre item.
+        val padWidth = minOf((centre - right).coerceAtLeast(0f), padHeight * MAX_ASPECT)
+        return Metrics(height, leftTile(height), centre, padWidth, padHeight, bar, strip, right, right / width)
     }
+    /** One library thumbnail item: drawing + up to two name lines + padding. */
+    fun thumbItem(fontScale: Float) = THUMB + 2f + 2 * THUMB_NAME_LINE * fontScale.coerceAtLeast(1f) + 6f
+    fun caption(fontScale: Float) = CAPTION * fontScale.coerceAtLeast(1f)
+    /** Whole thumbnails visible in the library below its header. */
+    fun thumbsVisible(height: Float, fontScale: Float) = (height - LIBRARY_HEADER) / thumbItem(fontScale)
 }
 
 /** Plot mapping of the Ease canvas: x ∈ [0, 1] across, y ∈ [[low], [high]] upward, inside an [inset] margin. */
@@ -244,12 +269,15 @@ internal fun graphTypeTile(curve: EasingCurve): EaseChoice? = EaseChoice.of(curv
         Spacer(Modifier.weight(1f))
         if (segment != null) {
             val values = GraphModel.values(layer, target, segment)
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val libraryState by remember(context) { CurveLibraryStore.get(context) }.state.collectAsState()
+            val curveName = CurveLibrary.nameFor(libraryState, segment.curve)
             Column(Modifier.widthIn(max = 132.dp).padding(end = 4.dp).semantics(mergeDescendants = true) {
-                contentDescription = "${segment.label} of ${segment.count}, ${values.first} to ${values.second}, ${seconds(segment.durationUs)}; the segment at the playhead"
+                contentDescription = "${segment.label} of ${segment.count}, ${values.first} to ${values.second}, ${seconds(segment.durationUs)}, curve $curveName; the segment at the playhead"
             }, horizontalAlignment = Alignment.End) {
                 Text("${segment.label} · ${seconds(segment.durationUs)}", color = TextPrimary, style = MaterialTheme.typography.labelMedium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End, modifier = Modifier.testTag("graph-segment-label"))
-                Text("${values.first} → ${values.second}", color = TextSecondary, style = MaterialTheme.typography.labelSmall,
+                Text(curveName, color = TextSecondary, style = MaterialTheme.typography.labelSmall,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End)
             }
         }
@@ -315,6 +343,19 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
     fun commit() { if (dragging) { dragging = false; latestCommit(); draft = null } }
     fun cancelDrag() { if (dragging) { dragging = false; latestCancel(); draft = null } }
     val onKey = local in GraphModel.keyTimes(layer, target)
+    // GRAPH G2L: the curve library (app-level). Closed by default; leaving the Graph page resets it.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val libraryStore = remember(context) { CurveLibraryStore.get(context) }
+    val library by libraryStore.state.collectAsState()
+    val libraryUi = remember { GraphLibraryUi() }
+    var libraryOpen by remember { mutableStateOf(false) }
+    BackHandler(enabled = libraryOpen) { libraryOpen = false }
+    // Animator duration scale 0 (developer option) shows the end state immediately.
+    val animate = remember(context) { runCatching { android.provider.Settings.Global.getFloat(context.contentResolver,
+        android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) > 0f }
+    val libraryProgress by androidx.compose.animation.core.animateFloatAsState(if (libraryOpen) 1f else 0f,
+        if (animate) androidx.compose.animation.core.tween(250, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+        else androidx.compose.animation.core.snap(), label = "graph-library")
 
     BoxWithConstraints(modifier.fillMaxSize().dismissPopoversOnEmptyTap().testTag("graph-page")) {
         val m = GraphLayout.compute(maxWidth.value, maxHeight.value, LocalDensity.current.fontScale)
@@ -329,19 +370,41 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
                 onPaste = { scope.launch {
                     val text = runCatching { clipboard.getClipEntry()?.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() }.getOrNull()
                     CubicBezierText.parse(text)?.let { edit(it) } } },
-                onReset = { edit(EasingCurve.EASY_EASE) })
-            // Centre: ONE rounded item, the touchpad above and the values bar below, sharing one width.
-            Box(Modifier.width(m.centreWidth.dp).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
-                Column(Modifier.width(m.padWidth.dp).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(SurfaceHigh)
+                onReset = { edit(EasingCurve.EASY_EASE) }, showDot = library.showPlayheadDot,
+                onToggleDot = { libraryStore.update { it.copy(showPlayheadDot = !it.showPlayheadDot) } })
+            // Centre: ONE rounded item (touchpad over values bar, type strip on its right edge), then the right column.
+            // With the library open the strip and the pinned rail fold into the library column, which takes exactly their
+            // combined width, so the touchpad and the values bar never move or resize.
+            val p = libraryProgress
+            Box(Modifier.width((m.padWidth + m.right).dp).fillMaxHeight().testTag("graph-right-region")) {
+                val stripShown = (m.strip + GraphLayout.HAIRLINE) * (1f - p)
+                Row(Modifier.width((m.padWidth + stripShown).dp).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(SurfaceHigh)
                     .border(.5.dp, Border, RoundedCornerShape(8.dp)).testTag("graph-centre")) {
-                    EaseCanvas(curve, ghost, GraphModel.progress(segment, local), selectedHandle, snap, mirror,
-                        onSelect = { selectedHandle = it }, onBegin = ::begin, onDrag = ::preview, onEnd = ::commit, onCancel = ::cancelDrag,
-                        modifier = Modifier.fillMaxWidth().height(m.padHeight.dp).testTag("graph-ease-canvas"))
-                    Box(Modifier.fillMaxWidth().height(GraphLayout.HAIRLINE.dp).background(Border))
-                    EaseValuesBar(curve, m.bar, onTyped = { edit(it) })
+                    Column(Modifier.width(m.padWidth.dp).fillMaxHeight().testTag("graph-pad-column")) {
+                        EaseCanvas(curve, ghost, GraphModel.progress(segment, local), selectedHandle, snap, mirror, library.showPlayheadDot,
+                            onSelect = { selectedHandle = it }, onBegin = ::begin, onDrag = ::preview, onEnd = ::commit, onCancel = ::cancelDrag,
+                            modifier = Modifier.fillMaxWidth().height(m.padHeight.dp).testTag("graph-ease-canvas"))
+                        Box(Modifier.fillMaxWidth().height(GraphLayout.HAIRLINE.dp).background(Border))
+                        EaseValuesBar(curve, m.bar, onTyped = { edit(it) })
+                    }
+                    if (p < 1f) {
+                        Box(Modifier.width(GraphLayout.HAIRLINE.dp).fillMaxHeight().background(Border))
+                        GraphTypeStrip(m.strip, curve, onType = { edit(EaseChoice.curve(it, stored)) },
+                            Modifier.graphicsLayer { alpha = 1f - p })
+                    }
                 }
+                val railX = m.padWidth + m.strip + GraphLayout.HAIRLINE + GraphLayout.RAIL_GAP
+                if (p < 1f) GraphPinnedRail(library, curve, libraryStore, libraryUi, onApply = { edit(it) },
+                    Modifier.offset(x = railX.dp).width(GraphLayout.RAIL.dp).fillMaxHeight().graphicsLayer { alpha = 1f - p })
+                if (p > 0f) {
+                    val x = m.padWidth + stripShown + GraphLayout.RAIL_GAP
+                    GraphLibraryColumn(library, curve, libraryStore, libraryUi, onApply = { edit(it) }, onType = { edit(EaseChoice.curve(it, stored)) },
+                        Modifier.offset(x = x.dp).width((m.padWidth + m.right - x).dp).fillMaxHeight().graphicsLayer { alpha = p })
+                }
+                // The library toggle: fixed at the bottom of the right column, the same position open and closed.
+                GraphLibraryButton(libraryOpen, GraphLayout.RAIL + GraphLayout.RAIL_GAP, onToggle = { libraryOpen = !libraryOpen },
+                    Modifier.align(Alignment.BottomEnd))
             }
-            GraphRightRail(curve, onType = { edit(EaseChoice.curve(it, stored)) }, onPreset = { edit(it) })
         }
     }
 }
@@ -349,7 +412,7 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
 /** The Graph page's own left rail (other pages keep [InspectorUtilityRail] unchanged). */
 @Composable private fun GraphLeftRail(tile: Float, curve: EasingCurve, onKey: Boolean, snap: Boolean, mirror: Boolean,
     onToggleKey: () -> Unit, onGraph: () -> Unit, onInvert: () -> Unit, onSnap: () -> Unit, onMirror: () -> Unit, onApplyAll: () -> Unit,
-    onCopy: () -> Unit, onPaste: () -> Unit, onReset: () -> Unit) {
+    onCopy: () -> Unit, onPaste: () -> Unit, onReset: () -> Unit, showDot: Boolean, onToggleDot: () -> Unit) {
     val focus = LocalFocusManager.current
     val handles = curve.bezierOrNull() != null
     var tools by remember { mutableStateOf(false) }
@@ -385,23 +448,10 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
                 DropdownMenuItem(text = { Text("Copy cubic-bezier") }, enabled = handles, onClick = { menu = false; onCopy() }, modifier = Modifier.testTag("graph-menu-copy"))
                 DropdownMenuItem(text = { Text("Paste cubic-bezier") }, onClick = { menu = false; onPaste() }, modifier = Modifier.testTag("graph-menu-paste"))
                 DropdownMenuItem(text = { Text("Reset curve to Easy Ease") }, onClick = { menu = false; onReset() }, modifier = Modifier.testTag("graph-menu-reset"))
+                DropdownMenuItem(text = { Text("Show playhead dot") }, onClick = { menu = false; onToggleDot() },
+                    trailingIcon = { Icon(InspectorIcons.icon(if (showDot) "EYE" else "EYE_OFF"), if (showDot) "On" else "Off", Modifier.size(InspectorIcons.INLINE), tint = TextPrimary) },
+                    modifier = Modifier.testTag("graph-menu-dot").semantics { stateDescription = if (showDot) "On" else "Off" })
             }
-        }
-    }
-}
-
-/** Right rail: the type tiles, a hairline, then every built-in preset; one vertical list, 40dp wide. */
-@Composable private fun GraphRightRail(curve: EasingCurve, onType: (EaseChoice) -> Unit, onPreset: (EasingCurve) -> Unit) {
-    val typeTile = graphTypeTile(curve)
-    val preset = EasePresets.match(curve)
-    LazyColumn(Modifier.width(GraphLayout.RAIL.dp).fillMaxHeight().testTag("graph-right-rail"), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        items(GRAPH_TYPE_TILES, key = { "type-${it.name}" }) { c ->
-            InspectorIconButton(InspectorIcons.icon(CHOICE_ICONS.getValue(c)), c.label, Modifier.testTag("graph-type-${c.name}"), selected = c == typeTile) { onType(c) }
-        }
-        item(key = "divider") { Box(Modifier.padding(vertical = 3.dp).width(GraphLayout.RAIL.dp).height(1.dp).background(Border).testTag("graph-rail-divider")) }
-        items(EasePresets.ALL, key = { it.id }) { p ->
-            InspectorIconButton(InspectorIcons.curve(p.id, { t -> p.curve.ease(t) }), p.name, Modifier.testTag("graph-preset-${p.id}"),
-                selected = p == preset) { onPreset(p.curve) }
         }
     }
 }
@@ -429,7 +479,7 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
     }
 }
 
-@Composable private fun EaseValueTile(limit: PropertyLimit, value: Float, modifier: Modifier, onCommit: (String) -> Unit) {
+@Composable internal fun EaseValueTile(limit: PropertyLimit, value: Float, modifier: Modifier, onCommit: (String) -> Unit) {
     var editing by remember { mutableStateOf(false) }
     val text = EaseLimits.format(limit, value)
     Box(modifier.background(if (editing) Surface else Color.Transparent)
@@ -450,7 +500,7 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
  * the whole canvas is an XY pad with one always-selected handle ([EasePad]). The curve layer redraws only when the
  * curve, ghost or range changes; the playhead dot is its own layer.
  */
-@Composable private fun EaseCanvas(curve: EasingCurve, ghost: EasingCurve?, progress: Float?, selected: Int?, snap: Boolean, mirror: Boolean,
+@Composable private fun EaseCanvas(curve: EasingCurve, ghost: EasingCurve?, progress: Float?, selected: Int?, snap: Boolean, mirror: Boolean, showDot: Boolean,
     onSelect: (Int?) -> Unit, onBegin: () -> Unit, onDrag: (EasingCurve) -> Unit, onEnd: () -> Unit, onCancel: () -> Unit, modifier: Modifier) {
     val density = LocalDensity.current
     val inset = with(density) { 10.dp.toPx() }
@@ -525,7 +575,7 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
             }
         }) {
         EaseCurveLayer(curve, ghost, range, selected, inset)
-        EasePlayheadLayer(curve, progress, range, inset)
+        EasePlayheadLayer(curve, progress, range, inset, showDot)
     }
 }
 
@@ -588,13 +638,13 @@ private fun pathOf(curve: EasingCurve, plot: EasePlot): Path {
     return path
 }
 
-@Composable private fun EasePlayheadLayer(curve: EasingCurve, progress: Float?, range: Pair<Float, Float>, inset: Float) {
+@Composable private fun EasePlayheadLayer(curve: EasingCurve, progress: Float?, range: Pair<Float, Float>, inset: Float, showDot: Boolean = true) {
     if (progress == null) return
     Canvas(Modifier.fillMaxSize().testTag("graph-playhead-dot")) {
         val plot = EasePlot(size.width, size.height, inset, range.first, range.second)
         val p = Offset(plot.x(progress), plot.y(curve.ease(progress)))
         drawLine(TextSecondary.copy(alpha = .6f), Offset(p.x, plot.y(plot.high)), Offset(p.x, plot.y(plot.low)), .75.dp.toPx())
-        drawCircle(Surface, 5.dp.toPx(), p)
-        drawCircle(TextPrimary, 4.dp.toPx(), p)
+        // "Show playhead dot" (overflow, app-level): off hides the dot; the vertical playhead line always stays.
+        if (showDot) { drawCircle(Surface, 5.dp.toPx(), p); drawCircle(TextPrimary, 4.dp.toPx(), p) }
     }
 }

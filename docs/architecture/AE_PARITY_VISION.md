@@ -595,6 +595,8 @@ Fluxx's existing trackpad interaction system could potentially be used to provid
 
 **GRAPH G1.1 (2026-11-24):** the Graph page was relaid out: the shared header row, a Graph-only left rail (diamond, Graph, Invert, Tools, ⋮), one touchpad + values-bar item (typed values replace the numeric popover; the loupe is gone; Bounce and Elastic are edited as an XY pad) and a right rail of types and presets. See [GRAPH G1.1](../checkpoints/GRAPH_G1_1.md).
 
+**GRAPH G2L (2026-11-24):** the Ease view gained a type strip inside the centre box, a pinned rail and a curve library (Pinned / Types / Presets / My curves) that opens over the strip and rail without resizing the touchpad. Users can save, rename, delete, pin and reorder curves, and import/export them as `.fluxxcurves`; the library is app-level, not per project. See [GRAPH G2L](../checkpoints/GRAPH_G2L.md).
+
 ---
 
 # 21. Expressions

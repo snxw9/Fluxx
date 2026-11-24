@@ -21,7 +21,8 @@ class GraphG11Test {
             assertTrue(label, GraphLayout.leftRailFits(content))
             assertTrue(label, m.leftTile in GraphLayout.LEFT_MIN..GraphLayout.RAIL)
             // Rails + centre fit side by side; the touchpad and the bar share the centre item's width.
-            assertTrue(label, 2 * GraphLayout.RAIL + 2 * GraphLayout.RAIL_GAP + m.centreWidth <= width + 1e-3f)
+            // G2L: centreWidth is everything right of the left rail (touchpad + strip + pinned rail).
+            assertTrue(label, GraphLayout.RAIL + GraphLayout.RAIL_GAP + m.centreWidth <= width + 1e-3f)
             assertTrue(label, m.padWidth <= m.centreWidth + 1e-3f && m.padWidth <= m.padHeight * GraphLayout.MAX_ASPECT + 1e-3f)
             // Header + gap + pad + hairline + bar fill the sheet exactly; nothing scrolls.
             assertEquals(label, sheet - InspectorSheetBudget.FRAME_V, InspectorChromeBudget.header(s) + InspectorChromeBudget.CONTENT_TOP +

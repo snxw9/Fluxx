@@ -177,6 +177,23 @@ internal object InspectorIcons {
         put("EASE_APPLY_ALL", p().poly(1f, 6f, 8.5f, 9f, 11.5f, 6f, 14.5f, 3f, 11.5f).poly(1f, 12f, 8.5f, 15f, 11.5f, 12f, 14.5f, 9f, 11.5f)
             .poly(1f, 18f, 8.5f, 21f, 11.5f, 18f, 14.5f, 15f, 11.5f).line(3f, 19f, 21f, 19f).build())
         // GRAPH G1.1: the Graph rail's Tools (snap / mirror / apply to all): three slider knobs on a vertical axis.
+        // GRAPH G2L: curve library glyphs.
+        // Library: three stacked curve cards.
+        put("GRAPH_LIBRARY", p().rect(4f, 4f, 13f, 13f, 2.5f).line(8f, 20f, 18f, 20f).arc(18f, 20f, 2f, 2f, 0, 0, 20f, 18f).line(20f, 18f, 20f, 8f)
+            .cubic(6.5f, 14.5f, 9.5f, 14.5f, 11f, 6.5f, 14.5f, 6.5f).build())
+        // Star: five rounded points.
+        put("GRAPH_STAR", p().poly(1.2f, 12f, 3f, 14.6f, 8.6f, 20.6f, 9.2f, 16f, 13.4f, 17.3f, 19.8f, 12f, 16.6f, 6.7f, 19.8f, 8f, 13.4f, 3.4f, 9.2f, 9.4f, 8.6f).build())
+        // Save curve: a curve dropping into a tray.
+        put("GRAPH_SAVE", p().line(4f, 14f, 4f, 18f).arc(4f, 18f, 2f, 2f, 0, 0, 6f, 20f).line(6f, 20f, 18f, 20f).arc(18f, 20f, 2f, 2f, 0, 0, 20f, 18f)
+            .line(20f, 18f, 20f, 14f).line(12f, 3f, 12f, 14f).line(8.5f, 10.5f, 12f, 14f, 15.5f, 10.5f).cubic(4f, 9f, 6f, 9f, 6f, 4f, 9f, 4f).build())
+        // Import / export: opposed arrows.
+        put("GRAPH_EXCHANGE", p().line(8f, 4f, 8f, 18f).line(5f, 15f, 8f, 18f, 11f, 15f).line(16f, 20f, 16f, 6f).line(13f, 9f, 16f, 6f, 19f, 9f).build())
+        put("GRAPH_EXPORT", p().line(12f, 15f, 12f, 4f).line(8f, 8f, 12f, 4f, 16f, 8f).line(4f, 15f, 4f, 18f).arc(4f, 18f, 2f, 2f, 0, 0, 6f, 20f)
+            .line(6f, 20f, 18f, 20f).arc(18f, 20f, 2f, 2f, 0, 0, 20f, 18f).line(20f, 18f, 20f, 15f).build())
+        // Edit values: x and y letters.
+        put("GRAPH_XY", p().line(4f, 7f, 10f, 17f).line(10f, 7f, 4f, 17f).line(14f, 7f, 17f, 12f, 20f, 7f).line(17f, 12f, 17f, 17f).build())
+        // Rename: a pencil.
+        put("GRAPH_RENAME", p().poly(1f, 15.5f, 4.5f, 19.5f, 8.5f, 8.5f, 19.5f, 4.5f, 19.5f, 4.5f, 15.5f).line(13.5f, 6.5f, 17.5f, 10.5f).line(12f, 20f, 20f, 20f).build())
         put("GRAPH_TOOLS", p().line(6f, 4f, 6f, 20f).line(12f, 4f, 12f, 20f).line(18f, 4f, 18f, 20f).circle(6f, 15f, 2f).circle(12f, 8f, 2f).circle(18f, 13f, 2f).build())
         put("CUBE", p().poly(2f, 12f, 3f, 20f, 7.5f, 20f, 16.5f, 12f, 21f, 4f, 16.5f, 4f, 7.5f).line(4.6f, 7.9f, 12f, 12f, 19.4f, 7.9f).line(12f, 12f, 12f, 20.3f).build())
         // ---- Landing grid categories --------------------------------------------------------------------
