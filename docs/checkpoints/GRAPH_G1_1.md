@@ -12,7 +12,7 @@ Status:
   | Test | Result |
   |---|---|
   | `GraphPageLayoutTest` (5) | Pass |
-  | `GraphPlayheadTest` (2) | Pass |
+  | `GraphPlayheadTest` (5) | Pass (`nextOntoAKeyframeThenDrag` fails without the fix) |
   | `GraphCurveRenderTest` | Pass |
   | `InspectorSwipeLayoutTest`, `TextInspectorLayoutTest`, `TextAnimateLayoutTest` | Pass (13 with `GraphCurveRenderTest`) |
   | `adb logcat -b crash -d` | Empty |
@@ -105,29 +105,37 @@ Pad coordinates are 0–1 across the plot rectangle, 0 at the bottom. Direct dra
 - The old `GraphLayout` grid arithmetic and its test
 - The `EASE_NUMERIC` and `EASE_COPY` glyphs (no surface uses them now)
 
-## 6. The playhead report: investigation and result
+## 6. The playhead jump: root cause and fix
 
-**Not reproduced; no code cause found.** What I did:
+**Found and fixed** (after the first G1.1 commit, with a debug trace on the user's A16).
 
-1. **Read the whole path.** No `Seek` exists on the Graph path: `SetKeyEasing`, `previewGesture` / `commitGesture`, `GraphPage`, `onGesturePreview`. The controller's `update` / `pause` / `seek` echo back exactly the time they are given (`requestedUs` → `position()` → `onPosition` → `reportPosition`). Every editor path that moves the playhead (timeline scrub, Prev/Next, markers, `TextEditController.begin`'s frame snap) also tells the controller. The Graph callbacks pass `displayedState.playheadUs`, which during a gesture is the frozen base, which equals the playhead at the drag's start. The timeline only seeks from its scroll position while a user scroll is in progress.
-2. **Reproduced the real wiring on the A16.** A test hosts the real `EditorScreen` with a real `PreviewController` wired like MainActivity (`GraphPlayheadTest`), with the playhead parked off-frame at 1,744,321µs, and logs every controller report:
-   - a Rotation target, then the user's target: an animator Range Selector **Offset** field opened from the Animate tab;
-   - handles really moved (asserted from the stored curve): the left handle to the left edge, the right handle to the right edge, one handle first, then both, then overshoot;
-   - then type and preset taps.
+**How it was found.**
+- My harness drove the real `EditorScreen` with a real `PreviewController` but never reproduced it, because it always moved the playhead *before* opening the Graph page.
+- A temporary debug-only trace in `EditorViewModel` logged every playhead change with its call stack while the user reproduced it on their own project:
+  - Next moved the playhead 0.628s → **1.000s**, onto a keyframe;
+  - the next graph drag moved it back to **0.628s**, through `PreviewController.position` → `reportPosition`.
+- So the preview controller had been told to show an old time.
 
-   Every report was 1,744,321µs. The editor playhead, the displayed playhead, the timeline content position and the selection never changed.
-3. **What the user sees.** They confirmed that the timecode does not change and that the **graph dot slides along the curve**. The dot is drawn at the playhead's fraction of the segment (fixed x) and at the curve's eased value there (y). When a handle drags the curve sideways under it, it looks as if the dot slides. That is the curve moving under a fixed playhead, not a playhead change.
+**Cause.** `GraphPage` passed its drag handlers to the canvas as callable references to local functions (`::begin`, `::preview`, `::commit`, `::cancelDrag`). Compose memoizes those, so the canvas kept the handlers from the composition in which the page was opened. Those handlers carried that composition's callbacks, including `EditorScreen`'s `onTransformCommit`, which captured `playheadUs` at that time, plus the segment's key time and layer id. On release, the stale commit called `previewController.update(project, <playhead when the page opened>)`. The controller rendered that time and reported it back, and `reportPosition` moved the playhead there.
 
-**Tests that now enforce the rule** (§7.4 of the brief):
-- JVM `GraphG11Test.graphEditingNeverMovesThePlayhead`: the `EditorViewModel` sequence `beginGesture` → `previewGesture(SetKeyEasing)` × 3 → `commitGesture`, with `reportPosition` interleaved as the controller does it, then type / preset / apply-to-all actions. Playhead and selection unchanged. It passes before and after this pass, because the cause is not at that level (there is none in code).
-- A16 `GraphPageLayoutTest`: playhead equal before and after a handle drag, a preset tap and a typed value.
-- A16 `GraphPlayheadTest`: the real-wiring sequence above.
+It only showed when the playhead was moved *after* opening the Graph page: with Prev/Next onto a keyframe or marker, as the user does to pick a segment. That is why "on a key or marker" looked like the trigger. The trace also caught the same echo on smaller moves.
 
-The "preview playing when the drag starts" case is not in the harness: `PreviewController.play/pause` from the test thread did not stop playback before the next step (the test's idling waited for playback to end), so the harness pauses with a seek instead. Not verified.
+**Fix (call sites only; `PreviewController` untouched).**
+- `GraphPage`: every input the handlers use (`onAction`, `onBegin`, `onPreview`, `onCommit`, `onCancel`, the layer id, the target, the segment's key time) goes through an always-current `rememberUpdatedState` holder. A memoized handler can no longer act on an old composition, which also stops a drag after Prev/Next from editing the previous segment.
+- `EditorScreen`: `onTransformCommit`, `onTransformCancel` and `onGesturePreview` read `editor.state.playheadUs` / `editor.displayedState.playheadUs` when they run, instead of a value captured at composition. For the Transform and Opacity pages this sends the same value as before.
+
+**Tests.**
+- A16 `GraphPlayheadTest.nextOntoAKeyframeThenDrag`: real `EditorScreen` + `PreviewController`; open the Graph page at 0.2s, Next onto the key at 1.0s, drag a handle. It **fails without the fix** (1,000,000 → 200,000µs, checked by stashing the fix) and passes with it.
+- `GraphPlayheadTest` also covers: the playhead on a keyframe, on a composition and a layer marker, the hold-then-release drag, the left handle to the left edge, and the Animate Offset target.
+- `GraphPageLayoutTest` asserts the playhead after a drag, a preset tap and a typed value.
+- JVM `GraphG11Test.graphEditingNeverMovesThePlayhead` covers the `EditorViewModel` sequence. The cause is Compose lambda memoization, which a JVM test cannot reproduce, so this one passes with or without the fix.
+- The debug trace is removed.
+
+Not verified: the case where playback is running when a drag starts. The harness could not hold playback across steps.
 
 ## 7. Files
 
-New: `GraphG11Test` (JVM), `GraphPlayheadTest` (androidTest), this file.
+New: `GraphG11Test` (JVM), `GraphPlayheadTest` (androidTest), this file. The playhead fix also changes `ui/editor/EditorScreen.kt` (three callbacks).
 
 Changed:
 - `ui/inspector/GraphPage.kt`: rewritten (geometry, header, left rail, centre item, values bar, XY pad, right rail; the loupe, grid, numeric popover and strip removed)
@@ -161,7 +169,7 @@ Changed:
 
 ## 10. Deviations
 
-- The playhead fix is "none needed in code" (§6); the regression tests stay as guards.
+- The playhead fix is at the call sites (`GraphPage`, `EditorScreen` wiring); `PreviewController` is unchanged (§6).
 - `EASE_NUMERIC` and `EASE_COPY` were removed from the icon family because nothing draws them now (Copy is a ⋮ text item).
 
 ## 11. Questions for G2

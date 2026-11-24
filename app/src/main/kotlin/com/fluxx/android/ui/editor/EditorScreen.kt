@@ -714,15 +714,17 @@ fun EditorScreen(
                             previewController?.update(editor.displayedState.project, playheadUs, false)
                             }
                         },
+                        // GRAPH G1.1: read the editor's playhead when the callback runs, never a value captured at composition
+                        // (a stale capture made the preview controller echo an old time back as the playhead).
                         onTransformCommit = {
                             textEditor.finish { editor.commitGesture()
-                            previewController?.update(editor.state.project, playheadUs, false)
+                            previewController?.update(editor.state.project, editor.state.playheadUs, false)
                             }
                         },
                         onTransformCancel = {
                             textEditor.cancel()
                             editor.cancelGesture()
-                            previewController?.update(editor.state.project, playheadUs, false)
+                            previewController?.update(editor.state.project, editor.state.playheadUs, false)
                         },
                         onTransformEdit = { transform ->
                             previewController?.pause()
@@ -766,7 +768,7 @@ fun EditorScreen(
                         // GRAPH G1: Graph page drags preview SetKeyEasing inside the existing begin/commit/cancel gesture.
                         onGesturePreview = { action ->
                             textEditor.finish { editor.previewGesture(action)
-                            previewController?.update(editor.displayedState.project, playheadUs, false)
+                            previewController?.update(editor.displayedState.project, editor.displayedState.playheadUs, false)
                             }
                         },
                         modifier = Modifier.fillMaxSize()

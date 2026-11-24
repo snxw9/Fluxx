@@ -296,16 +296,24 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
     val cancel by rememberUpdatedState(onCancel)
     DisposableEffect(target, keyTime) { onDispose { if (dragging) { dragging = false; cancel() } } }
 
+    // GRAPH G1.1 playhead fix: the handlers below are handed to long-lived gesture coroutines and memoized callable
+    // references, so they must never capture this composition's values. Every input goes through an always-current
+    // holder; otherwise a drag after Prev/Next would commit with the callbacks (and the playhead) from when the page opened.
+    val latestAction by rememberUpdatedState(onAction); val latestBegin by rememberUpdatedState(onBegin)
+    val latestPreview by rememberUpdatedState(onPreview); val latestCommit by rememberUpdatedState(onCommit)
+    val latestCancel by rememberUpdatedState(onCancel)
+    val latestLayerId by rememberUpdatedState(layer.id); val latestTarget by rememberUpdatedState(target)
+    val latestKey by rememberUpdatedState(keyTime)
     fun edit(c: EasingCurve, all: Boolean = false) {
         focus.clearFocus()
         if (!all && EaseMath.same(c, stored)) return
         ghost = stored
-        onAction(GraphModel.action(layer.id, target, if (all) null else listOf(keyTime), c))
+        latestAction(GraphModel.action(latestLayerId, latestTarget, if (all) null else listOf(latestKey), c))
     }
-    fun begin() { if (!dragging) { dragging = true; ghost = stored; onBegin() } }
-    fun preview(c: EasingCurve) { if (dragging) { draft = c; onPreview(GraphModel.action(layer.id, target, listOf(keyTime), c)) } }
-    fun commit() { if (dragging) { dragging = false; onCommit(); draft = null } }
-    fun cancelDrag() { if (dragging) { dragging = false; onCancel(); draft = null } }
+    fun begin() { if (!dragging) { dragging = true; ghost = stored; latestBegin() } }
+    fun preview(c: EasingCurve) { if (dragging) { draft = c; latestPreview(GraphModel.action(latestLayerId, latestTarget, listOf(latestKey), c)) } }
+    fun commit() { if (dragging) { dragging = false; latestCommit(); draft = null } }
+    fun cancelDrag() { if (dragging) { dragging = false; latestCancel(); draft = null } }
     val onKey = local in GraphModel.keyTimes(layer, target)
 
     BoxWithConstraints(modifier.fillMaxSize().dismissPopoversOnEmptyTap().testTag("graph-page")) {

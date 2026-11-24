@@ -51,7 +51,7 @@ class GraphPlayheadTest {
     /** Taps the clip pill at the playhead (its label can be scrolled off to the left) to open the inspector. */
     private fun openInspector(label: SemanticsMatcher) {
         val row = compose.onAllNodes(label).fetchSemanticsNodes().first().boundsInRoot.center.y
-        compose.onRoot().performTouchInput { click(Offset(width * .62f, row)) }; settle()
+        compose.onRoot().performTouchInput { click(Offset(width * .8f, row)) }; settle()
     }
     private fun clipX(label: SemanticsMatcher) = compose.onAllNodes(label).fetchSemanticsNodes().map { it.boundsInRoot.left }
     /** Drag handle [handle] of [curve] by ([dx], [dy]) fractions of the plot, in small steps. */
@@ -111,5 +111,90 @@ class GraphPlayheadTest {
         assertEquals(EasingPreset.CUSTOM, curve().type)
         assertEquals(arbitrary, editor.state.playheadUs); assertEquals(arbitrary, editor.displayedState.playheadUs)
         assertEquals(clip, clipX(label)); assertEquals(1L, editor.state.selectedLayerId)
+    }
+
+    /**
+     * The user's repro: playhead ON a keyframe / composition marker / layer marker; start Linear, move the right handle
+     * down and hold before releasing; then move the right handle, then the left.
+     */
+    private fun onTarget(at: Long, markers: Boolean) {
+        val label = hasText("Spin")
+        val layer = CompositionLayer(1, LayerType.SOLID, name = "Spin", timing = ClipTiming(0, 0, 4_000_000),
+            markers = if (markers) FrozenList.of(listOf(Marker(11, at, description = "L"))) else FrozenList.empty(),
+            animTransform = AnimatableTransform(rotation = AnimatableProperty1D(true, 0f, FrozenList.of(listOf(
+                Keyframe1D(0, 0f), Keyframe1D(1_000_000, 90f), Keyframe1D(3_000_000, 45f))))))
+        val editor = EditorViewModel()
+        val comp = com.fluxx.android.model.Composition(durationUs = 4_000_000, layers = FrozenList.of(listOf(layer)),
+            markers = if (markers) FrozenList.of(listOf(Marker(12, at, description = "C"))) else FrozenList.empty())
+        editor.dispatch(EditorAction.Load(ProjectDocument(comp)))
+        val controller = mutableStateOf<PreviewController?>(null)
+        compose.setContent {
+            FluxxTheme {
+                EditorScreen(editor, MediaRepository(context), controller.value, null, true, false,
+                    onSurfaceAvailable = { s, w, h ->
+                        if (controller.value == null) controller.value = PreviewController(context, s, w, h, onPosition = {
+                            android.util.Log.d("GraphPlayhead", "report $it"); editor.reportPosition(it) })
+                        controller.value!!.update(editor.displayedState.project, editor.displayedState.playheadUs, false)
+                    },
+                    onSurfaceDestroyed = {}, onSurfaceResized = { _, _ -> }, onRequestMediaPermission = {}, onOpenDocumentPicker = {},
+                    onSaveProject = {}, onLoadProject = {}, onExportStart = {}, onExportCancel = {}, onOpenExportedVideo = {})
+            }
+        }
+        compose.waitUntil(10_000) { controller.value != null }
+        // Select the layer near its start (its label is on screen), open Transform, then move the playhead onto the target.
+        compose.runOnIdle { editor.dispatch(EditorAction.Seek(200_000)); controller.value!!.seek(200_000) }
+        settle()
+        compose.onNodeWithText("Spin").performClick(); settle()
+        compose.onNodeWithContentDescription("Transform").performClick(); compose.waitForIdle()
+        compose.runOnIdle { editor.dispatch(EditorAction.Seek(at)); controller.value!!.seek(at) }
+        settle()
+        android.util.Log.d("GraphPlayhead", "on target: state=${editor.state.playheadUs} marker=${editor.state.selectedMarkerId}")
+        compose.onNodeWithTag("transform-mode-ROTATION").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("inspector-rail-graph", useUnmergedTree = true).performClick(); settle()
+        compose.onNodeWithTag("graph-right-rail").performScrollToNode(hasTestTag("graph-type-LINEAR"))
+        compose.onNodeWithTag("graph-type-LINEAR", useUnmergedTree = true).performClick(); settle()
+        val before = editor.state.playheadUs
+        android.util.Log.d("GraphPlayhead", "start at=$at markers=$markers before=$before selectedMarker=${editor.state.selectedMarkerId}")
+        fun curve() = editor.state.project.composition.layers[0].animTransform.rotation.keyframes[1].curve
+        // Right handle down, then hold still before releasing ("wait a bit").
+        val b = curve().bezierOrNull()!!; val (lo, hi) = EasePlot.range(curve())
+        compose.onNodeWithTag("graph-ease-canvas").performTouchInput {
+            val inset = 10.dp.toPx(); val w = width - 2 * inset; val h = height - 2 * inset
+            down(Offset(inset + b[2] * w, inset + (hi - b[3]) / (hi - lo) * h))
+            repeat(10) { moveBy(Offset(0f, h * .03f)) }
+        }
+        repeat(3) { Thread.sleep(500); compose.mainClock.advanceTimeBy(500); android.util.Log.d("GraphPlayhead", "holding: state=${editor.state.playheadUs} displayed=${editor.displayedState.playheadUs}") }
+        compose.onNodeWithTag("graph-ease-canvas").performTouchInput { up() }
+        settle(); Thread.sleep(1500); compose.waitForIdle()
+        android.util.Log.d("GraphPlayhead", "after hold: state=${editor.state.playheadUs} curve=${curve()} selectedMarker=${editor.state.selectedMarkerId}")
+        assertEquals("hold drag with the playhead on a ${if (markers) "marker" else "keyframe"}", before, editor.state.playheadUs)
+        dragHandle(curve(), 1, 0f, .2f); Thread.sleep(1500); compose.waitForIdle()
+        android.util.Log.d("GraphPlayhead", "after right: state=${editor.state.playheadUs}")
+        dragHandle(curve(), 0, 0f, -.2f); Thread.sleep(1500); compose.waitForIdle()
+        android.util.Log.d("GraphPlayhead", "after left: state=${editor.state.playheadUs} curve=${curve()}")
+        assertEquals(before, editor.state.playheadUs)
+    }
+    @Test fun playheadOnAKeyframe() = onTarget(1_000_000, markers = false)
+    @Test fun playheadOnMarkers() = onTarget(2_000_000, markers = true)
+
+    /** The traced phone repro: play, pause, Next onto a keyframe with the Graph page open, then drag a handle. */
+    @Test fun nextOntoAKeyframeThenDrag() {
+        val label = hasText("Spin")
+        val editor = host(CompositionLayer(1, LayerType.SOLID, name = "Spin", timing = ClipTiming(0, 0, 4_000_000),
+            animTransform = AnimatableTransform(rotation = AnimatableProperty1D(true, 0f, FrozenList.of(listOf(
+                Keyframe1D(0, 0f), Keyframe1D(1_000_000, 90f), Keyframe1D(3_000_000, 45f)))))))
+        compose.runOnIdle { editor.dispatch(EditorAction.Seek(200_000)) }
+        settle()
+        compose.onNodeWithText("Spin").performClick(); settle()
+        compose.onNodeWithContentDescription("Transform").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("transform-mode-ROTATION").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("inspector-rail-graph", useUnmergedTree = true).performClick(); settle()
+        // With the Graph page open at 0.2s, Next onto the key at 1.0s (the traced phone sequence).
+        compose.onNodeWithContentDescription("Next contextual boundary", useUnmergedTree = true).performClick(); settle()
+        val before = editor.state.playheadUs
+        assertEquals(1_000_000L, before)
+        fun curve() = editor.state.project.composition.layers[0].animTransform.rotation.keyframes.first { it.timeUs == 1_000_000L }.curve
+        dragHandle(curve(), 1, 0f, .2f); Thread.sleep(1500); compose.waitForIdle()
+        assertEquals("the playhead after Next then a graph drag", before, editor.state.playheadUs)
     }
 }
