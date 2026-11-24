@@ -230,7 +230,7 @@ internal object TextColourEdit {
     fun alphaPercent(argb: Int)=(argb ushr 24)*100f/255f
     fun withAlphaPercent(argb: Int,percent: Float)=withAlpha(argb,kotlin.math.round(percent.coerceIn(0f,100f)/100f*255f).toInt())
     /** RRGGBB keeps the current alpha; AARRGGBB replaces it. Invalid text returns null (nothing applied). */
-    fun hex(text: String,current: Int): Int? = FluxxColor.parseHex(text.trim().removePrefix("#"),(current ushr 24)/255f)?.toArgb()
+    fun hex(text: String, current: Int): Int? = FluxxColor.parseHexEntry(text, current)
     fun hexText(argb: Int)=FluxxColor.fromArgb(argb).toHexString(true)
     /** A swatch sets the colour and keeps the current alpha (a fully transparent colour becomes opaque). */
     fun swatch(current: Int,argb: Int)=withAlpha(argb,(current ushr 24).takeIf {it>0} ?: 255)

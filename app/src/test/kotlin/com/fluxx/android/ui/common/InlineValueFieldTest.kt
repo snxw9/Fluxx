@@ -16,7 +16,7 @@ class InlineValueFieldTest {
         override fun finish() {events+="finish"}
         override fun cancel() {events+="cancel";colour=before}
     }
-    private fun hexSession()=InlineEntrySession(ColourValues::hex,sink)
+    private fun hexSession()=InlineEntrySession(ColourValues::hex,sink,com.fluxx.android.model.FluxxColor::hexAppliesLive)
     private fun alphaSession()=InlineEntrySession(ColourValues::alpha,sink)
 
     @Test fun clearingShowsTheFadedPreviousValue() {
@@ -46,6 +46,19 @@ class InlineValueFieldTest {
         assertEquals(listOf("begin","preview","finish"),events)
         // A second session is a second (separate) undo entry; a blur without a session does nothing.
         assertFalse(s.end());assertEquals(3,events.size)
+    }
+    /** GRAPH G2.1 §2: 3-digit hex is valid but applies when the field is left (a live 3-digit prefix of a 6-digit value would flash). */
+    @Test fun threeDigitHexAppliesOnLeaveAsOneUndo() {
+        val s=hexSession()
+        s.focus(ColourValues.hexText(colour),colour)
+        s.edit("#"); s.edit("#f"); s.edit("#ff"); s.edit("#fff")
+        assertTrue("not live",events.isEmpty())
+        assertTrue(s.end())
+        assertEquals(listOf("begin","preview","finish"),events); assertEquals(0x80FFFFFF.toInt(),colour)
+        // Four digits are invalid: nothing applies, nothing is kept.
+        events.clear(); val prior=colour
+        s.focus(ColourValues.hexText(colour),colour); s.edit("0000")
+        assertFalse(s.end()); assertTrue(events.isEmpty()); assertEquals(prior,colour)
     }
     @Test fun invalidTextRevertsOnBlur() {
         val s=hexSession();val original=colour

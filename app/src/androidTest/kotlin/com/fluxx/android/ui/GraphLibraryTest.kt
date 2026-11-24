@@ -34,6 +34,15 @@ class GraphLibraryTest {
     private lateinit var store: CurveLibraryStore
     private var previous: CurveLibraryStore? = null
     private val selected = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Selected")
+    private var root: android.view.View? = null
+    private fun ime(): Int = androidx.core.view.ViewCompat.getRootWindowInsets(root!!)?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom ?: 0
+    /** Waits (real time) until the keyboard is up / down; returns whether it got there. */
+    private fun waitIme(up: Boolean, ms: Long = 3000): Boolean {
+        val end = System.currentTimeMillis() + ms
+        while (System.currentTimeMillis() < end) { compose.waitForIdle(); if ((ime() > 0) == up) return true; Thread.sleep(50) }
+        return (ime() > 0) == up
+    }
+    private fun field(name: String) = compose.onNodeWithContentDescription("$name, exact value")
 
     @Before fun memory() { store = CurveLibraryStore.inMemory(); previous = CurveLibraryStore.replaceForTest(store) }
     @After fun restore() { CurveLibraryStore.replaceForTest(previous) }
@@ -46,6 +55,7 @@ class GraphLibraryTest {
                 FrozenList.of(listOf(Keyframe1D(0, 0f), Keyframe1D(1_000_000, 90f), Keyframe1D(3_000_000, 45f))))))))))))
         vm.dispatch(EditorAction.Select(1)); vm.dispatch(EditorAction.Seek(1_234_567))
         compose.setContent {
+            root = androidx.compose.ui.platform.LocalView.current
             val (w, h) = size.value
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides if (InspectorSheetBudget.compact(h)) 40.dp else 48.dp) {
                 MaterialTheme { key(size.value) {
@@ -275,7 +285,7 @@ class GraphLibraryTest {
     }
     private fun density() = compose.density.density
 
-    /** GRAPH G2 (A3): the xy popover edits the stored curve with typed fields; the graph is untouched. */
+    /** GRAPH G2 (A3) / G2.1 §7: the xy popover edits the stored curve with typed fields; the graph is untouched. */
     @Test fun xyPopoverEditsAndPersistsTheStoredCurve() {
         var s = CurveLibraryState(pinned = listOf("user:m"))
         s = CurveLibrary.add(s, "Mine", EasingCurve.bezier(.1f, .9f, .2f, 1f), "user:m")!!.first
@@ -283,23 +293,179 @@ class GraphLibraryTest {
         val graph = curve()
         compose.onNodeWithTag("graph-pinned-user:m").performTouchInput { longClick() }; compose.waitForIdle()
         click("graph-curve-xy")
-        compose.onNodeWithContentDescription("y1, exact value in ").performTextReplacement("0.4")
-        compose.onNodeWithContentDescription("y1, exact value in ").performImeAction(); compose.waitForIdle()
+        field("y1").performClick(); field("y1").performTextReplacement("0.4"); field("y1").performImeAction(); compose.waitForIdle()
         assertEquals(EasingCurve.bezier(.1f, .4f, .2f, 1f), store.state.value.user[0].curve)
-        // Edit again (each commit re-arms its field), invalid input is discarded, empty keeps the value.
-        compose.onNodeWithContentDescription("x2, exact value in ").performClick()
-        compose.onNodeWithContentDescription("x2, exact value in ").performTextReplacement("abc")
-        compose.onNodeWithContentDescription("x2, exact value in ").performImeAction(); compose.waitForIdle()
-        compose.onNodeWithContentDescription("y1, exact value in ").performClick()
-        compose.onNodeWithContentDescription("y1, exact value in ").performTextReplacement("")
-        compose.onNodeWithContentDescription("y1, exact value in ").performImeAction(); compose.waitForIdle()
-        compose.onNodeWithContentDescription("x1, exact value in ").performClick()
-        compose.onNodeWithContentDescription("x1, exact value in ").performTextReplacement("5")
-        compose.onNodeWithContentDescription("x1, exact value in ").performImeAction(); compose.waitForIdle()
+        // Edit again, invalid input is discarded, empty keeps the value.
+        field("x2").performClick(); field("x2").performTextReplacement("abc"); field("x2").performImeAction(); compose.waitForIdle()
+        field("y1").performClick(); field("y1").performTextReplacement(""); field("y1").performImeAction(); compose.waitForIdle()
+        field("x1").performClick(); field("x1").performTextReplacement("5"); field("x1").performImeAction(); compose.waitForIdle()
         assertEquals("x clamps to 1", EasingCurve.bezier(1f, .4f, .2f, 1f), store.state.value.user[0].curve)
         assertEquals(graph, curve()); assertEquals(1_234_567L, vm.state.playheadUs)
-        // The pinned thumbnail shows the stored curve; persisted in the store (atomic writes are covered by GraphG2LTest).
         compose.onNodeWithTag("graph-pinned-user:m").assertExists()
+    }
+
+    /**
+     * GRAPH G2.1 §7: a compact 2 x 2 grid of independent fields. No auto-focus; editing one field and tapping away
+     * changes only it and closes the keyboard; Done never brings the keyboard back; moving to another field keeps the
+     * keyboard up; y2 is fully visible above the keyboard, at 268dp and 328dp.
+     */
+    @Test fun xyFieldsAreIndependentAndStayAboveTheKeyboard() {
+        for (h in listOf(268f, 328f)) {
+            var s = CurveLibraryState(pinned = listOf("user:m"))
+            s = CurveLibrary.add(s, "Mine", EasingCurve.bezier(.1f, .9f, .2f, 1f), "user:m")!!.first
+            if (h == 268f) start(s) else {
+                compose.runOnIdle { store.update { s }; size.value = 360f to h }; compose.waitForIdle()
+                if (compose.onAllNodesWithTag("graph-page").fetchSemanticsNodes().isEmpty()) {
+                    compose.onNodeWithContentDescription("Transform").performClick(); compose.waitForIdle()
+                    click("transform-mode-ROTATION"); click("inspector-rail-graph")
+                }
+            }
+            val graph = curve()
+            compose.onNodeWithTag("graph-pinned-user:m").performTouchInput { longClick() }; compose.waitForIdle()
+            click("graph-curve-xy")
+            // No auto-focus, no keyboard.
+            Thread.sleep(600); compose.waitForIdle()
+            compose.onAllNodes(isFocused()).assertCountEquals(0); assertTrue("no keyboard on open at $h", waitIme(false, 300))
+            // 2 x 2, values-bar sized tiles.
+            val t = listOf("x1", "y1", "x2", "y2").map { field(it).fetchSemanticsNode().boundsInRoot }
+            val tiles = (0..3).map { compose.onNodeWithTag("graph-curve-value-$it").fetchSemanticsNode().boundsInRoot }
+            assertEquals(tiles[0].top, tiles[1].top, 1f); assertTrue(tiles[2].top >= tiles[0].bottom - 1f); assertEquals(tiles[0].left, tiles[2].left, 1f)
+            val d = compose.density.density
+            assertEquals(XyEdit.TILE_W, tiles[0].width / d, 1f); assertEquals(XyEdit.TILE_H, tiles[0].height / d, 1f)
+            assertTrue(t.all { it.width > 0f })
+            // Edit only x1, then tap away (inside the popover, between the tiles): only x1 changes, the keyboard closes.
+            field("x1").performClick(); waitIme(true)
+            field("x1").performTextReplacement("0.3")
+            compose.onNodeWithTag("graph-curve-values").performTouchInput { click(center) }; compose.waitForIdle()
+            assertEquals(EasingCurve.bezier(.3f, .9f, .2f, 1f), store.state.value.user.first { it.id == "user:m" }.curve)
+            compose.onAllNodes(isFocused()).assertCountEquals(0); assertTrue("keyboard closed after tap-away at $h", waitIme(false))
+            // Moving straight to another field commits the first and keeps the keyboard up.
+            field("x2").performClick(); assertTrue(waitIme(true)); field("x2").performTextReplacement("0.25")
+            field("y1").performClick(); compose.waitForIdle(); Thread.sleep(300)
+            assertEquals(.25f, store.state.value.user.first { it.id == "user:m" }.curve.c, 1e-4f)
+            android.util.Log.d("GraphG21", "xy at 360x$h: ime while moving between fields=${ime()}")
+            field("y1").performImeAction(); compose.waitForIdle()
+            // All four with Done each; after Done the keyboard stays hidden (600ms).
+            for ((name, v) in listOf("x1" to "0.15", "y1" to "0.8", "x2" to "0.35", "y2" to "1.1")) {
+                field(name).performClick(); waitIme(true)
+                field(name).performTextReplacement(v); field(name).performImeAction(); compose.waitForIdle()
+                Thread.sleep(600); compose.waitForIdle()
+                compose.onAllNodes(isFocused()).assertCountEquals(0)
+                assertEquals("keyboard stays hidden after Done on $name at $h", 0, ime())
+            }
+            assertEquals(EasingCurve.bezier(.15f, .8f, .35f, 1.1f), store.state.value.user.first { it.id == "user:m" }.curve)
+            // y2 lies inside the window and above the keyboard while it is up.
+            field("y2").performClick(); val up = waitIme(true)
+            Thread.sleep(400); compose.waitForIdle()
+            val node = field("y2").fetchSemanticsNode()
+            // The window (decor view), not the test's 268dp host view.
+            val win = root!!.rootView
+            val loc = IntArray(2); win.getLocationOnScreen(loc)
+            val top = node.positionOnScreen.y; val bottom = top + node.size.height
+            val imeTop = loc[1] + win.height - ime()
+            android.util.Log.d("GraphG21", "xy y2 at 360x$h: top=$top bottom=$bottom imeTop=$imeTop window=${loc[1]}..${loc[1] + win.height} ime=${ime()} up=$up")
+            assertTrue("keyboard up for the y2 check at $h", up)
+            assertTrue("y2 inside the window at $h", top >= loc[1]); assertTrue("y2 above the keyboard at $h: $bottom > $imeTop", bottom <= imeTop)
+            field("y2").performImeAction(); compose.waitForIdle(); waitIme(false)
+            assertEquals("the graph is untouched", graph, curve()); assertEquals(1_234_567L, vm.state.playheadUs)
+            Espresso.pressBack(); compose.waitForIdle()
+        }
+    }
+
+    /**
+     * GRAPH G2.1 §8: long-press lifts the tile into an overlay that follows the pointer exactly, the other pinned cells
+     * slide aside as the slot changes, nothing is written while dragging, and the drop is one write.
+     */
+    @Test fun liftFollowReflowAndOneWritePerDrop() {
+        start()
+        click("graph-library")
+        val p = store.state.value.pinned
+        val col = bounds("graph-library-column")
+        val from = bounds("graph-lib-${p[0]}"); val target = bounds("graph-lib-${p[3]}")
+        val before3 = target; val writes = store.writes
+        compose.mainClock.autoAdvance = false
+        val start = Offset(from.center.x - col.left, from.center.y - col.top)
+        compose.onNodeWithTag("graph-library-column").performTouchInput { down(start * density) }
+        compose.mainClock.advanceTimeBy(900)
+        compose.onNodeWithTag("graph-library-column").performTouchInput { moveTo((start + Offset(0f, 12f)) * density) }
+        compose.mainClock.advanceTimeBy(32)
+        val lifted = compose.onNodeWithTag("graph-drag-lifted", useUnmergedTree = true)
+        lifted.assertExists()
+        fun liftedCentre() = lifted.getBoundsInRoot().let { Offset(((it.left + it.right) / 2).value, ((it.top + it.bottom) / 2).value) }
+        val grab = liftedCentre() - (Offset(col.left, col.top) + start + Offset(0f, 12f))
+        // It follows the pointer exactly.
+        for (step in listOf(Offset(10f, 20f), Offset(-6f, 30f), Offset(15f, 8f))) {
+            val at = start + Offset(0f, 12f) + step
+            compose.onNodeWithTag("graph-library-column").performTouchInput { moveTo(at * density) }
+            compose.mainClock.advanceTimeBy(16)
+            val c = liftedCentre() - (Offset(col.left, col.top) + at)
+            assertEquals("follows x", grab.x, c.x, 1f); assertEquals("follows y", grab.y, c.y, 1f)
+        }
+        // Onto pinned cell 4 (row 2, right): the cells between slide aside (animated), nothing is written yet.
+        val over = Offset(target.center.x - col.left, target.center.y - col.top)
+        compose.onNodeWithTag("graph-library-column").performTouchInput { moveTo(over * density) }
+        compose.mainClock.advanceTimeBy(400)
+        assertEquals("no store writes while dragging", writes, store.writes)
+        assertNotEquals("cell 4 moved aside", before3, bounds("graph-lib-${p[3]}"))
+        compose.onNodeWithTag("graph-library-column").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(300); compose.mainClock.autoAdvance = true; compose.waitForIdle()
+        assertEquals("one write per drop", writes + 1, store.writes)
+        assertEquals(3, store.state.value.pinned.indexOf(p[0])); assertEquals(p - p[0], store.state.value.pinned - p[0])
+        compose.onAllNodesWithTag("graph-drag-lifted", useUnmergedTree = true).assertCountEquals(0)
+        assertEquals(1_234_567L, vm.state.playheadUs)
+    }
+
+    /** GRAPH G2.1 §8: auto-scroll (56dp ramped zone) carries a lifted pinned curve to My curves; dropping there unpins it. */
+    @Test fun autoScrollReachesAFarSectionAndUnpins() {
+        var s = CurveLibraryState()
+        for (i in 0 until 6) s = CurveLibrary.add(s, "c$i", EasingCurve.bezier(.1f * i, .5f, .5f, 1f), "user:$i")!!.first
+        start(s)
+        click("graph-library")
+        val p = store.state.value.pinned; val writes = store.writes
+        val col = bounds("graph-library-column"); val from = bounds("graph-lib-${p[0]}")
+        val x = from.center.x - col.left
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("graph-library-column").performTouchInput { down(Offset(x, from.center.y - col.top) * density) }
+        compose.mainClock.advanceTimeBy(900)
+        // Rest the finger inside the bottom zone (10dp from the edge) and count frames until My curves shows.
+        compose.onNodeWithTag("graph-library-column").performTouchInput { moveTo(Offset(x, (col.height - 10f) * density)) }
+        var frames = 0
+        while (!visible("graph-lib-cap|mine") && frames < 600) { compose.mainClock.advanceTimeBy(16); frames++ }
+        val grid = compose.onNodeWithTag("graph-library-grid")
+        android.util.Log.d("GraphG21", "auto-scroll to My curves: $frames frames (${frames * 16} ms) at 360x268")
+        assertTrue("reached My curves in $frames frames", visible("graph-lib-cap|mine"))
+        assertTrue("faster than G2 (about 3x): $frames frames", frames < 200)
+        assertEquals(writes, store.writes)
+        val mine = bounds("graph-lib-cap|mine")
+        compose.onNodeWithTag("graph-library-column").performTouchInput { moveTo(Offset(x, mine.bottom - col.top + 20f) * density); up() }
+        compose.mainClock.advanceTimeBy(300); compose.mainClock.autoAdvance = true; compose.waitForIdle()
+        grid.assertExists()
+        assertFalse("unpinned: ${store.state.value.pinned}", p[0] in store.state.value.pinned)
+        assertEquals(writes + 1, store.writes); assertEquals(1_234_567L, vm.state.playheadUs)
+    }
+
+    /** GRAPH G2.1 §8: the pinned rail reorders with the same lift and slide-aside; one write. */
+    @Test fun railReorderLiftsFollowsAndWritesOnce() {
+        start()
+        val p = store.state.value.pinned; val writes = store.writes
+        val rail = bounds("graph-pinned-rail"); val a = bounds("graph-pinned-${p[0]}"); val d = bounds("graph-pinned-${p[1]}")
+        // Outside both auto-scroll zones (the rail would scroll under the finger and the slot would run on).
+        android.util.Log.d("GraphG21", "rail ${rail.height}dp tall; target ${d.center.y - rail.top}dp from the top")
+        compose.mainClock.autoAdvance = false
+        val s0 = Offset(a.center.x - rail.left, a.center.y - rail.top)
+        compose.onNodeWithTag("graph-pinned-rail").performTouchInput { down(s0 * density) }
+        compose.mainClock.advanceTimeBy(900)
+        var y = s0.y
+        val end = d.center.y - rail.top
+        while (y < end) { y = minOf(end, y + 6f); val at = Offset(s0.x, y); compose.onNodeWithTag("graph-pinned-rail").performTouchInput { moveTo(at * density) }; compose.mainClock.advanceTimeBy(16) }
+        compose.onNodeWithTag("graph-drag-lifted", useUnmergedTree = true).assertExists()
+        compose.mainClock.advanceTimeBy(300)
+        assertEquals(writes, store.writes)
+        compose.onNodeWithTag("graph-pinned-rail").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(300); compose.mainClock.autoAdvance = true; compose.waitForIdle()
+        assertEquals(writes + 1, store.writes)
+        assertEquals("moved to slot 2: ${store.state.value.pinned}", 1, store.state.value.pinned.indexOf(p[0]))
+        assertEquals(1_234_567L, vm.state.playheadUs)
     }
 
     /**
@@ -331,9 +497,7 @@ class GraphLibraryTest {
         compose.onNodeWithTag("graph-pinned-rail").performScrollToNode(hasTestTag("graph-pinned-user:m"))
         compose.onNodeWithTag("graph-pinned-user:m").performTouchInput { longClick() }; compose.waitForIdle()
         click("graph-curve-xy")
-        compose.onNodeWithContentDescription("y2, exact value in ").performClick()
-        compose.onNodeWithContentDescription("y2, exact value in ").performTextReplacement("0.5")
-        compose.onNodeWithContentDescription("y2, exact value in ").performImeAction(); compose.waitForIdle()
+        field("y2").performClick(); field("y2").performTextReplacement("0.5"); field("y2").performImeAction(); compose.waitForIdle()
         assertEquals(.5f, store.state.value.user.first { it.id == "user:m" }.curve.d, 1e-4f)
     }
 }

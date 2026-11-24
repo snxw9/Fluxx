@@ -274,7 +274,7 @@ internal fun graphTypeTile(curve: EasingCurve): EaseChoice? = EaseChoice.of(curv
  * the Value | Speed | Ease mode icons (Value and Speed visible, disabled, inert) and the two-line segment label.
  */
 @Composable internal fun GraphPageHeader(layer: CompositionLayer, target: GraphTarget, playheadUs: Long, frameRate: FrameRate, onBack: () -> Unit,
-    session: GraphSession = remember { GraphSession() }) {
+    session: GraphSession = remember { GraphSession() }, compositionWidth: Int = 1080, compositionHeight: Int = 1920) {
     val local = GraphModel.local(layer, target, playheadUs, frameRate)
     val segment = GraphSelection.segment(layer, target, session.selection, playheadUs, local)
     val valueAvailable = GraphValues.available(layer, target)
@@ -292,7 +292,8 @@ internal fun graphTypeTile(curve: EasingCurve): EaseChoice? = EaseChoice.of(curv
         }
         Spacer(Modifier.weight(1f))
         if (segment != null) {
-            val values = GraphModel.values(layer, target, segment)
+            // GRAPH G2.1 §5: the page's own units and formatting.
+            val values = GraphValues.labels(layer, target, segment, compositionWidth, compositionHeight)
             val context = androidx.compose.ui.platform.LocalContext.current
             val libraryState by remember(context) { CurveLibraryStore.get(context) }.state.collectAsState()
             val curveName = CurveLibrary.nameFor(libraryState, segment.curve)
@@ -328,7 +329,7 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
 @Composable internal fun GraphPage(layer: CompositionLayer, target: GraphTarget, playheadUs: Long, frameRate: FrameRate,
     onAction: (EditorAction) -> Unit, onBegin: () -> Unit, onPreview: (EditorAction) -> Unit, onCommit: () -> Unit, onCancel: () -> Unit,
     onClose: () -> Unit, modifier: Modifier = Modifier, session: GraphSession = remember { GraphSession() },
-    compositionWidth: Int = 1080, compositionHeight: Int = 1920) {
+    compositionWidth: Int = 1080, compositionHeight: Int = 1920, startTimecodeUs: Long = 0L) {
     val close by rememberUpdatedState(onClose)
     BackHandler { close() }
     val local = GraphModel.local(layer, target, playheadUs, frameRate)
@@ -342,7 +343,6 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
     var draft by remember(target, keyTime) { mutableStateOf<EasingCurve?>(null) }
     var ghost by remember(target, keyTime) { mutableStateOf<EasingCurve?>(null) }
     var selectedHandle by remember(target, keyTime) { mutableStateOf<Int?>(null) }
-    var snap by rememberSaveable { mutableStateOf(false) }
     var mirror by rememberSaveable { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
     val curve = draft ?: segment.curve
@@ -371,13 +371,8 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
     fun preview(c: EasingCurve) { if (dragging) { draft = c; latestPreview(GraphModel.action(latestLayerId, latestTarget, listOf(latestKey), c)) } }
     fun commit() { if (dragging) { dragging = false; latestCommit(); draft = null } }
     fun cancelDrag() { if (dragging) { dragging = false; latestCancel(); draft = null } }
-    // GRAPH G2: key drags (Value view) use the same begin / preview / commit / cancel; the selection follows the key.
+    // GRAPH G2.1 §3: keys are not draggable; a tap selects, a double tap seeks, the values bar types time and value.
     val latestPlayhead by rememberUpdatedState(playheadUs)
-    var keyDragFrom by remember { mutableStateOf<KeySelection?>(null) }
-    fun keyBegin() { if (!dragging) { dragging = true; keyDragFrom = session.selection; latestBegin() } }
-    fun keyPreview(action: EditorAction, time: Long) { if (dragging) { latestPreview(action); session.selection = KeySelection(time, latestPlayhead) } }
-    fun keyCommit() { if (dragging) { dragging = false; latestCommit() } }
-    fun keyCancel() { if (dragging) { dragging = false; latestCancel(); session.selection = keyDragFrom } }
     fun selectKey(time: Long?) { focus.clearFocus(); session.selection = time?.let { KeySelection(it, latestPlayhead) } }
     // Double tap on a key: the one graph gesture that moves the playhead (Seek, as Prev/Next; frame-snapped).
     fun seekKey(time: Long) { focus.clearFocus(); latestAction(EditorAction.Seek(Math.addExact(layer.resolvedKeyframeAnchorUs, time), snap = true)) }
@@ -386,6 +381,8 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
     val context = androidx.compose.ui.platform.LocalContext.current
     val libraryStore = remember(context) { CurveLibraryStore.get(context) }
     val library by libraryStore.state.collectAsState()
+    // GRAPH G2.1 §9: Snap is on by default and persisted app-level (like "Show playhead dot"); Mirror is per page.
+    val snap = library.graphSnap
     val libraryUi = remember { GraphLibraryUi() }
     var libraryOpen by remember { mutableStateOf(false) }
     BackHandler(enabled = libraryOpen) { libraryOpen = false }
@@ -403,7 +400,7 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
                 onToggleKey = { GraphModel.toggleKey(layer, target, playheadUs, frameRate)?.let(onAction) },
                 onGraph = { close() },
                 onInvert = { EaseMath.invert(stored)?.let { edit(it) } },
-                onSnap = { snap = !snap }, onMirror = { mirror = !mirror }, onApplyAll = { edit(stored, all = true) },
+                onSnap = { libraryStore.update { it.copy(graphSnap = !it.graphSnap) } }, onMirror = { mirror = !mirror }, onApplyAll = { edit(stored, all = true) },
                 onCopy = { CubicBezierText.format(stored)?.let { text ->
                     scope.launch { runCatching { clipboard.setClipEntry(ClipEntry(android.content.ClipData.newPlainText("cubic-bezier", text))) } } } },
                 onPaste = { scope.launch {
@@ -425,16 +422,20 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
                             val channel = session.channel.coerceIn(0, (axes.size - 1).coerceAtLeast(0))
                             val keyTimes = GraphModel.keyTimes(layer, target)
                             val picked = session.selection?.takeIf { GraphSelection.valid(it, keyTimes, playheadUs) }?.let { keyTimes.indexOf(it.keyTimeUs) }
-                            val scene = remember(layer, target, frameRate, axes, channel, segment, picked) {
-                                ValueScene(layer, target, frameRate, axes, channel, segment.copy(curve = curve), picked) }
+                            val scene = remember(layer, target, frameRate, axes, channel, segment, picked, startTimecodeUs) {
+                                ValueScene(layer, target, frameRate, axes, channel, segment.copy(curve = curve), picked, startTimecodeUs) }
                             ValueCanvas(scene, session, local, library.showPlayheadDot, snap, mirror,
                                 onSelectKey = ::selectKey, onSeekKey = ::seekKey,
                                 onHandleBegin = ::begin, onHandleDrag = ::preview, onHandleEnd = ::commit, onHandleCancel = ::cancelDrag,
-                                onKeyBegin = ::keyBegin, onKeyDrag = ::keyPreview, onKeyEnd = ::keyCommit, onKeyCancel = ::keyCancel,
                                 modifier = Modifier.fillMaxWidth().height(m.padHeight.dp).testTag("graph-value-canvas"))
                             Box(Modifier.fillMaxWidth().height(GraphLayout.HAIRLINE.dp).background(Border))
-                            ValueValuesBar(scene, picked, m.bar, onChannel = { session.channel = it }) { action, time ->
-                                focus.clearFocus(); latestAction(action); session.selection = KeySelection(time, latestPlayhead) }
+                            // GRAPH G2.1 §6: the live value at the playhead (as the page shows it) when no key is selected.
+                            val live = remember(layer, target, playheadUs, frameRate) { GraphValues.live(layer, target, playheadUs, frameRate) }
+                            ValueValuesBar(scene, picked, m.bar, live, onChannel = { session.channel = it },
+                                onCommit = { action, time ->
+                                    focus.clearFocus(); latestAction(action)
+                                    if (time != null) session.selection = KeySelection(time, latestPlayhead) },
+                                onTypedAtPlayhead = { x, y -> GraphValues.atPlayheadAction(layer, target, latestPlayhead, frameRate, x, y) })
                         } else {
                             EaseCanvas(curve, ghost, GraphModel.progress(segment, local), selectedHandle, snap, mirror, library.showPlayheadDot,
                                 onSelect = { selectedHandle = it }, onBegin = ::begin, onDrag = ::preview, onEnd = ::commit, onCancel = ::cancelDrag,
@@ -518,7 +519,8 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
  */
 @Composable private fun EaseValuesBar(curve: EasingCurve, height: Float, onTyped: (EasingCurve) -> Unit) {
     val rows = EaseLimits.rows(curve)
-    Row(Modifier.fillMaxWidth().height(height.dp).testTag("graph-values-bar")) {
+    // GRAPH G2.1 §4: an opaque bar (the container's fill), so nothing draws through it.
+    Row(Modifier.fillMaxWidth().height(height.dp).background(SurfaceHigh).testTag("graph-values-bar")) {
         if (rows.isEmpty()) {
             Box(Modifier.fillMaxSize().semantics { contentDescription = "Hold: no parameters"; disabled() }.testTag("graph-value-hold"), contentAlignment = Alignment.Center) {
                 Text("Hold", color = TextDisabled, style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace))
@@ -537,7 +539,7 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
 @Composable internal fun EaseValueTile(limit: PropertyLimit, value: Float, modifier: Modifier, onCommit: (String) -> Unit) {
     var editing by remember { mutableStateOf(false) }
     val text = EaseLimits.format(limit, value)
-    Box(modifier.background(if (editing) Surface else Color.Transparent)
+    Box(modifier.background(if (editing) Surface else SurfaceHigh)
         .clickable(role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Type ${limit.name}") { editing = true }
         .semantics(mergeDescendants = true) { contentDescription = "${limit.name} $text" }) {
         Text(limit.name, Modifier.align(Alignment.TopStart).padding(start = 4.dp, top = 2.dp), color = TextSecondary, fontSize = 8.sp, lineHeight = 9.sp, maxLines = 1)

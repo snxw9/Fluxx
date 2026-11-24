@@ -145,13 +145,26 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.
 
-### Graph editor (in progress: G1, G1.1, G2L and G2 in source)
+### Graph editor (in progress: G1, G1.1, G2L, G2 and G2.1 in source)
 
 The graph editor (value and speed curves for keyframes, reached from the rail's Graph icon) is the current big item. It is planned in these passes:
 - [x] **G1: curve backend + Ease view** — schema v13 easing (Hold, Linear, Easy Ease, Custom bezier with overshoot, Bounce, Elastic), `SetKeyEasing`, overshoot-safe consumers, and the Graph page's Ease view with presets, handles, numeric entry and `cubic-bezier()` clipboard. Implemented in source on `graph-g1`; JVM 518/518 and the targeted A16 layout/render tests pass; phone acceptance pending ([record](../checkpoints/GRAPH_G1.md)).
 - [x] **G1.1: Graph page layout rework** — shared header row, Graph-only left rail with a Tools popover, touchpad + values bar as one item, Bounce/Elastic XY pad, right rail of types and presets; loupe, tile grid, numeric popover and preset strip removed. The reported playhead jump was a stale Graph drag callback that re-sent the playhead from when the page opened (after Prev/Next); fixed at the call sites and guarded by an A16 test that fails without the fix. JVM 524/524, A16 Graph and layout suites pass; phone acceptance pending ([record](../checkpoints/GRAPH_G1_1.md)).
 - [x] **G2L: Ease view layout rework + curve library** — type strip inside the centre box, a pinned rail (up to 15, drag to pin/reorder/replace/unpin), a library that morphs over the strip + rail without resizing the touchpad, user curves (save, rename, delete, 60 max, app-level store), `.fluxxcurves` import/export via SAF, and a "Show playhead dot" toggle. The user-preset part of the old G4 moved here. No schema change, no new action. JVM 531/531; A16 Graph, layout and render suites pass; phone acceptance pending ([record](../checkpoints/GRAPH_G2L.md)).
 - [x] **G2: Value graph** — the property's value over time from the real evaluator; key selection (tap) and seek (double tap); key dragging in time and value with the existing `MoveKeyframe` / `SetKeyframe(2D)` / animator Key MOVE+SET actions (one undo, frame snap, neighbour clamp); the selected segment's handles on the curve; pan, axis-aware pinch zoom and fit; Time / Value / X|Y values bar. Colour has no Value graph. Plus G2L carry-over: 2-column library grid without Types, the icon fade, an editable xy popover, and the typed-entry self-cancel fix (A4). No schema change, no new action. JVM 542/542; A16 Graph, layout and render suites pass; phone acceptance pending ([record](../checkpoints/GRAPH_G2.md)).
+- [x] **G2.1: acceptance fixes**:
+  - a shared hex parser (3, 6 and 8 digits);
+  - Value graph keys are not draggable;
+  - nothing draws through the values bar;
+  - the Graph uses the inspector pages' units (shared `PropertyDisplay`);
+  - a live Value tile and an inert Time tile;
+  - the time audit, with Graph times now in the transport's timecode;
+  - a compact independent xy popover;
+  - library and rail drags lift, follow and reflow, with 3.75× auto-scroll;
+  - Snap on by default and persisted;
+  - magnetic Transform detents (Rotation 5°, Opacity and Scale 25%).
+
+  No schema change, no new action. A16 suites pass, with two flaky tests reported; phone acceptance pending ([record](../checkpoints/GRAPH_G2_1.md)).
 - [ ] **G3: Speed graph** and "smooth through key". Next.
 - [ ] **G4: convert Bounce/Elastic to keys**, extra curve libraries, share-sheet export of curves. Later: separate X/Y easing and dimensions (a further schema bump) and multi-select.
 
@@ -167,6 +180,7 @@ Still parked after the text phase. These are user ideas recorded for planning; n
 
 ### Parked / follow-ups
 
+- **Parked from GRAPH G2.1:** a live Time tile (after the time audit questions: frame snapping of scrubs, rounding, drop-frame) and Position detents (needs layer geometry).
 - **Interface size setting** (from GRAPH G2L): an app-level size for inspector tiles and thumbnails; several Graph widths (strip, rail, library) now follow fixed tile sizes.
 - **Landscape editor layout.** Rotation now keeps the project open, but the landscape layout is cramped and the preview distorts.
 - **T5 right-to-left text.** Stopped; needs the cross-style shaping ownership decision.

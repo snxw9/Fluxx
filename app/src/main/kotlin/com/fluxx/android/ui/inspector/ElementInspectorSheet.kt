@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.drawText
@@ -131,6 +132,8 @@ fun ElementInspectorSheet(
     onTextScalarPreview: (AnimPropertyType, Float) -> Unit = { _, _ -> },
     onTextPayloadPreview: (TextProperties)->Unit = {},
     textFrameRate: FrameRate=FrameRate(),
+    /** GRAPH G2.1 §6a: the composition start timecode, so Graph times read like the transport. */
+    compositionStartTimecodeUs: Long = 0L,
     onTextBeginDraft: (Boolean,(CompositionLayer)->Unit)->Unit={_,ready->ready(layer)},
     textFinishing: Boolean=false,
     textStrokeClamp: String?=null,
@@ -208,7 +211,8 @@ fun ElementInspectorSheet(
                     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
                         // Section pages: ONE header row (← | page tabs), exactly like Edit Text.
                         // GRAPH G1.1: the Graph page's header sits in the same full-width header row as every section page.
-                        if (!textTyping && section == InspectorSection.GRAPH) graphTarget?.let { GraphPageHeader(layer, it, playheadUs, textFrameRate, onBack = graphHost.close, session = graphHost.session) }
+                        if (!textTyping && section == InspectorSection.GRAPH) graphTarget?.let { GraphPageHeader(layer, it, playheadUs, textFrameRate, onBack = graphHost.close, session = graphHost.session,
+                            compositionWidth = compositionWidth, compositionHeight = compositionHeight) }
                         if (!textTyping && section != null && !textSection && section != InspectorSection.GRAPH) SectionHeader(sections, section!!, layer.type,
                             onBack = { focusManager.clearFocus(); section = null },
                             onSelect = { focusManager.clearFocus(); section = it })
@@ -291,7 +295,7 @@ fun ElementInspectorSheet(
                                 InspectorSection.GRAPH -> graphTarget?.let { target ->
                                     GraphPage(layer, target, playheadUs, textFrameRate, onAction, onTransformBegin, onGesturePreview,
                                         onTransformCommit, onTransformCancel, onClose = graphHost.close, session = graphHost.session,
-                                        compositionWidth = compositionWidth, compositionHeight = compositionHeight)
+                                        compositionWidth = compositionWidth, compositionHeight = compositionHeight, startTimecodeUs = compositionStartTimecodeUs)
                                 }
                                 else -> Unit // Disabled categories cannot be opened.
                             }
@@ -461,21 +465,29 @@ internal fun PositionTrackpad(
 internal fun RotationDialController(
     rotationDegrees: Float,
     onBegin: () -> Unit, onPreview: (Float) -> Unit,
-    onCommit: () -> Unit, onCancel: () -> Unit, onEdit: (Float) -> Unit, valueHeight: Dp = SectionLayout.VALUE_BOX.dp
+    onCommit: () -> Unit, onCancel: () -> Unit, onEdit: (Float) -> Unit, valueHeight: Dp = SectionLayout.VALUE_BOX.dp,
+    /** GRAPH G2.1 §9: magnetic 5° detents while dragging (Transform); typed values are never snapped. */
+    magnetic: Boolean = false
 ) {
     var previousAngle by remember { mutableFloatStateOf(0f) }
     var accumulated by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+    val view = LocalView.current
+    var magnet by remember { mutableStateOf<Magnet?>(null) }
     fun angle(point: Offset, bounds: Size) = Math.toDegrees(atan2(
         (point.y - bounds.height / 2).toDouble(), (point.x - bounds.width / 2).toDouble())).toFloat()
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize().inspectorDrag(
-            onStart = { point, bounds -> previousAngle = angle(point, bounds); accumulated = rotationDegrees; onBegin() },
+            onStart = { point, bounds -> previousAngle = angle(point, bounds); accumulated = rotationDegrees
+                // The handle runs on the circle drawn below (radius = half the dial minus 12dp).
+                magnet = if (magnetic) with(density) { TransformDetents.rotation(bounds.minDimension / 2f - 12.dp.toPx(), TransformDetents.ZONE_DP.dp.toPx()) } else null
+                onBegin() },
             onMove = { point, bounds ->
                 val next = angle(point, bounds)
                 val delta = ((next - previousAngle + 540f) % 360f) - 180f
                 accumulated += delta
                 previousAngle = next
-                onPreview(accumulated)
+                onPreview(magnet?.apply(accumulated) { InspectorHaptics.tick(view) } ?: accumulated)
             }, onCommit = onCommit, onCancel = onCancel)) {
             val radius = (size.minDimension / 2f - 12.dp.toPx()).coerceAtLeast(0f)
             drawCircle(Border, radius, center, style = Stroke(1.3.dp.toPx()))
@@ -489,7 +501,7 @@ internal fun RotationDialController(
             val handle = center + Offset(cos(radians).toFloat(), sin(radians).toFloat()) * radius
             drawCircle(Highlight, 6.dp.toPx(), handle)
         }
-        CompactValueBox("", formatRotation(rotationDegrees), "\u00b0", onEdit,
+        CompactValueBox("", PropertyDisplay.ROTATION.storedText(rotationDegrees), "\u00b0", onEdit,
             modifier = Modifier.fillMaxWidth(.7f), keyboardType = KeyboardType.Text,
             parse = ::parseRotation, height = valueHeight, large = true)
     }
@@ -502,7 +514,7 @@ internal fun formatRotation(degrees: Float): String {
     return "${turns}x${number(remainder.toFloat())}"
 }
 
-private fun parseRotation(input: String): Float? {
+internal fun parseRotation(input: String): Float? {
     val text = input.trim().removeSuffix("\u00b0").replace(',', '.')
     val parts = text.lowercase().split('x', '\u00d7')
     if (parts.size == 1) return ValueParsing.number(parts[0])?.toFloat()?.takeIf { it.isFinite() }
@@ -527,7 +539,7 @@ internal fun ScaleController(
     Column(Modifier.fillMaxWidth().testTag("scale-controller"), verticalArrangement = Arrangement.spacedBy(ScaleRulerMath.GAP_DP.dp)) {
         key(linked) {
             Box(Modifier.fillMaxWidth()) {
-                LogScaleRuler(if (linked) "Scale" else "Width", scaleX,
+                LogScaleRuler(if (linked) "Scale" else "Width", scaleX, magnetic = true,
                     onBegin = { initial = Offset(scaleX, scaleY); onBegin() },
                     onPreview = { value -> onPreview(value, if (linked) ScaleRulerMath.linkedY(initial.x, initial.y, value) else initial.y) },
                     onCommit = onCommit, onCancel = onCancel,
@@ -536,7 +548,7 @@ internal fun ScaleController(
                 Box(Modifier.align(Alignment.TopEnd)) { linkToggle() }
             }
             if (!linked) {
-                LogScaleRuler("Height", scaleY,
+                LogScaleRuler("Height", scaleY, magnetic = true,
                     onBegin = { initial = Offset(scaleX, scaleY); onBegin() },
                     onPreview = { onPreview(initial.x, it) },
                     onCommit = onCommit, onCancel = onCancel,
@@ -705,8 +717,6 @@ private fun OverhauledTransformSectionContent(
     val transform = currentTransform
     val refW = layer.referenceWidth.takeIf { it > 0 } ?: compositionWidth
     val refH = layer.referenceHeight.takeIf { it > 0 } ?: compositionHeight
-    val halfReferenceW = refW / 2f
-    val halfReferenceH = refH / 2f
     val context = LocalContext.current
     val heldSource = layer.text.source.evaluateDocument(playheadUs - layer.resolvedKeyframeAnchorUs)
     val ligatures=layer.text.effectiveLigatures(playheadUs-layer.resolvedKeyframeAnchorUs)
@@ -748,8 +758,10 @@ private fun OverhauledTransformSectionContent(
         }
         return EditorAction.SetAnchorPoint(layer.id, ax, ay, position)
     }
-    val pixelX = compositionWidth / 2f + transform.positionX * halfReferenceW
-    val pixelY = compositionHeight / 2f + transform.positionY * halfReferenceH
+    // GRAPH G2.1 §5: the shared stored → shown conversion (the Value graph uses the same helper).
+    val unitsX = PropertyDisplay.positionX(compositionWidth, refW); val unitsY = PropertyDisplay.positionY(compositionHeight, refH)
+    val pixelX = unitsX.toDisplay(transform.positionX)
+    val pixelY = unitsY.toDisplay(transform.positionY)
     var gestureBase by remember { mutableStateOf(transform) }
     val begin = { gestureBase = transform; onBeginGesture() }
 
@@ -839,20 +851,20 @@ private fun OverhauledTransformSectionContent(
                   } else CentredSectionGroup(SectionLayout.positionGroup(fontScale), "transform-group-position") {
                     val limitX = PropertyLimits.position(compositionWidth); val limitY = PropertyLimits.position(compositionHeight)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)) {
-                        CompactValueBox("X", number(pixelX), onCommitValue = {
-                            val newPosX = (limitX.typed(it) - compositionWidth / 2f) / halfReferenceW
+                        CompactValueBox("X", unitsX.text(pixelX), onCommitValue = {
+                            val newPosX = unitsX.toStored(limitX.typed(it))
                             onEdit(transform.copy(positionX = newPosX))
                         }, modifier = Modifier.weight(1f), height = valueBox, large = true)
-                        CompactValueBox("Y", number(pixelY), onCommitValue = {
-                            val newPosY = (limitY.typed(it) - compositionHeight / 2f) / halfReferenceH
+                        CompactValueBox("Y", unitsY.text(pixelY), onCommitValue = {
+                            val newPosY = unitsY.toStored(limitY.typed(it))
                             onEdit(transform.copy(positionY = newPosY))
                         }, modifier = Modifier.weight(1f), height = valueBox, large = true)
                     }
                     Spacer(Modifier.height(SectionLayout.GAP.dp))
                     // Planned: Z position requires a 3D layer model. The pad never clamps inside ±10× the composition.
                     Box(Modifier.size(SectionLayout.PAD.dp).testTag("position-pad")) { PositionTrackpad(pixelX / compositionWidth, pixelY / compositionHeight, begin, { x, y ->
-                        val newPosX = (limitX.hard(x * compositionWidth) - compositionWidth / 2f) / halfReferenceW
-                        val newPosY = (limitY.hard(y * compositionHeight) - compositionHeight / 2f) / halfReferenceH
+                        val newPosX = unitsX.toStored(limitX.hard(x * compositionWidth))
+                        val newPosY = unitsY.toStored(limitY.hard(y * compositionHeight))
                         onPreviewGesture(gestureBase.copy(positionX = newPosX, positionY = newPosY))
                     }, onCommitGesture, onCancelGesture) }
                   }
@@ -866,7 +878,7 @@ private fun OverhauledTransformSectionContent(
                         }, onCommitGesture, onCancelGesture,
                         {
                             onEdit(transform.copy(rotationDegrees = PropertyLimits.ROTATION.typed(it)))
-                        }, valueBox) }
+                        }, valueBox, magnetic = true) }
                 }
                 TransformSubMode.SCALE -> CentredSectionGroup(SectionLayout.scaleGroup(linked, fontScale), "transform-group-scale") {
                     // Typed values (±50000%) come from each ruler's readout; Flip H/V stays in the layer menu.
@@ -981,14 +993,14 @@ private fun CompactOpacitySectionContent(
                     SliderRowLabel("Opacity", row, badge)
                     Row(Modifier.fillMaxWidth().height(row.touch.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)) {
-                        SectionSlider(opacity, row, "Opacity",
+                        SectionSlider(opacity, row, "Opacity", detents = { track, zone -> TransformDetents.opacity(track, zone) },
                             onBegin = { if (!dragging) { onBeginGesture(); dragging = true } },
                             onChange = { onPreviewGesture(it) },
                             onFinish = { if (dragging) { dragging = false; onCommitGesture() } },
                             onCancel = { if (dragging) { dragging = false; onCancelGesture() } },
                             modifier = Modifier.weight(1f))
-                        CompactValueBox("", number(opacity * 100f), "%", {
-                            val newOp = PropertyLimits.OPACITY.typed(it) / 100f
+                        CompactValueBox("", PropertyDisplay.OPACITY.storedText(opacity), "%", {
+                            val newOp = PropertyDisplay.OPACITY.toStored(PropertyLimits.OPACITY.typed(it))
                             onEdit(newOp)
                         }, modifier = Modifier.width(row.valueWidth.dp).semantics { contentDescription = "Opacity percentage" },
                             height = row.valueHeight.dp, large = true)

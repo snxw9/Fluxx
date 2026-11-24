@@ -178,6 +178,10 @@ class GraphPageLayoutTest {
         start()
         openRotationGraph()
         click("graph-tools"); compose.onNodeWithTag("graph-tools-popover", useUnmergedTree = true).assertExists()
+        // GRAPH G2.1 §9: Snap is on by default (persisted app-level); a tap turns it off and back on.
+        compose.onNodeWithTag("graph-tool-snap").assert(selected)
+        click("graph-tool-snap"); compose.onNodeWithTag("graph-tool-snap").assert(!selected)
+        assertFalse(CurveLibraryStore.get(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext).state.value.graphSnap)
         click("graph-tool-snap"); compose.onNodeWithTag("graph-tool-snap").assert(selected)
         click("graph-tool-mirror"); compose.onNodeWithTag("graph-tool-mirror").assert(selected)
         click("graph-tool-apply-all")

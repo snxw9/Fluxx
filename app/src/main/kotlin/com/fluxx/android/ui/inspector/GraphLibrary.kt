@@ -29,6 +29,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.animation.core.VectorConverter
+import kotlin.math.roundToInt
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -99,14 +108,30 @@ internal class CurveDragState {
     /** Set by the long-pressed item; the container then owns the rest of the gesture. */
     internal var pointer: androidx.compose.ui.input.pointer.PointerId? = null
     internal var startY = 0f
-    internal var moved = false
+    /** State: crossing the slop recomposes the lists (draft order) and shows the lifted tile. */
+    var moved by mutableStateOf(false); internal set
     internal var onMenu: (() -> Unit)? = null
     internal var startX = 0f
-    fun start(id: String, x: Float, y: Float, pointer: androidx.compose.ui.input.pointer.PointerId, onMenu: (() -> Unit)?) {
+    /** GRAPH G2.1 §8: the lifted tile (root px): where the pointer grabbed it, and its size. */
+    var grab by mutableStateOf(Offset.Zero); private set
+    var tile by mutableStateOf(androidx.compose.ui.geometry.Size.Zero); private set
+    /** The live drop slot ([PinDrafts]) and, in the library, whether the pointer is over Pinned. Display only. */
+    var slot by mutableStateOf<Int?>(null)
+    var inside by mutableStateOf(false)
+    /** After a drop: the curve being animated into its cell from [landingFrom] (root px, tile top-left). */
+    var landing by mutableStateOf<String?>(null)
+    var landingFrom = Offset.Zero
+    /** Called on every move and every auto-scroll frame, to refresh [slot] from the current cell bounds. */
+    internal var onRefresh: (() -> Unit)? = null
+    fun start(id: String, x: Float, y: Float, pointer: androidx.compose.ui.input.pointer.PointerId, onMenu: (() -> Unit)?,
+        grab: Offset = Offset.Zero, tile: androidx.compose.ui.geometry.Size = androidx.compose.ui.geometry.Size.Zero) {
         this.id = id; pointerX = x; pointerY = y; startX = x; startY = y; moved = false; this.pointer = pointer; this.onMenu = onMenu
+        this.grab = grab; this.tile = tile; slot = null; inside = false; landing = null
     }
-    fun move(x: Float, y: Float) { pointerX = x; pointerY = y }
-    fun end() { id = null; pointer = null; onMenu = null }
+    fun move(x: Float, y: Float) { pointerX = x; pointerY = y; if (moved) onRefresh?.invoke() }
+    fun end() { id = null; pointer = null; onMenu = null; slot = null; inside = false }
+    /** The lifted tile's top-left (root px). */
+    val tileTopLeft get() = Offset(pointerX, pointerY) - grab
 }
 
 /**
@@ -126,7 +151,8 @@ private fun Modifier.curveGestures(key: String, dragState: CurveDragState, onTap
         }
         onHaptic()
         val b = dragState.bounds[key]
-        dragState.start(key.substringAfter('|'), (b?.left ?: 0f) + long.position.x, (b?.top ?: 0f) + long.position.y, long.id, onMenu)
+        dragState.start(key.substringAfter('|'), (b?.left ?: 0f) + long.position.x, (b?.top ?: 0f) + long.position.y, long.id, onMenu,
+            grab = long.position, tile = b?.size ?: androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat()))
         long.consume()
     }
 }
@@ -154,13 +180,15 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.dragLoop
             if (id == null || change == null) { if (event.changes.none { it.pressed }) break else continue }
             val x = dragState.listBounds.left + change.position.x
             val y = dragState.listBounds.top + change.position.y
-            if (kotlin.math.hypot(x - dragState.startX, y - dragState.startY) > slop) dragState.moved = true
+            if (!dragState.moved && kotlin.math.hypot(x - dragState.startX, y - dragState.startY) > slop) dragState.moved = true
             change.consume()
             dragState.move(x, y)
             if (!change.pressed) {
                 val curve = dragState.id; val moved = dragState.moved; val menu = dragState.onMenu
+                // The drop reads the live slot before the state ends; the lifted tile then lands in its cell.
+                if (curve != null && moved) { dragState.landingFrom = dragState.tileTopLeft; onDrop(curve, x, y); dragState.landing = curve }
                 dragState.end()
-                if (curve != null) { if (moved) onDrop(curve, x, y) else menu?.invoke() }
+                if (curve != null && !moved) menu?.invoke()
                 break
             }
         }
@@ -199,15 +227,45 @@ internal class GraphLibraryUi {
     val drag = remember { CurveDragState() }
     val list = rememberLazyListState()
     val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    // GRAPH G2.1 §8: the rail reorders with the same lift, follow and slide-aside as the library (display-only draft).
+    val draft = drag.id?.takeIf { drag.moved }?.let { PinDrafts.draft(state.pinned, it, drag.slot ?: state.pinned.indexOf(it).coerceAtLeast(0)) }
+    val shown = draft?.order?.mapNotNull { id -> CurveLibrary.entry(state, id) } ?: pinned
+    val latestShown by rememberUpdatedState(shown.map { "rail|${it.id}" })
+    drag.onRefresh = {
+        val keys = latestShown
+        // Settled positions of the laid-out cells (never mid-slide; the rail scrolls); slots are display indices.
+        val cells = settledList(list, drag.listBounds, keys)
+        if (cells.isNotEmpty()) {
+            val h = with(density) { DRAG_HYSTERESIS.dp.toPx() }
+            val cur = drag.slot ?: state.pinned.indexOf(drag.id)
+            val cx = cells[0].second.center.x
+            val next = PinDrafts.stable(cur, Offset(cx, drag.pointerY), cells.firstOrNull { it.first == cur }?.second, h) { at ->
+                PinDrafts.candidateIndexed(cells, keys.size, cx, at.y, gapPresent = true, full = false) }
+            if (next != null && next != drag.slot) {
+                if (drag.slot != null) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                // Keep the scroll by INDEX: a lazy list anchors to its first visible item's key, so moving that item in the
+                // draft would scroll the list after it and run the slot on under a still finger.
+                list.requestScrollToItem(list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset)
+                drag.slot = next
+            }
+        }
+    }
     AutoScroll(drag, list)
-    Box(modifier.onGloballyPositioned { drag.listBounds = it.boundsInRoot() }.dragContainer(drag) { id, _, y -> railDrop(store, pinned, drag, id, y) }) {
+    Box(modifier.onGloballyPositioned { drag.listBounds = it.boundsInRoot() }.dragContainer(drag) { id, _, _ ->
+        // One store write per drop: the live slot (already computed while dragging).
+        val slot = drag.slot ?: return@dragContainer
+        store.update { PinDrafts.commit(it, id, slot) }
+    }) {
         LazyColumn(Modifier.width(GraphLayout.RAIL.dp).fillMaxHeight().testTag("graph-pinned-rail"), state = list,
             verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(bottom = 48.dp)) {
-            items(pinned, key = { "rail|${it.id}" }) { e ->
+            items(shown, key = { "rail|${it.id}" }) { e ->
                 val key = "rail|${e.id}"
                 val selected = CurveLibrary.matches(e, curve)
-                Box(Modifier.size(GraphLayout.RAIL.dp).clip(RoundedCornerShape(10.dp)).background(if (selected) Surface else Color.Transparent)
-                    .graphicsLayer { alpha = if (drag.id == e.id) .4f else 1f }
+                val lifted = drag.id == e.id && drag.moved || drag.landing == e.id
+                Box(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = androidx.compose.animation.core.tween(DRAG_REFLOW_MS))
+                    .size(GraphLayout.RAIL.dp).clip(RoundedCornerShape(10.dp)).background(if (selected && !lifted) Surface else Color.Transparent)
+                    .graphicsLayer { alpha = if (lifted) 0f else 1f }
                     .onGloballyPositioned { drag.bounds[key] = it.boundsInRoot() }
                     .curveGestures(key, drag, onTap = { onApply(e.curve) }, onMenu = if (e.user) ({ ui.menuFor = e.id; ui.menuMode = 0 }) else null,
                         onHaptic = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) })
@@ -219,46 +277,98 @@ internal class GraphLibraryUi {
                 }
             }
         }
-        DropIndicator(drag, pinned.map { "rail|${it.id}" })
+        LiftedTile(drag, state, curve, rail = true)
     }
 }
 
-private fun railDrop(store: CurveLibraryStore, pinned: List<LibraryEntry>, drag: CurveDragState, id: String, y: Float) {
-    val keys = pinned.map { "rail|${it.id}" }
-    val target = dropIndex(drag, keys, y) ?: return
-    val from = pinned.indexOfFirst { it.id == id }
-    if (from < 0) return
-    store.update { CurveLibrary.movePinned(it, from, if (target > from) target - 1 else target) }
+/**
+ * GRAPH G2.1 §8: the SETTLED (target) rects, in root px, of the laid-out items among [keys] (display index → rect), from
+ * the lazy layout's own item offsets, which exclude placement (slide-aside) animation.
+ */
+private fun settledGrid(grid: LazyGridState, list: Rect, keys: List<String>): List<Pair<Int, Rect>> {
+    val info = grid.layoutInfo
+    val index = keys.withIndex().associate { it.value to it.index }
+    return info.visibleItemsInfo.mapNotNull { item ->
+        val i = index[item.key as? String] ?: return@mapNotNull null
+        val x = list.left + item.offset.x; val y = list.top + item.offset.y - info.viewportStartOffset
+        i to Rect(x, y, x + item.size.width, y + item.size.height)
+    }.sortedBy { it.first }
+}
+private fun settledList(lazy: LazyListState, list: Rect, keys: List<String>): List<Pair<Int, Rect>> {
+    val info = lazy.layoutInfo
+    val index = keys.withIndex().associate { it.value to it.index }
+    return info.visibleItemsInfo.mapNotNull { item ->
+        val i = index[item.key as? String] ?: return@mapNotNull null
+        val y = list.top + item.offset - info.viewportStartOffset
+        i to Rect(list.left, y, list.right, y + item.size)
+    }.sortedBy { it.first }
 }
 
-/** The gap index (0..keys.size) under [y] among the visible items [keys], or null when none is visible. */
-private fun dropIndex(drag: CurveDragState, keys: List<String>, y: Float): Int? {
-    val visible = keys.mapIndexedNotNull { i, k -> drag.bounds[k]?.let { i to it } }
-    if (visible.isEmpty()) return null
-    for ((i, r) in visible) if (y < r.center.y) return i
-    return visible.last().first + 1
+/** GRAPH G2.1 §8 timings and sizes. */
+internal const val DRAG_REFLOW_MS = 180
+internal const val DRAG_LAND_MS = 150
+internal const val DRAG_LIFT_SCALE = 1.08f
+internal const val DRAG_HYSTERESIS = 8f
+
+/**
+ * The lifted tile: drawn above the list in an overlay, following the pointer exactly (scale [DRAG_LIFT_SCALE], shadow,
+ * slight transparency; dimmed when the drop would unpin). After the drop it animates into its final cell ([DRAG_LAND_MS]).
+ */
+@Composable private fun BoxScope.LiftedTile(drag: CurveDragState, state: CurveLibraryState, curve: EasingCurve, rail: Boolean, unpinning: Boolean = false) {
+    val id = drag.id?.takeIf { drag.moved } ?: drag.landing ?: return
+    val e = CurveLibrary.entry(state, id) ?: return
+    val d = LocalDensity.current
+    val pos = remember(id) { androidx.compose.animation.core.Animatable(drag.tileTopLeft, Offset.VectorConverter) }
+    val landing = drag.landing == id && drag.id == null
+    if (landing) LaunchedEffect(id) {
+        pos.snapTo(drag.landingFrom)
+        // The cell's bounds after the committed write (one frame later); without a cell (unpinned) it just fades.
+        withFrameNanos { }
+        val key = drag.bounds.keys.firstOrNull { it.substringAfter('|') == id && (it.startsWith("pin|") || it.startsWith("rail|")) }
+        val target = key?.let { drag.bounds[it] }?.topLeft
+        if (target != null) pos.animateTo(target, androidx.compose.animation.core.tween(DRAG_LAND_MS))
+        else delay(DRAG_LAND_MS.toLong())
+        if (drag.landing == id) drag.landing = null
+    }
+    // While dragging the tile is drawn exactly at the pointer (no animation lag); landing animates [pos].
+    val local = (if (landing) pos.value else drag.tileTopLeft) - drag.listBounds.topLeft
+    val size = drag.tile
+    val shape = RoundedCornerShape(if (rail) 10.dp else 6.dp)
+    Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(local.x.roundToInt(), local.y.roundToInt()) }
+        .size(with(d) { size.width.toDp() }, with(d) { size.height.toDp() })
+        .graphicsLayer { scaleX = DRAG_LIFT_SCALE; scaleY = DRAG_LIFT_SCALE; alpha = if (unpinning && !landing) .5f else .92f
+            shadowElevation = 8.dp.toPx(); this.shape = shape; clip = true }
+        .background(SurfaceHigh).border(.5.dp, Border, shape).testTag("graph-drag-lifted")
+        .semantics { contentDescription = "Dragging ${e.name}" + if (unpinning) ", release to unpin" else "" },
+        contentAlignment = Alignment.Center) {
+        val selected = CurveLibrary.matches(e, curve)
+        if (rail) CurveThumbnail(e.curve, selected, Modifier.size(28.dp))
+        else Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CurveThumbnail(e.curve, selected, Modifier.fillMaxWidth().height(GraphLayout.GRID_THUMB_H.dp), insetDp = 3f)
+            Text(e.name, color = TextPrimary, fontSize = 7.sp, lineHeight = GraphLayout.GRID_NAME_LINE.sp, maxLines = 2,
+                overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+        }
+    }
 }
 
-
-/** A 2dp line at the drop position while a curve is dragged. */
-@Composable private fun BoxScope.DropIndicator(drag: CurveDragState, keys: List<String>) {
-    if (drag.id == null) return
-    val i = dropIndex(drag, keys, drag.pointerY) ?: return
-    val r = if (i < keys.size) drag.bounds[keys[i]]?.let { it.top - 1f } else drag.bounds[keys.last()]?.let { it.bottom + 1f }
-    r ?: return
-    val y = with(LocalDensity.current) { (r - drag.listBounds.top).toDp() }
-    Box(Modifier.align(Alignment.TopStart).offset(y = y).fillMaxWidth().height(2.dp).background(Highlight).testTag("graph-drop-indicator"))
-}
-
-/** Auto-scrolls [list] while a drag is near its top or bottom edge. */
+/**
+ * Auto-scrolls [list] while a drag is inside a [DragAutoScroll.EDGE_DP] zone at its top or bottom edge, with a speed that
+ * ramps up towards the edge ([DragAutoScroll.speed]); it keeps scrolling while the finger rests in the zone. Every frame
+ * also refreshes the drop slot, so the gap follows cells scrolling under a still finger.
+ */
 @Composable private fun AutoScroll(drag: CurveDragState, list: ScrollableState) {
-    val edge = with(LocalDensity.current) { 32.dp.toPx() }
+    val density = LocalDensity.current.density
     LaunchedEffect(drag.id != null) {
+        var last = 0L
         while (drag.id != null) {
+            val now = withFrameNanos { it }
+            val dt = if (last == 0L) 0f else ((now - last) / 1e9f).coerceAtMost(.05f)
+            last = now
+            if (!drag.moved) continue
             val b = drag.listBounds
-            val step = when { drag.pointerY < b.top + edge -> -12f; drag.pointerY > b.bottom - edge -> 12f; else -> 0f }
-            if (step != 0f) list.scrollBy(step)
-            delay(16)
+            val v = DragAutoScroll.velocity(drag.pointerY / density, b.top / density, b.bottom / density)
+            if (v != 0f && dt > 0f) list.scrollBy(v * dt * density)
+            drag.onRefresh?.invoke()
         }
     }
 }
@@ -283,26 +393,6 @@ private fun dropIndex(drag: CurveDragState, keys: List<String>, y: Float): Int? 
     }
 }
 
-/** The insertion gap (or, with [full], the slot) among the pinned cells for a pointer at ([x], [y]); null when none is visible. */
-private fun pinnedDrop(drag: CurveDragState, keys: List<String>, x: Float, y: Float, full: Boolean): Int? {
-    val visible = keys.mapIndexedNotNull { i, k -> drag.bounds[k]?.let { i to it } }
-    if (visible.isEmpty()) return if (keys.isEmpty()) 0 else null
-    val rects = visible.map { it.second }
-    return if (full) GridDrop.slot(rects, x, y)?.let { visible[it].first }
-    else GridDrop.index(rects, x, y)?.let { r -> if (r < visible.size) visible[r].first else visible.last().first + 1 }
-}
-
-/** A 2dp bar at the grid drop position while a curve is dragged over Pinned. */
-@Composable private fun BoxScope.GridDropIndicator(drag: CurveDragState, keys: List<String>, inPinned: Boolean) {
-    if (drag.id == null || !inPinned || keys.isEmpty()) return
-    val i = pinnedDrop(drag, keys, drag.pointerX, drag.pointerY, false) ?: return
-    val r = (if (i < keys.size) drag.bounds[keys[i]] else drag.bounds[keys.last()]) ?: return
-    val x = if (i < keys.size) r.left - 1f else r.right + 1f
-    val d = LocalDensity.current
-    Box(Modifier.align(Alignment.TopStart).offset(x = with(d) { (x - drag.listBounds.left).toDp() } - 1.dp, y = with(d) { (r.top - drag.listBounds.top).toDp() })
-        .size(2.dp, with(d) { r.height.toDp() }).background(Highlight).testTag("graph-drop-indicator"))
-}
-
 /**
  * The library (open). GRAPH G2 (A1): header (no title; import/export and save) over a 2-column grid of curve cells in
  * the Pinned / Presets / My curves sections (no Types: types live in the strip). Pinning is by drag only. The grid
@@ -316,8 +406,15 @@ private fun pinnedDrop(drag: CurveDragState, keys: List<String>, x: Float, y: Fl
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val fontScale = LocalDensity.current.fontScale
-    AutoScroll(drag, grid)
-    val pinnedKeys = sections.pinned.map { "pin|${it.id}" }
+    val density = LocalDensity.current
+    // GRAPH G2.1 §8: the display-only draft while dragging; the Pinned section shows its order and the lifted tile's gap.
+    val dragged = drag.id?.takeIf { drag.moved }
+    val full = dragged != null && dragged !in state.pinned && state.pinned.size >= CurveLibrary.MAX_PINNED
+    val draft = dragged?.let { PinDrafts.draft(state.pinned, it, if (drag.inside) drag.slot else null) }
+    // Full set: Pinned keeps its order; the cell in the slot is dimmed (it returns to the library on drop).
+    val shownPinned = (if (full) state.pinned else draft?.order ?: state.pinned).mapNotNull { CurveLibrary.entry(state, it) }
+    val evicted = draft?.evicted
+    val pinnedKeys = shownPinned.map { "pin|${it.id}" }
     /** Whether a pointer at [y] (root px) is over the Pinned section, from the captions and cells currently laid out. */
     fun inPinned(y: Float): Boolean {
         val cap = drag.bounds["cap|pinned"]
@@ -335,25 +432,48 @@ private fun pinnedDrop(drag: CurveDragState, keys: List<String>, x: Float, y: Fl
         if (pinnedKeys.isNotEmpty() && last == null) return true
         return y <= (last?.bottom ?: cap.bottom) + 12f
     }
-    fun drop(id: String, x: Float, y: Float) {
-        val wasPinned = id in state.pinned
-        if (inPinned(y)) {
-            val full = state.pinned.size >= CurveLibrary.MAX_PINNED && !wasPinned
-            val index = pinnedDrop(drag, pinnedKeys, x, y, full) ?: (if (full) return else 0)
-            store.update { CurveLibrary.pinAt(it, id, if (wasPinned) { val from = it.pinned.indexOf(id); if (index > from) index - 1 else index } else index) }
-        } else if (wasPinned) store.update { CurveLibrary.unpin(it, id) }
+    val latest by rememberUpdatedState(Triple(pinnedKeys, full, !full && draft?.gap != null))
+    drag.onRefresh = {
+        val (keys, isFull, gapPresent) = latest
+        val inside = inPinned(drag.pointerY)
+        drag.inside = inside
+        // Settled positions of the laid-out cells (a long Pinned section runs past the viewport); slots are display indices.
+        // Never the animated bounds: a cell sliding aside is still under the finger, which would flip the slot back.
+        val cells = settledGrid(grid, drag.listBounds, keys)
+        if (inside) {
+            val h = with(density) { DRAG_HYSTERESIS.dp.toPx() }
+            val cur = drag.slot
+            val next = PinDrafts.stable(cur, Offset(drag.pointerX, drag.pointerY), cur?.let { c -> cells.firstOrNull { it.first == c }?.second }, h) { at ->
+                PinDrafts.candidateIndexed(cells, keys.size, at.x, at.y, gapPresent, isFull) }
+            if (next != null && next != cur) {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                grid.requestScrollToItem(grid.firstVisibleItemIndex, grid.firstVisibleItemScrollOffset) // see the rail
+                drag.slot = next
+            }
+        } else if (!inside && drag.slot != null) drag.slot = null
+    }
+    AutoScroll(drag, grid)
+    fun drop(id: String, @Suppress("UNUSED_PARAMETER") x: Float, @Suppress("UNUSED_PARAMETER") y: Float) {
+        // One store write: the live slot; outside Pinned a pinned curve unpins (nothing changes for an unpinned one).
+        val slot = if (drag.inside) drag.slot ?: return else null
+        store.update { PinDrafts.commit(it, id, slot) }
     }
     val nameHeight = 2 * GraphLayout.GRID_NAME_LINE * fontScale.coerceAtLeast(1f)
-    @Composable fun Cell(e: LibraryEntry, key: String) {
+    @Composable fun Cell(e: LibraryEntry, key: String, placement: Modifier) {
         val selected = CurveLibrary.matches(e, curve)
         // A cell scrolled out of the grid drops its bounds (stale bounds would misplace drops).
         DisposableEffect(key) { onDispose { drag.bounds.remove(key) } }
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (selected) Surface else Color.Transparent)
-            .graphicsLayer { alpha = if (drag.id == e.id) .4f else 1f }
+        // The lifted curve's cells are empty gaps (the overlay tile follows the finger); the evicted one is dimmed.
+        val gap = (dragged == e.id || drag.landing == e.id)
+        val dim = evicted == e.id && key.startsWith("pin|")
+        Column(placement.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (selected && !gap) Surface else Color.Transparent)
+            .then(if (dim) Modifier.border(1.dp, TextDisabled, RoundedCornerShape(6.dp)) else Modifier)
+            .graphicsLayer { alpha = if (gap) 0f else if (dim) .35f else 1f }
             .onGloballyPositioned { drag.bounds[key] = it.boundsInRoot() }
             .curveGestures(key, drag, onTap = { onApply(e.curve) }, onMenu = if (e.user) ({ ui.menuFor = e.id; ui.menuMode = 0 }) else null,
                 onHaptic = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) })
-            .semantics(mergeDescendants = true) { contentDescription = e.name + if (e.user) ", user curve" else ""; if (selected) stateDescription = "Selected" }
+            .semantics(mergeDescendants = true) { contentDescription = e.name + if (e.user) ", user curve" else ""
+                if (selected) stateDescription = "Selected"; if (dim) stateDescription = "Returns to the library" }
             .testTag("graph-lib-${e.id}").padding(top = 1.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.fillMaxWidth().height(GraphLayout.GRID_THUMB_H.dp)) {
                 CurveThumbnail(e.curve, selected, Modifier.fillMaxSize(), insetDp = 3f)
@@ -379,13 +499,14 @@ private fun pinnedDrop(drag: CurveDragState, keys: List<String>, x: Float, y: Fl
             contentPadding = PaddingValues(top = GraphLayout.LIBRARY_HEADER.dp, bottom = GraphLayout.scrimSize().dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             item(key = "cap|pinned", span = span) { Caption("Pinned", "cap|pinned") }
-            items(sections.pinned, key = { "pin|${it.id}" }) { Cell(it, "pin|${it.id}") }
+            val reflow = androidx.compose.animation.core.tween<androidx.compose.ui.unit.IntOffset>(DRAG_REFLOW_MS)
+            items(shownPinned, key = { "pin|${it.id}" }) { Cell(it, "pin|${it.id}", Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = reflow)) }
             item(key = "cap|presets", span = span) { Caption("Presets", "cap|presets") }
-            items(sections.presets, key = { "preset|${it.id}" }) { Cell(it, "preset|${it.id}") }
+            items(sections.presets, key = { "preset|${it.id}" }) { Cell(it, "preset|${it.id}", Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = reflow)) }
             item(key = "cap|mine", span = span) { Caption("My curves", "cap|mine") }
-            items(sections.mine, key = { "mine|${it.id}" }) { Cell(it, "mine|${it.id}") }
+            items(sections.mine, key = { "mine|${it.id}" }) { Cell(it, "mine|${it.id}", Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = reflow)) }
         }
-        GridDropIndicator(drag, pinnedKeys, drag.id != null && inPinned(drag.pointerY))
+        LiftedTile(drag, state, curve, rail = false, unpinning = draft?.unpinning == true)
         LibraryHeader(state, curve, store) { _ ->
             // The new curve scrolls into view (the top of My curves).
             scope.launch {
@@ -503,21 +624,24 @@ private fun pinnedDrop(drag: CurveDragState, keys: List<String>, x: Float, y: Fl
     AnchoredPopover(true, { ui.menuFor = null; ui.menuMode = 0 }, "graph-curve-menu", modal = false) {
         when (ui.menuMode) {
             1 -> {
-                // GRAPH G2 (A3): typed fields (the values bar's clamps), commit on IME Done or focus loss; invalid input is
-                // discarded and empty keeps the old value. Edits the STORED curve only (never the graph). Each commit
-                // re-keys its field so it can be edited again; the curve is read back from the store, never captured.
+                // GRAPH G2.1 §7: a compact grid of independent fields (2 x 2 for bezier, 1 x 2 for Bounce / Elastic), each a
+                // values-bar tile. No auto-focus and no re-keying (the G2 cause of the reappearing keyboard): a field opens
+                // the keyboard only when tapped; Done, a tap elsewhere in the popover or closing it commits THAT field only
+                // ([XyEdit.commit]: clamped, invalid discarded, empty keeps) and the keyboard closes. The curve is read back
+                // from the store at commit time, never captured. Edits the STORED curve only (never the graph).
                 val rows = EaseLimits.rows(e.curve)
-                val rounds = remember { mutableStateMapOf<Int, Int>() }
-                Row(Modifier.testTag("graph-curve-values"), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    rows.forEachIndexed { i, (limit, value, _) ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(limit.name, color = TextSecondary, fontSize = 8.sp, lineHeight = 9.sp, maxLines = 1)
-                            key(i, rounds[i] ?: 0) {
-                                InspectorValueField(EaseLimits.format(limit, value), limit.name, limit.unit, onCommit = { text ->
-                                    store.update { s -> s.user.firstOrNull { it.id == e.id }?.let { u -> EaseLimits.typed(u.curve, i, text)?.let { c -> CurveLibrary.edit(s, e.id, c) } } ?: s }
-                                    rounds[i] = (rounds[i] ?: 0) + 1
-                                }, onCancel = { rounds[i] = (rounds[i] ?: 0) + 1 },
-                                    modifier = Modifier.testTag("graph-curve-value-$i"), autoFocus = i == 0)
+                val typing = LocalPopoverTyping.current
+                DisposableEffect(typing) { typing?.let { it.intValue++ }; onDispose { typing?.let { it.intValue-- } } }
+                val focus = LocalFocusManager.current
+                Column(Modifier.testTag("graph-curve-values").pointerInput(Unit) { detectTapGestures { focus.clearFocus() } },
+                    verticalArrangement = Arrangement.spacedBy(XyEdit.GAP.dp)) {
+                    rows.withIndex().chunked(2).forEach { pair ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(XyEdit.GAP.dp)) {
+                            pair.forEach { (i, row) ->
+                                val (limit, value, _) = row
+                                XyValueField(limit.name, EaseLimits.format(limit, value), Modifier.testTag("graph-curve-value-$i")) { text ->
+                                    store.update { st -> st.user.firstOrNull { it.id == e.id }?.let { u -> XyEdit.commit(u.curve, i, text)?.let { c -> CurveLibrary.edit(st, e.id, c) } } ?: st }
+                                }
                             }
                         }
                     }
@@ -539,4 +663,71 @@ private fun readCapped(input: java.io.InputStream, limit: Int): ByteArray {
     val out = java.io.ByteArrayOutputStream(); val buf = ByteArray(8192); var total = 0
     while (total < limit) { val n = input.read(buf, 0, minOf(buf.size, limit - total)); if (n < 0) break; out.write(buf, 0, n); total += n }
     return out.toByteArray()
+}
+
+/** GRAPH G2.1 §7: the xy popover's per-field commit rule and tile size (pure, JVM tested). */
+internal object XyEdit {
+    const val TILE_W = 48f
+    const val TILE_H = 44f
+    const val GAP = 4f
+    /** One field: empty keeps the value (null), invalid text is discarded (null), otherwise the clamped curve (null when unchanged). */
+    fun commit(curve: EasingCurve, index: Int, text: String): EasingCurve? {
+        if (text.isBlank()) return null
+        return EaseLimits.typed(curve, index, text)?.takeIf { !EaseMath.same(it, curve) }
+    }
+}
+
+/**
+ * Knows when the keyboard THIS field raised has gone (Back hid it): armed by a rising IME or a settled one, never by a
+ * falling one (the A4 lesson: a previous field's keyboard still sliding down is not Back).
+ */
+internal class ImeArm {
+    private var armed = false
+    private var last = -1
+    fun reset() { armed = false; last = -1 }
+    /** Returns true when the IME fell to 0 after this field's keyboard was up. */
+    fun ime(bottom: Int): Boolean {
+        val gone = bottom <= 0 && armed
+        if (bottom <= 0) armed = false else if (last >= 0 && bottom > last) armed = true
+        last = bottom
+        return gone
+    }
+    fun settled(bottom: Int) { if (bottom > 0) armed = true }
+}
+
+/** One xy tile: corner label, centred value; tap to type. Commits once per focus session (Done / focus loss / dispose). */
+@Composable private fun XyValueField(label: String, display: String, modifier: Modifier, onCommit: (String) -> Unit) {
+    var field by remember { mutableStateOf(TextFieldValue(display)) }
+    var focused by remember { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
+    val commit by rememberUpdatedState(onCommit)
+    LaunchedEffect(display, focused) { if (!focused) field = TextFieldValue(display) }
+    val latestText by rememberUpdatedState(field.text)
+    val latestFocused by rememberUpdatedState(focused)
+    DisposableEffect(Unit) { onDispose { if (latestFocused) commit(latestText) } }
+    val hostIme = LocalHostImeBottom.current
+    val ime = if (hostIme >= 0) hostIme else WindowInsets.ime.getBottom(LocalDensity.current)
+    val arm = remember { ImeArm() }
+    LaunchedEffect(ime, focused) {
+        if (!focused) return@LaunchedEffect
+        if (arm.ime(ime)) { focus.clearFocus(); return@LaunchedEffect }
+        if (ime > 0) { kotlinx.coroutines.delay(150); arm.settled(ime) }
+    }
+    val shape = RoundedCornerShape(6.dp)
+    Box(modifier.size(XyEdit.TILE_W.dp, XyEdit.TILE_H.dp).clip(shape).background(if (focused) Surface else SurfaceHigh)
+        .border(if (focused) 1.dp else .5.dp, if (focused) TextPrimary else Border, shape)) {
+        Text(label, Modifier.align(Alignment.TopStart).padding(start = 4.dp, top = 2.dp), color = TextSecondary, fontSize = 8.sp, lineHeight = 9.sp, maxLines = 1)
+        BasicTextField(field, { field = it }, singleLine = true,
+            textStyle = MaterialTheme.typography.labelMedium.copy(color = TextPrimary, fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center),
+            cursorBrush = SolidColor(TextPrimary),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.DecimalSigned, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
+            modifier = Modifier.align(Alignment.Center).padding(top = 8.dp, start = 2.dp, end = 2.dp).fillMaxWidth()
+                .onFocusChanged {
+                    if (it.isFocused && !focused) { arm.reset(); field = TextFieldValue(field.text, TextRange(0, field.text.length)) }
+                    if (focused && !it.isFocused) commit(field.text)
+                    focused = it.isFocused
+                }
+                .semantics { contentDescription = "$label, exact value" })
+    }
 }

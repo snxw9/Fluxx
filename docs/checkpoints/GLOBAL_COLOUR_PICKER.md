@@ -1,5 +1,13 @@
 # Global colour picker and inspector grid
 
+> **GRAPH G2.1 (2026-11-24): hex entry formats.** One parser, `FluxxColor.parseHex` / `FluxxColor.parseHexEntry`, sits behind every typed colour entry: the shared picker's hex field (`ColourValues.hex`), which covers Edit Text Fill/Stroke, markers, the swatch editor, Edit Solid and Add content → Solid, plus the text popover's `TextColourEdit.hex`. Animator colours use the same picker. It accepts any case, an optional leading `#` and surrounding whitespace:
+> - **`RRGGBB`** sets the colour and **keeps the current alpha byte exactly** (opacity stays with the sliders).
+> - **`AARRGGBB`** sets colour and alpha (unchanged order).
+> - **`RGB`** shorthand: each digit is doubled, then it works like 6 digits.
+> - Anything else is invalid and is discarded without change: 4, 5 or 7 digits (so `0000` reverts), non-hex characters, `0x…`, `##…`, or empty.
+>
+> 6- and 8-digit values still apply live while you type. A 3-digit value applies when the field is left (Done, blur or Back), still as one undo, so typing `00FF00` never flashes `#0000FF` at the third keystroke. The hex shown in the field is unchanged (8 digits). Tests: `HexEntryTest` (JVM table of every accepted and rejected form), `InlineValueFieldTest.threeDigitHexAppliesOnLeaveAsOneUndo`, and A16 `ColourHexEntryTest` (`000000` on a 50% red gives black at 50%; `#fff`, `40FF0000`; `0000` reverts). Record: [GRAPH G2.1 §2](GRAPH_G2_1.md#2-hex-colour-entry).
+
 > **TEXT UI 8 (2026-11-18):** the FULL variant's controls row is exactly the SV square (no stretch), and the picker is centred vertically in leftover height. The marker popover uses COMPACT with `header = false`. See the Edit Text overhaul record in `TEXT.md`, section TEXT UI 8.
 
 > **TEXT UI 7 (2026-11-18):** the shared `FluxxColourPicker` family (COMPACT popover / FULL page) replaced the original picker. The palette repository, eyedropper and hex rules below are unchanged.

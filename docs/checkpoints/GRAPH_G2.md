@@ -2,6 +2,8 @@
 
 # GRAPH G2: Value graph + G2L carry-over fixes
 
+> **GRAPH G2.1 (2026-11-24):** after the user's A16 acceptance, keys are no longer draggable (tap, double tap and typed Time / Value only). The Value graph now uses the inspector pages' units, shows a live value at the playhead, and reads times like the transport. The xy popover is a compact grid of independent fields; library drags lift, follow and reflow; Snap is on by default; and Transform has magnetic detents. This record is kept as it was; see [GRAPH_G2_1.md](GRAPH_G2_1.md).
+
 Branch `graph-g2`, created from `graph-g2l` at `9c227aa` (`graph-g2l` is not merged into `master`). Not merged.
 
 Status:

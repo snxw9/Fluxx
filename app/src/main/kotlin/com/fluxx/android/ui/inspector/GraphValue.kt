@@ -23,11 +23,28 @@ internal data class ValueKey(val timeUs: Long, val x: Float, val y: Float, val e
     fun value(channel: Int) = if (channel == 0) x else y
 }
 
-/** One value channel: display = stored × [display]; [min]..[max] are the stored-value clamps (the inspector's hard limits). */
-internal data class ValueAxis(val name: String, val unit: String, val display: Float, val min: Float, val max: Float) {
-    fun toDisplay(v: Float) = v * display
-    fun toStored(d: Float) = d / display
+/**
+ * One value channel in its inspector page's units (GRAPH G2.1 §5: [units] is the page's own [PropertyUnits]);
+ * [min]..[max] are the stored-value clamps (the page's hard limits, in stored units).
+ */
+internal data class ValueAxis(val units: PropertyUnits, val min: Float = units.storedMin, val max: Float = units.storedMax) {
+    val name get() = units.name
+    val unit get() = units.unit
+    fun toDisplay(v: Float) = units.toDisplay(v)
+    fun toStored(d: Float) = units.toStored(d)
     fun clamp(stored: Float) = stored.coerceIn(min, max)
+    /** The page's text for a stored value (no unit). */
+    fun storedText(stored: Float) = units.storedText(stored)
+    /** The page's text for a shown value (no unit). */
+    fun text(display: Float) = units.text(display)
+    /** A typed shown value → stored, with the page's typed clamp (the page's `limit.typed`, then its conversion). */
+    fun typed(display: Float) = clamp(toStored(units.limit.typed(display)))
+    /** The finest step the page's formatter can show (tick labels finer than this fall back to more decimals). */
+    val resolution: Double get() = when (units.format) {
+        DisplayFormat.ONE_DECIMAL, DisplayFormat.TURNS -> .1
+        DisplayFormat.SCALE_READOUT -> .01
+        DisplayFormat.LIMIT -> .01
+    }
 }
 
 internal object GraphValues {
@@ -99,30 +116,64 @@ internal object GraphValues {
         }
     }
 
-    /** The value axes, one per channel, in display units with the inspector's hard limits (stored units). */
-    fun axes(layer: CompositionLayer, target: GraphTarget, compositionWidth: Int, compositionHeight: Int): List<ValueAxis> {
-        fun of(l: PropertyLimit, factor: Float = 1f, name: String = l.name) = ValueAxis(name, l.unit, factor, l.hardMin / factor, l.hardMax / factor)
-        target.animator?.let { a ->
-            if (a.property != null) {
-                val l = AnimateFields.property(a.property).limit ?: return emptyList()
-                return if (channels(layer, target) == 2) listOf(of(l, name = "${l.name} X"), of(l, name = "${l.name} Y")) else listOf(of(l))
+    /** The value axes, one per channel, in the inspector page's units ([PropertyDisplay]) with its hard limits (stored units). */
+    fun axes(layer: CompositionLayer, target: GraphTarget, compositionWidth: Int, compositionHeight: Int): List<ValueAxis> =
+        PropertyDisplay.of(layer, target, compositionWidth, compositionHeight, channels(layer, target)).map { ValueAxis(it) }
+
+    /**
+     * GRAPH G2.1 §6: the live stored value(s) at the playhead, read exactly as the property's inspector page reads it
+     * (Transform / Opacity: the evaluated transform at the raw playhead; Text: the layer's clamped readers at the
+     * frame-snapped playhead; Animate: [TextAnimatorEdits.value] / [TextAnimatorEdits.vector]). Null when unavailable.
+     */
+    fun live(layer: CompositionLayer, target: GraphTarget, playheadUs: Long, rate: FrameRate): FloatArray? {
+        if (channels(layer, target) == 0) return null
+        val local = GraphModel.local(layer, target, playheadUs, rate)
+        return runCatching {
+            target.animator?.let { a ->
+                return@runCatching if (channels(layer, target) == 2) TextAnimatorEdits.vector(layer.text, a, local)
+                else floatArrayOf(TextAnimatorEdits.value(layer.text, a, local), 0f)
             }
-            val l = a.field?.let { AnimateFields.selector(it).limit } ?: return emptyList()
-            return listOf(of(l))
+            when (val p = target.property!!) {
+                AnimPropertyType.POSITION -> layer.evaluatedTransform(playheadUs).let { floatArrayOf(it.positionX, it.positionY) }
+                AnimPropertyType.SCALE -> layer.evaluatedTransform(playheadUs).let { floatArrayOf(it.scaleX, it.scaleY) }
+                AnimPropertyType.ROTATION -> floatArrayOf(layer.evaluatedTransform(playheadUs).rotationDegrees, 0f)
+                AnimPropertyType.OPACITY -> floatArrayOf(layer.evaluatedTransform(playheadUs).opacity, 0f)
+                AnimPropertyType.FONT_SIZE -> floatArrayOf(layer.text.sizeAt(local), 0f)
+                AnimPropertyType.STROKE_WIDTH -> floatArrayOf(layer.text.strokeWidthAt(local), 0f)
+                else -> floatArrayOf(layer.text.scalar(p).evaluate(local), 0f)
+            }
+        }.getOrNull()
+    }
+
+    /**
+     * GRAPH G2.1 §6: a typed value with no key selected sets the value AT THE PLAYHEAD, with the existing action the
+     * property's page uses for an animated property: [EditorAction.SetKeyframe2D] / [EditorAction.SetKeyframe] at
+     * [GraphModel.local] keeping an existing key's easing (else Easy Ease, as `EditorViewModel.editTransform`), or the
+     * Animate page's [TextAnimatorEdits.set]. [x] / [y] are stored values. Null when nothing changes.
+     */
+    fun atPlayheadAction(layer: CompositionLayer, target: GraphTarget, playheadUs: Long, rate: FrameRate, x: Float, y: Float): EditorAction? {
+        val current = live(layer, target, playheadUs, rate) ?: return null
+        val two = channels(layer, target) == 2
+        if (x == current[0] && (!two || y == current[1])) return null
+        val local = GraphModel.local(layer, target, playheadUs, rate)
+        target.animator?.let { a ->
+            return TextAnimatorEdits.action(layer.id, listOf(TextAnimatorEdits.set(layer.text, a, local, x, if (two) y else null)))
         }
-        return when (target.property!!) {
-            AnimPropertyType.POSITION -> listOf(of(PropertyLimits.position(compositionWidth), name = "Position X"),
-                of(PropertyLimits.position(compositionHeight), name = "Position Y"))
-            AnimPropertyType.SCALE -> listOf(of(PropertyLimits.LAYER_SCALE, 100f, "Scale X"), of(PropertyLimits.LAYER_SCALE, 100f, "Scale Y"))
-            AnimPropertyType.ROTATION -> listOf(of(PropertyLimits.ROTATION))
-            AnimPropertyType.OPACITY -> listOf(of(PropertyLimits.OPACITY, 100f))
-            AnimPropertyType.FONT_SIZE -> listOf(of(PropertyLimits.FONT_SIZE))
-            AnimPropertyType.TRACKING -> listOf(of(PropertyLimits.TRACKING))
-            AnimPropertyType.LEADING -> listOf(of(PropertyLimits.LEADING))
-            AnimPropertyType.BASELINE_SHIFT -> listOf(of(PropertyLimits.BASELINE))
-            AnimPropertyType.STROKE_WIDTH -> listOf(of(PropertyLimits.STROKE_WIDTH))
-            else -> emptyList()
+        val p = target.property!!
+        val easing = keys(layer, target).firstOrNull { it.timeUs == local }?.easing ?: EasingPreset.EASY_EASE
+        return if (two) EditorAction.SetKeyframe2D(layer.id, p, local, x, y, easing) else EditorAction.SetKeyframe(layer.id, p, local, x, easing)
+    }
+
+    /** The header's start / end value labels in the page's units and formatting (colour: [GraphModel.values]'s hex). */
+    fun labels(layer: CompositionLayer, target: GraphTarget, s: GraphSegment, compositionWidth: Int, compositionHeight: Int): Pair<String, String> {
+        val axes = axes(layer, target, compositionWidth, compositionHeight)
+        if (axes.isEmpty()) return GraphModel.values(layer, target, s)
+        val ks = keys(layer, target)
+        fun at(time: Long): String {
+            val k = ks.firstOrNull { it.timeUs == time } ?: return ""
+            return axes.indices.joinToString(", ") { ch -> axes[ch].storedText(k.value(ch)) } + axes[0].unit
         }
+        return at(s.startUs) to at(s.endUs)
     }
 
     /** A stored value clamped by the axis and, for animator fields, the model's own validated range. */
@@ -367,5 +418,20 @@ internal object GridDrop {
         val row = cells.withIndex().filter { y >= it.value.top && y <= it.value.bottom }
         if (row.isEmpty()) return null
         return row.minByOrNull { abs(it.value.center.x - x) }!!.index
+    }
+}
+
+/**
+ * GRAPH G2.1 §6a: Graph times read exactly like the transport and the timeline's playhead pill:
+ * [CompositionTimecode.format] (MM:SS:FF, nearest frame) of the composition start timecode + composition time.
+ */
+internal object GraphTime {
+    fun label(compositionUs: Long, rate: FrameRate, startTimecodeUs: Long = 0L): String =
+        CompositionTimecode.format(Math.addExact(startTimecodeUs, compositionUs), rate)
+    /** A typed time: a timecode (MM:SS:FF, as shown) or a whole number of composition frames ("45" or "45f"). Composition µs. */
+    fun parse(text: String, rate: FrameRate, startTimecodeUs: Long = 0L): Long? {
+        CompositionTimecode.parse(text, rate)?.let { return Math.subtractExact(it, startTimecodeUs) }
+        val f = ValueParsing.integer(text.trim().removeSuffix("f").trim())?.takeIf { it >= 0 } ?: return null
+        return runCatching { rate.frameTimeUs(f) }.getOrNull()
     }
 }

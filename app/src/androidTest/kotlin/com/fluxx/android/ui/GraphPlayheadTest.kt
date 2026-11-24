@@ -116,9 +116,10 @@ class GraphPlayheadTest {
         fun canvas(block: TouchInjectionScope.() -> Unit) { compose.onNodeWithTag("graph-value-canvas").performTouchInput(block); settle() }
         fun unchanged() { assertEquals(arbitrary, editor.state.playheadUs); assertEquals(arbitrary, editor.displayedState.playheadUs)
             assertEquals(clip, clipX(label)); assertEquals(1L, editor.state.selectedLayerId) }
-        // Key drag (hold before release, as in the G1.1 repro).
+        // A drag that starts on a key (hold before release, as in the G1.1 repro): G2.1 keys are not draggable, it pans.
         canvas { down(at("graph-value-key-1")); repeat(20) { moveBy(Offset(2f, -3f)) }; advanceEventTime(600); up() }
-        assertNotEquals(90f, keys()[1].value); unchanged()
+        assertEquals(90f, keys()[1].value); assertEquals(1_000_000L, keys()[1].timeUs); unchanged()
+        Thread.sleep(400); canvas { doubleClick(Offset(10f, 10f)) }; Thread.sleep(400)
         // Handle drag on the selected segment.
         canvas { click(at("graph-value-key-0")) }
         canvas { down(at("graph-value-handle-0")); repeat(20) { moveBy(Offset(-2f, -2f)) }; up() }
@@ -136,6 +137,55 @@ class GraphPlayheadTest {
         assertEquals(target, editor.state.playheadUs)
         settle(); Thread.sleep(600); compose.waitForIdle()
         assertEquals("no echo after the seek", target, editor.state.playheadUs)
+    }
+
+    /**
+     * GRAPH G2.1: the live Value tile, a typed value at the playhead (no key selected), and library / rail drags never
+     * change the playhead, the clip or the selection (real editor and preview controller).
+     */
+    @Test fun liveValueTypedValueAndLibraryDragsKeepThePlayhead() {
+        val label = hasText("Spin")
+        val editor = host(CompositionLayer(1, LayerType.SOLID, name = "Spin", timing = ClipTiming(0, 0, 4_000_000),
+            animTransform = AnimatableTransform(rotation = AnimatableProperty1D(true, 0f, FrozenList.of(listOf(
+                Keyframe1D(0, 0f), Keyframe1D(1_000_000, 90f), Keyframe1D(3_000_000, 45f)))))))
+        openInspector(label)
+        compose.onNodeWithContentDescription("Transform").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("transform-mode-ROTATION").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("inspector-rail-graph", useUnmergedTree = true).performClick(); settle()
+        compose.onNodeWithTag("graph-mode-GRAPH_VALUE").performClick(); settle()
+        val clip = clipX(label)
+        fun unchanged() { assertEquals(arbitrary, editor.state.playheadUs); assertEquals(arbitrary, editor.displayedState.playheadUs)
+            assertEquals(clip, clipX(label)); assertEquals(1L, editor.state.selectedLayerId) }
+        // The live value at the playhead, as the Rotation page shows it.
+        val layer0 = editor.state.project.composition.layers[0]
+        val target = GraphTarget(AnimPropertyType.ROTATION)
+        val live = com.fluxx.android.ui.inspector.GraphValues.live(layer0, target, arbitrary, editor.state.project.composition.frameRate)!![0]
+        val text = com.fluxx.android.ui.inspector.GraphValues.axes(layer0, target, 1080, 1920)[0].storedText(live)
+        compose.onNodeWithTag("graph-value-value").assertTextContains(text, substring = true)
+        compose.onNodeWithTag("graph-value-time", useUnmergedTree = true).assertIsNotEnabled()
+        // Typed value at the playhead.
+        compose.onNodeWithTag("graph-value-value", useUnmergedTree = true).performClick(); compose.waitForIdle()
+        compose.onNodeWithContentDescription("Rotation, exact value in \u00b0").performTextReplacement("20")
+        compose.onNodeWithContentDescription("Rotation, exact value in \u00b0").performImeAction(); settle()
+        assertEquals(20f, editor.state.project.composition.layers[0].evaluatedTransform(arbitrary).rotationDegrees, 1e-3f); unchanged()
+        // A rail reorder drag.
+        val pinned = CurveLibraryStore.get(context).state.value.pinned
+        val rail = compose.onNodeWithTag("graph-pinned-rail").fetchSemanticsNode().boundsInRoot
+        val a = compose.onNodeWithTag("graph-pinned-${pinned[0]}", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val b = compose.onNodeWithTag("graph-pinned-${pinned[2]}", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithTag("graph-pinned-rail").performTouchInput {
+            down(Offset(a.center.x - rail.left, a.center.y - rail.top)); advanceEventTime(900)
+            repeat(20) { i -> moveTo(Offset(a.center.x - rail.left, a.center.y - rail.top + (b.center.y - a.center.y) * (i + 1) / 20f)) }
+            advanceEventTime(300); up() }
+        settle(); unchanged()
+        // A library drag (a preset onto Pinned).
+        compose.onNodeWithTag("graph-library", useUnmergedTree = true).performClick(); settle()
+        val col = compose.onNodeWithTag("graph-library-column").fetchSemanticsNode().boundsInRoot
+        val first = compose.onNodeWithTag("graph-lib-${CurveLibraryStore.get(context).state.value.pinned[1]}", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithTag("graph-library-column").performTouchInput {
+            down(Offset(first.center.x - col.left, first.center.y - col.top)); advanceEventTime(900)
+            repeat(10) { moveBy(Offset(0f, 6f)) }; advanceEventTime(300); up() }
+        settle(); unchanged()
     }
 
     /** The user's repro: an animator Range Selector Offset field opened from the Animate tab, paused, one handle to the edge first. */

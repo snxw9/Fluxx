@@ -7,6 +7,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -117,33 +119,84 @@ class GraphValueTest {
         assertEquals(1, actions.count { it is EditorAction.Seek })
     }
 
-    @Test fun keyDragHandleDragAndTypedValuesAreOneUndoEach() {
+    /** GRAPH G2.1 §3 (converted from the G2 key-drag test): a drag that starts on a key pans; handles still drag; typed edits are one undo. */
+    @Test fun aKeyDragPansHandleDragAndTypedValuesAreOneUndoEach() {
         start(); value()
-        val before = rot()
+        val before = rot(); val fit = viewport()
         dragFrom(at("graph-value-key-1"), Offset(30f, -20f))
-        val moved = rot()[1]
-        assertNotEquals(1_000_000L, moved.timeUs); assertNotEquals(90f, moved.value)
-        assertEquals(GraphValues.timeOf(layer(), FrameRate(30, 1), GraphValues.frame(layer(), FrameRate(30, 1), moved.timeUs)), moved.timeUs) // on a frame
-        assertEquals(playhead, vm.state.playheadUs)
-        vm.undo(); compose.waitForIdle(); assertEquals(before, rot())
-        // Handle drag on the selected segment (key 1 → 2): the easing becomes Custom; one undo.
+        assertEquals("keys are not draggable", before, rot()); assertNotEquals("the drag panned", fit, viewport())
+        assertEquals(playhead, vm.state.playheadUs); assertTrue(actions.isEmpty())
+        Thread.sleep(400); canvas { doubleClick(Offset(8f, 8f) * density) }; Thread.sleep(400)
+        // Handle drag on the selected segment (key 1 -> 2): the easing becomes Custom; one undo.
         canvas { click(at("graph-value-key-0") * density) }; Thread.sleep(400)
         compose.onNodeWithTag("graph-value-handle-0", useUnmergedTree = true).assertExists()
         dragFrom(at("graph-value-handle-0"), Offset(10f, -25f))
         assertEquals(EasingPreset.CUSTOM, rot()[0].easing); assertEquals(playhead, vm.state.playheadUs)
         vm.undo(); compose.waitForIdle(); assertEquals(before, rot())
-        // Typed Time and Value on the selected key.
+        // Typed Time (the transport's timecode, or frames) and Value on the selected key.
         canvas { click(at("graph-value-key-1") * density) }; Thread.sleep(400)
+        compose.onNodeWithTag("graph-value-time").assertTextContains("00:01:00", substring = true)
         click("graph-value-time")
-        compose.onNodeWithContentDescription("Time, exact value in s").performTextReplacement("1.5")
-        compose.onNodeWithContentDescription("Time, exact value in s").performImeAction(); compose.waitForIdle()
+        compose.onNodeWithContentDescription("Time, exact value in ").performTextReplacement("00:01:15")
+        compose.onNodeWithContentDescription("Time, exact value in ").performImeAction(); compose.waitForIdle()
         assertEquals(1_500_000L, rot()[1].timeUs)
+        // Frame snap and neighbour clamp: 200 frames is past key 3 (90 frames), so one frame before it.
+        click("graph-value-time")
+        compose.onNodeWithContentDescription("Time, exact value in ").performTextReplacement("200")
+        compose.onNodeWithContentDescription("Time, exact value in ").performImeAction(); compose.waitForIdle()
+        assertEquals(FrameRate(30, 1).frameTimeUs(89), rot()[1].timeUs)
+        vm.undo(); compose.waitForIdle(); assertEquals(1_500_000L, rot()[1].timeUs)
+        // The undone time no longer exists, so the selection is gone (a typed value would go to the playhead): select key 2 again.
+        canvas { click(at("graph-value-key-1") * density) }; Thread.sleep(400)
         click("graph-value-value")
         compose.onNodeWithContentDescription("Rotation, exact value in °").performTextReplacement("120")
         compose.onNodeWithContentDescription("Rotation, exact value in °").performImeAction(); compose.waitForIdle()
         assertEquals(120f, rot()[1].value); assertEquals(1_500_000L, rot()[1].timeUs)
         assertEquals(playhead, vm.state.playheadUs)
         vm.undo(); compose.waitForIdle(); assertEquals(90f, rot()[1].value); assertEquals(1_500_000L, rot()[1].timeUs)
+    }
+
+    /** GRAPH G2.1 §6: no key selected: the Value tile is the live value at the playhead (as the page shows it), the Time tile is inert. */
+    @Test fun liveValueTileAndInertTimeTile() {
+        start(); value()
+        val target = GraphTarget(AnimPropertyType.ROTATION)
+        fun expected() = GraphValues.axes(layer(), target, 1080, 1920)[0].storedText(GraphValues.live(layer(), target, vm.state.playheadUs, FrameRate())!![0])
+        compose.onNodeWithTag("graph-value-time").assertIsNotEnabled().assertTextContains("–", substring = true)
+        compose.onNodeWithTag("graph-value-value").assertIsEnabled().assertTextContains(expected(), substring = true)
+        // It follows the playhead (scrub / play): the same number the Rotation page shows there.
+        compose.runOnIdle { vm.dispatch(EditorAction.Seek(2_000_000L)) }; compose.waitForIdle()
+        compose.onNodeWithTag("graph-value-value").assertTextContains(expected(), substring = true)
+        compose.runOnIdle { vm.dispatch(EditorAction.Seek(playhead)) }; compose.waitForIdle()
+        // Typing with no key sets the value at the playhead: one undo, the playhead stays.
+        val before = layer().animTransform.rotation
+        click("graph-value-value")
+        compose.onNodeWithContentDescription("Rotation, exact value in °").performTextReplacement("12")
+        compose.onNodeWithContentDescription("Rotation, exact value in °").performImeAction(); compose.waitForIdle()
+        assertEquals(12f, layer().evaluatedTransform(playhead).rotationDegrees, 1e-4f)
+        assertTrue(rot().any { it.timeUs == playhead }); assertEquals(playhead, vm.state.playheadUs)
+        compose.onNodeWithTag("graph-value-value").assertTextContains("0x12.0", substring = true)
+        compose.onNodeWithTag("graph-value-time").assertIsNotEnabled()
+        vm.undo(); compose.waitForIdle(); assertEquals(before, layer().animTransform.rotation)
+        assertTrue(actions.none { it is EditorAction.Seek })
+    }
+
+    /** GRAPH G2.1 §4: zoomed in hard, nothing draws through the values bar (the canvas is clipped and the bar is opaque). */
+    @Test fun nothingDrawsThroughTheValuesBar() {
+        start(); value()
+        val canvasBounds = bounds("graph-value-canvas"); val bar = bounds("graph-values-bar")
+        repeat(4) { canvas { val c = Offset(width / 2f, height / 2f); pinch(c - Offset(0f, 10f), c - Offset(0f, 110f), c + Offset(0f, 10f), c + Offset(0f, 110f), 300) } }
+        assertEquals(canvasBounds, bounds("graph-value-canvas")); assertEquals(bar, bounds("graph-values-bar"))
+        // The bar's bottom rows are only its own fill or the tile hairlines: never curve ink.
+        val img = compose.onNodeWithTag("graph-values-bar").captureToImage().asAndroidBitmap()
+        val allowed = listOf(com.fluxx.android.ui.theme.SurfaceHigh, com.fluxx.android.ui.theme.Border, com.fluxx.android.ui.theme.Surface).map { it.toArgb() }
+        fun near(a: Int, b: Int) = listOf(16, 8, 0).all { sh -> kotlin.math.abs((a ushr sh and 255) - (b ushr sh and 255)) <= 6 }
+        var checked = 0
+        for (y in listOf(img.height - 2, img.height - 3)) for (x in 0 until img.width) {
+            val px = img.getPixel(x, y)
+            assertEquals("opaque at $x,$y", 255, px ushr 24)
+            assertTrue("pixel $x,$y = ${Integer.toHexString(px)}", allowed.any { near(px, it) }); checked++
+        }
+        assertTrue(checked > 100)
     }
 
     @Test fun positionHasTwoChannelsAndTheToggleEditsOne() {
@@ -153,9 +206,11 @@ class GraphValueTest {
         click("graph-value-channel-1")
         canvas { click(at("graph-value-key-0") * density) }; Thread.sleep(400)
         click("graph-value-value")
+        // GRAPH G2.1 §5: typed in the Transform page's units (composition px, top-left origin).
         compose.onNodeWithContentDescription("Position Y, exact value in px").performTextReplacement("333")
         compose.onNodeWithContentDescription("Position Y, exact value in px").performImeAction(); compose.waitForIdle()
-        layer().animTransform.position.keyframes[0].let { assertEquals(100f, it.x); assertEquals(333f, it.y) }
+        layer().animTransform.position.keyframes[0].let { assertEquals(100f, it.x); assertEquals((333f - 960f) / 960f, it.y, 1e-6f) }
+        compose.onNodeWithTag("graph-value-value").assertTextContains("333.0px", substring = true)
         assertEquals(playhead, vm.state.playheadUs)
     }
 

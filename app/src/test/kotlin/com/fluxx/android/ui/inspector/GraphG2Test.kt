@@ -59,11 +59,12 @@ class GraphG2Test {
     @Test fun axesAreDisplayUnitsWithHardLimits() {
         val l = layer()
         val op = GraphValues.axes(l, GraphTarget(AnimPropertyType.OPACITY), 1080, 1920).single()
-        assertEquals(100f, op.display); assertEquals(0f, op.min); assertEquals(1f, op.max); assertEquals(1f, op.clamp(3f))
+        assertEquals(100f, op.units.factor); assertEquals(0f, op.min); assertEquals(1f, op.max); assertEquals(1f, op.clamp(3f))
         val sc = GraphValues.axes(l, GraphTarget(AnimPropertyType.SCALE), 1080, 1920)
         assertEquals(2, sc.size); assertEquals(150f, sc[0].toDisplay(1.5f), 1e-4f)
         val pos = GraphValues.axes(l, GraphTarget(AnimPropertyType.POSITION), 1080, 1920)
-        assertEquals(-10800f, pos[0].min); assertEquals(19200f, pos[1].max)
+        // GRAPH G2.1 §5: the ±10× composition pixel caps expressed in stored units (centre origin, half the reference size per unit).
+        assertEquals(-21f, pos[0].min, 1e-4f); assertEquals(19f, pos[1].max, 1e-4f)
         assertEquals(36000f, GraphValues.axes(l, rotation, 1080, 1920).single().max)
     }
 

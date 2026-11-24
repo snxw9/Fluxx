@@ -53,8 +53,8 @@ data class ColourPickerTarget(val icon: String, val label: String)
 
 /** Pure colour-value arithmetic shared by both variants (hex, alpha %, R/G/B), all on packed ARGB. */
 internal object ColourValues {
-    /** RRGGBB keeps the current alpha; AARRGGBB replaces it; `#` optional; any case. Incomplete/invalid → null. */
-    fun hex(text: String, current: Int): Int? = FluxxColor.parseHex(text.trim().removePrefix("#"), (current ushr 24) / 255f)?.toArgb()
+    /** The shared parser ([FluxxColor.parseHexEntry]): RGB / RRGGBB keep the current alpha; AARRGGBB replaces it. */
+    fun hex(text: String, current: Int): Int? = FluxxColor.parseHexEntry(text, current)
     fun hexText(argb: Int) = FluxxColor.fromArgb(argb).toHexString(true)
     fun alphaPercent(argb: Int) = (argb ushr 24) * 100f / 255f
     fun alphaText(argb: Int) = alphaPercent(argb).roundToInt().toString()
@@ -165,7 +165,7 @@ internal class ColourTransaction(private val begin: () -> Unit, private val prev
     }
     @Composable fun HexField(modifier: Modifier, height: Dp) {
         InlineValueField(ColourValues.hexText(argb), argb, ColourValues::hex, "Hex $name", tx::begin, tx::preview, tx::finish, tx::cancel,
-            modifier, hex = true, prefix = "#", height = height, testTag = "colour-hex")
+            modifier, hex = true, prefix = "#", height = height, testTag = "colour-hex", live = FluxxColor::hexAppliesLive)
     }
     @Composable fun AlphaField(modifier: Modifier, height: Dp) {
         InlineValueField(ColourValues.alphaText(argb), argb, ColourValues::alpha, "${name.replaceFirstChar { it.uppercase() }} alpha",

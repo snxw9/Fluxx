@@ -627,6 +627,7 @@ fun EditorScreen(
                         },
                         onTextPayloadPreview = textEditor::preview,
                         textFrameRate = composition.frameRate,
+                        compositionStartTimecodeUs = composition.startTimecodeUs,
                         textFinishing = textEditor.finishing,
                         onTextSampleColour = {reply->focusManager.clearFocus();previewController?.pause();textSampleReply=reply;eyedropperLayerId=layer.id},
                         onTextCancelSample = {textSampleReply=null;eyedropperLayerId=null;sampledColor=null},

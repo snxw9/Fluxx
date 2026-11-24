@@ -24,6 +24,7 @@ Start with the [roadmap](architecture/FLUXX_ROADMAP.md) for active scope. The [P
 | [Element inspector](checkpoints/ELEMENT_INSPECTOR.md) | Inspector navigation, transforms/anchor, layer actions, trim/extend/split |
 | [Global colour picker](checkpoints/GLOBAL_COLOUR_PICKER.md) | Shared picker, palettes and eyedropper ownership |
 | [Keyframe animation](checkpoints/KEYFRAME_ANIMATION.md) | Transform evaluator, tracks, editing and interpolation contracts |
+| [Graph editor G2.1](checkpoints/GRAPH_G2_1.md) | A16 acceptance fixes: hex entry, non-draggable keys, the opaque bar, the units audit table, the live value, the time audit table, the xy popover cause, library drag lift/reflow and auto-scroll, Snap and magnetic detents, test run times and flaky tests |
 | [Graph editor G2](checkpoints/GRAPH_G2.md) | The Value graph (keys, handles, selection and seek, pan/zoom/fit, Time/Value/X\|Y bar), the existing actions reused for key dragging, the G2L carry-over fixes and the typed-entry (A4) cause, verification and the A16 test list |
 | [Graph editor G2L](checkpoints/GRAPH_G2L.md) | Ease view rework (type strip, pinned rail, library morph) and the curve library: user curves, pinning, `.fluxxcurves` import/export, storage, verification and the A16 test list |
 | [Graph editor G1.1](checkpoints/GRAPH_G1_1.md) | Graph page layout rework (header row, rails, touchpad + values bar, XY pad), the playhead investigation, verification and the A16 test list |

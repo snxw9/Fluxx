@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -40,7 +41,7 @@ import kotlin.math.roundToLong
 
 /** Everything the Value canvas needs about the edited property, computed once per document / viewport change. */
 internal class ValueScene(val layer: CompositionLayer, val target: GraphTarget, val rate: FrameRate, val axes: List<ValueAxis>, val channel: Int,
-    val segment: GraphSegment, val selection: Int?) {
+    val segment: GraphSegment, val selection: Int?, val startTimecodeUs: Long = 0L) {
     val keys = GraphValues.keys(layer, target)
     val keyTimes = keys.map { it.timeUs }
     val channels = axes.size
@@ -69,17 +70,17 @@ internal class ValueScene(val layer: CompositionLayer, val target: GraphTarget, 
 private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; data class Key(val i: Int) : ValueHit; data object Empty : ValueHit }
 
 /**
- * GRAPH G2: the Value graph canvas. X = local time, Y = the property's value (display units), drawn with the property's
- * own evaluator. Keys are draggable points (time snaps to frames and never crosses a neighbour; value is clamped, Snap
- * snaps it to the grid), the selected segment's easing handles are editable on the curve (direct drag only), an
- * empty-canvas drag pans, a pinch zooms (axis-aware), a double tap on empty canvas fits and on a key seeks to it.
- * Nothing here moves the playhead except that double tap ([onSeekKey]). Every gesture reads current state through
- * holders (never values captured when the gesture coroutine started; the G1.1 rule).
+ * GRAPH G2: the Value graph canvas. X = local time, Y = the property's value in its inspector page's units, drawn with
+ * the property's own evaluator. Keys are tap-to-select and double-tap-to-seek only (GRAPH G2.1 §3: keys are not
+ * draggable; their time and value are typed in the values bar). The selected segment's easing handles are editable on
+ * the curve (direct drag only); any other one-finger drag, including one that starts on a key, pans; a pinch zooms
+ * (axis-aware); a double tap on empty canvas fits. Nothing here moves the playhead except the key double tap
+ * ([onSeekKey]). Every gesture reads current state through holders (the G1.1 rule). Everything is clipped to the
+ * canvas bounds (G2.1 §4).
  */
 @Composable internal fun ValueCanvas(scene: ValueScene, session: GraphSession, local: Long, showDot: Boolean, snap: Boolean, mirror: Boolean,
     onSelectKey: (Long?) -> Unit, onSeekKey: (Long) -> Unit,
-    onHandleBegin: () -> Unit, onHandleDrag: (EasingCurve) -> Unit, onHandleEnd: () -> Unit, onHandleCancel: () -> Unit,
-    onKeyBegin: () -> Unit, onKeyDrag: (EditorAction, Long) -> Unit, onKeyEnd: () -> Unit, onKeyCancel: () -> Unit, modifier: Modifier) {
+    onHandleBegin: () -> Unit, onHandleDrag: (EasingCurve) -> Unit, onHandleEnd: () -> Unit, onHandleCancel: () -> Unit, modifier: Modifier) {
     val density = LocalDensity.current
     val inset = with(density) { 12.dp.toPx() }
     val hit = with(density) { 24.dp.toPx() }
@@ -89,11 +90,9 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
     val select by rememberUpdatedState(onSelectKey); val seek by rememberUpdatedState(onSeekKey)
     val hBegin by rememberUpdatedState(onHandleBegin); val hDrag by rememberUpdatedState(onHandleDrag)
     val hEnd by rememberUpdatedState(onHandleEnd); val hCancel by rememberUpdatedState(onHandleCancel)
-    val kBegin by rememberUpdatedState(onKeyBegin); val kDrag by rememberUpdatedState(onKeyDrag)
-    val kEnd by rememberUpdatedState(onKeyEnd); val kCancel by rememberUpdatedState(onKeyCancel)
     // Double-tap detection across gestures (plain holder: never read by composition).
     val lastTap = remember { arrayOfNulls<Any>(3) } // [uptime, hit, position]
-    BoxWithConstraints(modifier.semantics {
+    BoxWithConstraints(modifier.clipToBounds().semantics {
         contentDescription = "Value graph"; stateDescription = vp.describe()
     }.pointerInput(Unit) {
         val doubleTap = viewConfiguration.doubleTapTimeoutMillis
@@ -154,8 +153,8 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
             lastTap[0] = null
             val first = moved
             when (target) {
-                ValueHit.Empty -> {
-                    // One-finger pan.
+                ValueHit.Empty, is ValueHit.Key -> {
+                    // One-finger pan (G2.1 §3: a drag that starts on a key pans too).
                     var last = first.position
                     drag(first.id) { change ->
                         change.consume()
@@ -187,31 +186,6 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
                             hDrag(c)
                         }
                     } finally { if (completed) hEnd() else hCancel() }
-                }
-                is ValueHit.Key -> {
-                    val k = target.i
-                    val key = s.keys[k]; val ch = s.channel; val axis = s.axes[ch]
-                    val (kx, ky) = plot.x(key.timeUs.toDouble()) to plot.y(s.keyValue(k))
-                    val grab = Offset(kx, ky) - down.position
-                    session.viewport = v0
-                    kBegin()
-                    var completed = false
-                    try {
-                        completed = drag(first.id) { change ->
-                            change.consume()
-                            val vpNow = currentVp
-                            val p = ValuePlot(size.width.toFloat(), size.height.toFloat(), inset, vpNow)
-                            val at = change.position + grab
-                            val time = GraphValues.clampTime(s.layer, s.rate, s.keyTimes, k, p.time(at.x).roundToLong())
-                            var display = p.value(at.y)
-                            if (snapOn) display = ValueView.snapValue(display, vpNow)
-                            val stored = GraphValues.clampValue(s.target, axis, axis.toStored(display.toFloat()))
-                            val x = if (ch == 0) stored else key.x; val y = if (ch == 1) stored else key.y
-                            val action = GraphValues.keyAction(s.layer, s.target, key, time, x, y) ?: EditorAction.Batch(emptyList())
-                            session.viewport = vpNow.include(time.toDouble(), axis.toDisplay(stored).toDouble())
-                            kDrag(action, time)
-                        }
-                    } finally { if (completed) kEnd() else kCancel() }
                 }
             }
         }
@@ -277,7 +251,8 @@ private fun hitTest(s: ValueScene, plot: ValuePlot, at: Offset, radius: Float): 
         val vStep = ValueView.step(vp.valueSpan)
         val tTicks = ticks(vp.t0, vp.t1, tStep); val vTicks = ticks(vp.v0, vp.v1, vStep)
         val tLabels = if (labels) tTicks.map { t -> measurer.measure(timeLabel(t, frames, scene), style) } else emptyList()
-        val vLabels = if (labels) vTicks.map { v -> measurer.measure(valueLabel(v, vStep), style) } else emptyList()
+        val axis = scene.axes[scene.channel]
+        val vLabels = if (labels) vTicks.map { v -> measurer.measure(valueLabel(v, vStep, axis), style) } else emptyList()
         val stroke = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
         val dim = Stroke(1.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
         onDrawBehind {
@@ -327,14 +302,16 @@ private fun ticks(lo: Double, hi: Double, step: Double): List<Double> {
     return out.take(4)
 }
 
-private fun timeLabel(localUs: Double, frames: Boolean, scene: ValueScene): String {
-    val absolute = localUs + scene.layer.resolvedKeyframeAnchorUs
-    return if (frames) "${(absolute / scene.frameUs).roundToLong()}f" else String.format(java.util.Locale.ROOT, "%.1fs", absolute / 1e6)
-}
+/** A time tick: the transport's timecode formatter (GRAPH G2.1 §6a), on composition time. */
+private fun timeLabel(localUs: Double, @Suppress("UNUSED_PARAMETER") frames: Boolean, scene: ValueScene): String =
+    GraphTime.label(Math.addExact(localUs.roundToLong(), scene.layer.resolvedKeyframeAnchorUs), scene.rate, scene.startTimecodeUs)
 
-private fun valueLabel(v: Double, step: Double): String {
+/** A value tick in the page's formatting ([ValueAxis.text]); steps finer than the formatter can show use step decimals. */
+internal fun valueLabel(v: Double, step: Double, axis: ValueAxis): String {
+    val clean = if (abs(v) < step * 1e-6) 0.0 else v
+    if (step >= axis.resolution - 1e-9) return axis.text(clean.toFloat())
     val decimals = when { step >= 1 -> 0; step >= .1 -> 1; step >= .01 -> 2; else -> 3 }
-    return String.format(java.util.Locale.ROOT, "%.${decimals}f", if (abs(v) < step * 1e-6) 0.0 else v)
+    return String.format(java.util.Locale.ROOT, "%.${decimals}f", clean)
 }
 
 /** The one playhead: a vertical line at its local time and (if enabled) the dot on the edited channel's curve. */
@@ -349,39 +326,49 @@ private fun valueLabel(v: Double, step: Double): String {
 }
 
 /**
- * GRAPH G2 values bar in the Value view: Time (composition seconds, 2 decimals) and Value of the selected key, typed
- * (snapped to a frame and clamped to the neighbours / the property's limits on commit; one undo each). With no key
- * selected the tiles show the segment's start key and are inert. 2-D properties add an X | Y tile that picks the
- * channel the Value tile and key drags edit.
+ * GRAPH G2 / G2.1 values bar in the Value view, on an opaque fill (nothing draws through it).
+ * - Time: the selected key's time in the transport's timecode format, typed (frame-snapped, clamped to the neighbours;
+ *   one undo). With no key selected it is inert and shows "–" (G2.1 §6: no live time until the time audit is resolved).
+ * - Value: the selected key's value, else the LIVE value at the playhead (as the page shows it). Always enabled; typing
+ *   edits the key, or with no key sets the value at the playhead ([GraphValues.atPlayheadAction]).
+ * - 2-D properties add an X | Y toggle that picks the channel the Value tile edits.
  */
-@Composable internal fun ValueValuesBar(scene: ValueScene, selected: Int?, height: Float, onChannel: (Int) -> Unit, onCommit: (EditorAction, Long) -> Unit) {
-    val k = selected ?: scene.segStart.coerceAtLeast(0)
-    val key = scene.keys.getOrNull(k) ?: return
+@Composable internal fun ValueValuesBar(scene: ValueScene, selected: Int?, height: Float, live: FloatArray?, onChannel: (Int) -> Unit,
+    onCommit: (EditorAction, Long?) -> Unit, onTypedAtPlayhead: (Float, Float) -> EditorAction?) {
+    val key = selected?.let { scene.keys.getOrNull(it) }
     val axis = scene.axes[scene.channel]
     val anchor = scene.layer.resolvedKeyframeAnchorUs
-    val enabled = selected != null
-    val time = String.format(java.util.Locale.ROOT, "%.2f", (anchor + key.timeUs) / 1e6)
-    val value = String.format(java.util.Locale.ROOT, "%.2f", axis.toDisplay(key.value(scene.channel)))
-    Row(Modifier.fillMaxWidth().height(height.dp).testTag("graph-values-bar")) {
-        GraphTypedTile("Time", "s", time, enabled, Modifier.weight(1f).fillMaxHeight().testTag("graph-value-time")) { text ->
-            val seconds = ValueParsing.number(text)?.takeIf { it.isFinite() } ?: return@GraphTypedTile
-            val local = Math.subtractExact((seconds * 1e6).roundToLong(), anchor)
-            val t = GraphValues.clampTime(scene.layer, scene.rate, scene.keyTimes, k, local)
-            GraphValues.keyAction(scene.layer, scene.target, key, t, key.x, key.y)?.let { onCommit(it, t) }
+    val time = key?.let { GraphTime.label(Math.addExact(anchor, it.timeUs), scene.rate, scene.startTimecodeUs) } ?: "–"
+    val stored = key?.value(scene.channel) ?: live?.getOrNull(scene.channel)
+    val value = stored?.let { axis.storedText(it) } ?: "–"
+    Row(Modifier.fillMaxWidth().height(height.dp).background(SurfaceHigh).testTag("graph-values-bar")) {
+        GraphTypedTile("Time", "", time, key != null, Modifier.weight(1f).fillMaxHeight().testTag("graph-value-time")) { text ->
+            val k = selected ?: return@GraphTypedTile
+            val kk = key ?: return@GraphTypedTile
+            val absolute = GraphTime.parse(text, scene.rate, scene.startTimecodeUs) ?: return@GraphTypedTile
+            val t = GraphValues.clampTime(scene.layer, scene.rate, scene.keyTimes, k, Math.subtractExact(absolute, anchor))
+            GraphValues.keyAction(scene.layer, scene.target, kk, t, kk.x, kk.y)?.let { onCommit(it, t) }
         }
         Box(Modifier.width(GraphLayout.HAIRLINE.dp).fillMaxHeight().background(Border))
-        GraphTypedTile(axis.name, axis.unit, value, enabled, Modifier.weight(1.2f).fillMaxHeight().testTag("graph-value-value")) { text ->
-            val d = ValueParsing.number(text)?.toFloat()?.takeIf { it.isFinite() } ?: return@GraphTypedTile
-            val stored = GraphValues.clampValue(scene.target, axis, axis.toStored(d))
-            val x = if (scene.channel == 0) stored else key.x; val y = if (scene.channel == 1) stored else key.y
-            GraphValues.keyAction(scene.layer, scene.target, key, key.timeUs, x, y)?.let { onCommit(it, key.timeUs) }
+        GraphTypedTile(axis.name, axis.unit, value, stored != null, Modifier.weight(1.2f).fillMaxHeight().testTag("graph-value-value")) { text ->
+            val d = (if (axis.units.format == DisplayFormat.TURNS) parseRotation(text) else ValueParsing.number(text, axis.unit)?.toFloat())
+                ?.takeIf { it.isFinite() } ?: return@GraphTypedTile
+            val v = GraphValues.clampValue(scene.target, axis, axis.typed(d))
+            if (key != null) {
+                val x = if (scene.channel == 0) v else key.x; val y = if (scene.channel == 1) v else key.y
+                GraphValues.keyAction(scene.layer, scene.target, key, key.timeUs, x, y)?.let { onCommit(it, key.timeUs) }
+            } else {
+                val cur = live ?: return@GraphTypedTile
+                val x = if (scene.channel == 0) v else cur[0]; val y = if (scene.channel == 1) v else cur.getOrElse(1) { 0f }
+                onTypedAtPlayhead(x, y)?.let { onCommit(it, null) }
+            }
         }
         if (scene.channels == 2) {
             Box(Modifier.width(GraphLayout.HAIRLINE.dp).fillMaxHeight().background(Border))
             Row(Modifier.width(56.dp).fillMaxHeight().testTag("graph-value-channel"), verticalAlignment = Alignment.CenterVertically) {
                 for (ch in 0..1) {
                     val on = scene.channel == ch
-                    Box(Modifier.weight(1f).fillMaxHeight().background(if (on) Surface else Color.Transparent).clickable(role = Role.Tab) { onChannel(ch) }
+                    Box(Modifier.weight(1f).fillMaxHeight().background(if (on) Surface else SurfaceHigh).clickable(role = Role.Tab) { onChannel(ch) }
                         .semantics { contentDescription = if (ch == 0) "Edit X" else "Edit Y"; if (on) stateDescription = "Selected" }
                         .testTag("graph-value-channel-$ch"), contentAlignment = Alignment.Center) {
                         Text(if (ch == 0) "X" else "Y", color = if (on) TextPrimary else TextSecondary,
@@ -396,7 +383,7 @@ private fun valueLabel(v: Double, step: Double): String {
 /** A values-bar tile with a corner label and a typed-entry popover (the Ease bar's tile, for free-form values). */
 @Composable internal fun GraphTypedTile(label: String, unit: String, text: String, enabled: Boolean, modifier: Modifier, onCommit: (String) -> Unit) {
     var editing by remember { mutableStateOf(false) }
-    Box(modifier.background(if (editing) Surface else Color.Transparent)
+    Box(modifier.background(if (editing) Surface else SurfaceHigh)
         .clickable(enabled = enabled, role = Role.Button, onClickLabel = "Type $label") { editing = true }
         .semantics(mergeDescendants = true) { contentDescription = "$label $text"; if (!enabled) disabled() }) {
         Text(label, Modifier.align(Alignment.TopStart).padding(start = 4.dp, top = 2.dp), color = TextSecondary, fontSize = 8.sp, lineHeight = 9.sp, maxLines = 1)
