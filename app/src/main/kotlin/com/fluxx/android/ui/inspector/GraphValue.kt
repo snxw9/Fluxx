@@ -382,7 +382,7 @@ internal object GraphSelection {
     }
 }
 
-internal enum class GraphMode { VALUE, EASE }
+internal enum class GraphMode { VALUE, SPEED, EASE }
 
 /**
  * Graph page state that outlives recomposition while the page is open (the sheet's header and the page body share it)
@@ -393,10 +393,15 @@ internal class GraphSession {
     var mode by mutableStateOf(GraphMode.EASE)
     var selection by mutableStateOf<KeySelection?>(null)
     var viewport by mutableStateOf<ValueViewport?>(null)
+    /** GRAPH G3: the Speed view's own viewport (reset with the page, i.e. when the property changes). */
+    var speedViewport by mutableStateOf<ValueViewport?>(null)
     var channel by mutableStateOf(0)
     var libraryGrid = LazyGridState()
         private set
-    fun reset() { mode = GraphMode.EASE; selection = null; viewport = null; channel = 0; libraryGrid = LazyGridState() }
+    fun viewportFor(speed: Boolean) = if (speed) speedViewport else viewport
+    fun setViewportFor(speed: Boolean, v: ValueViewport?) { if (speed) speedViewport = v else viewport = v }
+    /** [mode]: the tab to open on (G3: the last-used tab, persisted app-level; it falls back to Ease where unavailable). */
+    fun reset(mode: GraphMode = GraphMode.EASE) { this.mode = mode; selection = null; viewport = null; speedViewport = null; channel = 0; libraryGrid = LazyGridState() }
 }
 
 // ---- Library grid -------------------------------------------------------------------------------------------------

@@ -139,6 +139,41 @@ class GraphPlayheadTest {
         assertEquals("no echo after the seek", target, editor.state.playheadUs)
     }
 
+    /** GRAPH G3: Speed view handle drags (Smooth through key on), typed speed, pan / pinch / fit never move the playhead. */
+    @Test fun speedGraphEditsKeepThePlayhead() {
+        val label = hasText("Spin")
+        val editor = host(CompositionLayer(1, LayerType.SOLID, name = "Spin", timing = ClipTiming(0, 0, 4_000_000),
+            animTransform = AnimatableTransform(rotation = AnimatableProperty1D(true, 0f, FrozenList.of(listOf(
+                Keyframe1D(0, 0f), Keyframe1D(1_000_000, 90f), Keyframe1D(3_000_000, 180f)))))))
+        openInspector(label)
+        compose.onNodeWithContentDescription("Transform").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("transform-mode-ROTATION").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("inspector-rail-graph", useUnmergedTree = true).performClick(); settle()
+        compose.onNodeWithTag("graph-mode-GRAPH_SPEED").performClick(); settle()
+        val clip = clipX(label)
+        fun unchanged() { assertEquals(arbitrary, editor.state.playheadUs); assertEquals(arbitrary, editor.displayedState.playheadUs)
+            assertEquals(clip, clipX(label)); assertEquals(1L, editor.state.selectedLayerId) }
+        fun keys() = editor.state.project.composition.layers[0].animTransform.rotation.keyframes
+        fun at(tag: String): Offset {
+            val c = compose.onNodeWithTag("graph-speed-canvas").fetchSemanticsNode().boundsInRoot
+            val r = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            return Offset(r.center.x - c.left, r.center.y - c.top)
+        }
+        fun canvas(block: TouchInjectionScope.() -> Unit) { compose.onNodeWithTag("graph-speed-canvas").performTouchInput(block); settle() }
+        compose.onNodeWithTag("graph-tools", useUnmergedTree = true).performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("graph-tool-smooth", useUnmergedTree = true).performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("graph-tools", useUnmergedTree = true).performClick(); settle()
+        canvas { click(at("graph-value-key-0")) }
+        canvas { down(at("graph-value-handle-1")); repeat(20) { moveBy(Offset(-1f, -4f)) }; advanceEventTime(600); up() }
+        assertEquals(EasingPreset.CUSTOM, keys()[0].easing); assertEquals(EasingPreset.CUSTOM, keys()[1].easing); unchanged()
+        compose.onNodeWithTag("graph-speed-out-speed").performClick(); compose.waitForIdle()
+        compose.onNodeWithContentDescription("Speed out, exact value in °/s").performTextReplacement("30")
+        compose.onNodeWithContentDescription("Speed out, exact value in °/s").performImeAction(); settle(); unchanged()
+        canvas { swipe(Offset(width * .1f, height * .1f), Offset(width * .4f, height * .3f), 300) }; unchanged()
+        canvas { val c = Offset(width / 2f, height / 2f); pinch(c - Offset(60f, 0f), c - Offset(200f, 0f), c + Offset(60f, 0f), c + Offset(200f, 0f), 400) }; unchanged()
+        Thread.sleep(400); canvas { doubleClick(Offset(10f, 10f)) }; unchanged()
+    }
+
     /**
      * GRAPH G2.1: the live Value tile, a typed value at the playhead (no key selected), and library / rail drags never
      * change the playhead, the clip or the selection (real editor and preview controller).

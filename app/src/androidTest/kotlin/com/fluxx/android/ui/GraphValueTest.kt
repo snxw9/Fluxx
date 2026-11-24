@@ -82,7 +82,7 @@ class GraphValueTest {
     @Test fun valueTabOpensWithKeysAndKeepsEveryBound() {
         start()
         val sheet = bounds("inspector-sheet"); val ease = bounds("graph-ease-canvas"); val bar = bounds("graph-values-bar")
-        compose.onNodeWithTag("graph-mode-GRAPH_SPEED").assertIsNotEnabled()
+        compose.onNodeWithTag("graph-mode-GRAPH_SPEED").assertIsEnabled() // GRAPH G3: the Speed tab is live where Value is
         value()
         compose.onNodeWithTag("graph-mode-GRAPH_VALUE").assertIsSelected()
         for (i in 0..2) compose.onNodeWithTag("graph-value-key-$i", useUnmergedTree = true).assertExists()

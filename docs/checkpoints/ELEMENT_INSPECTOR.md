@@ -204,7 +204,15 @@ The following controls are rendered as inert/disabled placeholders pending futur
 - Library and rail drags lift, follow and reflow.
 - The Transform Rotation dial, Opacity slider and Scale ruler have magnetic detents (5°, 25%, 25%).
 
-[G1](GRAPH_G1.md), [G1.1](GRAPH_G1_1.md), [G2L](GRAPH_G2L.md), [G2](GRAPH_G2.md), [G2.1](GRAPH_G2_1.md).
+GRAPH G3:
+- The header's **Speed** tab is live: speed over time in the page's units/s, with speed / influence handles.
+- The Speed values bar has Speed out / Influence out / Speed in / Influence in.
+- Tools → Smooth through key matches speeds across a key in the Speed view.
+- The page opens on the last-used tab.
+
+TL1: the Value view's Time tile shows the playhead's timecode when no key is selected.
+
+[G1](GRAPH_G1.md), [G1.1](GRAPH_G1_1.md), [G2L](GRAPH_G2L.md), [G2](GRAPH_G2.md), [G2.1](GRAPH_G2_1.md), [TL1](TL1.md), [G3](GRAPH_G3.md).
 
 ---
 

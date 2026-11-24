@@ -39,9 +39,16 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
-/** Everything the Value canvas needs about the edited property, computed once per document / viewport change. */
+/** A handle drag's result: the selected segment's curve, plus other keys' curves (Smooth through key). One Batch. */
+internal data class HandleEdit(val curve: EasingCurve, val others: List<Pair<Long, EasingCurve>> = emptyList())
+
+/**
+ * Everything the Value / Speed canvas needs about the edited property, computed once per document / viewport change.
+ * GRAPH G3: one canvas for both views; [speed] switches the plotted quantity (value → speed in display units/s), the key
+ * and handle positions and the handle drag mapping ([SpeedHandles], [SmoothThroughKey] when [smooth]).
+ */
 internal class ValueScene(val layer: CompositionLayer, val target: GraphTarget, val rate: FrameRate, val axes: List<ValueAxis>, val channel: Int,
-    val segment: GraphSegment, val selection: Int?, val startTimecodeUs: Long = 0L) {
+    val segment: GraphSegment, val selection: Int?, val startTimecodeUs: Long = 0L, val speed: Boolean = false, val smooth: Boolean = false) {
     val keys = GraphValues.keys(layer, target)
     val keyTimes = keys.map { it.timeUs }
     val channels = axes.size
@@ -50,21 +57,70 @@ internal class ValueScene(val layer: CompositionLayer, val target: GraphTarget, 
     /** Display value of [channel] at local [time]. */
     fun value(time: Long, ch: Int = channel): Double { sampler?.invoke(time, buffer); return axes[ch].toDisplay(buffer[ch]).toDouble() }
     fun keyValue(k: Int, ch: Int = channel) = axes[ch].toDisplay(keys[k].value(ch)).toDouble()
-    /** The fitted window: keys' time range and the sampled curve extent of every channel (overshoot included). */
+    /** G3: the speed segments (display units/s; one combined curve for 2-D properties). */
+    val speedSegs: List<SpeedSegment> by lazy { if (speed) GraphSpeed.segments(layer, target, axes) else emptyList() }
+    /** The plotted quantity at local [time]: the value of [ch], or the speed. */
+    fun curveY(time: Long, ch: Int = channel): Double = if (speed) GraphSpeed.speedAt(speedSegs, time) else value(time, ch)
+    /** Curves to draw: every channel in the Value view, one combined curve in the Speed view. */
+    val curves: Int get() = if (speed) 1 else channels
+    /** The edited curve (the solid one). */
+    val curve: Int get() = if (speed) 0 else channel
+    /** Where key [k] is drawn: its value, or its speed (departing; the last key: arriving). */
+    fun keyY(k: Int): Double = if (speed) GraphSpeed.keySpeed(speedSegs, k) else keyValue(k)
+    /** The fitted window: keys' time range and the sampled curve extent (overshoot and negative speeds; 0 in the Speed view). */
     val fit: ValueViewport by lazy {
         val t0 = keyTimes.first(); val t1 = keyTimes.last()
-        var lo = Double.MAX_VALUE; var hi = -Double.MAX_VALUE
+        var lo = if (speed) 0.0 else Double.MAX_VALUE; var hi = if (speed) 0.0 else -Double.MAX_VALUE
         val n = 240
-        for (ch in 0 until channels) for (i in 0..n) {
-            val v = value(t0 + (t1 - t0) * i / n, ch); lo = minOf(lo, v); hi = maxOf(hi, v)
+        for (ch in 0 until curves) for (i in 0..n) {
+            val v = curveY(t0 + (t1 - t0) * i / n, ch); lo = minOf(lo, v); hi = maxOf(hi, v)
         }
-        for (k in keys.indices) for (ch in 0 until channels) { val v = keyValue(k, ch); lo = minOf(lo, v); hi = maxOf(hi, v) }
+        for (k in keys.indices) for (ch in 0 until curves) { val v = if (speed) keyY(k) else keyValue(k, ch); lo = minOf(lo, v); hi = maxOf(hi, v) }
+        if (speed) for (sg in speedSegs) sg.bezier?.let { b -> for (h in 0..1) { val v = SpeedHandles.speed(sg, b, h); lo = minOf(lo, v); hi = maxOf(hi, v) } }
         ValueView.fit(t0, t1, lo, hi)
     }
     val frameUs get() = 1e6 * rate.denominator / rate.numerator
     val limits by lazy { ValueView.limits(fit, frameUs) }
     val bezier get() = segment.curve.bezierOrNull()
     val segStart get() = keyTimes.indexOf(segment.startUs)
+    private val speedSeg: SpeedSegment? get() = segStart.takeIf { speed && it >= 0 }?.let { speedSegs.getOrNull(it) }
+    /** Handle [h] of the selected segment (time µs, y), or null (no bezier). */
+    fun handlePoint(h: Int): Pair<Double, Double>? {
+        val b = bezier ?: return null; val k = segStart; if (k < 0) return null
+        if (speed) { val sg = speedSeg ?: return null; return SpeedHandles.point(sg, b, h) }
+        return ValueHandles.point(b, h, keyTimes[k].toDouble(), keyValue(k), keyTimes[k + 1].toDouble(), keyValue(k + 1))
+    }
+    /** Where handle [h]'s line starts: its key (on the curve). */
+    fun handleAnchor(h: Int): Pair<Double, Double>? {
+        val b = bezier ?: return null; val k = segStart; if (k < 0) return null
+        if (speed) { val sg = speedSeg ?: return null; return SpeedHandles.anchor(sg, b, h) }
+        return if (h == 0) keyTimes[k].toDouble() to keyValue(k) else keyTimes[k + 1].toDouble() to keyValue(k + 1)
+    }
+    /**
+     * A drag of handle [h] (from the drag's starting bezier [b]) to (local [t], [y]): the Value view's normalised move
+     * ([EaseMath.moveHandle], Snap 0.05 / Mirror), or the Speed view's speed / influence ([SpeedHandles.drag]; Snap: 5% and
+     * the grid [grid]) plus Smooth through key.
+     */
+    fun dragHandle(b: FloatArray, h: Int, t: Double, y: Double, snap: Boolean, mirror: Boolean, grid: Double): HandleEdit? {
+        val k = segStart; if (k < 0) return null
+        if (speed) {
+            val sg = speedSeg ?: return null
+            val nb = SpeedHandles.drag(sg, b, h, t, y, snap, grid)
+            val r = SmoothThroughKey.apply(speedSegs, k, h, nb, smooth)
+            return HandleEdit(r.edits.first().second, r.edits.drop(1))
+        }
+        val (x, yy) = ValueHandles.normalised(b, h, t, y, keyTimes[k].toDouble(), keyValue(k), keyTimes[k + 1].toDouble(), keyValue(k + 1))
+        return HandleEdit(EaseMath.moveHandle(b, h, x, yy, snap, mirror))
+    }
+    /** A value-axis tick label: the page's formatting (Speed: per second, Rotation as a plain number). */
+    fun tickLabel(v: Double, step: Double): String {
+        val axis = axes[curve.coerceAtMost(axes.lastIndex)]
+        if (!speed) return valueLabel(v, step, axis)
+        val clean = if (abs(v) < step * 1e-6) 0.0 else v
+        if (step >= axis.resolution - 1e-9) return GraphSpeed.text(axis, clean)
+        val decimals = when { step >= 1 -> 0; step >= .1 -> 1; step >= .01 -> 2; else -> 3 }
+        return String.format(java.util.Locale.ROOT, "%.${decimals}f", clean)
+    }
 }
 
 private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; data class Key(val i: Int) : ValueHit; data object Empty : ValueHit }
@@ -80,11 +136,12 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
  */
 @Composable internal fun ValueCanvas(scene: ValueScene, session: GraphSession, local: Long, showDot: Boolean, snap: Boolean, mirror: Boolean,
     onSelectKey: (Long?) -> Unit, onSeekKey: (Long) -> Unit,
-    onHandleBegin: () -> Unit, onHandleDrag: (EasingCurve) -> Unit, onHandleEnd: () -> Unit, onHandleCancel: () -> Unit, modifier: Modifier) {
+    onHandleBegin: () -> Unit, onHandleDrag: (HandleEdit) -> Unit, onHandleEnd: () -> Unit, onHandleCancel: () -> Unit, modifier: Modifier) {
     val density = LocalDensity.current
     val inset = with(density) { 12.dp.toPx() }
     val hit = with(density) { 24.dp.toPx() }
-    val vp = session.viewport ?: scene.fit
+    // G3: the Speed view keeps its own viewport next to the Value one.
+    val vp = session.viewportFor(scene.speed) ?: scene.fit
     val current by rememberUpdatedState(scene); val currentVp by rememberUpdatedState(vp)
     val snapOn by rememberUpdatedState(snap); val mirrorOn by rememberUpdatedState(mirror)
     val select by rememberUpdatedState(onSelectKey); val seek by rememberUpdatedState(onSeekKey)
@@ -93,7 +150,7 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
     // Double-tap detection across gestures (plain holder: never read by composition).
     val lastTap = remember { arrayOfNulls<Any>(3) } // [uptime, hit, position]
     BoxWithConstraints(modifier.clipToBounds().semantics {
-        contentDescription = "Value graph"; stateDescription = vp.describe()
+        contentDescription = if (scene.speed) "Speed graph" else "Value graph"; stateDescription = vp.describe()
     }.pointerInput(Unit) {
         val doubleTap = viewConfiguration.doubleTapTimeoutMillis
         val slop = viewConfiguration.touchSlop
@@ -131,7 +188,7 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
                     val zoomed = ValueView.zoom(base, fx, fy, scale, axes, s.limits)
                     val c = (p[0] + p[1]) / 2f
                     val zp = ValuePlot(size.width.toFloat(), size.height.toFloat(), inset, zoomed)
-                    session.viewport = ValueView.pan(zoomed, (zp.time(c0.x) - zp.time(c.x)), (zp.value(c0.y) - zp.value(c.y)), s.limits)
+                    session.setViewportFor(s.speed, ValueView.pan(zoomed, (zp.time(c0.x) - zp.time(c.x)), (zp.value(c0.y) - zp.value(c.y)), s.limits))
                 }
                 return@awaitEachGesture
             }
@@ -142,7 +199,7 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
                 val double = prevAt != null && now - prevAt <= doubleTap && prevHit == target && prevPos != null && (prevPos - down.position).getDistance() < 2 * hit
                 when {
                     double && target is ValueHit.Key -> { seek(s.keyTimes[target.i]); lastTap[0] = null }
-                    double && target == ValueHit.Empty -> { session.viewport = null; lastTap[0] = null }
+                    double && target == ValueHit.Empty -> { session.setViewportFor(s.speed, null); lastTap[0] = null }
                     else -> {
                         if (target is ValueHit.Key) select(s.keyTimes[target.i]) else if (target == ValueHit.Empty) select(null)
                         lastTap[0] = now; lastTap[1] = target; lastTap[2] = down.position
@@ -161,17 +218,14 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
                         val vpNow = currentVp
                         val p = ValuePlot(size.width.toFloat(), size.height.toFloat(), inset, vpNow)
                         val d = change.position - last; last = change.position
-                        session.viewport = ValueView.pan(vpNow, -d.x / p.plotWidth * vpNow.timeSpan, d.y / p.plotHeight * vpNow.valueSpan, s.limits)
+                        session.setViewportFor(s.speed, ValueView.pan(vpNow, -d.x / p.plotWidth * vpNow.timeSpan, d.y / p.plotHeight * vpNow.valueSpan, s.limits))
                     }
                 }
                 is ValueHit.Handle -> {
                     val b = s.bezier ?: return@awaitEachGesture
-                    val k = s.segStart; if (k < 0) return@awaitEachGesture
-                    val t0 = s.keyTimes[k].toDouble(); val t1 = s.keyTimes[k + 1].toDouble()
-                    val a0 = s.keyValue(k); val a1 = s.keyValue(k + 1)
-                    val (ht, hv) = ValueHandles.point(b, target.i, t0, a0, t1, a1)
+                    val (ht, hv) = s.handlePoint(target.i) ?: return@awaitEachGesture
                     val grab = Offset(plot.x(ht), plot.y(hv)) - down.position
-                    session.viewport = v0 // frozen: never refits mid-drag
+                    session.setViewportFor(s.speed, v0) // frozen: never refits mid-drag
                     hBegin()
                     var completed = false
                     try {
@@ -180,10 +234,10 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
                             val vpNow = currentVp
                             val p = ValuePlot(size.width.toFloat(), size.height.toFloat(), inset, vpNow)
                             val at = change.position + grab
-                            val (x, y) = ValueHandles.normalised(b, target.i, p.time(at.x), p.value(at.y), t0, a0, t1, a1)
-                            val c = EaseMath.moveHandle(b, target.i, x, y, snapOn, mirrorOn)
-                            c.bezierOrNull()?.let { nb -> val (nt, nv) = ValueHandles.point(nb, target.i, t0, a0, t1, a1); session.viewport = vpNow.include(nt, nv) }
-                            hDrag(c)
+                            val edit = s.dragHandle(b, target.i, p.time(at.x), p.value(at.y), snapOn, mirrorOn, ValueView.step(vpNow.valueSpan))
+                                ?: return@drag
+                            session.setViewportFor(s.speed, vpNow.include(p.time(at.x), p.value(at.y)))
+                            hDrag(edit)
                         }
                     } finally { if (completed) hEnd() else hCancel() }
                 }
@@ -196,14 +250,12 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
         val plot = ValuePlot(w, h, inset, vp)
         // Semantics-only markers at the key and handle positions (tests and accessibility); no pointer input of their own.
         scene.keys.forEachIndexed { i, k ->
-            val x = plot.x(k.timeUs.toDouble()); val y = plot.y(scene.keyValue(i))
+            val x = plot.x(k.timeUs.toDouble()); val y = plot.y(scene.keyY(i))
             if (x in 0f..w && y in 0f..h) Box(Modifier.offset { IntOffset(x.roundToInt() - 1, y.roundToInt() - 1) }.size(2.dp)
                 .semantics { contentDescription = "Key ${i + 1}"; selected = scene.selection == i }.testTag("graph-value-key-$i"))
         }
-        scene.bezier?.takeIf { scene.segStart >= 0 }?.let { b ->
-            val k = scene.segStart
-            for (hi in 0..1) {
-                val (t, v) = ValueHandles.point(b, hi, scene.keyTimes[k].toDouble(), scene.keyValue(k), scene.keyTimes[k + 1].toDouble(), scene.keyValue(k + 1))
+        for (hi in 0..1) {
+            scene.handlePoint(hi)?.let { (t, v) ->
                 val x = plot.x(t); val y = plot.y(v)
                 if (x in 0f..w && y in 0f..h) Box(Modifier.offset { IntOffset(x.roundToInt() - 1, y.roundToInt() - 1) }.size(2.dp)
                     .semantics { contentDescription = "Handle ${hi + 1}" }.testTag("graph-value-handle-$hi"))
@@ -217,16 +269,12 @@ private fun hitTest(s: ValueScene, plot: ValuePlot, at: Offset, radius: Float): 
     // The nearest target within the radius wins; a key wins a tie (a handle close to its key never steals the key's tap).
     var best: ValueHit = ValueHit.Empty; var dist = radius
     for (i in s.keys.indices) {
-        val d = (Offset(plot.x(s.keyTimes[i].toDouble()), plot.y(s.keyValue(i))) - at).getDistance()
+        val d = (Offset(plot.x(s.keyTimes[i].toDouble()), plot.y(s.keyY(i))) - at).getDistance()
         if (d <= dist) { dist = d; best = ValueHit.Key(i) }
     }
-    s.bezier?.takeIf { s.segStart >= 0 }?.let { b ->
-        val k = s.segStart
-        for (h in 0..1) {
-            val (t, v) = ValueHandles.point(b, h, s.keyTimes[k].toDouble(), s.keyValue(k), s.keyTimes[k + 1].toDouble(), s.keyValue(k + 1))
-            val d = (Offset(plot.x(t), plot.y(v)) - at).getDistance()
-            if (d < dist) { dist = d; best = ValueHit.Handle(h) }
-        }
+    for (h in 0..1) s.handlePoint(h)?.let { (t, v) ->
+        val d = (Offset(plot.x(t), plot.y(v)) - at).getDistance()
+        if (d < dist) { dist = d; best = ValueHit.Handle(h) }
     }
     return best
 }
@@ -238,12 +286,18 @@ private fun hitTest(s: ValueScene, plot: ValuePlot, at: Offset, radius: Float): 
     Spacer(Modifier.fillMaxSize().drawWithCache {
         val plot = ValuePlot(size.width, size.height, inset, vp)
         val n = (plot.plotWidth / 2f).toInt().coerceIn(32, 1200)
-        val paths = (0 until scene.channels).map { ch ->
+        val paths = (0 until scene.curves).map { ch ->
             Path().apply {
+                var last = Long.MIN_VALUE
                 for (i in 0..n) {
-                    val t = vp.t0 + vp.timeSpan * i / n
-                    val x = plot.x(t); val y = plot.y(scene.value(t.roundToLong(), ch))
+                    val t = (vp.t0 + vp.timeSpan * i / n).roundToLong()
+                    // Speed jumps at keys (in ≠ out): add the two sides of every key crossed, so the jump is vertical.
+                    if (scene.speed && i > 0) for (kt in scene.keyTimes) if (kt in (last + 1)..t) {
+                        lineTo(plot.x((kt - 1).toDouble()), plot.y(scene.curveY(kt - 1, ch))); lineTo(plot.x(kt.toDouble()), plot.y(scene.curveY(kt, ch)))
+                    }
+                    val x = plot.x(t.toDouble()); val y = plot.y(scene.curveY(t, ch))
                     if (i == 0) moveTo(x, y) else lineTo(x, y)
+                    last = t
                 }
             }
         }
@@ -251,8 +305,7 @@ private fun hitTest(s: ValueScene, plot: ValuePlot, at: Offset, radius: Float): 
         val vStep = ValueView.step(vp.valueSpan)
         val tTicks = ticks(vp.t0, vp.t1, tStep); val vTicks = ticks(vp.v0, vp.v1, vStep)
         val tLabels = if (labels) tTicks.map { t -> measurer.measure(timeLabel(t, frames, scene), style) } else emptyList()
-        val axis = scene.axes[scene.channel]
-        val vLabels = if (labels) vTicks.map { v -> measurer.measure(valueLabel(v, vStep, axis), style) } else emptyList()
+        val vLabels = if (labels) vTicks.map { v -> measurer.measure(scene.tickLabel(v, vStep), style) } else emptyList()
         val stroke = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
         val dim = Stroke(1.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
         onDrawBehind {
@@ -266,11 +319,11 @@ private fun hitTest(s: ValueScene, plot: ValuePlot, at: Offset, radius: Float): 
                 vLabels.getOrNull(i)?.let { drawText(it, topLeft = Offset(2.dp.toPx(), y - it.size.height - 1.dp.toPx())) }
             }
             // The other channel dimmed, the edited one solid.
-            for (ch in 0 until scene.channels) if (ch != scene.channel) drawPath(paths[ch], TextSecondary.copy(alpha = .45f), style = dim)
-            drawPath(paths[scene.channel], TextPrimary, style = stroke)
-            scene.bezier?.takeIf { scene.segStart >= 0 }?.let { b -> handles(scene, plot, b) }
+            for (ch in 0 until scene.curves) if (ch != scene.curve) drawPath(paths[ch], TextSecondary.copy(alpha = .45f), style = dim)
+            drawPath(paths[scene.curve], TextPrimary, style = stroke)
+            handles(scene, plot)
             for (i in scene.keys.indices) {
-                val p = Offset(plot.x(scene.keyTimes[i].toDouble()), plot.y(scene.keyValue(i)))
+                val p = Offset(plot.x(scene.keyTimes[i].toDouble()), plot.y(scene.keyY(i)))
                 val inSegment = i == scene.segStart || i == scene.segStart + 1
                 drawCircle(Surface, 5.dp.toPx(), p)
                 drawCircle(if (inSegment) Highlight else TextPrimary, 3.5.dp.toPx(), p)
@@ -280,16 +333,13 @@ private fun hitTest(s: ValueScene, plot: ValuePlot, at: Offset, radius: Float): 
     })
 }
 
-private fun DrawScope.handles(scene: ValueScene, plot: ValuePlot, b: FloatArray) {
-    val k = scene.segStart
-    val t0 = scene.keyTimes[k].toDouble(); val t1 = scene.keyTimes[k + 1].toDouble()
-    val a0 = scene.keyValue(k); val a1 = scene.keyValue(k + 1)
+private fun DrawScope.handles(scene: ValueScene, plot: ValuePlot) {
     val line = 1.dp.toPx()
     for (h in 0..1) {
-        val (t, v) = ValueHandles.point(b, h, t0, a0, t1, a1)
+        val (t, v) = scene.handlePoint(h) ?: continue
+        val (at, av) = scene.handleAnchor(h) ?: continue
         val p = Offset(plot.x(t), plot.y(v))
-        val from = if (h == 0) Offset(plot.x(t0), plot.y(a0)) else Offset(plot.x(t1), plot.y(a1))
-        drawLine(TextSecondary, from, p, line, StrokeCap.Round)
+        drawLine(TextSecondary, Offset(plot.x(at), plot.y(av)), p, line, StrokeCap.Round)
         drawCircle(Highlight, 3.dp.toPx(), p)
     }
 }
@@ -321,7 +371,7 @@ internal fun valueLabel(v: Double, step: Double, axis: ValueAxis): String {
         val x = plot.x(local.toDouble())
         if (x < 0f || x > size.width) return@Canvas
         drawLine(TextSecondary.copy(alpha = .6f), Offset(x, 0f), Offset(x, size.height), .75.dp.toPx())
-        if (showDot) { val p = Offset(x, plot.y(scene.value(local))); drawCircle(Surface, 5.dp.toPx(), p); drawCircle(TextPrimary, 4.dp.toPx(), p) }
+        if (showDot) { val p = Offset(x, plot.y(scene.curveY(local))); drawCircle(Surface, 5.dp.toPx(), p); drawCircle(TextPrimary, 4.dp.toPx(), p) }
     }
 }
 
@@ -382,12 +432,55 @@ internal fun valueLabel(v: Double, step: Double, axis: ValueAxis): String {
     }
 }
 
+/**
+ * GRAPH G3 Speed view bar: Speed out, Influence out, Speed in, Influence in of the selected segment (the segment at the
+ * playhead without a selection). Speeds in display units/s with the page's decimals, influences in % (0.1–100). Typed
+ * entry is one undo each (Smooth through key applies to a typed speed). Disabled for Bounce / Elastic / Hold ("Edit in
+ * Ease"); a flat segment's speeds are disabled (influence stays editable).
+ */
+@Composable internal fun SpeedValuesBar(scene: ValueScene, height: Float, onCommit: (HandleEdit) -> Unit) {
+    val k = scene.segStart
+    val seg = scene.speedSegs.getOrNull(k)
+    val b = scene.bezier
+    val axis = scene.axes[0]
+    val unit = GraphSpeed.unit(axis)
+    fun edit(h: Int, influence: Double, speed: Double?) {
+        val sg = seg ?: return; val bb = b ?: return
+        val nb = SpeedHandles.set(sg, bb, h, influence, speed ?: SpeedHandles.speed(sg, bb, h))
+        val r = SmoothThroughKey.apply(scene.speedSegs, k, h, nb, scene.smooth)
+        onCommit(HandleEdit(r.edits.first().second, r.edits.drop(1)))
+    }
+    Row(Modifier.fillMaxWidth().height(height.dp).background(SurfaceHigh).testTag("graph-values-bar")) {
+        for (h in 0..1) {
+            val side = if (h == 0) "out" else "in"
+            val curveOk = b != null && seg != null
+            val note = if (!curveOk) "Edit in Ease" else null
+            val speedText = if (curveOk) GraphSpeed.text(axis, SpeedHandles.speed(seg!!, b!!, h)) else "–"
+            val influenceText = if (b != null) String.format(java.util.Locale.ROOT, "%.1f", SpeedHandles.influence(b, h) * 100) else "–"
+            if (h > 0) Box(Modifier.width(GraphLayout.HAIRLINE.dp).fillMaxHeight().background(Border))
+            GraphTypedTile("Speed $side", unit, speedText, curveOk && !seg!!.flat, Modifier.weight(1.2f).fillMaxHeight().testTag("graph-speed-$side-speed"),
+                description = note ?: if (seg?.flat == true) "Speed $side 0, flat segment" else null) { text ->
+                val v = ValueParsing.number(text.removeSuffix("/s").trim(), axis.unit)?.takeIf { it.isFinite() } ?: return@GraphTypedTile
+                val bb = b ?: return@GraphTypedTile
+                edit(h, SpeedHandles.influence(bb, h), v)
+            }
+            Box(Modifier.width(GraphLayout.HAIRLINE.dp).fillMaxHeight().background(Border))
+            GraphTypedTile("Influence $side", "%", influenceText, curveOk, Modifier.weight(1f).fillMaxHeight().testTag("graph-speed-$side-influence"),
+                description = note) { text ->
+                val v = ValueParsing.number(text, "%")?.takeIf { it.isFinite() } ?: return@GraphTypedTile
+                edit(h, v.coerceIn(.1, 100.0) / 100.0, null)
+            }
+        }
+    }
+}
+
 /** A values-bar tile with a corner label and a typed-entry popover (the Ease bar's tile, for free-form values). */
-@Composable internal fun GraphTypedTile(label: String, unit: String, text: String, enabled: Boolean, modifier: Modifier, onCommit: (String) -> Unit) {
+@Composable internal fun GraphTypedTile(label: String, unit: String, text: String, enabled: Boolean, modifier: Modifier,
+    description: String? = null, onCommit: (String) -> Unit) {
     var editing by remember { mutableStateOf(false) }
     Box(modifier.background(if (editing) Surface else SurfaceHigh)
         .clickable(enabled = enabled, role = Role.Button, onClickLabel = "Type $label") { editing = true }
-        .semantics(mergeDescendants = true) { contentDescription = "$label $text"; if (!enabled) disabled() }) {
+        .semantics(mergeDescendants = true) { contentDescription = description ?: "$label $text"; if (!enabled) disabled() }) {
         Text(label, Modifier.align(Alignment.TopStart).padding(start = 4.dp, top = 2.dp), color = TextSecondary, fontSize = 8.sp, lineHeight = 9.sp, maxLines = 1)
         Text(if (unit.isEmpty()) text else "$text$unit", Modifier.align(Alignment.Center).padding(top = 6.dp), color = if (enabled) TextPrimary else TextDisabled, maxLines = 1,
             style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace))

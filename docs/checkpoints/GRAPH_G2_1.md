@@ -2,6 +2,8 @@
 
 # GRAPH G2.1: acceptance fixes (hex colour, Value graph, units, time audit, library drag, snapping)
 
+> **Next:** [TL1](TL1.md) made scrubbing frame-exact, added the tiered ruler and made the Time tile live, and [GRAPH G3](GRAPH_G3.md) added the Speed graph.
+
 Branch `graph-g2-1`, created from `graph-g2` at `99b8a49`. `graph-g2` is not merged into `master`, so this branch also carries G2 and G2L. Not merged.
 
 The items come from the user's A16 acceptance of G2 ([GRAPH_G2.md](GRAPH_G2.md)).

@@ -599,6 +599,15 @@ Fluxx's existing trackpad interaction system could potentially be used to provid
 
 **GRAPH G2 (2026-11-24):** the **Value Graph** is live: the property's value over time from the real evaluator, keys draggable in time (frame-snapped, never crossing a neighbour) and value with one undo, the selected segment's influence handles on the curve, tap to select a key, double tap to seek to it, pan, axis-aware pinch zoom and fit, and a Time / Value / X|Y values bar. Colour properties have no Value graph (no single axis). The Speed Graph remains (G3). See [GRAPH G2](../checkpoints/GRAPH_G2.md).
 
+**GRAPH G3 (2026-11-24):** the **Speed Graph** is live. It plots speed over time across all keys, in each property's units per second (one combined curve for Position and Scale), from the evaluator's own easing derivative.
+
+- **Handles:** After-Effects-style speed/influence handles on the selected segment, editing the same stored curves as the Ease and Value views.
+- **Values bar:** Speed / Influence in and out, typed.
+- **Smooth through key:** a Tools toggle that matches speeds across a key (both 0 at a peak or valley), one undo.
+- **Tab memory:** the page opens on the last-used tab.
+
+G2.1 / TL1 also made the Value graph use the inspector pages' units, made scrubbing frame-exact and gave the ruler second / half-second / frame tiers. See [GRAPH G3](../checkpoints/GRAPH_G3.md) and [TL1](../checkpoints/TL1.md).
+
 ---
 
 # 21. Expressions

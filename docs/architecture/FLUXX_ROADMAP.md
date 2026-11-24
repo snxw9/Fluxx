@@ -145,7 +145,7 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.
 
-### Graph editor (in progress: G1, G1.1, G2L, G2 and G2.1 in source)
+### Graph editor (in progress: G1, G1.1, G2L, G2, G2.1, TL1 and G3 in source)
 
 The graph editor (value and speed curves for keyframes, reached from the rail's Graph icon) is the current big item. It is planned in these passes:
 - [x] **G1: curve backend + Ease view** — schema v13 easing (Hold, Linear, Easy Ease, Custom bezier with overshoot, Bounce, Elastic), `SetKeyEasing`, overshoot-safe consumers, and the Graph page's Ease view with presets, handles, numeric entry and `cubic-bezier()` clipboard. Implemented in source on `graph-g1`; JVM 518/518 and the targeted A16 layout/render tests pass; phone acceptance pending ([record](../checkpoints/GRAPH_G1.md)).
@@ -173,8 +173,16 @@ The graph editor (value and speed curves for keyframes, reached from the rail's 
   - a live Graph Time tile.
 
   No schema change, no new action. JVM 571/571; A16 TimeAuditTest passes; phone acceptance pending ([record](../checkpoints/TL1.md)).
-- [ ] **G3: Speed graph** and "smooth through key". Next.
-- [ ] **G4: convert Bounce/Elastic to keys**, extra curve libraries, share-sheet export of curves. Later: separate X/Y easing and dimensions (a further schema bump) and multi-select.
+- [x] **G3: Speed graph**:
+  - speed over time in the page's units/s, one combined curve for Position and Scale;
+  - speed / influence handles;
+  - a Speed / Influence values bar;
+  - Smooth through key (Speed view, one undo);
+  - the page opens on the last-used tab.
+
+  No schema change, no new action. JVM 581/581; A16 `GraphSpeedTest` passes; phone acceptance pending ([record](../checkpoints/GRAPH_G3.md)).
+- [ ] **G4: convert Bounce/Elastic to keys** and extra curve libraries. Next.
+- Later: share-sheet export of curves, separate X/Y easing and dimensions (needs schema v14) and multi-select.
 
 ### Timeline productivity (parked)
 
@@ -188,7 +196,7 @@ Still parked after the text phase. These are user ideas recorded for planning; n
 
 ### Parked / follow-ups
 
-- **Parked from GRAPH G2.1:** a live Time tile (after the time audit questions: frame snapping of scrubs, rounding, drop-frame) and Position detents (needs layer geometry).
+- **Parked (GRAPH G2.1 / TL1 / G3):** Position detents (needs layer geometry), drop-frame timecode, the Interface size setting, and separate X/Y easing (needs schema v14). The live Time tile shipped in TL1.
 - **Interface size setting** (from GRAPH G2L): an app-level size for inspector tiles and thumbnails; several Graph widths (strip, rail, library) now follow fixed tile sizes.
 - **Landscape editor layout.** Rotation now keeps the project open, but the landscape layout is cramped and the preview distorts.
 - **T5 right-to-left text.** Stopped; needs the cross-style shaping ownership decision.

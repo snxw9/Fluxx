@@ -270,6 +270,17 @@ internal val CHOICE_ICONS = mapOf(EaseChoice.HOLD to "EASE_HOLD", EaseChoice.LIN
 internal fun graphTypeTile(curve: EasingCurve): EaseChoice? = EaseChoice.of(curve).takeIf { it != EaseChoice.CUSTOM }
 
 /**
+ * GRAPH G3: the last-used Graph tab (persisted app-level in the curve library file). The page opens on it; Value and
+ * Speed fall back to Ease where unavailable (colour, fewer than two keys).
+ */
+internal object GraphTabs {
+    fun parse(name: String?): GraphMode = GraphMode.entries.firstOrNull { it.name == name } ?: GraphMode.EASE
+    fun stored(context: android.content.Context): GraphMode = parse(CurveLibraryStore.get(context).state.value.graphTab)
+    fun effective(mode: GraphMode, valueAvailable: Boolean): GraphMode = if (mode != GraphMode.EASE && !valueAvailable) GraphMode.EASE else mode
+    fun remember(store: CurveLibraryStore, mode: GraphMode) = store.update { it.copy(graphTab = mode.name) }
+}
+
+/**
  * GRAPH G1.1 header contents (the sheet places it in the shared header row): back arrow (returns, like the Graph icon),
  * the Value | Speed | Ease mode icons (Value and Speed visible, disabled, inert) and the two-line segment label.
  */
@@ -278,17 +289,19 @@ internal fun graphTypeTile(curve: EasingCurve): EaseChoice? = EaseChoice.of(curv
     val local = GraphModel.local(layer, target, playheadUs, frameRate)
     val segment = GraphSelection.segment(layer, target, session.selection, playheadUs, local)
     val valueAvailable = GraphValues.available(layer, target)
-    val mode = if (valueAvailable) session.mode else GraphMode.EASE
+    val mode = GraphTabs.effective(session.mode, valueAvailable)
     val picked = GraphSelection.valid(session.selection, GraphModel.keyTimes(layer, target), playheadUs)
+    val tabStore = CurveLibraryStore.get(androidx.compose.ui.platform.LocalContext.current)
     Row(Modifier.fillMaxWidth().height(InspectorChromeBudget.header(LocalDensity.current.fontScale).dp).testTag("graph-header"),
         verticalAlignment = Alignment.CenterVertically) {
         InspectorIconButton(InspectorIcons.icon("BACK"), "Back from the graph editor", Modifier.testTag("graph-back")) { onBack() }
         Spacer(Modifier.weight(1f))
         Row(verticalAlignment = Alignment.CenterVertically) {
             GraphModeTile("GRAPH_VALUE", if (valueAvailable) "Value graph" else "Value graph (not available for colour)", enabled = valueAvailable,
-                selected = mode == GraphMode.VALUE) { if (session.mode != GraphMode.VALUE) { session.mode = GraphMode.VALUE; session.viewport = null } }
-            GraphModeTile("GRAPH_SPEED", "Speed graph (not yet available)", enabled = false, selected = false)
-            GraphModeTile("GRAPH_EASE", "Ease view", enabled = true, selected = mode == GraphMode.EASE) { session.mode = GraphMode.EASE }
+                selected = mode == GraphMode.VALUE) { if (session.mode != GraphMode.VALUE) { session.mode = GraphMode.VALUE; session.viewport = null }; GraphTabs.remember(tabStore, GraphMode.VALUE) }
+            GraphModeTile("GRAPH_SPEED", if (valueAvailable) "Speed graph" else "Speed graph (not available for colour)", enabled = valueAvailable,
+                selected = mode == GraphMode.SPEED) { if (session.mode != GraphMode.SPEED) { session.mode = GraphMode.SPEED; session.speedViewport = null }; GraphTabs.remember(tabStore, GraphMode.SPEED) }
+            GraphModeTile("GRAPH_EASE", "Ease view", enabled = true, selected = mode == GraphMode.EASE) { session.mode = GraphMode.EASE; GraphTabs.remember(tabStore, GraphMode.EASE) }
         }
         Spacer(Modifier.weight(1f))
         if (segment != null) {
@@ -336,7 +349,9 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
     // GRAPH G2: a selected key's departing segment overrides the playhead's until the playhead moves.
     val segment = GraphSelection.segment(layer, target, session.selection, playheadUs, local)
     LaunchedEffect(playheadUs) { session.selection?.let { if (it.playheadUs != playheadUs) session.selection = null } }
-    val valueMode = session.mode == GraphMode.VALUE && GraphValues.available(layer, target)
+    val available = GraphValues.available(layer, target)
+    val valueMode = session.mode == GraphMode.VALUE && available
+    val speedMode = session.mode == GraphMode.SPEED && available
     // The property lost its keys (undo, diamond, deletion) or the address disappeared: fall back to the page it came from.
     if (segment == null) { LaunchedEffect(Unit) { close() }; Box(modifier.fillMaxSize().testTag("graph-page")); return }
     val keyTime = segment.startUs
@@ -369,6 +384,12 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
     }
     fun begin() { if (!dragging) { dragging = true; ghost = stored; latestBegin() } }
     fun preview(c: EasingCurve) { if (dragging) { draft = c; latestPreview(GraphModel.action(latestLayerId, latestTarget, listOf(latestKey), c)) } }
+    /** GRAPH G3: a handle edit as ONE action: the segment's SetKeyEasing, or a Batch with the neighbours' (Smooth through key). */
+    fun editAction(e: HandleEdit): EditorAction {
+        val own = GraphModel.action(latestLayerId, latestTarget, listOf(latestKey), e.curve)
+        return if (e.others.isEmpty()) own else EditorAction.Batch(listOf(own) + e.others.map { (k, c) -> GraphModel.action(latestLayerId, latestTarget, listOf(k), c) })
+    }
+    fun previewEdit(e: HandleEdit) { if (dragging) { draft = e.curve; latestPreview(editAction(e)) } }
     fun commit() { if (dragging) { dragging = false; latestCommit(); draft = null } }
     fun cancelDrag() { if (dragging) { dragging = false; latestCancel(); draft = null } }
     // GRAPH G2.1 §3: keys are not draggable; a tap selects, a double tap seeks, the values bar types time and value.
@@ -400,7 +421,8 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
                 onToggleKey = { GraphModel.toggleKey(layer, target, playheadUs, frameRate)?.let(onAction) },
                 onGraph = { close() },
                 onInvert = { EaseMath.invert(stored)?.let { edit(it) } },
-                onSnap = { libraryStore.update { it.copy(graphSnap = !it.graphSnap) } }, onMirror = { mirror = !mirror }, onApplyAll = { edit(stored, all = true) },
+                onSnap = { libraryStore.update { it.copy(graphSnap = !it.graphSnap) } },
+                smooth = library.smoothThroughKey, onSmooth = { libraryStore.update { it.copy(smoothThroughKey = !it.smoothThroughKey) } }, onMirror = { mirror = !mirror }, onApplyAll = { edit(stored, all = true) },
                 onCopy = { CubicBezierText.format(stored)?.let { text ->
                     scope.launch { runCatching { clipboard.setClipEntry(ClipEntry(android.content.ClipData.newPlainText("cubic-bezier", text))) } } } },
                 onPaste = { scope.launch {
@@ -417,18 +439,20 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
                 Row(Modifier.width((m.padWidth + stripShown).dp).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(SurfaceHigh)
                     .border(.5.dp, Border, RoundedCornerShape(8.dp)).testTag("graph-centre")) {
                     Column(Modifier.width(m.padWidth.dp).fillMaxHeight().testTag("graph-pad-column")) {
-                        if (valueMode) {
+                        if (valueMode || speedMode) {
                             val axes = remember(layer, target, compositionWidth, compositionHeight) { GraphValues.axes(layer, target, compositionWidth, compositionHeight) }
                             val channel = session.channel.coerceIn(0, (axes.size - 1).coerceAtLeast(0))
                             val keyTimes = GraphModel.keyTimes(layer, target)
                             val picked = session.selection?.takeIf { GraphSelection.valid(it, keyTimes, playheadUs) }?.let { keyTimes.indexOf(it.keyTimeUs) }
-                            val scene = remember(layer, target, frameRate, axes, channel, segment, picked, startTimecodeUs) {
-                                ValueScene(layer, target, frameRate, axes, channel, segment.copy(curve = curve), picked, startTimecodeUs) }
+                            val smooth = library.smoothThroughKey
+                            val scene = remember(layer, target, frameRate, axes, channel, segment, picked, startTimecodeUs, speedMode, smooth) {
+                                ValueScene(layer, target, frameRate, axes, channel, segment.copy(curve = curve), picked, startTimecodeUs, speed = speedMode, smooth = smooth) }
                             ValueCanvas(scene, session, local, library.showPlayheadDot, snap, mirror,
                                 onSelectKey = ::selectKey, onSeekKey = ::seekKey,
-                                onHandleBegin = ::begin, onHandleDrag = ::preview, onHandleEnd = ::commit, onHandleCancel = ::cancelDrag,
-                                modifier = Modifier.fillMaxWidth().height(m.padHeight.dp).testTag("graph-value-canvas"))
+                                onHandleBegin = ::begin, onHandleDrag = ::previewEdit, onHandleEnd = ::commit, onHandleCancel = ::cancelDrag,
+                                modifier = Modifier.fillMaxWidth().height(m.padHeight.dp).testTag(if (speedMode) "graph-speed-canvas" else "graph-value-canvas"))
                             Box(Modifier.fillMaxWidth().height(GraphLayout.HAIRLINE.dp).background(Border))
+                            if (speedMode) SpeedValuesBar(scene, m.bar) { e -> focus.clearFocus(); latestAction(editAction(e)) } else {
                             // GRAPH G2.1 §6: the live value at the playhead (as the page shows it) when no key is selected.
                             val live = remember(layer, target, playheadUs, frameRate) { GraphValues.live(layer, target, playheadUs, frameRate) }
                             ValueValuesBar(scene, picked, m.bar, live, onChannel = { session.channel = it },
@@ -436,7 +460,7 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
                                     focus.clearFocus(); latestAction(action)
                                     if (time != null) session.selection = KeySelection(time, latestPlayhead) },
                                 onTypedAtPlayhead = { x, y -> GraphValues.atPlayheadAction(layer, target, latestPlayhead, frameRate, x, y) },
-                                playheadUs = playheadUs)
+                                playheadUs = playheadUs) }
                         } else {
                             EaseCanvas(curve, ghost, GraphModel.progress(segment, local), selectedHandle, snap, mirror, library.showPlayheadDot,
                                 onSelect = { selectedHandle = it }, onBegin = ::begin, onDrag = ::preview, onEnd = ::commit, onCancel = ::cancelDrag,
@@ -468,7 +492,8 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
 
 /** The Graph page's own left rail (other pages keep [InspectorUtilityRail] unchanged). */
 @Composable private fun GraphLeftRail(tile: Float, curve: EasingCurve, onKey: Boolean, snap: Boolean, mirror: Boolean,
-    onToggleKey: () -> Unit, onGraph: () -> Unit, onInvert: () -> Unit, onSnap: () -> Unit, onMirror: () -> Unit, onApplyAll: () -> Unit,
+    onToggleKey: () -> Unit, onGraph: () -> Unit, onInvert: () -> Unit, onSnap: () -> Unit,
+    smooth: Boolean, onSmooth: () -> Unit, onMirror: () -> Unit, onApplyAll: () -> Unit,
     onCopy: () -> Unit, onPaste: () -> Unit, onReset: () -> Unit, showDot: Boolean, onToggleDot: () -> Unit) {
     val focus = LocalFocusManager.current
     val handles = curve.bezierOrNull() != null
@@ -483,8 +508,8 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
         InspectorIconButton(InspectorIcons.icon("EASE_INVERT"), "Invert curve (swap ease in and out)", t.testTag("graph-tool-invert"),
             enabled = EaseMath.invert(curve) != null) { onInvert() }
         Box {
-            InspectorIconButton(InspectorIcons.icon("GRAPH_TOOLS"), "Graph tools", t.testTag("graph-tools"), selected = tools || snap || mirror,
-                tint = if (snap || mirror) Highlight else null) {
+            InspectorIconButton(InspectorIcons.icon("GRAPH_TOOLS"), "Graph tools", t.testTag("graph-tools"), selected = tools || snap || mirror || smooth,
+                tint = if (snap || mirror || smooth) Highlight else null) {
                 // Decide the toggle first: a dismissal request closes an open popover synchronously (Main.immediate).
                 val open = PopoverToggle.next(if (tools) "tools" else null, "tools") != null
                 if (open) { PopoverDismissal.request(); tools = true } else tools = false
@@ -495,6 +520,9 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
                         selected = snap) { onSnap() }
                     InspectorIconButton(InspectorIcons.icon("EASE_MIRROR"), "Mirror handles", Modifier.testTag("graph-tool-mirror"), enabled = handles,
                         selected = mirror) { onMirror() }
+                    // GRAPH G3: off by default, persisted; applies to the Speed graph's handle drags and typed speeds.
+                    InspectorIconButton(InspectorIcons.icon("GRAPH_SMOOTH"), "Smooth through key (Speed graph)", Modifier.testTag("graph-tool-smooth")
+                        .semantics { stateDescription = if (smooth) "On" else "Off" }, selected = smooth) { onSmooth() }
                     InspectorIconButton(InspectorIcons.icon("EASE_APPLY_ALL"), "Apply to all keys", Modifier.testTag("graph-tool-apply-all")) { onApplyAll() }
                 }
             }

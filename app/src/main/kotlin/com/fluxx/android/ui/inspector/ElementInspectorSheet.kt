@@ -157,11 +157,13 @@ fun ElementInspectorSheet(
         var graphReturn by rememberSaveable { mutableStateOf<InspectorSection?>(null) }
         val pages = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
         val currentLayer by rememberUpdatedState(layer)
+        val graphContext = androidx.compose.ui.platform.LocalContext.current
         val graphHost = remember {
             var host: GraphHost? = null
             GraphHost({ currentLayer }, { graphTarget },
                 open = { target ->
-                    if (section != InspectorSection.GRAPH || graphTarget != target) host?.session?.reset()
+                    // GRAPH G3: open on the last-used tab (the page falls back to Ease where that tab is unavailable).
+                    if (section != InspectorSection.GRAPH || graphTarget != target) host?.session?.reset(GraphTabs.stored(graphContext))
                     if (section != InspectorSection.GRAPH) graphReturn = section; graphTarget = target; section = InspectorSection.GRAPH },
                 close = { host?.session?.reset(); section = graphReturn; graphTarget = null }).also { host = it }
         }

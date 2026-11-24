@@ -29,7 +29,9 @@ sealed interface LibraryEntry {
  * G2.1) the Graph Snap toggle, on by default. Mirror is not persisted.
  */
 data class CurveLibraryState(val user: List<UserCurve> = emptyList(), val pinned: List<String> = CurveLibrary.DEFAULT_PINNED,
-    val showPlayheadDot: Boolean = true, val graphSnap: Boolean = true)
+    val showPlayheadDot: Boolean = true, val graphSnap: Boolean = true,
+    /** GRAPH G3: the Graph page's last-used tab ("VALUE", "SPEED" or "EASE"; Ease the first time) and Smooth through key (off). */
+    val graphTab: String = "EASE", val smoothThroughKey: Boolean = false)
 
 /** Pure library logic (JVM tested). Every operation returns a new state; invalid requests return the state unchanged. */
 object CurveLibrary {
@@ -248,7 +250,7 @@ internal object CurveCodec {
 internal object CurveLibraryFile {
     const val FORMAT = "fluxx.curve-library"
     const val VERSION = 1
-    fun encode(s: CurveLibraryState): String = "{\"format\":${MiniJson.quote(FORMAT)},\"version\":$VERSION,\"showPlayheadDot\":${s.showPlayheadDot},\"graphSnap\":${s.graphSnap}," +
+    fun encode(s: CurveLibraryState): String = "{\"format\":${MiniJson.quote(FORMAT)},\"version\":$VERSION,\"showPlayheadDot\":${s.showPlayheadDot},\"graphSnap\":${s.graphSnap},\"graphTab\":${MiniJson.quote(s.graphTab)},\"smoothThroughKey\":${s.smoothThroughKey}," +
         "\"pinned\":[${s.pinned.joinToString(",") { MiniJson.quote(it) }}],\"curves\":[${s.user.joinToString(",") { CurveCodec.write(it.name, it.curve, it.id) }}]}"
     /** Null for a corrupt, foreign or newer-version file (the caller keeps a backup and starts from defaults). */
     fun decode(text: String): CurveLibraryState? = runCatching {
@@ -260,7 +262,8 @@ internal object CurveLibraryFile {
             val id = (o as? Map<*, *>)?.get("id") as? String ?: return@mapNotNull null
             CurveCodec.read(o)?.let { (name, c) -> UserCurve(id, name.take(CurveLibrary.NAME_LIMIT), c) }
         }.distinctBy { it.id }.take(CurveLibrary.MAX_USER)
-        val state = CurveLibraryState(user, emptyList(), m["showPlayheadDot"] as? Boolean ?: true, m["graphSnap"] as? Boolean ?: true)
+        val state = CurveLibraryState(user, emptyList(), m["showPlayheadDot"] as? Boolean ?: true, m["graphSnap"] as? Boolean ?: true,
+            (m["graphTab"] as? String)?.takeIf { it in setOf("VALUE", "SPEED", "EASE") } ?: "EASE", m["smoothThroughKey"] as? Boolean ?: false)
         val pinned = (m["pinned"] as? List<*>).orEmpty().mapNotNull { it as? String }.distinct()
             .filter { CurveLibrary.entry(state, it) != null }.take(CurveLibrary.MAX_PINNED)
         state.copy(pinned = pinned)

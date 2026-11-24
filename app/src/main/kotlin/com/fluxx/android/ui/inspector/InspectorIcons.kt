@@ -173,6 +173,8 @@ internal object InspectorIcons {
         put("EASE_ELASTIC", sampled(p(), { com.fluxx.android.model.EasingMath.elastic(it, 2f, .25f) }, -.1f, 1.6f).build())
         put("EASE_SNAP", p().rect(4f, 4f, 16f, 16f, 2.5f).line(4f, 12f, 20f, 12f).line(12f, 4f, 12f, 20f).circle(16f, 8f, 1.5f).build())
         put("EASE_MIRROR", p().line(12f, 3f, 12f, 21f).poly(1.5f, 9.5f, 6f, 9.5f, 18f, 3.5f, 18f).poly(1.5f, 14.5f, 6f, 20.5f, 18f, 14.5f, 18f).build())
+        // GRAPH G3: Smooth through key: a curve through a key with a level tangent (the matched speed).
+        put("GRAPH_SMOOTH", p().cubic(3f, 19f, 7f, 19f, 8f, 12f, 12f, 12f).cubic(12f, 12f, 16f, 12f, 17f, 5f, 21f, 5f).line(7f, 12f, 17f, 12f).circle(12f, 12f, 1.5f).build())
         put("EASE_INVERT", p().line(4f, 8f, 18f, 8f).line(15f, 5f, 18f, 8f, 15f, 11f).line(20f, 16f, 6f, 16f).line(9f, 13f, 6f, 16f, 9f, 19f).build())
         put("EASE_APPLY_ALL", p().poly(1f, 6f, 8.5f, 9f, 11.5f, 6f, 14.5f, 3f, 11.5f).poly(1f, 12f, 8.5f, 15f, 11.5f, 12f, 14.5f, 9f, 11.5f)
             .poly(1f, 18f, 8.5f, 21f, 11.5f, 18f, 14.5f, 15f, 11.5f).line(3f, 19f, 21f, 19f).build())
