@@ -2,7 +2,7 @@
 
 # GRAPH G1: curve backend + Ease view (Graph Editor, pass 1 of 4)
 
-Branch `graph-g1`, built on `master` at `d0d27f8` (TEXT F3.4 merged; the brief named `67df5f3`, which `d0d27f8` contains). Not committed: the changes are in the working tree of `graph-g1`. One pass, organised by the sections of the brief.
+Branch `graph-g1`, built on `master` at `d0d27f8` (TEXT F3.4 merged; the brief named `67df5f3`, which `d0d27f8` contains). Committed as `ced9499` on `graph-g1`. **The Graph page layout in §5 was reworked in [GRAPH G1.1](GRAPH_G1_1.md)** (header row, rails, touchpad + values bar; the tile grid, numeric popover, preset strip and loupe described below are gone). One pass, organised by the sections of the brief.
 
 Status:
 - Implemented in source.
@@ -215,7 +215,7 @@ Value graph, Speed graph (icons visible, disabled), key selection or dragging in
 
 ## 8. Deviations from the brief
 
-1. Base `d0d27f8` instead of `67df5f3` (master had moved on with F3.4). Not committed.
+1. Base `d0d27f8` instead of `67df5f3` (master had moved on with F3.4). Committed as `ced9499`.
 2. 32 presets rather than about 24: the brief's own list names 32.
 3. The Graph page carries its own rail (diamond on the edited property, Graph icon to return, ⋮ with Reset curve / Apply to all) instead of keeping the source page's rail. That is what makes "tap the icon again to return" and a live diamond possible on the page.
 4. The header grows with font scale, as every inspector header does.

@@ -136,7 +136,7 @@ class GraphG1UiStateTest {
         assertEquals(EditorAction.ToggleAnimated(1, AnimPropertyType.OPACITY, true, 0), GraphModel.toggleKey(layer, GraphTarget(AnimPropertyType.OPACITY), 0, FrameRate()))
     }
 
-    @Test fun numericRowsMatchTheType() {
+    @Test fun valueRowsMatchTheType() {
         assertEquals(listOf("x1", "y1", "x2", "y2"), EaseLimits.rows(EasingCurve.bezier(.1f, .2f, .3f, .4f)).map { it.first.name })
         assertEquals(EasingCurve.bezier(.1f, 2.5f, .3f, .4f), EaseLimits.rows(EasingCurve.bezier(.1f, .2f, .3f, .4f))[1].third(2.5f))
         // Editing a Linear/Easy Ease value makes it Custom; Hold has no rows.
@@ -146,32 +146,12 @@ class GraphG1UiStateTest {
         assertEquals(EasingCurve.elastic(3f, .1f), EaseLimits.rows(EasingCurve.elastic(3f, .5f))[1].third(0f))
     }
 
-    // ---- Page geometry at the hard sheet heights ----------------------------------------------------------------------
-    @Test fun graphPageFitsBothSheetHeightsWithoutScrolling() {
-        for (windowWidth in listOf(360f, 384f, 411f)) for (expanded in listOf(true, false)) for (scale in listOf(1f, 1.3f)) {
-            val sheet = InspectorSheetBudget.height(expanded, scale)
-            val height = sheet - InspectorSheetBudget.FRAME_V
-            val width = windowWidth - InspectorSheetBudget.FRAME_H - RailBudget.TILE - TextInspectorBudget.RAIL_GAP
-            val m = GraphLayout.compute(width, height, scale)
-            val label = "$windowWidth dp, sheet $sheet, scale $scale: $m"
-            assertTrue(label, m.fits)
-            assertTrue(label, m.columns * m.rows >= GraphLayout.TILES)
-            assertTrue(label, m.canvas + GraphLayout.CANVAS_GAP + m.controlsWidth <= width + 1e-3f)
-            assertTrue(label, GraphLayout.header(scale) + m.body + GraphLayout.STRIP + 2 * GraphLayout.GAP <= height + 1e-3f)
-            assertTrue(label, m.tile >= 32f && m.canvas <= m.body)
-        }
-        // The A16 (≈384dp wide) gets a ≥150dp canvas at 268 and ≥180dp at 328.
-        val w = 384f - InspectorSheetBudget.FRAME_H - RailBudget.TILE - TextInspectorBudget.RAIL_GAP
-        assertTrue(GraphLayout.compute(w, 268f - InspectorSheetBudget.FRAME_V).canvas >= 150f)
-        assertTrue(GraphLayout.compute(w, 328f - InspectorSheetBudget.FRAME_V).canvas >= 180f)
-    }
-
     @Test fun easeViewYRangeGrowsForOvershootAndSamplingIsExact() {
         assertEquals(EasePlot.DEFAULT_LOW to EasePlot.DEFAULT_HIGH, EasePlot.range(EasingCurve.EASY_EASE))
         val wild = EasingCurve.bezier(.1f, -2f, .9f, 3f)
         val (lo, hi) = EasePlot.range(wild)
         assertTrue(lo <= -2.1f + 1e-4f && hi >= 3.1f - 1e-4f)
-        val plot = EasePlot(200f, 100f, 10f, -.25f, 1.25f)
+        val plot = EasePlot(200f, 100f, 10f, -.15f, 1.15f)
         assertEquals(10f, plot.x(0f), 0f); assertEquals(190f, plot.x(1f), 1e-4f)
         assertEquals(.5f, plot.valueY(plot.y(.5f)), 1e-5f); assertEquals(.3f, plot.valueX(plot.x(.3f)), 1e-5f)
         // Drawn samples lie on the evaluated curve.
@@ -188,7 +168,7 @@ class GraphG1UiStateTest {
         assertFalse(InspectorSwipe.enabled(InspectorSection.GRAPH, textTyping = true))
         assertEquals("GRAPH", categoryIconName(InspectorSection.GRAPH, LayerType.TEXT))
         for (name in listOf("GRAPH_VALUE", "GRAPH_SPEED", "GRAPH_EASE", "EASE_HOLD", "EASE_LINEAR", "EASE_EASY", "EASE_IN", "EASE_OUT", "EASE_CUSTOM",
-            "EASE_BOUNCE", "EASE_ELASTIC", "EASE_SNAP", "EASE_MIRROR", "EASE_INVERT", "EASE_APPLY_ALL", "EASE_COPY", "EASE_NUMERIC", "PASTE"))
+            "EASE_BOUNCE", "EASE_ELASTIC", "EASE_SNAP", "EASE_MIRROR", "EASE_INVERT", "EASE_APPLY_ALL", "GRAPH_TOOLS", "PASTE"))
             assertTrue(name, name in InspectorIcons.PATHS)
         // The rail ⋮ easing menu is unchanged by the larger enum.
         assertEquals(listOf(EasingPreset.EASY_EASE, EasingPreset.LINEAR), RAIL_EASINGS)

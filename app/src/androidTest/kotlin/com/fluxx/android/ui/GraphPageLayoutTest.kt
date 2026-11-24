@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -19,16 +20,17 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * GRAPH G1: the Graph page (Ease view) inside the real ElementInspectorSheet at the hard sheet heights (268 / 328dp)
- * and two phone widths. The page fits without scrolling (only the preset strip scrolls sideways), nothing is clipped,
- * every tile keeps a touch size, a handle can be dragged (one undo entry), the Graph icon returns to the page it came
- * from with its state, and the sheet's swipe-down still closes. Edits go through the real EditorViewModel.
+ * GRAPH G1.1: the reworked Graph page inside the real ElementInspectorSheet at the hard sheet heights (268 / 328dp)
+ * and two phone widths: shared header row, left rail where every other page's rail is, the touchpad and values bar as
+ * one item, the right rail list. Handle, pad, typed and tap edits go through the real EditorViewModel; none moves the
+ * playhead.
  */
 class GraphPageLayoutTest {
     @get:Rule val compose = createComposeRule()
     private val size = mutableStateOf(Pair(384f, 268f))
     private var dismissed = 0
     private lateinit var vm: EditorViewModel
+    private val selected = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Selected")
 
     private fun rotationLayer() = CompositionLayer(1, LayerType.TEXT, timing = ClipTiming(0, 0, 4_000_000),
         text = TextProperties(source = AnimatableString(staticValue = "Graph"), size = AnimatableProperty1D(true, 72f,
@@ -36,16 +38,16 @@ class GraphPageLayoutTest {
         animTransform = AnimatableTransform(rotation = AnimatableProperty1D(true, 0f, FrozenList.of(listOf(
             Keyframe1D(0, 0f), Keyframe1D(1_000_000, 90f), Keyframe1D(3_000_000, 45f))))))
 
-    private fun start() {
+    private fun start(playhead: Long = 0) {
         vm = EditorViewModel()
         vm.dispatch(EditorAction.Load(ProjectDocument(com.fluxx.android.model.Composition(durationUs = 4_000_000, layers = FrozenList.of(listOf(rotationLayer()))))))
-        vm.dispatch(EditorAction.Select(1))
+        vm.dispatch(EditorAction.Select(1)); vm.dispatch(EditorAction.Seek(playhead))
         compose.setContent {
             val (w, h) = size.value
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides if (InspectorSheetBudget.compact(h)) 40.dp else 48.dp) {
                 MaterialTheme {
                     key(size.value) {
-                        ElementInspectorSheet(vm.displayedState.selectedLayer!!, 1080, 1920, compositionDurationUs = 4_000_000, playheadUs = vm.state.playheadUs,
+                        ElementInspectorSheet(vm.displayedState.selectedLayer!!, 1080, 1920, compositionDurationUs = 4_000_000, playheadUs = vm.displayedState.playheadUs,
                             onAction = vm::dispatch, onRename = {}, onDuplicate = {}, onDelete = {}, onDismiss = { dismissed++ },
                             onTransformBegin = vm::beginGesture, onTransformPreview = {}, onTransformCommit = { vm.commitGesture() },
                             onTransformCancel = { vm.cancelGesture() }, onTransformEdit = {}, onTimingChange = {}, onAudioChange = { _, _ -> },
@@ -59,94 +61,137 @@ class GraphPageLayoutTest {
     }
     private fun bounds(tag: String): Rect = compose.onNodeWithTag(tag, useUnmergedTree = true).getBoundsInRoot().let {
         Rect(it.left.value, it.top.value, it.right.value, it.bottom.value) }
-    private fun click(tag: String) { compose.onNodeWithTag(tag, useUnmergedTree = true).performClick(); compose.waitForIdle() }
-    private fun openRotationGraph() {
+    private fun click(tag: String) {
+        // The right rail is a vertical list: scroll its tile into view first, as a user does.
+        if (tag.startsWith("graph-type-") || tag.startsWith("graph-preset-")) compose.onNodeWithTag("graph-right-rail").performScrollToNode(hasTestTag(tag))
+        compose.onNodeWithTag(tag, useUnmergedTree = true).performClick(); compose.waitForIdle()
+    }
+    private fun curve(i: Int = 0) = vm.state.project.composition.layers[0].animTransform.rotation.keyframes[i].curve
+    private fun openTransformRotation() {
         compose.onNodeWithContentDescription("Transform").performClick(); compose.waitForIdle()
         click("transform-mode-ROTATION")
-        click("inspector-rail-graph")
-        compose.onNodeWithTag("graph-page").assertExists()
     }
+    private fun openRotationGraph() { openTransformRotation(); click("inspector-rail-graph"); compose.onNodeWithTag("graph-page").assertExists() }
+    private fun valueText(i: Int) = compose.onNodeWithTag("graph-value-$i", useUnmergedTree = true).fetchSemanticsNode()
+        .config[SemanticsProperties.ContentDescription].first()
 
-    @Test fun graphPageFitsBothSheetHeightsWithNothingClipped() {
+    @Test fun layoutFitsBothHeightsAndTheRailSitsWhereTransformsDoes() {
         start()
         for (w in listOf(360f, 384f)) for (h in listOf(268f, 328f)) {
-            compose.runOnIdle { size.value = w to h }
-            compose.waitForIdle()
-            openRotationGraph()
-            val sheet = bounds("inspector-sheet")
-            val tags = listOf("graph-header", "graph-ease-canvas", "graph-controls", "graph-preset-strip", "inspector-rail") +
-                EaseChoice.entries.map { "graph-type-${it.name}" } +
-                listOf("snap", "mirror", "invert", "apply-all", "copy", "paste", "numeric").map { "graph-tool-$it" } +
-                listOf("GRAPH_VALUE", "GRAPH_SPEED", "GRAPH_EASE").map { "graph-mode-$it" }
-            for (tag in tags) {
-                val b = bounds(tag)
-                assertTrue("$tag inside the sheet at $w×$h: $b in $sheet", b.left >= sheet.left - .5f && b.right <= sheet.right + .5f &&
-                    b.top >= sheet.top - .5f && b.bottom <= sheet.bottom + .5f)
-                if (tag.startsWith("graph-type") || tag.startsWith("graph-tool")) assertTrue("$tag touch size at $w×$h: $b", b.width >= 32f && b.height >= 32f)
-            }
-            val canvas = bounds("graph-ease-canvas")
-            assertTrue("square canvas at $w×$h: $canvas", kotlin.math.abs(canvas.width - canvas.height) < 1f && canvas.width >= 120f)
-            // Nothing overlaps: the canvas sits above the strip and beside the controls.
-            assertTrue(canvas.bottom <= bounds("graph-preset-strip").top + .5f); assertTrue(canvas.right <= bounds("graph-controls").left + .5f)
-            assertTrue(bounds("graph-header").bottom <= canvas.top + .5f)
-            // The rail still shows the diamond and the Graph icon (selected: it closes the page).
-            compose.onNodeWithTag("inspector-key-diamond").assertIsDisplayed()
-            compose.onNodeWithTag("inspector-rail-graph").assertIsSelected()
-            compose.onNodeWithTag("graph-segment-label", useUnmergedTree = true).assertTextContains("Key 1 to 2", substring = true)
+            compose.runOnIdle { size.value = w to h }; compose.waitForIdle()
+            openTransformRotation()
+            val transformRail = bounds("inspector-rail"); val transformHeader = bounds("inspector-section-header")
             click("inspector-rail-graph")
+            val sheet = bounds("inspector-sheet")
+            val at = "$w×$h"
+            assertEquals("rail top at $at", transformRail.top, bounds("graph-left-rail").top, .5f)
+            // Header row: back | modes | label, full width above the rails.
+            assertEquals("header height at $at", transformHeader.height, bounds("graph-header").height, .5f)
+            assertEquals("header top at $at", transformHeader.top, bounds("graph-header").top, .5f)
+            assertTrue(bounds("graph-header").bottom <= bounds("graph-left-rail").top + .5f)
+            for (tag in listOf("graph-back", "graph-mode-GRAPH_VALUE", "graph-mode-GRAPH_SPEED", "graph-mode-GRAPH_EASE", "graph-segment-label",
+                "graph-left-rail", "graph-centre", "graph-right-rail", "graph-ease-canvas", "graph-values-bar")) {
+                val b = bounds(tag)
+                assertTrue("$tag inside the sheet at $at: $b", b.left >= sheet.left - .5f && b.right <= sheet.right + .5f && b.top >= sheet.top - .5f && b.bottom <= sheet.bottom + .5f)
+            }
+            // Left rail, top to bottom: diamond, Graph, Invert, Tools, ⋮ (always last); every tile ≥ 36dp.
+            val order = listOf("inspector-key-diamond", "inspector-rail-graph", "graph-tool-invert", "graph-tools", "inspector-rail-menu").map { bounds(it) }
+            for (i in 1 until order.size) assertTrue("rail order at $at", order[i - 1].bottom <= order[i].top + .5f)
+            order.forEach { assertTrue("rail tile ≥ 36dp at $at: $it", it.height >= 36f - .5f) }
+            assertTrue(order.last().bottom <= bounds("graph-left-rail").bottom + .5f)
+            // One centre item: touchpad over values bar, same width, inside one container.
+            val centre = bounds("graph-centre"); val pad = bounds("graph-ease-canvas"); val bar = bounds("graph-values-bar")
+            assertEquals(pad.width, bar.width, .5f); assertEquals(centre.width, pad.width, .5f)
+            assertTrue(pad.top >= centre.top - .5f && bar.bottom <= centre.bottom + .5f && pad.bottom <= bar.top + .5f)
+            assertTrue("touchpad at $at: $pad", pad.height >= (if (h == 268f) 150f else 210f) - .5f && pad.width >= 200f - .5f)
+            assertTrue(bounds("graph-left-rail").right <= centre.left + .5f && centre.right <= bounds("graph-right-rail").left + .5f)
+            compose.onNodeWithTag("graph-segment-label", useUnmergedTree = true).assertTextContains("Key 1 to 2", substring = true)
+            // Back arrow returns to Transform in the Rotation mode, like the Graph icon.
+            click("graph-back")
             compose.onNodeWithTag("graph-page").assertDoesNotExist()
-            // Back on Transform with the Rotation mode it was opened from.
             compose.onNodeWithTag("transform-mode-ROTATION").onChildren().filterToOne(isToggleable()).assertIsOn()
             compose.onNodeWithTag("inspector-section-back").performClick(); compose.waitForIdle()
         }
     }
 
-    @Test fun handleDragIsOneUndoAndTypeTapsApply() {
-        start()
+    @Test fun handleDragUpdatesTheBarLiveCommitsOneUndoAndKeepsThePlayhead() {
+        start(playhead = 0)
         openRotationGraph()
-        // P1 of Easy Ease (0.33, 0) in the default y range [-0.25, 1.25], 10dp inset.
+        val before = vm.state.playheadUs
+        assertEquals("y1 0.00", valueText(1))
         compose.onNodeWithTag("graph-ease-canvas").performTouchInput {
             val inset = 10.dp.toPx(); val w = width - 2 * inset; val h = height - 2 * inset
-            val p1 = Offset(inset + .33f * w, inset + (1.25f - 0f) / 1.5f * h)
-            down(p1); moveBy(Offset(0f, -viewConfiguration.touchSlop - 4f)); moveBy(Offset(-10f, -h * .3f)); moveBy(Offset(-5f, -h * .1f)); up()
+            val (lo, hi) = EasePlot.range(EasingCurve.EASY_EASE)
+            down(Offset(inset + .33f * w, inset + (hi - 0f) / (hi - lo) * h))
+            moveBy(Offset(0f, -viewConfiguration.touchSlop - 4f)); moveBy(Offset(0f, -h * .3f))
         }
         compose.waitForIdle()
-        val curve = vm.state.project.composition.layers[0].animTransform.rotation.keyframes[0].curve
-        assertEquals(EasingPreset.CUSTOM, curve.type)
-        assertTrue("dragged up: $curve", curve.b > .3f)
-        vm.undo(); assertEquals(EasingCurve.EASY_EASE, vm.state.project.composition.layers[0].animTransform.rotation.keyframes[0].curve)
+        assertNotEquals("the bar follows the live drag", "y1 0.00", valueText(1))
+        assertEquals("not committed during the drag", EasingCurve.EASY_EASE, curve())
+        compose.onNodeWithTag("graph-ease-canvas").performTouchInput { up() }; compose.waitForIdle()
+        assertEquals(EasingPreset.CUSTOM, curve().type); assertTrue(curve().b > .2f)
+        assertEquals(before, vm.state.playheadUs)
+        vm.undo(); assertEquals(EasingCurve.EASY_EASE, curve()); assertFalse(vm.canUndo)
         compose.waitForIdle()
-        click("graph-type-BOUNCE")
-        assertEquals(EasingPreset.BOUNCE, vm.state.project.composition.layers[0].animTransform.rotation.keyframes[0].easing)
-        click("graph-type-HOLD")
-        assertEquals(EasingPreset.HOLD, vm.state.project.composition.layers[0].animTransform.rotation.keyframes[0].easing)
+        // A preset tap and a typed value: one action each, playhead unchanged.
         click("graph-preset-css.ease")
-        assertEquals(EasingCurve.bezier(.25f, .1f, .25f, 1f), vm.state.project.composition.layers[0].animTransform.rotation.keyframes[0].curve)
-        // InspectorIconButton reports selection as its state description.
-        compose.onNodeWithTag("graph-preset-css.ease").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Selected"))
-        click("graph-tool-apply-all")
-        assertEquals(EasingCurve.bezier(.25f, .1f, .25f, 1f), vm.state.project.composition.layers[0].animTransform.rotation.keyframes[1].curve)
-        // Numeric popover opens non-modal and closes again on the same tile.
-        click("graph-tool-numeric"); compose.onNodeWithTag("graph-numeric-rows", useUnmergedTree = true).assertExists()
-        click("graph-tool-numeric")
-        val selected = SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Selected")
-        compose.onNodeWithTag("graph-tool-numeric").assert(!selected)
-        compose.waitUntil(3_000) { compose.onAllNodesWithTag("graph-numeric-rows", useUnmergedTree = true).fetchSemanticsNodes().isEmpty() }
+        assertEquals(EasingCurve.bezier(.25f, .1f, .25f, 1f), curve()); assertEquals(before, vm.state.playheadUs)
+        compose.onNodeWithTag("graph-preset-css.ease").assert(selected)
+        click("graph-type-EASE_IN"); compose.onNodeWithTag("graph-type-EASE_IN").assert(selected)
+        click("graph-value-1")
+        compose.onNodeWithContentDescription("y1, exact value in ", substring = true).performTextReplacement("0.8")
+        compose.onNodeWithContentDescription("y1, exact value in ", substring = true).performImeAction(); compose.waitForIdle()
+        assertEquals(EasingPreset.CUSTOM, curve().type); assertEquals(.8f, curve().b, 1e-5f)
+        assertEquals(before, vm.state.playheadUs)
+        compose.onNodeWithTag("graph-type-EASE_IN").assert(!selected)
     }
 
-    @Test fun editTextReturnsToItsPageAndSwipeDownStillCloses() {
+    @Test fun bouncePadDragChangesCountAndHeight() {
         start()
-        compose.onNodeWithContentDescription("Edit Text").performClick(); compose.waitForIdle()
-        // The Character tab focuses Size (keyed): the rail's Graph icon is enabled for it.
-        click("inspector-rail-graph")
-        compose.onNodeWithTag("graph-page").assertExists()
-        compose.onNodeWithTag("graph-segment-label", useUnmergedTree = true).assertTextContains("Key 1 to 2", substring = true)
-        click("inspector-rail-graph")
-        compose.onNodeWithTag("text-tab-CHARACTER").assertIsSelected()
-        click("inspector-rail-graph")
+        openRotationGraph()
+        click("graph-type-BOUNCE")
+        assertEquals(EasingCurve.bounce(3f, .5f), curve())
+        assertEquals(listOf("Bounces 3", "Height 0.50"), listOf(valueText(0), valueText(1)))
+        compose.onNodeWithTag("graph-ease-canvas").performTouchInput {
+            val inset = 10.dp.toPx(); val w = width - 2 * inset; val h = height - 2 * inset
+            val (u, v) = EasePad.position(EasingCurve.bounce(3f, .5f))
+            down(Offset(inset + u * w, inset + (1 - v) * h))
+            moveBy(Offset(viewConfiguration.touchSlop + 4f, 0f)); moveBy(Offset(w * .4f, -h * .3f)); up()
+        }
+        compose.waitForIdle()
+        val c = curve()
+        assertEquals(EasingPreset.BOUNCE, c.type); assertTrue("more bounces: $c", c.a > 3f); assertTrue("higher: $c", c.b > .5f)
+        assertEquals(c.a, c.a.toInt().toFloat(), 0f)
+        vm.undo(); assertEquals(EasingCurve.bounce(3f, .5f), curve())
+    }
+
+    @Test fun toolsPopoverOverflowItemsAndSwipeDown() {
+        start()
+        openRotationGraph()
+        click("graph-tools"); compose.onNodeWithTag("graph-tools-popover", useUnmergedTree = true).assertExists()
+        click("graph-tool-snap"); compose.onNodeWithTag("graph-tool-snap").assert(selected)
+        click("graph-tool-mirror"); compose.onNodeWithTag("graph-tool-mirror").assert(selected)
+        click("graph-tool-apply-all")
+        compose.onNodeWithTag("graph-tools-popover", useUnmergedTree = true).assertExists() // momentary; stays open
+        click("graph-tools"); compose.onNodeWithTag("graph-tools-popover", useUnmergedTree = true).assertDoesNotExist()
+        // Snap / Mirror on: the closed Tools icon stays highlighted.
+        compose.onNodeWithTag("graph-tools").assert(selected)
+        click("inspector-rail-menu")
+        val items = listOf("graph-menu-copy", "graph-menu-paste", "graph-menu-reset").map { bounds(it) }
+        for (i in 1 until items.size) assertTrue(items[i - 1].bottom <= items[i].top + .5f)
+        compose.onAllNodesWithText("Apply this curve to all keys").assertCountEquals(0)
+        click("graph-menu-reset"); assertEquals(EasingCurve.EASY_EASE, curve())
         val before = dismissed
         compose.onNodeWithTag("inspector-sheet").performTouchInput { swipe(Offset(width * .6f, 20f * density), Offset(width * .6f, 160f * density), 300) }
-        compose.waitForIdle()
-        assertEquals(before + 1, dismissed)
+        compose.waitForIdle(); assertEquals(before + 1, dismissed)
+    }
+
+    @Test fun editTextReturnsToItsPage() {
+        start()
+        compose.onNodeWithContentDescription("Edit Text").performClick(); compose.waitForIdle()
+        click("inspector-rail-graph")
+        compose.onNodeWithTag("graph-page").assertExists()
+        click("inspector-rail-graph")
+        compose.onNodeWithTag("text-tab-CHARACTER").assertIsSelected()
     }
 }

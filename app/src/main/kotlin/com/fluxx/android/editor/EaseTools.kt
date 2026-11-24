@@ -19,8 +19,7 @@ object EasePresets {
     val ALL: List<EasePreset> = listOf(
         // CSS Easing Functions Level 1 named keywords.
         EasePreset("css.ease", "Ease", .25f, .1f, .25f, 1f),
-        EasePreset("css.ease_in", "Ease in", .42f, 0f, 1f, 1f),
-        EasePreset("css.ease_out", "Ease out", 0f, 0f, .58f, 1f),
+        // CSS ease-in / ease-out are the type tiles Ease In / Ease Out (EaseChoice), so they are not repeated here.
         EasePreset("css.ease_in_out", "Ease in-out", .42f, 0f, .58f, 1f),
         // Penner equations, published cubic-bezier approximations.
         EasePreset("sine.in", "Sine in", .12f, 0f, .39f, 0f), EasePreset("sine.out", "Sine out", .61f, 1f, .88f, 1f),

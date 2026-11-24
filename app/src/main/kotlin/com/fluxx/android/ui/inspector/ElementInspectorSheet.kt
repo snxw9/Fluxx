@@ -204,6 +204,8 @@ fun ElementInspectorSheet(
                     // own single header row (back, Character / Paragraph / Animate, menu) in place of the parent chrome.
                     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
                         // Section pages: ONE header row (← | page tabs), exactly like Edit Text.
+                        // GRAPH G1.1: the Graph page's header sits in the same full-width header row as every section page.
+                        if (!textTyping && section == InspectorSection.GRAPH) graphTarget?.let { GraphPageHeader(layer, it, playheadUs, textFrameRate, onBack = graphHost.close) }
                         if (!textTyping && section != null && !textSection && section != InspectorSection.GRAPH) SectionHeader(sections, section!!, layer.type,
                             onBack = { focusManager.clearFocus(); section = null },
                             onSelect = { focusManager.clearFocus(); section = it })
@@ -256,7 +258,7 @@ fun ElementInspectorSheet(
                             onAction(action)
                         }
                         }
-                        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = if(textSection || section == InspectorSection.GRAPH) 0.dp else InspectorChromeBudget.CONTENT_TOP.dp)) {
+                        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = if(textSection) 0.dp else InspectorChromeBudget.CONTENT_TOP.dp)) {
                           CompositionLocalProvider(LocalGraphHost provides graphHost) {
                           pages.SaveableStateProvider(section?.name ?: "landing") {
                             when (section) {

@@ -1,6 +1,6 @@
 # Fluxx
 
-Android motion graphics compositor built with Jetpack Compose, Kotlin and a native C++/Vulkan engine. Layered editing/rendering and transform animation are implemented, and the text phase is complete (native shaping, SDF rendering, rich and paragraph text, the animator engine and the Edit Text / Animate UI; see the [text record](docs/checkpoints/TEXT.md)). The graph editor is in progress: G1 (the easing backend with Hold, Custom bezier, Bounce and Elastic, and the Ease view) is implemented in source; see the [GRAPH G1 record](docs/checkpoints/GRAPH_G1.md). The full feature vision is broader than the current app.
+Android motion graphics compositor built with Jetpack Compose, Kotlin and a native C++/Vulkan engine. Layered editing/rendering and transform animation are implemented, and the text phase is complete (native shaping, SDF rendering, rich and paragraph text, the animator engine and the Edit Text / Animate UI; see the [text record](docs/checkpoints/TEXT.md)). The graph editor is in progress: G1 (the easing backend with Hold, Custom bezier, Bounce and Elastic, and the Ease view) is implemented in source, with the page layout reworked in G1.1; see the [GRAPH G1](docs/checkpoints/GRAPH_G1.md) and [G1.1](docs/checkpoints/GRAPH_G1_1.md) records. The full feature vision is broader than the current app.
 
 - [Documentation index](docs/README.md): feature owners and verification records.
 - [Roadmap](docs/architecture/FLUXX_ROADMAP.md): active phase, planned scope and gates.

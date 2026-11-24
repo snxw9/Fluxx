@@ -176,9 +176,8 @@ internal object InspectorIcons {
         put("EASE_INVERT", p().line(4f, 8f, 18f, 8f).line(15f, 5f, 18f, 8f, 15f, 11f).line(20f, 16f, 6f, 16f).line(9f, 13f, 6f, 16f, 9f, 19f).build())
         put("EASE_APPLY_ALL", p().poly(1f, 6f, 8.5f, 9f, 11.5f, 6f, 14.5f, 3f, 11.5f).poly(1f, 12f, 8.5f, 15f, 11.5f, 12f, 14.5f, 9f, 11.5f)
             .poly(1f, 18f, 8.5f, 21f, 11.5f, 18f, 14.5f, 15f, 11.5f).line(3f, 19f, 21f, 19f).build())
-        put("EASE_COPY", p().rect(9f, 9f, 11f, 11f, 2.5f).rect(4f, 4f, 11f, 11f, 2.5f).build())
-        put("EASE_NUMERIC", p().rect(3f, 7f, 18f, 10f, 2.5f).line(6.5f, 10f, 8f, 9.5f, 8f, 14.5f).line(10.5f, 10f, 12.5f, 9.5f, 12.5f, 12f, 10.5f, 14.5f, 13f, 14.5f)
-            .line(16.5f, 9f, 16.5f, 15f).build())
+        // GRAPH G1.1: the Graph rail's Tools (snap / mirror / apply to all): three slider knobs on a vertical axis.
+        put("GRAPH_TOOLS", p().line(6f, 4f, 6f, 20f).line(12f, 4f, 12f, 20f).line(18f, 4f, 18f, 20f).circle(6f, 15f, 2f).circle(12f, 8f, 2f).circle(18f, 13f, 2f).build())
         put("CUBE", p().poly(2f, 12f, 3f, 20f, 7.5f, 20f, 16.5f, 12f, 21f, 4f, 16.5f, 4f, 7.5f).line(4.6f, 7.9f, 12f, 12f, 19.4f, 7.9f).line(12f, 12f, 12f, 20.3f).build())
         // ---- Landing grid categories --------------------------------------------------------------------
         put("TRANSFORM", p().line(3f, 12f, 21f, 12f).line(12f, 3f, 12f, 21f).line(6f, 9f, 3f, 12f, 6f, 15f).line(18f, 9f, 21f, 12f, 18f, 15f)
