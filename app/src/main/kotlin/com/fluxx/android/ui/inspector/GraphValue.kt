@@ -426,11 +426,15 @@ internal object GridDrop {
  * [CompositionTimecode.format] (MM:SS:FF, nearest frame) of the composition start timecode + composition time.
  */
 internal object GraphTime {
+    /** A time on the frame grid (keys, axis ticks): start frame + its nearest frame, as the ruler and pill count. */
     fun label(compositionUs: Long, rate: FrameRate, startTimecodeUs: Long = 0L): String =
-        CompositionTimecode.format(Math.addExact(startTimecodeUs, compositionUs), rate)
+        CompositionTimecode.formatOnGrid(compositionUs, startTimecodeUs, rate)
+    /** TL1c: the playhead, exactly as the transport and the timeline pill show it (floor: the frame on screen). */
+    fun playhead(playheadUs: Long, rate: FrameRate, startTimecodeUs: Long = 0L): String =
+        CompositionTimecode.formatPlayhead(playheadUs, startTimecodeUs, rate)
     /** A typed time: a timecode (MM:SS:FF, as shown) or a whole number of composition frames ("45" or "45f"). Composition µs. */
     fun parse(text: String, rate: FrameRate, startTimecodeUs: Long = 0L): Long? {
-        CompositionTimecode.parse(text, rate)?.let { return Math.subtractExact(it, startTimecodeUs) }
+        if (text.contains(':')) return CompositionTimecode.parseOnGrid(text, startTimecodeUs, rate)
         val f = ValueParsing.integer(text.trim().removeSuffix("f").trim())?.takeIf { it >= 0 } ?: return null
         return runCatching { rate.frameTimeUs(f) }.getOrNull()
     }

@@ -41,6 +41,15 @@ data class FrameRate(val numerator: Int = 30, val denominator: Int = 1) {
     }
 
     fun snap(timeUs: Long): Long = frameTimeUs(nearestFrame(timeUs))
+
+    /**
+     * TL1: the frame on screen at [timeUs]: the last frame whose start ([frameTimeUs], exact µs rounded down) is at or
+     * before it. A frame's own start time maps to that frame (never to the one before), so floor == nearest at rest.
+     */
+    fun floorFrame(timeUs: Long): Long {
+        val n = nearestFrame(timeUs)
+        return if (n > 0 && frameTimeUs(n) > timeUs) n - 1 else n
+    }
 }
 
 enum class LayerType { VIDEO, IMAGE, SOLID, TEXT }

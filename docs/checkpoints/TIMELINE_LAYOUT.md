@@ -26,6 +26,19 @@ The action bar is 40dp tall, with 20dp vectors and 48dp-wide controls. The View 
 
 ## Ruler and project extent
 
+> **TL1 (2026-11-24), supersedes the stride rules below:**
+> - **Scrubbing** lands on the nearest whole frame (`TimelineScale.snappedTime`, `Seek(snap = true)`), and the preview receives the snapped time.
+> - **Readouts:** the transport and the playhead pill show the frame on screen (floor), counted from the start frame.
+> - **Ticks** are tiered by the displayed timecode frame:
+>   - major on each second (`:00`);
+>   - mid on frame `floor(period/2)`;
+>   - minors on every other frame.
+>
+>   Tiers drop out zooming out: minors under 6dp, mids under 8dp, then the step grows (1, 2, 5, 10, 30 s, 1 min …) to keep majors ≥ 12dp apart.
+> - **One position function:** every tick is a whole-pixel rect at `frameX = round(frame × pxPerFrame)`, the same function that places the playhead's scroll, so the line covers its tick exactly (0.00 px on the A16, 48 checks).
+>
+> Record: [TL1](TL1.md).
+
 Ticks now rise from a dedicated baseline in the lower ruler band. The time chip and marker descriptions use the upper band. Ticks have no duration-number labels. Major/minor strides are integer frame counts, chosen for readable pixel spacing; all x coordinates come from `FrameRate.frameTimeUs(frame)`. At 30000/1001fps, frame 30 is at 1,001,000µs, not at an invented one-second tick. The time chip uses the existing non-drop-frame minutes:seconds:frames convention, plus the saved display origin. Tick drawing starts at the visible frame range and does not iterate from zero for every viewport.
 
 There is no artificial 60-second extent or 100dp minimum timeline width. New projects are empty at time zero. Creation no longer offers a Seconds field and always chooses automatic duration. `Composition.durationUs == null` persists that mode using the existing codec representation; cached `resolvedDurationUs` derives the maximum layer end, or zero for no layers. Import/add, move, trim, deletion, undo/redo, and reload preserve this mode. Markers do not create media duration.

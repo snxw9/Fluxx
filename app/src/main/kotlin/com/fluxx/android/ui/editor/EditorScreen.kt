@@ -442,8 +442,17 @@ fun EditorScreen(
                     },
                     onPlayPauseToggle = {
                         textEditor.finish {
-                            if (previewState.playing) previewController?.pause()
-                            else {
+                            if (previewState.playing) {
+                                previewController?.pause()
+                                // TL1: rest on the frame that was on screen (floor). Read live state (never a captured value);
+                                // the seek starts a new controller generation, so older position reports are dropped (no echo).
+                                val rate = editor.state.project.composition.frameRate
+                                val shown = rate.frameTimeUs(rate.floorFrame(editor.state.playheadUs))
+                                if (shown != editor.state.playheadUs) {
+                                    editor.dispatch(EditorAction.Seek(shown))
+                                    previewController?.seek(editor.state.playheadUs)
+                                }
+                            } else {
                                 editor.dispatch(EditorAction.SelectMarker(null))
                                 previewController?.play()
                             }
@@ -523,7 +532,8 @@ fun EditorScreen(
                     onSeek = { timeUs, snap ->
                         textEditor.finish {
                             editor.dispatch(EditorAction.Seek(timeUs, snap))
-                            previewController?.seek(timeUs)
+                            // TL1: the preview gets the time the reducer kept (frame-snapped when [snap]), never the raw one.
+                            previewController?.seek(editor.state.playheadUs)
                         }
                     },
                     onToggleVisibility = { id, vis ->

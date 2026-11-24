@@ -244,6 +244,8 @@ fun TimelineView(
     val density = LocalDensity.current
     var pxPerSecond by remember { mutableFloatStateOf(120f) }
     val pxPerUs = (pxPerSecond * density.density) / 1_000_000.0
+    // TL1: the one time <-> x mapping (frame x = round(frame x pxPerFrame)); ticks and the playhead's scroll both use it.
+    val scale = remember(comp.frameRate, pxPerUs) { com.fluxx.android.editor.TimelineScale(comp.frameRate, pxPerUs) }
 
     // Top to bottom in list = front to back in draw order
     val sortedLayers = remember(comp.layers) {
@@ -272,7 +274,8 @@ fun TimelineView(
         edgeScroll = 0f
         editing = false
         if (horizontalScrollState.value != editScrollOrigin) {
-            onSeek((horizontalScrollState.value / pxPerUs).roundToLong().coerceIn(0L, durationUs), false)
+            // TL1: an edit's edge scroll also lands the playhead on a whole frame.
+            onSeek(scale.snappedTime(horizontalScrollState.value.toDouble(), durationUs), true)
         }
     }
     val commitEdit = { onCommitGesture(); finishScroll() }
@@ -316,17 +319,20 @@ fun TimelineView(
             // Allow even the last layer to align above the inspector.
             val bottomPadding = (maxHeight - TimelineTracksBottom).coerceAtLeast(0.dp)
             val totalViewportWidthPx = constraints.maxWidth.toFloat()
-            val centerXPx = totalViewportWidthPx / 2f
-            val centerXDp = with(density) { centerXPx.toDp() }
+            // TL1: the leading spacer (and so the playhead column) is a whole number of pixels.
+            val centerPx = (totalViewportWidthPx / 2f).roundToInt()
+            val centerXPx = centerPx.toFloat()
+            val centerXDp = with(density) { centerPx.toDp() }
 
             val contentWidthPx = (durationUs * pxPerUs).toFloat()
             val contentWidthDp = with(density) { contentWidthPx.toDp() }
 
             // Synchronize playheadUs -> horizontalScrollState when not user-scrolling
-            LaunchedEffect(playheadUs, pxPerUs, durationUs, pinching, horizontalScrollState.maxValue) {
+            // TL1: keyed on the scroll ending too, so a released scrub settles exactly on its snapped frame's x.
+            LaunchedEffect(playheadUs, pxPerUs, durationUs, pinching, horizontalScrollState.maxValue, horizontalScrollState.isScrollInProgress) {
                 if (!editing && (pinching || !horizontalScrollState.isScrollInProgress)) {
-                    val targetScroll = (playheadUs.coerceIn(0L, durationUs) * pxPerUs).roundToInt()
-                    if (abs(horizontalScrollState.value - targetScroll) > 1) {
+                    val targetScroll = scale.timeX(playheadUs.coerceIn(0L, durationUs)).toInt()
+                    if (horizontalScrollState.value != targetScroll) {
                         horizontalScrollState.scrollTo(targetScroll)
                     }
                 }
@@ -334,11 +340,13 @@ fun TimelineView(
 
             // Synchronize horizontalScrollState -> playheadUs when user is actively scrolling/scrubbing
             LaunchedEffect(horizontalScrollState.value, horizontalScrollState.isScrollInProgress) {
+                // TL1 scrub: the scroll position maps to the NEAREST whole frame; a Seek is sent only when that frame
+                // changes (at most one per frame crossed), and the preview receives the same snapped time.
                 if (!editing && !pinching && horizontalScrollState.isScrollInProgress &&
-                    abs(horizontalScrollState.value - (playheadUs * pxPerUs).roundToInt()) > 1) {
-                    val newTimeUs = (horizontalScrollState.value / pxPerUs).roundToLong().coerceIn(0L, durationUs)
+                    horizontalScrollState.value.toLong() != scale.timeX(playheadUs)) {
+                    val newTimeUs = scale.snappedTime(horizontalScrollState.value.toDouble(), durationUs)
                     if (newTimeUs != playheadUs) {
-                        onSeek(newTimeUs, false)
+                        onSeek(newTimeUs, true)
                     }
                 }
             }
@@ -401,6 +409,8 @@ fun TimelineView(
                             durationUs = durationUs,
                             frameRate = comp.frameRate,
                             pxPerUs = pxPerUs,
+                            scale = scale,
+                            startTimecodeUs = comp.startTimecodeUs,
                             markers = comp.markers,
                             visibleStartUs = ((horizontalScrollState.value - centerXPx) / pxPerUs).toLong().coerceAtLeast(0),
                             visibleEndUs = ((horizontalScrollState.value + centerXPx) / pxPerUs).toLong().coerceAtMost(durationUs),
@@ -493,14 +503,16 @@ fun TimelineView(
 
             // 2. Stationary Fixed-Center Playhead (pinned at exact 50% horizontal center of the screen)
             StationaryTimelinePlayhead(
-                playheadUs = Math.addExact(comp.startTimecodeUs, playheadUs),
+                playheadUs = playheadUs,
+                startTimecodeUs = comp.startTimecodeUs,
+                columnPx = centerPx,
                 frameRate = comp.frameRate,
                 marker = Markers.active(project, selectedLayer, playheadUs),
                 playheadPopover = if (markerOnBar) null else markerPopover,
                 onTap = { playheadMarker(false) },
                 onHold = { playheadMarker(true) },
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
+                    .align(Alignment.TopStart)
                     .fillMaxHeight()
             )
 
@@ -592,6 +604,9 @@ internal fun EyeIcon(
     }
 }
 
+/** TL1: the ruler's px per µs, for tests that check tick positions exactly (not read by accessibility services). */
+internal val TimelineZoomKey = androidx.compose.ui.semantics.SemanticsPropertyKey<Double>("TimelinePxPerUs")
+
 /**
  * Timeline Ruler with zoom-derived major, medium, and minor graduated tick marks.
  * Spacing dynamically derives from the current timeline zoom (pxPerUs).
@@ -601,6 +616,8 @@ private fun TimelineRuler(
     durationUs: Long,
     frameRate: FrameRate,
     pxPerUs: Double,
+    scale: com.fluxx.android.editor.TimelineScale,
+    startTimecodeUs: Long,
     markers: List<Marker>,
     visibleStartUs: Long,
     visibleEndUs: Long,
@@ -617,12 +634,12 @@ private fun TimelineRuler(
         textSize = with(density) { 9.sp.toPx() }
         typeface = android.graphics.Typeface.MONOSPACE
     } }
-    val steps = remember(frameRate, pxPerUs, density) {
-        timelineTickSteps(frameRate, pxPerUs, with(density) { 6.dp.toPx().toDouble() },
-            with(density) { 48.dp.toPx().toDouble() })
-    }
+    // TL1 tiered ticks: classified by the displayed timecode frame (start frame + composition frame).
+    val level = remember(frameRate, scale, density) { com.fluxx.android.editor.RulerTiers.level(frameRate, scale.pxPerFrame, density.density) }
+    val startFrame = remember(startTimecodeUs, frameRate) { com.fluxx.android.model.CompositionTimecode.startFrame(startTimecodeUs, frameRate) }
     ExactTimelineTargets { Box(Modifier.fillMaxWidth().height(RULER_HEIGHT_DP.dp)) {
         Canvas(Modifier.fillMaxWidth().height(RULER_HEIGHT_DP.dp).background(Background)
+            .testTag("timeline-ruler").semantics { this[TimelineZoomKey] = pxPerUs }
             .pointerInput(durationUs, pxPerUs, markers) {
                 detectTapGestures { offset ->
                     val targetUs = (offset.x / pxPerUs).toLong().coerceIn(0L, durationUs)
@@ -636,20 +653,34 @@ private fun TimelineRuler(
             val startX = (visibleStartUs * pxPerUs).toFloat()
             val endX = (visibleEndUs * pxPerUs).toFloat()
             drawLine(TextSecondary.copy(alpha = .45f), Offset(startX, baseline), Offset(endX, baseline), .75.dp.toPx())
-            // Begin at the visible frame window, not frame zero, so long projects don't redraw every tick.
-            var frame = (frameRate.nearestFrame(visibleStartUs) / steps.minor) * steps.minor
-            val lastFrame = frameRate.nearestFrame(visibleEndUs)
-            while (frame <= lastFrame) {
-                val time = frameRate.frameTimeUs(frame)
-                if (time > durationUs) break
-                val x = (time * pxPerUs).toFloat()
-                val major = frame % steps.major == 0L
-                val medium = !major && steps.major % 2 == 0L && frame % (steps.major / 2) == 0L
-                val height = (if (major) 12.dp else if (medium) 8.dp else 5.dp).toPx()
-                drawLine(TextSecondary.copy(alpha = if (major) .95f else .65f),
-                    Offset(x, baseline - height), Offset(x, baseline), if (major) 1.dp.toPx() else .75.dp.toPx())
-                if (frame > Long.MAX_VALUE - steps.minor) break
-                frame += steps.minor
+            // Begin at the visible frame window, not frame zero, so long projects don't redraw every tick. Each tick is a
+            // whole-pixel rectangle at its frame's x ([TimelineScale.frameX]) with a whole-pixel width, centred like the
+            // playhead line, so there are no anti-aliased double lines and the playhead sits exactly on its frame.
+            val majorH = 12.dp.toPx()
+            val wMajor = 1.dp.roundToPx().coerceAtLeast(1); val wMinor = .75.dp.roundToPx().coerceAtLeast(1)
+            val lastFrame = minOf(frameRate.nearestFrame(visibleEndUs) + 1, scale.lastFrame(durationUs))
+            val firstFrame = (frameRate.nearestFrame(visibleStartUs) - 1).coerceAtLeast(0)
+            val tickColour = TextSecondary.copy(alpha = .95f); val minorColour = TextSecondary.copy(alpha = .65f)
+            fun tick(frame: Long) {
+                if (frame < firstFrame || frame > lastFrame) return
+                val tier = com.fluxx.android.editor.RulerTiers.tier(startFrame + frame, level) ?: return
+                val major = tier == com.fluxx.android.editor.TickTier.MAJOR
+                val w = if (major) wMajor else wMinor
+                val h = kotlin.math.round(majorH * when (tier) { com.fluxx.android.editor.TickTier.MAJOR -> 1f
+                    com.fluxx.android.editor.TickTier.MID -> com.fluxx.android.editor.RulerTiers.MID_HEIGHT
+                    com.fluxx.android.editor.TickTier.MINOR -> com.fluxx.android.editor.RulerTiers.MINOR_HEIGHT })
+                val bottom = kotlin.math.round(baseline); val top = bottom - h
+                drawRect(if (major) tickColour else minorColour, topLeft = Offset((scale.frameX(frame) - w / 2).toFloat(), top),
+                    size = androidx.compose.ui.geometry.Size(w.toFloat(), h))
+            }
+            if (level.minors) { var f = firstFrame; while (f <= lastFrame) { tick(f); f++ } }
+            else {
+                // Only each period's major and mid: from the period boundary at or before the window.
+                var boundary = Math.floorDiv(firstFrame + startFrame, level.period) * level.period - startFrame
+                while (boundary <= lastFrame) {
+                    tick(boundary); if (level.mids) tick(boundary + level.midOffset)
+                    boundary += level.period
+                }
             }
             for ((index, marker) in markers.withIndex()) {
                 if (marker.timeUs < visibleStartUs || marker.timeUs > visibleEndUs || marker.timeUs > durationUs) continue
@@ -1057,6 +1088,8 @@ private fun TimelineClipRow(
 @Composable
 private fun StationaryTimelinePlayhead(
     playheadUs: Long,
+    startTimecodeUs: Long,
+    columnPx: Int,
     frameRate: FrameRate,
     marker: Marker?,
     onTap: () -> Unit,
@@ -1067,8 +1100,14 @@ private fun StationaryTimelinePlayhead(
     val tint = marker?.let { Color(it.colorArgb) } ?: Highlight
     val tap by rememberUpdatedState(onTap)
     val hold by rememberUpdatedState(onHold)
+    // TL1: the box is placed so its line's left edge is columnPx - lineWidth / 2 (integer px), the same rule the ruler uses
+    // for a tick centred on its frame x: the line covers exactly the tick's pixels.
+    val density = LocalDensity.current
+    val boxPx = with(density) { 72.dp.roundToPx() }
+    val linePx = with(density) { 1.dp.roundToPx().coerceAtLeast(1) }
+    val lineLeft = boxPx / 2 - linePx / 2
     Box(
-        modifier = modifier.width(72.dp),
+        modifier = modifier.offset { androidx.compose.ui.unit.IntOffset(columnPx - boxPx / 2, 0) }.width(with(density) { boxPx.toDp() }),
         contentAlignment = Alignment.TopCenter
     ) {
         // Vertical Pure White Playhead Line (extends down through all tracks)
@@ -1077,10 +1116,12 @@ private fun StationaryTimelinePlayhead(
         }
         Box(
             modifier = Modifier
-                .align(Alignment.TopCenter)
+                .align(Alignment.TopStart)
+                .offset { androidx.compose.ui.unit.IntOffset(lineLeft, 0) }
                 .fillMaxHeight()
-                .width(1.dp)
+                .width(with(density) { linePx.toDp() })
                 .background(tint)
+                .testTag("timeline-playhead-line")
         )
 
         // Time readout occupies the ruler's upper band; ticks occupy the lower band.
@@ -1094,7 +1135,8 @@ private fun StationaryTimelinePlayhead(
                 .padding(horizontal = 4.dp, vertical = 0.5.dp)
         ) {
             Text(
-                text = TimeFormat.formatTimecode(playheadUs, frameRate),
+                // TL1: the frame on screen (floor), counted from the composition's start frame.
+                text = TimeFormat.formatPlayhead(playheadUs, startTimecodeUs, frameRate),
                 color = tint,
                 fontSize = 10.sp,
                 lineHeight = 12.sp,

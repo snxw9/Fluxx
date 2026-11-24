@@ -328,17 +328,19 @@ internal fun valueLabel(v: Double, step: Double, axis: ValueAxis): String {
 /**
  * GRAPH G2 / G2.1 values bar in the Value view, on an opaque fill (nothing draws through it).
  * - Time: the selected key's time in the transport's timecode format, typed (frame-snapped, clamped to the neighbours;
- *   one undo). With no key selected it is inert and shows "–" (G2.1 §6: no live time until the time audit is resolved).
+ *   one undo). With no key selected (TL1c) it shows the PLAYHEAD's timecode, live, exactly as the transport and the
+ *   timeline pill do (floor: the frame on screen); it is not editable then.
  * - Value: the selected key's value, else the LIVE value at the playhead (as the page shows it). Always enabled; typing
  *   edits the key, or with no key sets the value at the playhead ([GraphValues.atPlayheadAction]).
  * - 2-D properties add an X | Y toggle that picks the channel the Value tile edits.
  */
 @Composable internal fun ValueValuesBar(scene: ValueScene, selected: Int?, height: Float, live: FloatArray?, onChannel: (Int) -> Unit,
-    onCommit: (EditorAction, Long?) -> Unit, onTypedAtPlayhead: (Float, Float) -> EditorAction?) {
+    onCommit: (EditorAction, Long?) -> Unit, onTypedAtPlayhead: (Float, Float) -> EditorAction?, playheadUs: Long = 0L) {
     val key = selected?.let { scene.keys.getOrNull(it) }
     val axis = scene.axes[scene.channel]
     val anchor = scene.layer.resolvedKeyframeAnchorUs
-    val time = key?.let { GraphTime.label(Math.addExact(anchor, it.timeUs), scene.rate, scene.startTimecodeUs) } ?: "–"
+    val time = key?.let { GraphTime.label(Math.addExact(anchor, it.timeUs), scene.rate, scene.startTimecodeUs) }
+        ?: GraphTime.playhead(playheadUs, scene.rate, scene.startTimecodeUs)
     val stored = key?.value(scene.channel) ?: live?.getOrNull(scene.channel)
     val value = stored?.let { axis.storedText(it) } ?: "–"
     Row(Modifier.fillMaxWidth().height(height.dp).background(SurfaceHigh).testTag("graph-values-bar")) {

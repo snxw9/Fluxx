@@ -161,7 +161,8 @@ class GraphValueTest {
         start(); value()
         val target = GraphTarget(AnimPropertyType.ROTATION)
         fun expected() = GraphValues.axes(layer(), target, 1080, 1920)[0].storedText(GraphValues.live(layer(), target, vm.state.playheadUs, FrameRate())!![0])
-        compose.onNodeWithTag("graph-value-time").assertIsNotEnabled().assertTextContains("–", substring = true)
+        // TL1c: the Time tile shows the playhead (floor), not editable.
+        compose.onNodeWithTag("graph-value-time").assertIsNotEnabled().assertTextContains(GraphTime.playhead(vm.state.playheadUs, FrameRate()), substring = true)
         compose.onNodeWithTag("graph-value-value").assertIsEnabled().assertTextContains(expected(), substring = true)
         // It follows the playhead (scrub / play): the same number the Rotation page shows there.
         compose.runOnIdle { vm.dispatch(EditorAction.Seek(2_000_000L)) }; compose.waitForIdle()

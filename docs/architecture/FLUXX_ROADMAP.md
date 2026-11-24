@@ -165,6 +165,14 @@ The graph editor (value and speed curves for keyframes, reached from the rail's 
   - magnetic Transform detents (Rotation 5°, Opacity and Scale 25%).
 
   No schema change, no new action. A16 suites pass, with two flaky tests reported; phone acceptance pending ([record](../checkpoints/GRAPH_G2_1.md)).
+- [x] **TL1: timeline**:
+  - scrubs land on whole frames;
+  - the playhead readouts floor (the frame on screen) and pause rests on it;
+  - a tiered ruler (second / half-second / frame) that adapts to zoom;
+  - one frame → x function for ticks and playhead (0.00 px offset);
+  - a live Graph Time tile.
+
+  No schema change, no new action. JVM 571/571; A16 TimeAuditTest passes; phone acceptance pending ([record](../checkpoints/TL1.md)).
 - [ ] **G3: Speed graph** and "smooth through key". Next.
 - [ ] **G4: convert Bounce/Elastic to keys**, extra curve libraries, share-sheet export of curves. Later: separate X/Y easing and dimensions (a further schema bump) and multi-select.
 

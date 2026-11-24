@@ -161,7 +161,8 @@ fun PreviewSection(
 
         // Transport Controls Bar
         TransportBar(
-            playheadUs = Math.addExact(comp.startTimecodeUs, playheadUs),
+            playheadUs = playheadUs,
+            startTimecodeUs = comp.startTimecodeUs,
             durationUs = comp.endTimecodeUs,
             frameRate = comp.frameRate,
             isPlaying = isPlaying,
@@ -207,7 +208,9 @@ fun TransportBar(
     onPreviousFrame: () -> Unit,
     onNextFrame: () -> Unit,
     onReturnToStart: () -> Unit,
-    onFitComp: () -> Unit
+    onFitComp: () -> Unit,
+    /** TL1: the playhead readout counts from the composition's start frame and floors (the frame on screen). */
+    startTimecodeUs: Long = 0L
 ) {
     Surface(
         color = Surface,
@@ -226,7 +229,7 @@ fun TransportBar(
             // Left: Timecode readout
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = TimeFormat.formatTimecode(playheadUs, frameRate),
+                    text = TimeFormat.formatPlayhead(playheadUs, startTimecodeUs, frameRate),
                     color = TextPrimary,
                     style = MaterialTheme.typography.titleSmall,
                     fontFamily = FontFamily.Monospace

@@ -435,7 +435,8 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
                                 onCommit = { action, time ->
                                     focus.clearFocus(); latestAction(action)
                                     if (time != null) session.selection = KeySelection(time, latestPlayhead) },
-                                onTypedAtPlayhead = { x, y -> GraphValues.atPlayheadAction(layer, target, latestPlayhead, frameRate, x, y) })
+                                onTypedAtPlayhead = { x, y -> GraphValues.atPlayheadAction(layer, target, latestPlayhead, frameRate, x, y) },
+                                playheadUs = playheadUs)
                         } else {
                             EaseCanvas(curve, ghost, GraphModel.progress(segment, local), selectedHandle, snap, mirror, library.showPlayheadDot,
                                 onSelect = { selectedHandle = it }, onBegin = ::begin, onDrag = ::preview, onEnd = ::commit, onCancel = ::cancelDrag,

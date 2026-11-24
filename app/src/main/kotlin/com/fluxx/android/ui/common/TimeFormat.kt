@@ -15,6 +15,10 @@ object TimeFormat {
     fun formatTimecode(timeUs: Long, frameRate: FrameRate): String =
         com.fluxx.android.model.CompositionTimecode.format(timeUs, frameRate)
 
+    /** TL1: the playhead readout (floor: the frame on screen), counted from the composition's start frame. */
+    fun formatPlayhead(playheadUs: Long, startTimecodeUs: Long, frameRate: FrameRate): String =
+        com.fluxx.android.model.CompositionTimecode.formatPlayhead(playheadUs, startTimecodeUs, frameRate)
+
     /**
      * Compact timestamp like "01:23.4"
      */
