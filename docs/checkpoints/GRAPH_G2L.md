@@ -67,7 +67,7 @@ At 411dp (JVM geometry only) the fraction is 21.96%, just under the 22% floor; `
 
 ## 4. Long-press, menu and drag
 
-- Long-press then release without moving: for a **user curve**, a non-modal popover with xy (read-only values), pencil (rename) and trash, in that order. Built-ins show nothing.
+- Long-press then release without moving: for a **user curve**, a non-modal popover with xy, pencil (rename) and trash, in that order. Built-ins show nothing. (Correction, see G2 §A3: the xy view held values-bar tiles that opened nested typed-entry popovers; it was not read-only. G2 replaced them with typed fields.)
 - Long-press then move drags. Pinning is by drag only:
   - dropping into Pinned inserts at the drop slot (or reorders when already pinned);
   - with 15 pinned, the curve replaces the slot under the drop and the others keep their order;
@@ -119,7 +119,7 @@ At 411dp (JVM geometry only) the fraction is 21.96%, just under the 22% floor; `
 
 - **Library fraction at 411dp is 21.96%,** below the brief's 22–30%. It follows from the fixed strip + rail widths; widening it would mean resizing the touchpad at wide sizes, which the brief rules out. Kept as is.
 - **Playhead checks for the library live in `GraphLibraryTest`,** not in new `GraphPlayheadTest` cases; `GraphPlayheadTest` only got the new tags and the in-memory store.
-- **Values bar tap after a value entry (unresolved, possibly pre-existing):** in instrumented runs, a tap on a values-bar tile shortly after a previous typed entry closed sometimes did not open the entry; alone, waiting 600ms was enough, but in a full suite run it still failed. The library test therefore checks the bar is enabled, clickable and unobscured rather than tapping it twice. Not reproduced by hand; worth checking in phone acceptance (type a value, Done, immediately tap another tile).
+- **Values bar tap after a value entry (resolved in [G2 §A4](GRAPH_G2.md)):** a typed entry opened right after another closed cancelled itself (the previous keyboard sliding down read as Back). Original note: in instrumented runs, a tap on a values-bar tile shortly after a previous typed entry closed sometimes did not open the entry; alone, waiting 600ms was enough, but in a full suite run it still failed. The library test therefore checks the bar is enabled, clickable and unobscured rather than tapping it twice. Not reproduced by hand; worth checking in phone acceptance (type a value, Done, immediately tap another tile).
 - Share-sheet export is not implemented (SAF only).
 
 ## 11. Questions for G2
@@ -127,3 +127,5 @@ At 411dp (JVM geometry only) the fraction is 21.96%, just under the 22% floor; `
 - Should the pinned rail also accept drops from the strip (types), or stay curves-only?
 - Should the library remember its scroll position between openings?
 - The "Interface size" setting is parked in the roadmap; should it come before the Value graph, since tile sizes now drive several Graph widths?
+
+**Next:** [GRAPH G2](GRAPH_G2.md): the Value graph and the G2L carry-over fixes (library grid, icon fade, editable xy popover, the A4 typed-entry fix).

@@ -597,6 +597,8 @@ Fluxx's existing trackpad interaction system could potentially be used to provid
 
 **GRAPH G2L (2026-11-24):** the Ease view gained a type strip inside the centre box, a pinned rail and a curve library (Pinned / Types / Presets / My curves) that opens over the strip and rail without resizing the touchpad. Users can save, rename, delete, pin and reorder curves, and import/export them as `.fluxxcurves`; the library is app-level, not per project. See [GRAPH G2L](../checkpoints/GRAPH_G2L.md).
 
+**GRAPH G2 (2026-11-24):** the **Value Graph** is live: the property's value over time from the real evaluator, keys draggable in time (frame-snapped, never crossing a neighbour) and value with one undo, the selected segment's influence handles on the curve, tap to select a key, double tap to seek to it, pan, axis-aware pinch zoom and fit, and a Time / Value / X|Y values bar. Colour properties have no Value graph (no single axis). The Speed Graph remains (G3). See [GRAPH G2](../checkpoints/GRAPH_G2.md).
+
 ---
 
 # 21. Expressions

@@ -155,9 +155,12 @@ fun ElementInspectorSheet(
         val pages = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
         val currentLayer by rememberUpdatedState(layer)
         val graphHost = remember {
+            var host: GraphHost? = null
             GraphHost({ currentLayer }, { graphTarget },
-                open = { target -> if (section != InspectorSection.GRAPH) graphReturn = section; graphTarget = target; section = InspectorSection.GRAPH },
-                close = { section = graphReturn; graphTarget = null })
+                open = { target ->
+                    if (section != InspectorSection.GRAPH || graphTarget != target) host?.session?.reset()
+                    if (section != InspectorSection.GRAPH) graphReturn = section; graphTarget = target; section = InspectorSection.GRAPH },
+                close = { host?.session?.reset(); section = graphReturn; graphTarget = null }).also { host = it }
         }
         // A restored GRAPH page without its target (process death) returns to the page it came from.
         if (section == InspectorSection.GRAPH && graphTarget == null) LaunchedEffect(Unit) { section = graphReturn }
@@ -205,7 +208,7 @@ fun ElementInspectorSheet(
                     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
                         // Section pages: ONE header row (← | page tabs), exactly like Edit Text.
                         // GRAPH G1.1: the Graph page's header sits in the same full-width header row as every section page.
-                        if (!textTyping && section == InspectorSection.GRAPH) graphTarget?.let { GraphPageHeader(layer, it, playheadUs, textFrameRate, onBack = graphHost.close) }
+                        if (!textTyping && section == InspectorSection.GRAPH) graphTarget?.let { GraphPageHeader(layer, it, playheadUs, textFrameRate, onBack = graphHost.close, session = graphHost.session) }
                         if (!textTyping && section != null && !textSection && section != InspectorSection.GRAPH) SectionHeader(sections, section!!, layer.type,
                             onBack = { focusManager.clearFocus(); section = null },
                             onSelect = { focusManager.clearFocus(); section = it })
@@ -287,7 +290,8 @@ fun ElementInspectorSheet(
                                     palette = paletteRepository, onEyedropper = onEyedropperRequest)
                                 InspectorSection.GRAPH -> graphTarget?.let { target ->
                                     GraphPage(layer, target, playheadUs, textFrameRate, onAction, onTransformBegin, onGesturePreview,
-                                        onTransformCommit, onTransformCancel, onClose = graphHost.close)
+                                        onTransformCommit, onTransformCancel, onClose = graphHost.close, session = graphHost.session,
+                                        compositionWidth = compositionWidth, compositionHeight = compositionHeight)
                                 }
                                 else -> Unit // Disabled categories cannot be opened.
                             }

@@ -16,6 +16,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -26,7 +32,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -84,6 +92,8 @@ import kotlinx.coroutines.withContext
 internal class CurveDragState {
     var id by mutableStateOf<String?>(null); private set
     var pointerY by mutableFloatStateOf(0f); private set
+    /** GRAPH G2 (A1): the pointer's x (root px), for drop slots in the 2-column grid. */
+    var pointerX by mutableFloatStateOf(0f); private set
     val bounds = mutableStateMapOf<String, Rect>()
     var listBounds by mutableStateOf(Rect.Zero)
     /** Set by the long-pressed item; the container then owns the rest of the gesture. */
@@ -91,10 +101,11 @@ internal class CurveDragState {
     internal var startY = 0f
     internal var moved = false
     internal var onMenu: (() -> Unit)? = null
-    fun start(id: String, y: Float, pointer: androidx.compose.ui.input.pointer.PointerId, onMenu: (() -> Unit)?) {
-        this.id = id; pointerY = y; startY = y; moved = false; this.pointer = pointer; this.onMenu = onMenu
+    internal var startX = 0f
+    fun start(id: String, x: Float, y: Float, pointer: androidx.compose.ui.input.pointer.PointerId, onMenu: (() -> Unit)?) {
+        this.id = id; pointerX = x; pointerY = y; startX = x; startY = y; moved = false; this.pointer = pointer; this.onMenu = onMenu
     }
-    fun move(y: Float) { pointerY = y }
+    fun move(x: Float, y: Float) { pointerX = x; pointerY = y }
     fun end() { id = null; pointer = null; onMenu = null }
 }
 
@@ -114,8 +125,8 @@ private fun Modifier.curveGestures(key: String, dragState: CurveDragState, onTap
             return@awaitEachGesture
         }
         onHaptic()
-        val top = dragState.bounds[key]?.top ?: 0f
-        dragState.start(key.substringAfter('|'), top + long.position.y, long.id, onMenu)
+        val b = dragState.bounds[key]
+        dragState.start(key.substringAfter('|'), (b?.left ?: 0f) + long.position.x, (b?.top ?: 0f) + long.position.y, long.id, onMenu)
         long.consume()
     }
 }
@@ -126,7 +137,13 @@ private fun Modifier.curveGestures(key: String, dragState: CurveDragState, onTap
  * edges), and the release drops (or, without movement, opens the item's menu). It survives the dragged item scrolling
  * out of the list.
  */
-private fun Modifier.dragContainer(dragState: CurveDragState, onDrop: (String, Float) -> Unit): Modifier = pointerInput(dragState) {
+private fun Modifier.dragContainer(dragState: CurveDragState, onDrop: (String, Float, Float) -> Unit): Modifier = composed {
+    // The drop handler reads the CURRENT library state: never the one captured when the pointer coroutine started.
+    val drop by rememberUpdatedState(onDrop)
+    pointerInput(dragState) { dragLoop(dragState) { id, x, y -> drop(id, x, y) } }
+}
+
+private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.dragLoop(dragState: CurveDragState, onDrop: (String, Float, Float) -> Unit) {
     val slop = viewConfiguration.touchSlop
     awaitEachGesture {
         awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
@@ -135,14 +152,15 @@ private fun Modifier.dragContainer(dragState: CurveDragState, onDrop: (String, F
             val id = dragState.pointer
             val change = event.changes.firstOrNull { it.id == id }
             if (id == null || change == null) { if (event.changes.none { it.pressed }) break else continue }
+            val x = dragState.listBounds.left + change.position.x
             val y = dragState.listBounds.top + change.position.y
-            if (kotlin.math.abs(y - dragState.startY) > slop) dragState.moved = true
+            if (kotlin.math.hypot(x - dragState.startX, y - dragState.startY) > slop) dragState.moved = true
             change.consume()
-            dragState.move(y)
+            dragState.move(x, y)
             if (!change.pressed) {
                 val curve = dragState.id; val moved = dragState.moved; val menu = dragState.onMenu
                 dragState.end()
-                if (curve != null) { if (moved) onDrop(curve, y) else menu?.invoke() }
+                if (curve != null) { if (moved) onDrop(curve, x, y) else menu?.invoke() }
                 break
             }
         }
@@ -150,10 +168,10 @@ private fun Modifier.dragContainer(dragState: CurveDragState, onDrop: (String, F
 }
 
 /** The curve drawing used for thumbnails (fills its box; no name). */
-@Composable internal fun CurveThumbnail(curve: EasingCurve, selected: Boolean, modifier: Modifier) {
+@Composable internal fun CurveThumbnail(curve: EasingCurve, selected: Boolean, modifier: Modifier, insetDp: Float = 4f) {
     val range = remember(curve) { EasePlot.range(curve) }
     Canvas(modifier) {
-        val inset = 4.dp.toPx()
+        val inset = insetDp.dp.toPx()
         val plot = EasePlot(size.width, size.height, inset, range.first, range.second)
         val pts = EaseSampling.points(curve)
         val path = Path().apply { moveTo(plot.x(pts[0]), plot.y(pts[1])); var i = 2; while (i < pts.size) { lineTo(plot.x(pts[i]), plot.y(pts[i + 1])); i += 2 } }
@@ -182,7 +200,7 @@ internal class GraphLibraryUi {
     val list = rememberLazyListState()
     val haptic = LocalHapticFeedback.current
     AutoScroll(drag, list)
-    Box(modifier.onGloballyPositioned { drag.listBounds = it.boundsInRoot() }.dragContainer(drag) { id, y -> railDrop(store, pinned, drag, id, y) }) {
+    Box(modifier.onGloballyPositioned { drag.listBounds = it.boundsInRoot() }.dragContainer(drag) { id, _, y -> railDrop(store, pinned, drag, id, y) }) {
         LazyColumn(Modifier.width(GraphLayout.RAIL.dp).fillMaxHeight().testTag("graph-pinned-rail"), state = list,
             verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(bottom = 48.dp)) {
             items(pinned, key = { "rail|${it.id}" }) { e ->
@@ -221,9 +239,6 @@ private fun dropIndex(drag: CurveDragState, keys: List<String>, y: Float): Int? 
     return visible.last().first + 1
 }
 
-/** Pinned slot under [y] (for a replace when the set is full), or null. */
-private fun slotIndex(drag: CurveDragState, keys: List<String>, y: Float): Int? =
-    keys.indexOfFirst { k -> drag.bounds[k]?.let { y >= it.top && y <= it.bottom } == true }.takeIf { it >= 0 }
 
 /** A 2dp line at the drop position while a curve is dragged. */
 @Composable private fun BoxScope.DropIndicator(drag: CurveDragState, keys: List<String>) {
@@ -236,7 +251,7 @@ private fun slotIndex(drag: CurveDragState, keys: List<String>, y: Float): Int? 
 }
 
 /** Auto-scrolls [list] while a drag is near its top or bottom edge. */
-@Composable private fun AutoScroll(drag: CurveDragState, list: LazyListState) {
+@Composable private fun AutoScroll(drag: CurveDragState, list: ScrollableState) {
     val edge = with(LocalDensity.current) { 32.dp.toPx() }
     LaunchedEffect(drag.id != null) {
         while (drag.id != null) {
@@ -248,94 +263,135 @@ private fun slotIndex(drag: CurveDragState, keys: List<String>, y: Float): Int? 
     }
 }
 
-/** The floating library toggle at the bottom of the right column, over a soft scrim in the surface colour. */
-@Composable internal fun GraphLibraryButton(open: Boolean, width: Float, onToggle: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier.width(width.dp).height(48.dp).background(Brush.verticalGradient(listOf(Surface.copy(alpha = 0f), Surface, Surface)))) {
+/**
+ * The floating library toggle at the bottom of the right column. GRAPH G2 (A2): one soft radial scrim in the surface
+ * colour, the SAME composable and parameters open and closed, centred on the icon and fading out [GraphLayout.SCRIM_EXTENT]
+ * beyond its bounds (left and top), so tiles scroll in from underneath it and there is no solid block.
+ */
+@Composable internal fun GraphLibraryButton(open: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    val size = GraphLayout.scrimSize(); val icon = GraphLayout.RAIL
+    Box(modifier.size(size.dp).testTag("graph-library-scrim").drawBehind {
+        val c = Offset(this.size.width - (icon / 2).dp.toPx(), this.size.height - (icon / 2).dp.toPx())
+        val r = (icon / 2 + GraphLayout.SCRIM_EXTENT).dp.toPx()
+        val inner = (icon / 2) / (icon / 2 + GraphLayout.SCRIM_EXTENT)
+        drawCircle(Brush.radialGradient(0f to Surface.copy(alpha = .9f), inner * .8f to Surface.copy(alpha = .82f), 1f to Surface.copy(alpha = 0f),
+            center = c, radius = r), r, c)
+    }) {
         InspectorIconButton(InspectorIcons.icon("GRAPH_LIBRARY"), if (open) "Close curve library" else "Open curve library",
-            Modifier.align(Alignment.BottomEnd).size(GraphLayout.RAIL.dp).testTag("graph-library").semantics { selected = open },
+            Modifier.align(Alignment.BottomEnd).size(icon.dp).testTag("graph-library").semantics { selected = open },
             selected = open, tint = if (open) Highlight else null) { onToggle() }
     }
 }
 
+/** The insertion gap (or, with [full], the slot) among the pinned cells for a pointer at ([x], [y]); null when none is visible. */
+private fun pinnedDrop(drag: CurveDragState, keys: List<String>, x: Float, y: Float, full: Boolean): Int? {
+    val visible = keys.mapIndexedNotNull { i, k -> drag.bounds[k]?.let { i to it } }
+    if (visible.isEmpty()) return if (keys.isEmpty()) 0 else null
+    val rects = visible.map { it.second }
+    return if (full) GridDrop.slot(rects, x, y)?.let { visible[it].first }
+    else GridDrop.index(rects, x, y)?.let { r -> if (r < visible.size) visible[r].first else visible.last().first + 1 }
+}
+
+/** A 2dp bar at the grid drop position while a curve is dragged over Pinned. */
+@Composable private fun BoxScope.GridDropIndicator(drag: CurveDragState, keys: List<String>, inPinned: Boolean) {
+    if (drag.id == null || !inPinned || keys.isEmpty()) return
+    val i = pinnedDrop(drag, keys, drag.pointerX, drag.pointerY, false) ?: return
+    val r = (if (i < keys.size) drag.bounds[keys[i]] else drag.bounds[keys.last()]) ?: return
+    val x = if (i < keys.size) r.left - 1f else r.right + 1f
+    val d = LocalDensity.current
+    Box(Modifier.align(Alignment.TopStart).offset(x = with(d) { (x - drag.listBounds.left).toDp() } - 1.dp, y = with(d) { (r.top - drag.listBounds.top).toDp() })
+        .size(2.dp, with(d) { r.height.toDp() }).background(Highlight).testTag("graph-drop-indicator"))
+}
+
 /**
- * The library column (open): header (no title; import/export and save) over one scrolling thumbnail column with the
- * Pinned / Types / Presets / My curves sections. Pinning is by drag only.
+ * The library (open). GRAPH G2 (A1): header (no title; import/export and save) over a 2-column grid of curve cells in
+ * the Pinned / Presets / My curves sections (no Types: types live in the strip). Pinning is by drag only. The grid
+ * state lives in the page session ([grid]), so the scroll position survives closing and reopening the library while
+ * the Graph page stays open.
  */
 @Composable internal fun GraphLibraryColumn(state: CurveLibraryState, curve: EasingCurve, store: CurveLibraryStore, ui: GraphLibraryUi,
-    onApply: (EasingCurve) -> Unit, onType: (EaseChoice) -> Unit, modifier: Modifier = Modifier) {
+    grid: LazyGridState, onApply: (EasingCurve) -> Unit, modifier: Modifier = Modifier) {
     val sections = CurveLibrary.sections(state)
     val drag = remember { CurveDragState() }
-    val list = rememberLazyListState()
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val fontScale = LocalDensity.current.fontScale
-    AutoScroll(drag, list)
+    AutoScroll(drag, grid)
     val pinnedKeys = sections.pinned.map { "pin|${it.id}" }
-    fun drop(id: String, y: Float) {
+    /** Whether a pointer at [y] (root px) is over the Pinned section, from the captions and cells currently laid out. */
+    fun inPinned(y: Float): Boolean {
+        val cap = drag.bounds["cap|pinned"]
+        val presets = drag.bounds["cap|presets"]
+        val visible = pinnedKeys.mapNotNull { drag.bounds[it] }
+        if (cap == null) {
+            // The Pinned caption scrolled away above: Pinned is whatever pinned cells are still visible, down to Presets.
+            if (visible.isEmpty()) return false
+            return y <= (presets?.top ?: (visible.maxOf { it.bottom } + 12f))
+        }
+        if (y < cap.top) return false
+        // The Presets caption (when visible) closes the section; otherwise a section running past the viewport goes on.
+        presets?.let { return y <= it.top }
+        val last = pinnedKeys.lastOrNull()?.let { drag.bounds[it] }
+        if (pinnedKeys.isNotEmpty() && last == null) return true
+        return y <= (last?.bottom ?: cap.bottom) + 12f
+    }
+    fun drop(id: String, x: Float, y: Float) {
         val wasPinned = id in state.pinned
-        val inPinned = drag.bounds["cap|pinned"]?.let { y >= it.top } == true && (pinnedKeys.isEmpty() ||
-            y <= (drag.bounds[pinnedKeys.last()]?.bottom ?: drag.bounds["cap|pinned"]!!.bottom) + 12f)
-        if (inPinned) {
+        if (inPinned(y)) {
             val full = state.pinned.size >= CurveLibrary.MAX_PINNED && !wasPinned
-            val index = if (full) slotIndex(drag, pinnedKeys, y) ?: return else dropIndex(drag, pinnedKeys, y) ?: 0
+            val index = pinnedDrop(drag, pinnedKeys, x, y, full) ?: (if (full) return else 0)
             store.update { CurveLibrary.pinAt(it, id, if (wasPinned) { val from = it.pinned.indexOf(id); if (index > from) index - 1 else index } else index) }
         } else if (wasPinned) store.update { CurveLibrary.unpin(it, id) }
     }
-    @Composable fun Thumb(e: LibraryEntry, key: String) {
+    val nameHeight = 2 * GraphLayout.GRID_NAME_LINE * fontScale.coerceAtLeast(1f)
+    @Composable fun Cell(e: LibraryEntry, key: String) {
         val selected = CurveLibrary.matches(e, curve)
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if (selected) Surface else Color.Transparent)
+        // A cell scrolled out of the grid drops its bounds (stale bounds would misplace drops).
+        DisposableEffect(key) { onDispose { drag.bounds.remove(key) } }
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (selected) Surface else Color.Transparent)
             .graphicsLayer { alpha = if (drag.id == e.id) .4f else 1f }
             .onGloballyPositioned { drag.bounds[key] = it.boundsInRoot() }
             .curveGestures(key, drag, onTap = { onApply(e.curve) }, onMenu = if (e.user) ({ ui.menuFor = e.id; ui.menuMode = 0 }) else null,
                 onHaptic = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) })
             .semantics(mergeDescendants = true) { contentDescription = e.name + if (e.user) ", user curve" else ""; if (selected) stateDescription = "Selected" }
-            .testTag("graph-lib-${e.id}").padding(vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.fillMaxWidth().height(GraphLayout.THUMB.dp)) {
-                CurveThumbnail(e.curve, selected, Modifier.fillMaxSize())
-                if (e.user) StarBadge(Modifier.align(Alignment.TopEnd).padding(2.dp))
+            .testTag("graph-lib-${e.id}").padding(top = 1.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.fillMaxWidth().height(GraphLayout.GRID_THUMB_H.dp)) {
+                CurveThumbnail(e.curve, selected, Modifier.fillMaxSize(), insetDp = 3f)
+                if (e.user) StarBadge(Modifier.align(Alignment.TopEnd).padding(1.dp))
                 if (ui.menuFor == e.id) CurveMenuPopover(state, e, store, ui)
             }
-            Text(e.name, color = if (selected) TextPrimary else TextSecondary, fontSize = 8.sp, lineHeight = 9.sp, maxLines = 2,
-                overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp, start = 2.dp, end = 2.dp))
+            Text(e.name, color = if (selected) TextPrimary else TextSecondary, fontSize = 7.sp, lineHeight = GraphLayout.GRID_NAME_LINE.sp, maxLines = 2,
+                overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 1.dp, start = 1.dp, end = 1.dp).height(nameHeight.dp).testTag("graph-lib-name"))
         }
     }
     @Composable fun Caption(text: String, key: String) {
-        Column(Modifier.fillMaxWidth().height(GraphLayout.caption(fontScale).dp).onGloballyPositioned { drag.bounds[key] = it.boundsInRoot() }
+        DisposableEffect(key) { onDispose { drag.bounds.remove(key) } }
+        Column(Modifier.fillMaxWidth().height(GraphLayout.gridCaption(fontScale).dp).onGloballyPositioned { drag.bounds[key] = it.boundsInRoot() }
             .testTag("graph-lib-$key"), verticalArrangement = Arrangement.Bottom) {
-            Text(text, color = TextSecondary, fontSize = 8.sp, lineHeight = 9.sp, maxLines = 1, modifier = Modifier.padding(start = 2.dp))
+            Text(text, color = TextSecondary, fontSize = 7.sp, lineHeight = 8.sp, maxLines = 1, modifier = Modifier.padding(start = 2.dp))
             Box(Modifier.fillMaxWidth().height(1.dp).background(Border))
         }
     }
+    val span: (androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope.() -> GridItemSpan) = { GridItemSpan(maxLineSpan) }
     Box(modifier.onGloballyPositioned { drag.listBounds = it.boundsInRoot() }.dragContainer(drag, ::drop).testTag("graph-library-column")) {
-        LazyColumn(Modifier.fillMaxSize(), state = list, verticalArrangement = Arrangement.spacedBy(2.dp),
-            contentPadding = PaddingValues(top = GraphLayout.LIBRARY_HEADER.dp, bottom = 48.dp)) {
-            item(key = "cap|pinned") { Caption("Pinned", "cap|pinned") }
-            items(sections.pinned, key = { "pin|${it.id}" }) { Thumb(it, "pin|${it.id}") }
-            item(key = "cap|types") { Caption("Types", "cap|types") }
-            items(GRAPH_TYPE_TILES, key = { "type|${it.name}" }) { c ->
-                val tile = EaseChoice.curve(c, EasingCurve.EASY_EASE)
-                val selected = graphTypeTile(curve) == c
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if (selected) Surface else Color.Transparent)
-                    .clickable(role = Role.Button) { onType(c) }
-                    .semantics(mergeDescendants = true) { contentDescription = c.label; if (selected) stateDescription = "Selected" }
-                    .testTag("graph-lib-type-${c.name}").padding(vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    CurveThumbnail(tile, selected, Modifier.fillMaxWidth().height(GraphLayout.THUMB.dp))
-                    Text(c.label, color = if (selected) TextPrimary else TextSecondary, fontSize = 8.sp, lineHeight = 9.sp, maxLines = 2,
-                        textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp))
-                }
-            }
-            item(key = "cap|presets") { Caption("Presets", "cap|presets") }
-            items(sections.presets, key = { "preset|${it.id}" }) { Thumb(it, "preset|${it.id}") }
-            item(key = "cap|mine") { Caption("My curves", "cap|mine") }
-            items(sections.mine, key = { "mine|${it.id}" }) { Thumb(it, "mine|${it.id}") }
+        LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize().testTag("graph-library-grid"), state = grid,
+            contentPadding = PaddingValues(top = GraphLayout.LIBRARY_HEADER.dp, bottom = GraphLayout.scrimSize().dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            item(key = "cap|pinned", span = span) { Caption("Pinned", "cap|pinned") }
+            items(sections.pinned, key = { "pin|${it.id}" }) { Cell(it, "pin|${it.id}") }
+            item(key = "cap|presets", span = span) { Caption("Presets", "cap|presets") }
+            items(sections.presets, key = { "preset|${it.id}" }) { Cell(it, "preset|${it.id}") }
+            item(key = "cap|mine", span = span) { Caption("My curves", "cap|mine") }
+            items(sections.mine, key = { "mine|${it.id}" }) { Cell(it, "mine|${it.id}") }
         }
-        DropIndicator(drag, pinnedKeys)
-        LibraryHeader(state, curve, store) { id ->
-            // The new curve scrolls into view (top of My curves).
+        GridDropIndicator(drag, pinnedKeys, drag.id != null && inPinned(drag.pointerY))
+        LibraryHeader(state, curve, store) { _ ->
+            // The new curve scrolls into view (the top of My curves).
             scope.launch {
                 delay(50)
-                val index = list.layoutInfo.totalItemsCount.let { n -> (2 + sections.pinned.size + GRAPH_TYPE_TILES.size + 1 + sections.presets.size).coerceAtMost(n - 1) }
-                runCatching { list.animateScrollToItem(index) }
+                val index = (1 + sections.pinned.size + 1 + sections.presets.size).coerceAtMost((grid.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
+                runCatching { grid.animateScrollToItem(index) }
             }
         }
     }
@@ -447,12 +503,22 @@ private fun slotIndex(drag: CurveDragState, keys: List<String>, y: Float): Int? 
     AnchoredPopover(true, { ui.menuFor = null; ui.menuMode = 0 }, "graph-curve-menu", modal = false) {
         when (ui.menuMode) {
             1 -> {
+                // GRAPH G2 (A3): typed fields (the values bar's clamps), commit on IME Done or focus loss; invalid input is
+                // discarded and empty keeps the old value. Edits the STORED curve only (never the graph). Each commit
+                // re-keys its field so it can be edited again; the curve is read back from the store, never captured.
                 val rows = EaseLimits.rows(e.curve)
-                Row(Modifier.width((rows.size * 56).dp).height(40.dp).testTag("graph-curve-values")) {
+                val rounds = remember { mutableStateMapOf<Int, Int>() }
+                Row(Modifier.testTag("graph-curve-values"), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     rows.forEachIndexed { i, (limit, value, _) ->
-                        if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(Border))
-                        EaseValueTile(limit, value, Modifier.weight(1f).fillMaxHeight().testTag("graph-curve-value-$i")) { text ->
-                            EaseLimits.typed(e.curve, i, text)?.let { c -> store.update { CurveLibrary.edit(it, e.id, c) } }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(limit.name, color = TextSecondary, fontSize = 8.sp, lineHeight = 9.sp, maxLines = 1)
+                            key(i, rounds[i] ?: 0) {
+                                InspectorValueField(EaseLimits.format(limit, value), limit.name, limit.unit, onCommit = { text ->
+                                    store.update { s -> s.user.firstOrNull { it.id == e.id }?.let { u -> EaseLimits.typed(u.curve, i, text)?.let { c -> CurveLibrary.edit(s, e.id, c) } } ?: s }
+                                    rounds[i] = (rounds[i] ?: 0) + 1
+                                }, onCancel = { rounds[i] = (rounds[i] ?: 0) + 1 },
+                                    modifier = Modifier.testTag("graph-curve-value-$i"), autoFocus = i == 0)
+                            }
                         }
                     }
                 }

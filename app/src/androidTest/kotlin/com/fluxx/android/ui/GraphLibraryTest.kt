@@ -66,14 +66,22 @@ class GraphLibraryTest {
         Rect(it.left.value, it.top.value, it.right.value, it.bottom.value) }
     private fun click(tag: String) { compose.onNodeWithTag(tag, useUnmergedTree = true).performClick(); compose.waitForIdle() }
     private fun curve() = vm.state.project.composition.layers[0].animTransform.rotation.keyframes[1].curve
-    private fun reveal(tag: String) { compose.onNodeWithTag("graph-library-column").onChildren().filterToOne(hasScrollAction()).performScrollToNode(hasTestTag(tag)); compose.waitForIdle() }
+    /** Scrolls [tag] into view and, like a user would, clear of the header and the library icon (scroll-to-node stops at the edge). */
+    private fun reveal(tag: String) {
+        val grid = compose.onNodeWithTag("graph-library-column").onChildren().filterToOne(hasScrollAction())
+        grid.performScrollToNode(hasTestTag(tag)); compose.waitForIdle()
+        val col = bounds("graph-library-column"); val r = bounds(tag)
+        val low = r.bottom - (col.bottom - GraphLayout.scrimSize() - 2f); val high = (col.top + GraphLayout.LIBRARY_HEADER + 2f) - r.top
+        val by = when { low > 0f -> low; high > 0f -> -high; else -> 0f }
+        if (by != 0f) { grid.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollBy) { it(0f, by * compose.density.density) }; compose.waitForIdle() }
+    }
     private fun visible(tag: String) = compose.onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() &&
         bounds(tag).let { r -> val c = bounds("graph-library-column"); r.top >= c.top + GraphLayout.LIBRARY_HEADER && r.bottom <= c.bottom - 40f }
     /**
      * Long-press [fromTag] and drag it through the library container (which owns the drag): to the top or bottom edge
      * so auto-scroll runs until [targetTag] is in view, then onto [targetY] (computed from the target's root bounds).
      */
-    private fun libraryDrag(fromTag: String, targetTag: String, up: Boolean, targetY: (Rect) -> Float) {
+    private fun libraryDrag(fromTag: String, targetTag: String, up: Boolean, target: (Rect) -> Offset) {
         val col = bounds("graph-library-column"); val from = bounds(fromTag)
         val x = from.center.x - col.left
         compose.mainClock.autoAdvance = false
@@ -84,8 +92,8 @@ class GraphLibraryTest {
             var n = 0
             while (!visible(targetTag) && n++ < 400) compose.mainClock.advanceTimeBy(16)
         }
-        val y = targetY(bounds(targetTag)) - col.top
-        compose.onNodeWithTag("graph-library-column").performTouchInput { moveTo(Offset(x * density, y * density)); up() }
+        val t = target(bounds(targetTag)) - Offset(col.left, col.top)
+        compose.onNodeWithTag("graph-library-column").performTouchInput { moveTo(Offset(x * density, t.y * density)); moveTo(t * density); up() }
         compose.mainClock.advanceTimeBy(100)
         compose.mainClock.autoAdvance = true; compose.waitForIdle()
     }
@@ -159,7 +167,8 @@ class GraphLibraryTest {
         compose.onNodeWithTag("graph-library-save").assertIsNotEnabled()
         // Hold cannot be saved either.
         compose.runOnIdle { store.update { it.copy(user = it.user.drop(1)) } }
-        reveal("graph-lib-type-HOLD"); click("graph-lib-type-HOLD"); compose.onNodeWithTag("graph-library-save").assertIsNotEnabled()
+        click("graph-library"); click("graph-type-HOLD"); click("graph-library")
+        compose.onNodeWithTag("graph-library-save").assertIsNotEnabled()
     }
 
     @Test fun longPressMenuOnUserCurvesOnlyAndDragToPin() {
@@ -180,11 +189,11 @@ class GraphLibraryTest {
         compose.onAllNodesWithTag("graph-curve-xy", useUnmergedTree = true).assertCountEquals(0)
         // Drag after long-press: quad.in up onto the Pinned section (auto-scroll brings it into view) pins it at the top.
         reveal("graph-lib-preset:quad.in")
-        libraryDrag("graph-lib-preset:quad.in", "graph-lib-cap|pinned", up = true) { it.bottom + 6f }
+        libraryDrag("graph-lib-preset:quad.in", "graph-lib-cap|pinned", up = true) { Offset(it.left + 4f, it.bottom + 8f) }
         assertEquals("pinned first after the drop: ${store.state.value.pinned}", "preset:quad.in", store.state.value.pinned.firstOrNull())
         // Unpin by dragging a pinned curve out of Pinned, down into Presets.
         reveal("graph-lib-preset:back.out")
-        libraryDrag("graph-lib-preset:back.out", "graph-lib-cap|presets", up = false) { it.bottom + 30f }
+        libraryDrag("graph-lib-preset:back.out", "graph-lib-cap|presets", up = false) { Offset(it.left + 10f, it.bottom + 20f) }
         assertFalse("unpinned: ${store.state.value.pinned}", "preset:back.out" in store.state.value.pinned)
         assertEquals(1_234_567L, vm.state.playheadUs)
     }
@@ -196,7 +205,7 @@ class GraphLibraryTest {
         start(st)
         click("graph-library")
         reveal("graph-lib-preset:circ.out")
-        libraryDrag("graph-lib-preset:circ.out", "graph-lib-${fifteen[1]}", up = true) { it.center.y }
+        libraryDrag("graph-lib-preset:circ.out", "graph-lib-${fifteen[1]}", up = true) { it.center }
         val pinned = store.state.value.pinned
         assertEquals(15, pinned.size); assertTrue("preset:circ.out" in pinned)
         assertEquals("the others keep their order", fifteen.filter { it in pinned }, pinned.filter { it != "preset:circ.out" })
@@ -219,5 +228,112 @@ class GraphLibraryTest {
         val back = CurveExchange.import(CurveLibraryState(), file.readBytes())
         file.delete()
         assertEquals(listOf("Round"), back.state.user.map { it.name }); assertEquals(EasingCurve.elastic(4f, .4f), back.state.user[0].curve)
+    }
+
+    /** GRAPH G2 (A1/A2): a 2-column grid, no Types, ≥ 4 rows at 268dp, and the icon's fade is the same small scrim open and closed. */
+    @Test fun gridSectionsRowsAndTheIconFade() {
+        start()
+        for ((h, min) in listOf(268f to 4f, 328f to 5f)) {
+            compose.runOnIdle { size.value = 360f to h }; compose.waitForIdle()
+            if (compose.onAllNodesWithTag("graph-page").fetchSemanticsNodes().isEmpty()) {
+                compose.onNodeWithContentDescription("Transform").performClick(); compose.waitForIdle()
+                click("transform-mode-ROTATION"); click("inspector-rail-graph")
+            }
+            val icon = bounds("graph-library"); val scrimClosed = bounds("graph-library-scrim")
+            click("graph-library")
+            compose.onAllNodesWithTag("graph-lib-cap|types", useUnmergedTree = true).assertCountEquals(0)
+            compose.onAllNodesWithTag("graph-lib-type-HOLD", useUnmergedTree = true).assertCountEquals(0)
+            val col = bounds("graph-library-column")
+            // Two columns: the first two pinned cells share a row.
+            val a = bounds("graph-lib-preset:css.ease_in_out"); val b = bounds("graph-lib-preset:back.in")
+            assertEquals(a.top, b.top, .5f); assertTrue(b.left >= a.right - .5f)
+            assertTrue("cell width ${a.width}", a.width in 36f..41f)
+            // Rows fully visible below the header.
+            val cells = compose.onAllNodes(hasTestTag("graph-lib-preset:css.ease_in_out") or hasTestTag("graph-lib-preset:back.in") or
+                hasTestTag("graph-lib-preset:back.out") or hasTestTag("graph-lib-preset:back.in_out") or hasTestTag("graph-lib-preset:expo.in") or
+                hasTestTag("graph-lib-preset:expo.out") or hasTestTag("graph-lib-preset:expo.in_out") or hasTestTag("graph-lib-preset:circ.in_out") or
+                hasTestTag("graph-lib-preset:cubic.in_out") or hasTestTag("graph-lib-preset:quad.out") or hasTestTag("graph-lib-preset:material.standard") or
+                hasTestTag("graph-lib-preset:material.emphasized"), useUnmergedTree = true).fetchSemanticsNodes()
+            // boundsInRoot is clipped to the viewport, so a row's real bottom is its top + the (unclipped) row height.
+            val rowHeight = a.height
+            val rows = cells.map { it.boundsInRoot.top / density() }.distinct()
+                .count { top -> top >= col.top + GraphLayout.LIBRARY_HEADER - .5f && top + rowHeight <= col.bottom + .5f }
+            val tops = cells.map { it.boundsInRoot.top / density() - col.top }.distinct().sorted()
+            android.util.Log.d("GraphG2", "grid at 360x$h: rows fully visible=$rows (row height ${a.height}, column ${col.width}x${col.height}, row tops below the column top=$tops, caption=${bounds("graph-lib-cap|pinned")})")
+            assertTrue("rows visible at $h: $rows", rows >= min)
+            // The icon and its scrim do not move; the scrim is the icon + 6dp (left and top) in both states.
+            assertEquals(icon, bounds("graph-library")); assertEquals(scrimClosed, bounds("graph-library-scrim"))
+            val scrim = bounds("graph-library-scrim")
+            assertEquals(icon.left - GraphLayout.SCRIM_EXTENT, scrim.left, .6f); assertEquals(icon.top - GraphLayout.SCRIM_EXTENT, scrim.top, .6f)
+            assertEquals(icon.right, scrim.right, .6f); assertEquals(icon.bottom, scrim.bottom, .6f)
+            // A cell 12dp or more from the icon is entirely outside the scrim (fully visible).
+            val clear = cells.map { it.boundsInRoot.let { r -> Rect(r.left / density(), r.top / density(), r.right / density(), r.bottom / density()) } }
+                .filter { it.right <= icon.left - 12f || it.bottom <= icon.top - 12f }
+            assertTrue(clear.isNotEmpty()); assertTrue(clear.all { !it.overlaps(scrim) })
+            click("graph-library")
+        }
+    }
+    private fun density() = compose.density.density
+
+    /** GRAPH G2 (A3): the xy popover edits the stored curve with typed fields; the graph is untouched. */
+    @Test fun xyPopoverEditsAndPersistsTheStoredCurve() {
+        var s = CurveLibraryState(pinned = listOf("user:m"))
+        s = CurveLibrary.add(s, "Mine", EasingCurve.bezier(.1f, .9f, .2f, 1f), "user:m")!!.first
+        start(s)
+        val graph = curve()
+        compose.onNodeWithTag("graph-pinned-user:m").performTouchInput { longClick() }; compose.waitForIdle()
+        click("graph-curve-xy")
+        compose.onNodeWithContentDescription("y1, exact value in ").performTextReplacement("0.4")
+        compose.onNodeWithContentDescription("y1, exact value in ").performImeAction(); compose.waitForIdle()
+        assertEquals(EasingCurve.bezier(.1f, .4f, .2f, 1f), store.state.value.user[0].curve)
+        // Edit again (each commit re-arms its field), invalid input is discarded, empty keeps the value.
+        compose.onNodeWithContentDescription("x2, exact value in ").performClick()
+        compose.onNodeWithContentDescription("x2, exact value in ").performTextReplacement("abc")
+        compose.onNodeWithContentDescription("x2, exact value in ").performImeAction(); compose.waitForIdle()
+        compose.onNodeWithContentDescription("y1, exact value in ").performClick()
+        compose.onNodeWithContentDescription("y1, exact value in ").performTextReplacement("")
+        compose.onNodeWithContentDescription("y1, exact value in ").performImeAction(); compose.waitForIdle()
+        compose.onNodeWithContentDescription("x1, exact value in ").performClick()
+        compose.onNodeWithContentDescription("x1, exact value in ").performTextReplacement("5")
+        compose.onNodeWithContentDescription("x1, exact value in ").performImeAction(); compose.waitForIdle()
+        assertEquals("x clamps to 1", EasingCurve.bezier(1f, .4f, .2f, 1f), store.state.value.user[0].curve)
+        assertEquals(graph, curve()); assertEquals(1_234_567L, vm.state.playheadUs)
+        // The pinned thumbnail shows the stored curve; persisted in the store (atomic writes are covered by GraphG2LTest).
+        compose.onNodeWithTag("graph-pinned-user:m").assertExists()
+    }
+
+    /**
+     * GRAPH G2 (A4) regression: a typed entry opened right after another one closed used to cancel itself (the previous
+     * keyboard sliding down read as Back), so the second popover closed at once and the typed value was lost.
+     */
+    @Test fun aSecondTypedEntryRightAfterTheFirstStaysOpenAndCommits() {
+        start()
+        fun popups() = compose.onAllNodes(isPopup()).fetchSemanticsNodes().size
+        click("graph-value-1")
+        compose.onNodeWithContentDescription("y1, exact value in ").performTextReplacement("0.4")
+        compose.onNodeWithContentDescription("y1, exact value in ").performImeAction(); compose.waitForIdle()
+        assertEquals(.4f, curve().b, 1e-4f)
+        // Immediately: the next tile, then the same tile again, each while the previous keyboard is still going down.
+        click("graph-value-0")
+        assertEquals("the second entry stays open", 1, popups())
+        compose.onNodeWithContentDescription("x1, exact value in ").performTextReplacement("0.2")
+        compose.onNodeWithContentDescription("x1, exact value in ").performImeAction(); compose.waitForIdle()
+        assertEquals(.2f, curve().a, 1e-4f)
+        click("graph-value-1")
+        assertEquals(1, popups())
+        compose.onNodeWithContentDescription("y1, exact value in ").performTextReplacement("0.6")
+        compose.onNodeWithContentDescription("y1, exact value in ").performImeAction(); compose.waitForIdle()
+        assertEquals(.6f, curve().b, 1e-4f)
+        // The same in the library's xy popover.
+        var st = CurveLibrary.add(store.state.value, "Mine", EasingCurve.bezier(.1f, .9f, .2f, 1f), "user:m")!!.first
+        st = CurveLibrary.pinAt(st, "user:m", 0)
+        compose.runOnIdle { store.update { st } }; compose.waitForIdle()
+        compose.onNodeWithTag("graph-pinned-rail").performScrollToNode(hasTestTag("graph-pinned-user:m"))
+        compose.onNodeWithTag("graph-pinned-user:m").performTouchInput { longClick() }; compose.waitForIdle()
+        click("graph-curve-xy")
+        compose.onNodeWithContentDescription("y2, exact value in ").performClick()
+        compose.onNodeWithContentDescription("y2, exact value in ").performTextReplacement("0.5")
+        compose.onNodeWithContentDescription("y2, exact value in ").performImeAction(); compose.waitForIdle()
+        assertEquals(.5f, store.state.value.user.first { it.id == "user:m" }.curve.d, 1e-4f)
     }
 }

@@ -91,6 +91,53 @@ class GraphPlayheadTest {
         assertEquals(arbitrary, editor.state.playheadUs); assertEquals(clip, clipX(label)); assertEquals(1L, editor.state.selectedLayerId)
     }
 
+    /**
+     * GRAPH G2: the Value view on the real editor and preview controller. Key drag, handle drag, a pinned-preset tap,
+     * pan, pinch zoom and fit never move the playhead, the clip or the selection; a double tap on a key seeks to it once
+     * and the controller does not echo the playhead back anywhere else afterwards.
+     */
+    @Test fun valueGraphEditsKeepThePlayheadAndADoubleTapSeeksOnce() {
+        val label = hasText("Spin")
+        val editor = host(CompositionLayer(1, LayerType.SOLID, name = "Spin", timing = ClipTiming(0, 0, 4_000_000),
+            animTransform = AnimatableTransform(rotation = AnimatableProperty1D(true, 0f, FrozenList.of(listOf(
+                Keyframe1D(0, 0f), Keyframe1D(1_000_000, 90f), Keyframe1D(3_000_000, 45f)))))))
+        openInspector(label)
+        compose.onNodeWithContentDescription("Transform").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("transform-mode-ROTATION").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("inspector-rail-graph", useUnmergedTree = true).performClick(); settle()
+        compose.onNodeWithTag("graph-mode-GRAPH_VALUE").performClick(); settle()
+        val clip = clipX(label)
+        fun keys() = editor.state.project.composition.layers[0].animTransform.rotation.keyframes
+        fun at(tag: String): Offset {
+            val c = compose.onNodeWithTag("graph-value-canvas").fetchSemanticsNode().boundsInRoot
+            val r = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            return Offset(r.center.x - c.left, r.center.y - c.top)
+        }
+        fun canvas(block: TouchInjectionScope.() -> Unit) { compose.onNodeWithTag("graph-value-canvas").performTouchInput(block); settle() }
+        fun unchanged() { assertEquals(arbitrary, editor.state.playheadUs); assertEquals(arbitrary, editor.displayedState.playheadUs)
+            assertEquals(clip, clipX(label)); assertEquals(1L, editor.state.selectedLayerId) }
+        // Key drag (hold before release, as in the G1.1 repro).
+        canvas { down(at("graph-value-key-1")); repeat(20) { moveBy(Offset(2f, -3f)) }; advanceEventTime(600); up() }
+        assertNotEquals(90f, keys()[1].value); unchanged()
+        // Handle drag on the selected segment.
+        canvas { click(at("graph-value-key-0")) }
+        canvas { down(at("graph-value-handle-0")); repeat(20) { moveBy(Offset(-2f, -2f)) }; up() }
+        assertEquals(EasingPreset.CUSTOM, keys()[0].easing); unchanged()
+        // Preset from the pinned rail, pan, pinch, fit.
+        compose.onNodeWithTag("graph-pinned-preset:back.out", useUnmergedTree = true).performClick(); settle(); unchanged()
+        canvas { swipe(Offset(width * .1f, height * .1f), Offset(width * .4f, height * .3f), 300) }; unchanged()
+        canvas { val c = Offset(width / 2f, height / 2f); pinch(c - Offset(60f, 0f), c - Offset(200f, 0f), c + Offset(60f, 0f), c + Offset(200f, 0f), 400) }; unchanged()
+        Thread.sleep(400)
+        canvas { doubleClick(Offset(10f, 10f)) }; unchanged()
+        Thread.sleep(400)
+        // The one exception: a double tap on a key seeks to it.
+        val target = keys()[2].timeUs
+        canvas { doubleClick(at("graph-value-key-2")) }
+        assertEquals(target, editor.state.playheadUs)
+        settle(); Thread.sleep(600); compose.waitForIdle()
+        assertEquals("no echo after the seek", target, editor.state.playheadUs)
+    }
+
     /** The user's repro: an animator Range Selector Offset field opened from the Animate tab, paused, one handle to the edge first. */
     @Test fun animatorOffsetGraphEditsKeepThePlayhead() {
         val label = hasText("Word") or hasText("Offset me", substring = true)

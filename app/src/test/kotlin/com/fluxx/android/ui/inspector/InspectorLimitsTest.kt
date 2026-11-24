@@ -78,13 +78,23 @@ class InspectorLimitsTest {
         // IME Done commits once; disposal afterwards does nothing.
         entry().also {it.commit("12");it.dispose("13")};assertEquals(listOf("commit:12"),events);events.clear()
         // Tap outside (popover disposed) commits the current text.
-        entry().also {it.keyboard(true);it.dispose("40")};assertEquals(listOf("commit:40"),events);events.clear()
+        entry().also {it.ime(0);it.ime(800);it.dispose("40")};assertEquals(listOf("commit:40"),events);events.clear()
         // Escape cancels; nothing commits later.
         entry().also {it.cancel();it.commit("1");it.dispose("2")};assertEquals(listOf("cancel"),events);events.clear()
         // Back hides the keyboard after it was shown: cancel, and closing the popover then commits nothing.
-        entry().also {it.keyboard(false);it.keyboard(true);it.keyboard(false);it.dispose("9")};assertEquals(listOf("cancel"),events);events.clear()
+        entry().also {it.ime(0);it.ime(800);it.ime(0);it.dispose("9")};assertEquals(listOf("cancel"),events);events.clear()
         // The keyboard not yet shown is not a cancellation.
-        entry().also {it.keyboard(false);it.commit("5")};assertEquals(listOf("commit:5"),events)
+        entry().also {it.ime(0);it.commit("5")};assertEquals(listOf("commit:5"),events);events.clear()
+        // GRAPH G2 (A4): opened while the previous entry's keyboard is still sliding down. The falling IME reaching 0 is
+        // not Back: the new entry stays open and commits what is typed (this cancelled at once before the fix).
+        entry().also {it.ime(800);it.ime(500);it.ime(120);it.ime(0);it.ime(300);it.ime(800);it.commit("0.4")}
+        assertEquals(listOf("commit:0.4"),events);events.clear()
+        // ... and once its own keyboard is up, Back still cancels.
+        entry().also {it.ime(600);it.ime(0);it.ime(800);it.ime(0);it.dispose("1")};assertEquals(listOf("cancel"),events);events.clear()
+        // A keyboard already fully up when the field opens (no motion) arms after it settles; Back then cancels.
+        entry().also {it.ime(800);it.settled(800);it.ime(0)};assertEquals(listOf("cancel"),events);events.clear()
+        // Without settling, a keyboard that only falls is never Back.
+        entry().also {it.ime(800);it.ime(0);it.dispose("7")};assertEquals(listOf("commit:7"),events)
     }
     @Test fun popoverSitsAboveItsAnchorAndStaysOnScreen() {
         val m=8;val w=1080;val h=2400

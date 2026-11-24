@@ -61,6 +61,8 @@ import kotlin.math.roundToInt
 internal class GraphHost(val layer: () -> CompositionLayer, private val target: () -> GraphTarget?,
     val open: (GraphTarget) -> Unit, val close: () -> Unit) {
     val openTarget: GraphTarget? get() = target()
+    /** GRAPH G2: the open page's shared state (view, key selection, viewport, channel, library scroll); reset on open / close. */
+    val session = GraphSession()
 }
 internal val LocalGraphHost = compositionLocalOf<GraphHost?> { null }
 
@@ -119,6 +121,22 @@ internal object GraphLayout {
     fun caption(fontScale: Float) = CAPTION * fontScale.coerceAtLeast(1f)
     /** Whole thumbnails visible in the library below its header. */
     fun thumbsVisible(height: Float, fontScale: Float) = (height - LIBRARY_HEADER) / thumbItem(fontScale)
+
+    /**
+     * GRAPH G2 (A1): the library is a 2-column grid. One cell: a curve thumbnail [GRID_THUMB_H] tall over a name of up to
+     * two 7sp lines ([GRID_NAME_LINE] each). Captions span both columns.
+     */
+    const val GRID_THUMB_H = 24f
+    const val GRID_NAME_LINE = 7.5f
+    const val GRID_CAPTION = 12f
+    fun gridRow(fontScale: Float) = GRID_THUMB_H + 2f + 2 * GRID_NAME_LINE * fontScale.coerceAtLeast(1f)
+    fun gridCaption(fontScale: Float) = GRID_CAPTION * fontScale.coerceAtLeast(1f)
+    /** Grid rows visible below the header and the first caption (fractional). */
+    fun gridRowsVisible(height: Float, fontScale: Float) = (height - LIBRARY_HEADER - gridCaption(fontScale)) / gridRow(fontScale)
+
+    /** GRAPH G2 (A2): the library icon's fade ends this far beyond the icon (left and top); the same open and closed. */
+    const val SCRIM_EXTENT = 6f
+    fun scrimSize() = RAIL + SCRIM_EXTENT
 }
 
 /** Plot mapping of the Ease canvas: x ∈ [0, 1] across, y ∈ [[low], [high]] upward, inside an [inset] margin. */
@@ -255,16 +273,22 @@ internal fun graphTypeTile(curve: EasingCurve): EaseChoice? = EaseChoice.of(curv
  * GRAPH G1.1 header contents (the sheet places it in the shared header row): back arrow (returns, like the Graph icon),
  * the Value | Speed | Ease mode icons (Value and Speed visible, disabled, inert) and the two-line segment label.
  */
-@Composable internal fun GraphPageHeader(layer: CompositionLayer, target: GraphTarget, playheadUs: Long, frameRate: FrameRate, onBack: () -> Unit) {
-    val segment = GraphModel.segment(layer, target, GraphModel.local(layer, target, playheadUs, frameRate))
+@Composable internal fun GraphPageHeader(layer: CompositionLayer, target: GraphTarget, playheadUs: Long, frameRate: FrameRate, onBack: () -> Unit,
+    session: GraphSession = remember { GraphSession() }) {
+    val local = GraphModel.local(layer, target, playheadUs, frameRate)
+    val segment = GraphSelection.segment(layer, target, session.selection, playheadUs, local)
+    val valueAvailable = GraphValues.available(layer, target)
+    val mode = if (valueAvailable) session.mode else GraphMode.EASE
+    val picked = GraphSelection.valid(session.selection, GraphModel.keyTimes(layer, target), playheadUs)
     Row(Modifier.fillMaxWidth().height(InspectorChromeBudget.header(LocalDensity.current.fontScale).dp).testTag("graph-header"),
         verticalAlignment = Alignment.CenterVertically) {
         InspectorIconButton(InspectorIcons.icon("BACK"), "Back from the graph editor", Modifier.testTag("graph-back")) { onBack() }
         Spacer(Modifier.weight(1f))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            GraphModeTile("GRAPH_VALUE", "Value graph (not yet available)", enabled = false, selected = false)
+            GraphModeTile("GRAPH_VALUE", if (valueAvailable) "Value graph" else "Value graph (not available for colour)", enabled = valueAvailable,
+                selected = mode == GraphMode.VALUE) { if (session.mode != GraphMode.VALUE) { session.mode = GraphMode.VALUE; session.viewport = null } }
             GraphModeTile("GRAPH_SPEED", "Speed graph (not yet available)", enabled = false, selected = false)
-            GraphModeTile("GRAPH_EASE", "Ease view", enabled = true, selected = true)
+            GraphModeTile("GRAPH_EASE", "Ease view", enabled = true, selected = mode == GraphMode.EASE) { session.mode = GraphMode.EASE }
         }
         Spacer(Modifier.weight(1f))
         if (segment != null) {
@@ -273,7 +297,7 @@ internal fun graphTypeTile(curve: EasingCurve): EaseChoice? = EaseChoice.of(curv
             val libraryState by remember(context) { CurveLibraryStore.get(context) }.state.collectAsState()
             val curveName = CurveLibrary.nameFor(libraryState, segment.curve)
             Column(Modifier.widthIn(max = 132.dp).padding(end = 4.dp).semantics(mergeDescendants = true) {
-                contentDescription = "${segment.label} of ${segment.count}, ${values.first} to ${values.second}, ${seconds(segment.durationUs)}, curve $curveName; the segment at the playhead"
+                contentDescription = "${segment.label} of ${segment.count}, ${values.first} to ${values.second}, ${seconds(segment.durationUs)}, curve $curveName; ${if (picked) "the selected key's segment" else "the segment at the playhead"}"
             }, horizontalAlignment = Alignment.End) {
                 Text("${segment.label} · ${seconds(segment.durationUs)}", color = TextPrimary, style = MaterialTheme.typography.labelMedium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End, modifier = Modifier.testTag("graph-segment-label"))
@@ -286,8 +310,9 @@ internal fun graphTypeTile(curve: EasingCurve): EaseChoice? = EaseChoice.of(curv
 
 private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us / 1_000_000.0)
 
-@Composable private fun GraphModeTile(icon: String, label: String, enabled: Boolean, selected: Boolean) {
+@Composable private fun GraphModeTile(icon: String, label: String, enabled: Boolean, selected: Boolean, onClick: () -> Unit = {}) {
     Box(Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(if (selected) Surface else Color.Transparent)
+        .clickable(enabled = enabled, role = Role.Tab) { onClick() }
         .semantics { contentDescription = label; if (!enabled) disabled(); if (selected) this.selected = true }.testTag("graph-mode-$icon"),
         contentAlignment = Alignment.Center) {
         Icon(InspectorIcons.icon(icon), null, Modifier.size(20.dp), tint = if (!enabled) TextDisabled else if (selected) TextPrimary else TextSecondary)
@@ -302,11 +327,15 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
  */
 @Composable internal fun GraphPage(layer: CompositionLayer, target: GraphTarget, playheadUs: Long, frameRate: FrameRate,
     onAction: (EditorAction) -> Unit, onBegin: () -> Unit, onPreview: (EditorAction) -> Unit, onCommit: () -> Unit, onCancel: () -> Unit,
-    onClose: () -> Unit, modifier: Modifier = Modifier) {
+    onClose: () -> Unit, modifier: Modifier = Modifier, session: GraphSession = remember { GraphSession() },
+    compositionWidth: Int = 1080, compositionHeight: Int = 1920) {
     val close by rememberUpdatedState(onClose)
     BackHandler { close() }
     val local = GraphModel.local(layer, target, playheadUs, frameRate)
-    val segment = GraphModel.segment(layer, target, local)
+    // GRAPH G2: a selected key's departing segment overrides the playhead's until the playhead moves.
+    val segment = GraphSelection.segment(layer, target, session.selection, playheadUs, local)
+    LaunchedEffect(playheadUs) { session.selection?.let { if (it.playheadUs != playheadUs) session.selection = null } }
+    val valueMode = session.mode == GraphMode.VALUE && GraphValues.available(layer, target)
     // The property lost its keys (undo, diamond, deletion) or the address disappeared: fall back to the page it came from.
     if (segment == null) { LaunchedEffect(Unit) { close() }; Box(modifier.fillMaxSize().testTag("graph-page")); return }
     val keyTime = segment.startUs
@@ -342,6 +371,16 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
     fun preview(c: EasingCurve) { if (dragging) { draft = c; latestPreview(GraphModel.action(latestLayerId, latestTarget, listOf(latestKey), c)) } }
     fun commit() { if (dragging) { dragging = false; latestCommit(); draft = null } }
     fun cancelDrag() { if (dragging) { dragging = false; latestCancel(); draft = null } }
+    // GRAPH G2: key drags (Value view) use the same begin / preview / commit / cancel; the selection follows the key.
+    val latestPlayhead by rememberUpdatedState(playheadUs)
+    var keyDragFrom by remember { mutableStateOf<KeySelection?>(null) }
+    fun keyBegin() { if (!dragging) { dragging = true; keyDragFrom = session.selection; latestBegin() } }
+    fun keyPreview(action: EditorAction, time: Long) { if (dragging) { latestPreview(action); session.selection = KeySelection(time, latestPlayhead) } }
+    fun keyCommit() { if (dragging) { dragging = false; latestCommit() } }
+    fun keyCancel() { if (dragging) { dragging = false; latestCancel(); session.selection = keyDragFrom } }
+    fun selectKey(time: Long?) { focus.clearFocus(); session.selection = time?.let { KeySelection(it, latestPlayhead) } }
+    // Double tap on a key: the one graph gesture that moves the playhead (Seek, as Prev/Next; frame-snapped).
+    fun seekKey(time: Long) { focus.clearFocus(); latestAction(EditorAction.Seek(Math.addExact(layer.resolvedKeyframeAnchorUs, time), snap = true)) }
     val onKey = local in GraphModel.keyTimes(layer, target)
     // GRAPH G2L: the curve library (app-level). Closed by default; leaving the Graph page resets it.
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -381,11 +420,28 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
                 Row(Modifier.width((m.padWidth + stripShown).dp).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(SurfaceHigh)
                     .border(.5.dp, Border, RoundedCornerShape(8.dp)).testTag("graph-centre")) {
                     Column(Modifier.width(m.padWidth.dp).fillMaxHeight().testTag("graph-pad-column")) {
-                        EaseCanvas(curve, ghost, GraphModel.progress(segment, local), selectedHandle, snap, mirror, library.showPlayheadDot,
-                            onSelect = { selectedHandle = it }, onBegin = ::begin, onDrag = ::preview, onEnd = ::commit, onCancel = ::cancelDrag,
-                            modifier = Modifier.fillMaxWidth().height(m.padHeight.dp).testTag("graph-ease-canvas"))
-                        Box(Modifier.fillMaxWidth().height(GraphLayout.HAIRLINE.dp).background(Border))
-                        EaseValuesBar(curve, m.bar, onTyped = { edit(it) })
+                        if (valueMode) {
+                            val axes = remember(layer, target, compositionWidth, compositionHeight) { GraphValues.axes(layer, target, compositionWidth, compositionHeight) }
+                            val channel = session.channel.coerceIn(0, (axes.size - 1).coerceAtLeast(0))
+                            val keyTimes = GraphModel.keyTimes(layer, target)
+                            val picked = session.selection?.takeIf { GraphSelection.valid(it, keyTimes, playheadUs) }?.let { keyTimes.indexOf(it.keyTimeUs) }
+                            val scene = remember(layer, target, frameRate, axes, channel, segment, picked) {
+                                ValueScene(layer, target, frameRate, axes, channel, segment.copy(curve = curve), picked) }
+                            ValueCanvas(scene, session, local, library.showPlayheadDot, snap, mirror,
+                                onSelectKey = ::selectKey, onSeekKey = ::seekKey,
+                                onHandleBegin = ::begin, onHandleDrag = ::preview, onHandleEnd = ::commit, onHandleCancel = ::cancelDrag,
+                                onKeyBegin = ::keyBegin, onKeyDrag = ::keyPreview, onKeyEnd = ::keyCommit, onKeyCancel = ::keyCancel,
+                                modifier = Modifier.fillMaxWidth().height(m.padHeight.dp).testTag("graph-value-canvas"))
+                            Box(Modifier.fillMaxWidth().height(GraphLayout.HAIRLINE.dp).background(Border))
+                            ValueValuesBar(scene, picked, m.bar, onChannel = { session.channel = it }) { action, time ->
+                                focus.clearFocus(); latestAction(action); session.selection = KeySelection(time, latestPlayhead) }
+                        } else {
+                            EaseCanvas(curve, ghost, GraphModel.progress(segment, local), selectedHandle, snap, mirror, library.showPlayheadDot,
+                                onSelect = { selectedHandle = it }, onBegin = ::begin, onDrag = ::preview, onEnd = ::commit, onCancel = ::cancelDrag,
+                                modifier = Modifier.fillMaxWidth().height(m.padHeight.dp).testTag("graph-ease-canvas"))
+                            Box(Modifier.fillMaxWidth().height(GraphLayout.HAIRLINE.dp).background(Border))
+                            EaseValuesBar(curve, m.bar, onTyped = { edit(it) })
+                        }
                     }
                     if (p < 1f) {
                         Box(Modifier.width(GraphLayout.HAIRLINE.dp).fillMaxHeight().background(Border))
@@ -398,12 +454,11 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
                     Modifier.offset(x = railX.dp).width(GraphLayout.RAIL.dp).fillMaxHeight().graphicsLayer { alpha = 1f - p })
                 if (p > 0f) {
                     val x = m.padWidth + stripShown + GraphLayout.RAIL_GAP
-                    GraphLibraryColumn(library, curve, libraryStore, libraryUi, onApply = { edit(it) }, onType = { edit(EaseChoice.curve(it, stored)) },
+                    GraphLibraryColumn(library, curve, libraryStore, libraryUi, session.libraryGrid, onApply = { edit(it) },
                         Modifier.offset(x = x.dp).width((m.padWidth + m.right - x).dp).fillMaxHeight().graphicsLayer { alpha = p })
                 }
                 // The library toggle: fixed at the bottom of the right column, the same position open and closed.
-                GraphLibraryButton(libraryOpen, GraphLayout.RAIL + GraphLayout.RAIL_GAP, onToggle = { libraryOpen = !libraryOpen },
-                    Modifier.align(Alignment.BottomEnd))
+                GraphLibraryButton(libraryOpen, onToggle = { libraryOpen = !libraryOpen }, Modifier.align(Alignment.BottomEnd))
             }
         }
     }
