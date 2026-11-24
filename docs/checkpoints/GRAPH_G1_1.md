@@ -131,7 +131,7 @@ It only showed when the playhead was moved *after* opening the Graph page: with 
 - JVM `GraphG11Test.graphEditingNeverMovesThePlayhead` covers the `EditorViewModel` sequence. The cause is Compose lambda memoization, which a JVM test cannot reproduce, so this one passes with or without the fix.
 - The debug trace is removed.
 
-Not verified: the case where playback is running when a drag starts. The harness could not hold playback across steps.
+**User-confirmed on the A16 (2026-11-24):** with the fix the playhead no longer jumps; a drag that starts during playback pauses playback (the intended behaviour) and does not jump. The harness could not hold playback across steps, so that case is confirmed by hand only.
 
 ## 7. Files
 
@@ -150,7 +150,6 @@ Changed:
 ## 8. Not verified
 
 - Phone acceptance.
-- The "playing when a drag starts" playhead case (§6).
 - Font scale 1.3 on the device (JVM geometry only).
 - TalkBack.
 - Clipboard on the device.
