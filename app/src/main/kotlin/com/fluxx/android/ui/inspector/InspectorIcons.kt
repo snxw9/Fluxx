@@ -291,6 +291,8 @@ internal object InspectorIcons {
         put("EYE_OFF", p().cubic(3f, 12f, 7f, 5.5f, 17f, 5.5f, 21f, 12f).cubic(21f, 12f, 17f, 18.5f, 7f, 18.5f, 3f, 12f).line(5f, 19f, 19f, 5f).build())
         put("GRIP", p().line(6f, 8.5f, 18f, 8.5f).line(6f, 12f, 18f, 12f).line(6f, 15.5f, 18f, 15.5f).build())
         put("EXPANDED", p().line(5f, 9f, 12f, 16f, 19f, 9f).build())
+        // TLP T1: the D-button's arrow (an open chevron toward the timeline; expands the layer in TL3).
+        put("ARROW", p().line(9.5f, 5f, 16.5f, 12f, 9.5f, 19f).build())
         // TEXT F3.2: axis glyphs at the start of each two-axis slider row (Position, Anchor point, Scale X/Y).
         put("AXIS_X", p().line(7f, 7f, 17f, 17f).line(17f, 7f, 7f, 17f).build())
         put("AXIS_Y", p().line(7f, 6f, 12f, 12f).line(17f, 6f, 12f, 12f).line(12f, 12f, 12f, 18f).build())

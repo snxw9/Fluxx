@@ -56,8 +56,8 @@ internal class TimelineReorderState {
 
 /** One stationary gesture gutter survives reordering and virtualization of individual rows. */
 @Composable
-internal fun TimelineSideControls(layers: List<CompositionLayer>, selectedId: Long?, listState: LazyListState,
-    drag: TimelineReorderState, onVisibility: (Long, Boolean) -> Unit, onDragSelect: (Long) -> Unit,
+internal fun TimelineSideControls(layers: List<CompositionLayer>, selection: com.fluxx.android.editor.LayerSelection?, listState: LazyListState,
+    drag: TimelineReorderState, onDTap: (Long, com.fluxx.android.editor.DZone) -> Unit, onDLongPress: (Long) -> Unit, onDragSelect: (Long) -> Unit,
     onBegin: () -> Unit, onPreview: (EditorAction) -> Unit, onCommit: () -> Unit, onCancel: () -> Unit,
     onScrollStart: () -> Unit) {
     val density = LocalDensity.current
@@ -125,13 +125,12 @@ internal fun TimelineSideControls(layers: List<CompositionLayer>, selectedId: Lo
                     val isDragging = layer.id == drag.draggingId
                     val y = if (isDragging) drag.viewportTop else drag.placedTops[layer.id]
                         ?: (item.offset + listState.layoutInfo.beforeContentPadding).toFloat()
-                    Box(Modifier.offset { IntOffset(0, y.roundToInt()) }.size(36.dp, TRACK_ROW_HEIGHT_DP.dp)
-                        .zIndex(if (isDragging) 1f else 0f)
-                        .clickable { onVisibility(layer.id, !layer.visible) }
-                        .semantics { contentDescription = if (layer.visible) "Hide ${layer.name}" else "Show ${layer.name}" },
-                        contentAlignment = Alignment.Center) {
-                        EyeIcon(layer.visible, if (layer.id == selectedId) Highlight else TextSecondary)
-                    }
+                    // TLP T1: the row's eye is the D-button (eye + arrow), always there; no extra column.
+                    val inSelection = selection?.let { layer.id in it } ?: false
+                    DButton(layer, selected = inSelection, selectionMode = selection != null,
+                        onTap = { zone -> onDTap(layer.id, zone) }, onLongPress = { onDLongPress(layer.id) },
+                        modifier = Modifier.offset { IntOffset(0, y.roundToInt()) }.height(TRACK_ROW_HEIGHT_DP.dp)
+                            .zIndex(if (isDragging) 1f else 0f))
                     Box(Modifier.align(Alignment.TopEnd)
                         .offset { IntOffset(0, y.roundToInt()) }.size(48.dp, TRACK_ROW_HEIGHT_DP.dp)
                         .zIndex(if (isDragging) 1f else 0f)

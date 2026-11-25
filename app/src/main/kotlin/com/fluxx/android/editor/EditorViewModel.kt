@@ -68,6 +68,31 @@ class EditorViewModel : ViewModel() {
         } else dispatch(add)
     }
 
+
+    /**
+     * TLP T0: selection mode (null = off). Ordered, primary = last. UI state only: not in [EditorState], so it is never
+     * in undo history and never saved. After every document change it is pruned to layers that still exist; when none
+     * remain the mode exits. While on, the single selection mirrors the primary (not recorded in history: Select never is).
+     */
+    var layerSelection by mutableStateOf<LayerSelection?>(null)
+        private set
+    val selectionMode: Boolean get() = layerSelection != null
+    fun enterSelection(id: Long) {
+        if (state.project.composition.layers.none { it.id == id }) return
+        commitGesture()
+        layerSelection = LayerSelection(listOf(id)); syncPrimary()
+    }
+    fun exitSelection() { layerSelection = null }
+    /** Replaces the selection (Select all, Odd / Even, Invert, add / remove); an empty one exits the mode. */
+    fun setSelection(next: LayerSelection) {
+        val ids = state.project.composition.layers.map { it.id }.toSet()
+        layerSelection = next.prune(ids).takeUnless { it.isEmpty }; syncPrimary()
+    }
+    private fun syncSelection() { layerSelection?.let { setSelection(it) } }
+    private fun syncPrimary() {
+        val p = layerSelection?.primary ?: return
+        if (state.selectedLayerId != p) state = EditorReducer.reduce(state, EditorAction.Select(p))
+    }
     private data class HistoryEntry(val project: ProjectDocument, val selectedLayerId: Long?)
     private fun EditorState.historyEntry() = HistoryEntry(project, selectedLayerId)
     private val undoStack = mutableListOf<HistoryEntry>()
@@ -83,6 +108,7 @@ class EditorViewModel : ViewModel() {
         redoStack.add(state.historyEntry())
         state = state.copy(project = prev.project, selectedLayerId = prev.selectedLayerId, selectedMarkerId = null,
             playheadUs = state.playheadUs.coerceAtMost(prev.project.composition.resolvedDurationUs))
+        syncSelection()
     }
 
     fun redo() {
@@ -92,6 +118,7 @@ class EditorViewModel : ViewModel() {
         undoStack.add(state.historyEntry())
         state = state.copy(project = next.project, selectedLayerId = next.selectedLayerId, selectedMarkerId = null,
             playheadUs = state.playheadUs.coerceAtMost(next.project.composition.resolvedDurationUs))
+        syncSelection()
     }
 
     fun dispatch(action: EditorAction) {
@@ -107,6 +134,7 @@ class EditorViewModel : ViewModel() {
             redoStack.clear()
         }
         state = next
+        if (action is EditorAction.Load) layerSelection = null else syncSelection()
     }
 
     /** Resolve and apply transport navigation from one current snapshot, at click time. */
@@ -200,6 +228,7 @@ class EditorViewModel : ViewModel() {
             val time = state.playheadUs.coerceAtMost(reduced.project.composition.resolvedDurationUs)
             state = reduced.copy(playheadUs = time,
                 selectedMarkerId = reduced.selectedMarkerId.takeIf { time == reduced.playheadUs })
+            syncSelection()
         }
     }
     fun cancelGesture(gestureId: Long? = null) {

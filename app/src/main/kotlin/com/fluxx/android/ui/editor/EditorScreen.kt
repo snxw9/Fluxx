@@ -239,7 +239,23 @@ fun EditorScreen(
             editor.dispatch(EditorAction.Select(null))
         } else onExitClick()
     }
-    BackHandler { focusManager.clearFocus(); textEditor.finish { leaveSelectionOrEditor() } }
+    /** TLP T1: one D-button / body / empty-space effect (rules in [DButtonRules]); multi-layer edits are one Batch. */
+    fun selectionEffect(effect: DEffect?, id: Long?) {
+        when (effect) {
+            null, DEffect.NONE -> {}
+            DEffect.TOGGLE_VISIBILITY -> id?.let { layerId -> editor.state.project.composition.layers.firstOrNull { it.id == layerId }?.let {
+                editor.dispatch(EditorAction.SetVisibility(layerId, !it.visible))
+                previewController?.update(editor.state.project, editor.state.playheadUs, false) } }
+            DEffect.BULK_VISIBILITY -> { val sel = editor.layerSelection; if (sel != null && id != null)
+                MultiLayerEdits.visibility(editor.state.project, sel, id)?.let { applyLayerAction(it) } }
+            DEffect.ENTER -> id?.let { textEditor.finish { dismissInspector(); editor.enterSelection(it) } }
+            DEffect.ADD -> { val sel = editor.layerSelection; if (sel != null && id != null) editor.setSelection(sel.add(id)) }
+            DEffect.REMOVE -> { val sel = editor.layerSelection; if (sel != null && id != null) {
+                DButtonRules.afterRemove(sel, id)?.let { editor.setSelection(it) } ?: editor.exitSelection() } }
+            DEffect.EXIT -> editor.exitSelection()
+        }
+    }
+    BackHandler { focusManager.clearFocus(); textEditor.finish { if (editor.selectionMode) editor.exitSelection() else leaveSelectionOrEditor() } }
     LaunchedEffect(selectedLayer?.id, inspectorSheetVisible, previewState.playing) {
         if (!inspectorSheetVisible || selectedLayer?.id != eyedropperLayerId || previewState.playing) eyedropperLayerId=null
     }
@@ -350,7 +366,7 @@ fun EditorScreen(
                 // 1. Upper Canvas Preview Area (~50% of vertical space)
                 // View-only expansion: never dispatch composition or layer edits here.
                 CompositionPreview(
-                    moveEnabled=selectedLayer?.type==LayerType.TEXT && !textEditor.active,
+                    moveEnabled=selectedLayer?.type==LayerType.TEXT && !textEditor.active && !editor.selectionMode,
                     onMoveBegin={previewController?.pause();editor.beginGesture();previewMoveGesture=editor.activeGestureId},
                     onMovePreview={transform -> if(previewMoveGesture==editor.activeGestureId) selectedLayer?.let {
                         editor.editTransform(it.id,transform,true);previewController?.update(editor.displayedState.project,playheadUs,false)
@@ -385,6 +401,8 @@ fun EditorScreen(
                     playheadUs = playheadUs,
                     selectedLayerId = displayedState.selectedLayerId,
                     onSelectLayer = { id ->
+                        // TLP T0: the on-preview selector is inert in selection mode (it must not fork the set).
+                        if (editor.selectionMode) return@CompositionPreview
                         textSelection=null
                         // Preview selection must never open the inspector. Keep this callback separate.
                         focusManager.clearFocus()
@@ -516,17 +534,29 @@ fun EditorScreen(
                         }
                     },
                     onDragSelect = { id ->
-                        inspectorSheetVisible = false
-                        editor.dispatch(EditorAction.Select(id))
+                        // TLP: in selection mode a hold-drag never changes the selection.
+                        if (!editor.selectionMode) {
+                            inspectorSheetVisible = false
+                            editor.dispatch(EditorAction.Select(id))
+                        }
                     },
                     onDismissInspector = { dismissInspector() },
+                    selection = editor.layerSelection,
+                    onDTap = { id, zone -> selectionEffect(DButtonRules.tap(editor.selectionMode, editor.layerSelection?.contains(id) == true, zone), id) },
+                    onDLongPress = { id -> selectionEffect(DButtonRules.longPress(editor.selectionMode, editor.layerSelection?.contains(id) == true), id) },
                     onSelectLayer = { id ->
+                        if (editor.selectionMode) {
+                            // TLP T1: a body tap adds / removes; an empty-space tap (id == null) deselects all and exits.
+                            // Neither dispatches a Seek or scrolls, and the inspector stays closed.
+                            selectionEffect(if (id == null) DButtonRules.empty(true) else DButtonRules.body(true, editor.layerSelection?.contains(id) == true), id)
+                        } else {
                         // Timeline selection intentionally opens the inspector.
                         editor.dispatch(EditorAction.Select(id))
                         if (id != null) {
                             inspectorSheetVisible = true
                         } else {
                             inspectorSheetVisible = false
+                        }
                         }
                     },
                     onSeek = { timeUs, snap ->

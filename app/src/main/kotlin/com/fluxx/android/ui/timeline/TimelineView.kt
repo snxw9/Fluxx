@@ -167,6 +167,11 @@ fun TimelineView(
     onMarkerAction: (EditorAction) -> Unit = {},
     onMarkerSelect: (Long?, Marker) -> Unit = { _, _ -> },
     onMarkerConfigure: () -> Unit = {},
+    /** TLP: selection mode (null = off); the D-button routes taps / long presses through [onDTap] / [onDLongPress]. */
+    selection: com.fluxx.android.editor.LayerSelection? = null,
+    onDTap: (Long, com.fluxx.android.editor.DZone) -> Unit = { id, zone ->
+        if (zone == com.fluxx.android.editor.DZone.EYE) project.composition.layers.firstOrNull { it.id == id }?.let { onToggleVisibility(id, !it.visible) } },
+    onDLongPress: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val comp = project.composition
@@ -455,7 +460,8 @@ fun TimelineView(
                                         project = project,
                                         mediaRepository = mediaRepository,
                                         layer = layer,
-                                        isSelected = layer.id == selectedLayerId,
+                                        // TLP T1: in selection mode the D-button shows selection; the row is not highlighted.
+                                        isSelected = layer.id == selectedLayerId && selection == null,
                                         activeProperty = activeProperty,
                                         activeAnimatorTrack = activeAnimatorTrack,
                                         onMarkerSelect = { tapMarker(layer.id, it) },
@@ -516,8 +522,8 @@ fun TimelineView(
                     .fillMaxHeight()
             )
 
-            TimelineSideControls(sortedLayers, selectedLayerId, verticalScrollState, reorder,
-                onToggleVisibility, onDragSelect, beginEdit, onPreviewGesture, commitEdit, cancelEdit,
+            TimelineSideControls(sortedLayers, selection, verticalScrollState, reorder,
+                onDTap, onDLongPress, onDragSelect, beginEdit, onPreviewGesture, commitEdit, cancelEdit,
                 onScrollStart = {
                     skipInspectorRestore = true
                     if (inspectorVisible) onDismissInspector()
