@@ -223,6 +223,12 @@ internal object SpeedFrame {
         }
         return r
     }
+    /**
+     * GRAPH G4.3: after a library / type-strip / preset tap, the window to animate to: the segment-framed [home] when a
+     * handle of the new curve lies outside [vp] or within [EDGE] of an edge, else null (the window does not move).
+     */
+    fun reframe(vp: ValueViewport, handles: List<Pair<Double, Double>>, home: ValueViewport?): ValueViewport? =
+        if (home != null && handles.isNotEmpty() && nearEdge(vp, handles) && home != vp) home else null
     /** A dragged point clamped inside the (frozen) window. */
     fun clamp(vp: ValueViewport, t: Double, v: Double): Pair<Double, Double> = t.coerceIn(vp.t0, vp.t1) to v.coerceIn(vp.v0, vp.v1)
 }

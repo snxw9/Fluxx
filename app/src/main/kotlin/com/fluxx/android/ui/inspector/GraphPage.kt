@@ -381,6 +381,8 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
         if (!all && EaseMath.same(c, stored)) return
         ghost = stored
         latestAction(GraphModel.action(latestLayerId, latestTarget, if (all) null else listOf(latestKey), c))
+        // GRAPH G4.3: a one-shot edit in the Speed view asks the canvas to check (once) that the handles still fit its window.
+        if (!dragging && session.mode == GraphMode.SPEED) session.reframeCurve = c
     }
     fun begin() { if (!dragging) { dragging = true; ghost = stored; latestBegin() } }
     fun preview(c: EasingCurve) { if (dragging) { draft = c; latestPreview(GraphModel.action(latestLayerId, latestTarget, listOf(latestKey), c)) } }

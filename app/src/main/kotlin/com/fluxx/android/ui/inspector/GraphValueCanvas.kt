@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fluxx.android.editor.*
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import com.fluxx.android.model.*
 import com.fluxx.android.ui.theme.*
 import kotlin.math.abs
@@ -176,6 +178,23 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
         androidx.compose.animation.core.Animatable(0f).animateTo(1f, androidx.compose.animation.core.tween(150)) {
             val f = value.toDouble()
             session.speedViewport = ValueViewport(from.t0 + (to.t0 - from.t0) * f, from.t1 + (to.t1 - from.t1) * f, from.v0 + (to.v0 - from.v0) * f, from.v1 + (to.v1 - from.v1) * f)
+        }
+    }
+    // GRAPH G4.3: once the tapped curve has landed, ONE animated re-frame to the segment frame if a handle left the window
+    // or sits within 10% of an edge; otherwise the window stays. Taps only (drags never set the request).
+    val reframeScope = rememberCoroutineScope()
+    LaunchedEffect(session.reframeCurve, scene.segment.curve, scene.speed) {
+        val requested = session.reframeCurve ?: return@LaunchedEffect
+        if (!scene.speed) { session.reframeCurve = null; return@LaunchedEffect }
+        if (!EaseMath.same(requested, scene.segment.curve)) return@LaunchedEffect
+        session.reframeCurve = null
+        val from = session.speedViewport ?: return@LaunchedEffect
+        val to = SpeedFrame.reframe(from, (0..1).mapNotNull { scene.handlePoint(it) }, scene.home) ?: return@LaunchedEffect
+        reframeScope.launch {
+            androidx.compose.animation.core.Animatable(0f).animateTo(1f, androidx.compose.animation.core.tween(200)) {
+                val f = value.toDouble()
+                session.speedViewport = ValueViewport(from.t0 + (to.t0 - from.t0) * f, from.t1 + (to.t1 - from.t1) * f, from.v0 + (to.v0 - from.v0) * f, from.v1 + (to.v1 - from.v1) * f)
+            }
         }
     }
     // Double-tap detection across gestures (plain holder: never read by composition).

@@ -153,3 +153,42 @@ class GraphG4Test {
         }
     }
 }
+
+/** GRAPH G4.3: the Speed view's one re-frame after a library / strip / preset tap. */
+class GraphG43ReframeTest {
+    private val vp = ValueViewport(0.0, 1_000_000.0, -10.0, 110.0)
+    private val home = ValueViewport(-80_000.0, 1_080_000.0, -40.0, 400.0)
+
+    @Test fun reframesOnlyWhenAHandleLeavesOrNearsAnEdge() {
+        // Well inside: no move.
+        assertNull(SpeedFrame.reframe(vp, listOf(300_000.0 to 50.0, 700_000.0 to 40.0), home))
+        // Outside (above): to the segment frame.
+        assertEquals(home, SpeedFrame.reframe(vp, listOf(300_000.0 to 250.0, 700_000.0 to 40.0), home))
+        // Within 10% of the bottom edge (−10 + 12 = 2): to the segment frame.
+        assertEquals(home, SpeedFrame.reframe(vp, listOf(300_000.0 to 1.0, 700_000.0 to 40.0), home))
+        // Within 10% of a time edge.
+        assertEquals(home, SpeedFrame.reframe(vp, listOf(50_000.0 to 50.0), home))
+        // No handles (Bounce / Elastic / Hold) or already home: nothing.
+        assertNull(SpeedFrame.reframe(vp, emptyList(), home))
+        assertNull(SpeedFrame.reframe(home, listOf(0.0 to 1e9), home))
+    }
+
+    /** The real page model: an extreme preset on a calm segment's frame needs a re-frame; a calm one does not. */
+    @Test fun extremePresetOnTheRealScene() {
+        val rate = FrameRate(30, 1)
+        fun layer(c: EasingCurve) = CompositionLayer(1, LayerType.SOLID, timing = ClipTiming(0, 0, 4_000_000), animTransform = AnimatableTransform(
+            rotation = AnimatableProperty1D(true, 0f, FrozenList.of(listOf(Keyframe1D(0, 0f).withCurve(c), Keyframe1D(1_000_000, 90f), Keyframe1D(3_000_000, 180f))))))
+        val target = GraphTarget(AnimPropertyType.ROTATION)
+        fun scene(c: EasingCurve): ValueScene {
+            val l = layer(c)
+            val axes = GraphValues.axes(l, target, 1080, 1920)
+            return ValueScene(l, target, rate, axes, 0, GraphModel.segment(l, target, 0)!!, null, 0L, speed = true, smooth = false)
+        }
+        val calm = scene(EasingCurve.EASY_EASE)
+        val window = calm.home
+        val handles = { s: ValueScene -> (0..1).mapNotNull { s.handlePoint(it) } }
+        assertNull(SpeedFrame.reframe(window, handles(scene(EasingCurve.bezier(.4f, 0f, .6f, 1f))), scene(EasingCurve.bezier(.4f, 0f, .6f, 1f)).home))
+        val wild = scene(EasingCurve.bezier(.05f, 1f, .95f, 0f))
+        assertEquals(wild.home, SpeedFrame.reframe(window, handles(wild), wild.home))
+    }
+}
