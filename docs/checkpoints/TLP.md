@@ -44,3 +44,48 @@ Local branch `tlp`, created from `master` at `2377a83` (after the graph merge). 
   - Δ is clamped so the earliest selected clip stays at ≥ 0, and each start is frame-snapped through `TimelineEdits.move`. Frame-aligned clips therefore keep their exact relative offsets.
 - **The D-button's 48dp touch target:** rows are 28dp tall and the row height must not change. The button is 56dp wide (48dp+) and one row tall. A 48dp-tall target would overlap the neighbouring rows' buttons. *Reported, not worked around.*
 - **The arrow** is drawn and disabled (TL3). Its callback is wired as bulk expand and does nothing this run.
+
+## T1. The D-button
+
+- **What it is:** the row's existing eye became the D-button (`ui/timeline/DButton.kt`). It is not an extra column.
+  - **Shape:** one-sided rounded (flat on the screen edge, a 14dp radius toward the timeline), one row tall (28dp), 56dp wide.
+  - **Zones:** the eye on the left (`EYE` / `EYE_OFF`), the new `ARROW` chevron on the right. `InspectorIconFamilyTest` passes.
+  - **Fade:** the rounded edge fades with the Graph library icon's scrim stops (0.9 → 0.82 → 0, ending `GraphLayout.SCRIM_EXTENT` past the icons), so the layer shows underneath.
+  - **Colour:** neutral (`surfaceVariant` / `onSurfaceVariant`) when not selected, `primary` / `onPrimary` when selected. All from `MaterialTheme.colorScheme`; no hard-coded colour. The row itself is not highlighted in selection mode.
+- **Rules (`DButtonRules`, JVM tested):**
+  - **Outside the mode:** a tap on the eye toggles that layer (existing action). The arrow is disabled. A long-press (with haptic) enters selection mode with that layer.
+  - **In the mode:**
+    - an unselected layer: any tap on its D-button, or a tap on its body, adds it;
+    - a selected layer, eye: sets every selected layer to the inverse of the tapped layer's state (one `Batch`, one undo);
+    - a selected layer, arrow: disabled (wired as bulk expand for TL3);
+    - a selected layer, body tap or long-press on its D-button: removes it;
+    - a tap on empty track space deselects all and exits (no `Seek`, no scroll, no document change);
+    - deselecting the last layer exits.
+- **Accessibility:** content descriptions for the eye ("Hide / Show …", "Hide / Show the selected layers", "Add … to the selection") and the arrow ("Expand … (not available yet)", disabled). The D-button carries a selected state ("Selected" / "Not selected") and a long-click action.
+- **48dp:** 56dp across; one 28dp row tall (the row height is fixed, see T0 blockers).
+
+## T2. The eye as a real off switch
+
+### Audit (before the change)
+
+| Path | Hidden layers before TLP |
+|---|---|
+| Draw list (`FramePlan`, used by preview and export) | **Excluded** (`layers.filter { it.visible }`), so no draw, no effect pass and no keyframe evaluation for media / solid / text draws. |
+| `FrameEvaluator` | Excluded. |
+| Text preparation (`CompositionRenderer.prepareTextProject`) | **Not excluded.** Every text layer was shaped and got native layouts, glyph uploads and character catalogues. The per-frame passes skipped hidden layers (`renderPreparedText`, `applyTextTiers` → base tier, no animator evaluation). |
+| Decoders / raster textures | LRU caches. A hidden layer's decoder / texture stayed until evicted by others. No prefetch exists: `frameAt` is only called for draw-list layers, so a hidden video's decoding stops on the next frame. |
+| Export (`CompositionSupport.check`, `FramePlan`, `AudioMixer`, the single-video fast path) | Excluded (the fast path requires `visible`). |
+| Audio (`AudioMixer`, `AudioMixPolicy` headroom) | Excluded. |
+| Preview hit-testing / on-preview selector / overlay | Excluded (`layer.visible && active`). |
+| Parenting | None: layers cannot be parented, so the "hidden parent still evaluates" rule does not apply. |
+
+### Change
+
+- **Preparation (the one allowed exception):** `prepareTextProject` prepares visible text layers only (`RenderLayers.preparedText`). A hidden text layer's layouts are released like any unwanted layout. Turning it back on re-prepares it, as any project change does.
+- **Delayed release:** `DelayedRelease` (`render/HiddenRelease.kt`, 3 s, clock injectable through `CompositionRenderer(releaseClock = …)`).
+  - It closes decoders and raster textures that no visible layer has needed for 3 s. A quick off / on keeps them.
+  - It runs between frames (nothing staged; the previous frame's GPU work has completed).
+  - A source shared with a visible layer stays wanted. Released resources are re-acquired on demand by the next frame that needs them.
+  - **Limit:** the release happens on the next rendered frame after the 3 s, not on a timer. A paused, untouched preview keeps the resource until something renders. `PreviewController` is frozen, so no timer was added there.
+- **Hidden layers stay** in the timeline, undo and the saved file, and can be selected and edited (JVM).
+- Tests: `HiddenLayerTest`. **Device memory was not measured** (not verified).

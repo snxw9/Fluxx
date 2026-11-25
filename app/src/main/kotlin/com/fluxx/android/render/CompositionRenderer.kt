@@ -14,7 +14,9 @@ import java.util.concurrent.CancellationException
 
 /** A bounded working set, not a layer limit. Extra layers are decoded and composited in batches. */
 class CompositionRenderer(private val context: Context, private val repository: MediaRepository,
-    surface: Surface? = null, width: Int = 1, height: Int = 1) : Closeable {
+    surface: Surface? = null, width: Int = 1, height: Int = 1,
+    /** TLP T2: the clock for releasing hidden layers' decoders / textures after [DelayedRelease.DEFAULT_DELAY_MS] (injectable). */
+    releaseClock: () -> Long = { android.os.SystemClock.uptimeMillis() }) : Closeable {
     private val interactive = surface != null
     val session = RenderBridge.create(surface,width,height,context.assets).also { check(it != 0L) { "Vulkan rendering is unavailable" } }
     private val lowRam = context.getSystemService(android.app.ActivityManager::class.java).isLowRamDevice
@@ -29,6 +31,15 @@ class CompositionRenderer(private val context: Context, private val repository: 
     }
     private val decoders = LinkedHashMap<String,DecoderEntry>(4,0.75f,true)
     private val images = LinkedHashMap<String,Raster>(8,0.75f,true)
+    // TLP T2: decoders and textures no visible layer needs are released after a short delay (re-acquired on demand).
+    private val decoderRelease = DelayedRelease<String>(clock = releaseClock)
+    private val rasterRelease = DelayedRelease<String>(clock = releaseClock)
+    private var wantedDecoders = emptySet<String>()
+    private var wantedRasters = emptySet<String>()
+    private fun releaseHidden() {
+        for (uri in decoderRelease.due(decoders.keys.toList(), wantedDecoders)) { flush(); decoders.remove(uri)?.decoder?.close() }
+        for (key in rasterRelease.due(images.keys.toList(), wantedRasters)) { flush(); images.remove(key)?.buffer?.close() }
+    }
     private var prepared: ProjectDocument? = null
     private var plan: FramePlan? = null
     private var staged = 0
@@ -89,7 +100,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
         // different layers (duplicated layers, shared animators) are evaluated once per frame time.
         val memo=TrackMemo()
         val layers = project.composition.layers
-        val wanted=layers.filter { it.type==LayerType.TEXT }.flatMap { layer ->
+        // TLP T2 (the one allowed preparation change): hidden text layers are not prepared at all (no shaping, layouts,
+        // glyph uploads or character catalogues); their layouts are released below like any unwanted layout.
+        val wanted=RenderLayers.preparedText(layers).flatMap { layer ->
             StyledTextPreparation.alternatives(layer.text.source).flatMap { source ->
                 val shaping=StyledTextPreparation.shapingDocument(source)
                 listOf(Triple(layer.text.fontId,shaping,true),Triple(layer.text.fontId,shaping,false)) }
@@ -99,7 +112,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
             RenderBridge.releaseText(session,entry.value.handle);obsolete.remove()
         } }
         onlyText = layers.isNotEmpty() && layers.all { it.type == LayerType.TEXT } && TextFixtureProvider.entries().isEmpty()
-        preparedText = layers.filter { it.type==LayerType.TEXT }.sortedWith(compareBy<CompositionLayer> { it.zOrder }.thenBy { it.id }).map { layer ->
+        preparedText = RenderLayers.preparedText(layers).map { layer ->
             val sources = StyledTextPreparation.alternatives(layer.text.source)
             val linePool=LinePermutationPool()
             val effective=layer.text.effectiveLigatures(0)
@@ -450,7 +463,10 @@ class CompositionRenderer(private val context: Context, private val repository: 
             prepareTextProject(project)
             plan=nextPlan
             prepared=project
+            wantedDecoders=RenderLayers.wantedDecoders(project); wantedRasters=RenderLayers.wantedRasters(project)
         }
+        // Between frames: nothing is staged and the previous frame's GPU work has completed (submitWork waits on its fence).
+        releaseHidden()
         val comp=project.composition
         check(RenderBridge.begin(session,targetWidth,targetHeight,comp.width,comp.height)) { "Could not start composition frame" }
         staged=0
