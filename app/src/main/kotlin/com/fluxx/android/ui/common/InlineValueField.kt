@@ -46,7 +46,9 @@ internal interface ValueSink { fun begin(); fun preview(value: Int); fun finish(
  * preview per distinct value); leaving the field keeps it as ONE undo entry. Empty, invalid or incomplete text applies
  * nothing and reverts. While the field is empty the previous value stays visible, faded, behind the input.
  */
-internal class InlineEntrySession(private val parse: (text: String, base: Int) -> Int?, private val sink: ValueSink) {
+internal class InlineEntrySession(private val parse: (text: String, base: Int) -> Int?, private val sink: ValueSink,
+    /** Whether a valid value applies LIVE while typing; others apply when the field is left (GRAPH G2.1: 3-digit hex). */
+    private val live: (String) -> Boolean = { true }) {
     /** The value shown when the session started (faded placeholder while the field is empty). */
     var previous = ""; private set
     var text = ""; private set
@@ -62,6 +64,7 @@ internal class InlineEntrySession(private val parse: (text: String, base: Int) -
     fun edit(next: String) {
         if (!active) return
         text = next
+        if (!live(next)) return
         val value = parse(next, base) ?: return
         if (value == applied) return
         if (applied == null) sink.begin()
@@ -74,7 +77,10 @@ internal class InlineEntrySession(private val parse: (text: String, base: Int) -
     fun end(): Boolean {
         if (!active) return false
         active = false
-        val kept = applied != null && parse(text, base) != null
+        val final = parse(text, base)
+        // A valid final value that was not applied live (e.g. #fff) applies now, still one undo.
+        if (final != null && final != applied) { if (applied == null) sink.begin(); applied = final; sink.preview(final) }
+        val kept = applied != null && final != null
         if (applied != null) { if (kept) sink.finish() else sink.cancel() }
         applied = null; text = previous
         return kept
@@ -102,14 +108,15 @@ internal val LocalImeLift = compositionLocalOf<ImeLiftHost?> { null }
 @Composable internal fun InlineValueField(display: String, base: Int, parse: (String, Int) -> Int?, label: String,
     onBegin: () -> Unit, onPreview: (Int) -> Unit, onFinish: () -> Unit, onCancel: () -> Unit,
     modifier: Modifier = Modifier, hex: Boolean = false, prefix: String = "", suffix: String = "", height: Dp = 32.dp,
-    testTag: String = "inline-value-field", onFocus: (Boolean) -> Unit = {}) {
+    testTag: String = "inline-value-field", onFocus: (Boolean) -> Unit = {}, live: (String) -> Boolean = { true }) {
     val begin by rememberUpdatedState(onBegin); val preview by rememberUpdatedState(onPreview)
     val finish by rememberUpdatedState(onFinish); val cancel by rememberUpdatedState(onCancel)
     val currentParse by rememberUpdatedState(parse)
+    val currentLive by rememberUpdatedState(live)
     val session = remember { InlineEntrySession({ t, b -> currentParse(t, b) }, object : ValueSink {
         override fun begin() = begin(); override fun preview(value: Int) = preview(value)
         override fun finish() = finish(); override fun cancel() = cancel()
-    }) }
+    }) { currentLive(it) } }
     var field by remember { mutableStateOf(TextFieldValue(display)) }
     var focused by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current

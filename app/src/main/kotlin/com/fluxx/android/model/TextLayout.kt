@@ -26,10 +26,10 @@ class TextLayoutMetrics private constructor(private val data: DoubleArray, val s
     fun logical(text: TextProperties, time: Long): TextBounds {
         if(sourceDocument!=null) { val b=evaluated(text,time)?.logicalBounds
             if(b!=null) return TextBounds(b[0],b[1],b[2],b[3]) }
-        return logical(text.size.evaluate(time),text.tracking.evaluate(time),text.leading.evaluate(time),text.baselineShift.evaluate(time))
+        return logical(text.sizeAt(time),text.tracking.evaluate(time),text.leading.evaluate(time),text.baselineShift.evaluate(time))
     }
     fun bounds(text: TextProperties, time: Long): TextBounds = if((text.animators.isNotEmpty() || sourceDocument!=null) && data.size>6+lines*2+glyphs*8)
-        animatedBounds(text,time) else logical(text, time).union(ink(text.size.evaluate(time), text.alignment,
+        animatedBounds(text,time) else logical(text, time).union(ink(text.sizeAt(time), text.alignment,
         text.tracking.evaluate(time), text.leading.evaluate(time), text.baselineShift.evaluate(time), text.effectiveStrokeWidth(time)))
     fun logical(size: Float, tracking: Float = 0f, leading: Float = 0f, baseline: Float = 0f): TextBounds {
         val out = FloatArray(4); logicalInto(size, tracking, leading, baseline, out)

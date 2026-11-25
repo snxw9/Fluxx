@@ -31,7 +31,11 @@ import kotlinx.coroutines.CancellationException
  */
 @Composable internal fun SectionSlider(fraction: Float, row: SectionLayout.SliderRow, label: String,
     onBegin: () -> Unit, onChange: (Float) -> Unit, onFinish: () -> Unit, onCancel: () -> Unit,
-    modifier: Modifier = Modifier, enabled: Boolean = true) {
+    modifier: Modifier = Modifier, enabled: Boolean = true,
+    /** GRAPH G2.1 §9: magnetic detents for a drag, given the track width (px) and the finger zone (px). Typed values never snap. */
+    detents: ((trackPx: Float, zonePx: Float) -> Magnet)? = null) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val currentDetents by rememberUpdatedState(detents)
     val begin by rememberUpdatedState(onBegin); val change by rememberUpdatedState(onChange)
     val finish by rememberUpdatedState(onFinish); val cancel by rememberUpdatedState(onCancel)
     val focus = LocalFocusManager.current
@@ -49,7 +53,11 @@ import kotlinx.coroutines.CancellationException
             awaitEachGesture {
                 val down = awaitFirstDown(); down.consume(); focus.clearFocus()
                 active = true; begin()
-                fun update(x: Float) = change((x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f))
+                val magnet = currentDetents?.invoke(size.width.coerceAtLeast(1).toFloat(), TransformDetents.ZONE_DP.dp.toPx())
+                fun update(x: Float) {
+                    val raw = (x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f)
+                    change(magnet?.apply(raw) { InspectorHaptics.tick(view) } ?: raw)
+                }
                 try {
                     update(down.position.x)
                     val completed = horizontalDrag(down.id) { it.consume(); update(it.position.x) }

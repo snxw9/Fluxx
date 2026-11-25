@@ -230,7 +230,7 @@ internal object TextColourEdit {
     fun alphaPercent(argb: Int)=(argb ushr 24)*100f/255f
     fun withAlphaPercent(argb: Int,percent: Float)=withAlpha(argb,kotlin.math.round(percent.coerceIn(0f,100f)/100f*255f).toInt())
     /** RRGGBB keeps the current alpha; AARRGGBB replaces it. Invalid text returns null (nothing applied). */
-    fun hex(text: String,current: Int): Int? = FluxxColor.parseHex(text.trim().removePrefix("#"),(current ushr 24)/255f)?.toArgb()
+    fun hex(text: String, current: Int): Int? = FluxxColor.parseHexEntry(text, current)
     fun hexText(argb: Int)=FluxxColor.fromArgb(argb).toHexString(true)
     /** A swatch sets the colour and keeps the current alpha (a fully transparent colour becomes opaque). */
     fun swatch(current: Int,argb: Int)=withAlpha(argb,(current ushr 24).takeIf {it>0} ?: 255)
@@ -248,11 +248,11 @@ internal class TextNumericDraft(val layer: CompositionLayer,time: Long,val frame
     private val paragraph=document.paragraphs.getOrNull(document.text.take(start).count {it=='\n'}) ?: TextParagraphStyle()
     val limit: PropertyLimit? get()=PropertyLimits.forControl(control,scope.selected)
     val initial: Float=when(control) {
-        TextControl.SIZE->if(scope.selected) style.sizeFactor*100 else layer.text.size.evaluate(local)
+        TextControl.SIZE->if(scope.selected) style.sizeFactor*100 else layer.text.sizeAt(local)
         TextControl.RELATIVE_SIZE->style.sizeFactor*100
         TextControl.TRACKING->if(scope.selected) style.trackingDelta else layer.text.tracking.evaluate(local)
         TextControl.BASELINE->if(scope.selected) style.baselineDelta else layer.text.baselineShift.evaluate(local)
-        TextControl.STROKE_WIDTH->if(scope.selected) style.strokeDelta else layer.text.strokeWidth.evaluate(local)
+        TextControl.STROKE_WIDTH->if(scope.selected) style.strokeDelta else layer.text.strokeWidthAt(local)
         TextControl.LEADING->layer.text.leading.evaluate(local)
         TextControl.H_SCALE->style.horizontalScale;TextControl.V_SCALE->style.verticalScale
         TextControl.MANUAL_KERNING->style.manualKerning.firstOrNull {it.character>=start}?.amount ?: 0f

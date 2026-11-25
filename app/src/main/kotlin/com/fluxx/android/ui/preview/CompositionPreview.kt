@@ -247,7 +247,7 @@ fun CompositionPreview(
                                         if (!active || layer.type != LayerType.TEXT) active else {
                                             val metrics = textHitMetrics[layer.id]
                                             if (metrics == null) false else {
-                                                val textSize = layer.text.size.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs)
+                                                val textSize = layer.text.sizeAt(playheadUs - layer.resolvedKeyframeAnchorUs)
                                                 val bounds = metrics.bounds(layer.text, playheadUs - layer.resolvedKeyframeAnchorUs)
                                                 val matrix = FloatArray(16)
                                                 LayerGeometry.textMatrix(matrix, layer.evaluatedTransform(playheadUs), metrics.logical(layer.text, playheadUs - layer.resolvedKeyframeAnchorUs), comp.width, comp.height,

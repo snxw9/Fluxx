@@ -80,7 +80,20 @@ object TextAnimatorEdits {
         TextAnimatorActions.keyTimes(layer,address).map { it-layer.resolvedKeyframeAnchorUs }
     fun value(text: TextProperties,address: AnimatorTrackAddress,local: Long): Float {
         val t=requireNotNull(track(text,address)) { "Not a scalar animator field" }
-        return if(isHold(address)) t.hold(local) else t.evaluate(local)
+        return if(isHold(address)) t.hold(local) else clamp(address,t.evaluate(local))
+    }
+    /**
+     * GRAPH G1: an evaluated (possibly overshooting) scalar clamped to the field's validated range, so a sampled value
+     * written back as a key or static value never fails validation. Identity for in-range values.
+     */
+    fun clamp(address: AnimatorTrackAddress,value: Float): Float {
+        address.property?.let { return AnimatorLimits.clamp(it,value) }
+        return when(address.field) {
+            SelectorField.SMOOTHNESS,SelectorField.CORRELATION -> value.coerceIn(0f,100f)
+            SelectorField.EASE_HIGH,SelectorField.EASE_LOW,SelectorField.AMOUNT,SelectorField.MIN_AMOUNT,SelectorField.MAX_AMOUNT -> value.coerceIn(-100f,100f)
+            SelectorField.WIGGLES_PER_SECOND -> value.coerceIn(0f,1000f)
+            else -> value
+        }
     }
     fun vector(text: TextProperties,address: AnimatorTrackAddress,local: Long): FloatArray {
         val v=requireNotNull(animator(text,address.animatorId)?.properties?.firstOrNull { it.property==address.property }?.vector)

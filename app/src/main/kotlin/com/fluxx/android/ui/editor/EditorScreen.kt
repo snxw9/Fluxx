@@ -442,8 +442,17 @@ fun EditorScreen(
                     },
                     onPlayPauseToggle = {
                         textEditor.finish {
-                            if (previewState.playing) previewController?.pause()
-                            else {
+                            if (previewState.playing) {
+                                previewController?.pause()
+                                // TL1: rest on the frame that was on screen (floor). Read live state (never a captured value);
+                                // the seek starts a new controller generation, so older position reports are dropped (no echo).
+                                val rate = editor.state.project.composition.frameRate
+                                val shown = rate.frameTimeUs(rate.floorFrame(editor.state.playheadUs))
+                                if (shown != editor.state.playheadUs) {
+                                    editor.dispatch(EditorAction.Seek(shown))
+                                    previewController?.seek(editor.state.playheadUs)
+                                }
+                            } else {
                                 editor.dispatch(EditorAction.SelectMarker(null))
                                 previewController?.play()
                             }
@@ -523,7 +532,8 @@ fun EditorScreen(
                     onSeek = { timeUs, snap ->
                         textEditor.finish {
                             editor.dispatch(EditorAction.Seek(timeUs, snap))
-                            previewController?.seek(timeUs)
+                            // TL1: the preview gets the time the reducer kept (frame-snapped when [snap]), never the raw one.
+                            previewController?.seek(editor.state.playheadUs)
                         }
                     },
                     onToggleVisibility = { id, vis ->
@@ -627,6 +637,7 @@ fun EditorScreen(
                         },
                         onTextPayloadPreview = textEditor::preview,
                         textFrameRate = composition.frameRate,
+                        compositionStartTimecodeUs = composition.startTimecodeUs,
                         textFinishing = textEditor.finishing,
                         onTextSampleColour = {reply->focusManager.clearFocus();previewController?.pause();textSampleReply=reply;eyedropperLayerId=layer.id},
                         onTextCancelSample = {textSampleReply=null;eyedropperLayerId=null;sampledColor=null},
@@ -714,15 +725,17 @@ fun EditorScreen(
                             previewController?.update(editor.displayedState.project, playheadUs, false)
                             }
                         },
+                        // GRAPH G1.1: read the editor's playhead when the callback runs, never a value captured at composition
+                        // (a stale capture made the preview controller echo an old time back as the playhead).
                         onTransformCommit = {
                             textEditor.finish { editor.commitGesture()
-                            previewController?.update(editor.state.project, playheadUs, false)
+                            previewController?.update(editor.state.project, editor.state.playheadUs, false)
                             }
                         },
                         onTransformCancel = {
                             textEditor.cancel()
                             editor.cancelGesture()
-                            previewController?.update(editor.state.project, playheadUs, false)
+                            previewController?.update(editor.state.project, editor.state.playheadUs, false)
                         },
                         onTransformEdit = { transform ->
                             previewController?.pause()
@@ -763,6 +776,12 @@ fun EditorScreen(
                             }
                         },
                         onTextEditVisible = { textEditOpen = it },
+                        // GRAPH G1: Graph page drags preview SetKeyEasing inside the existing begin/commit/cancel gesture.
+                        onGesturePreview = { action ->
+                            textEditor.finish { editor.previewGesture(action)
+                            previewController?.update(editor.displayedState.project, editor.displayedState.playheadUs, false)
+                            }
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }

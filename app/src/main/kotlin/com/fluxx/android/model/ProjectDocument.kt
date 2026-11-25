@@ -17,7 +17,7 @@ class FrozenList<out T> private constructor(private val values: List<T>) : List<
 object CompositionDefaults {
     const val WIDTH = 1080
     const val HEIGHT = 1920
-    const val PROJECT_VERSION = 12 // Atomic rich Source Text; v10/v11 remain permanently readable.
+    const val PROJECT_VERSION = 13 // GRAPH G1: segment easing types + curve parameters; v1–v12 remain permanently readable.
 }
 
 /** Convert from the absolute frame index, never by repeatedly adding a rounded frame period. */
@@ -41,6 +41,15 @@ data class FrameRate(val numerator: Int = 30, val denominator: Int = 1) {
     }
 
     fun snap(timeUs: Long): Long = frameTimeUs(nearestFrame(timeUs))
+
+    /**
+     * TL1: the frame on screen at [timeUs]: the last frame whose start ([frameTimeUs], exact µs rounded down) is at or
+     * before it. A frame's own start time maps to that frame (never to the one before), so floor == nearest at rest.
+     */
+    fun floorFrame(timeUs: Long): Long {
+        val n = nearestFrame(timeUs)
+        return if (n > 0 && frameTimeUs(n) > timeUs) n - 1 else n
+    }
 }
 
 enum class LayerType { VIDEO, IMAGE, SOLID, TEXT }
@@ -72,29 +81,45 @@ data class Transform(
     }
 }
 
-enum class EasingPreset { EASY_EASE, LINEAR }
+/**
+ * The departing key's segment easing. Kotlin order is NOT the wire order (EasingWire): LINEAR 0, EASY_EASE 1, HOLD 2,
+ * CUSTOM 3, BOUNCE 4, ELASTIC 5. CUSTOM/BOUNCE/ELASTIC read the key's four curve parameters (EasingCurve).
+ */
+enum class EasingPreset { EASY_EASE, LINEAR, HOLD, CUSTOM, BOUNCE, ELASTIC }
 
+/** The parameters a new key receives when only an easing type is given (the type's defaults; GRAPH G1). */
 data class Keyframe1D(
     val timeUs: Long,
     val value: Float,
-    val easing: EasingPreset = EasingPreset.EASY_EASE
+    val easing: EasingPreset = EasingPreset.EASY_EASE,
+    val curveA: Float = EasingLimits.defaultA(easing), val curveB: Float = EasingLimits.defaultB(easing),
+    val curveC: Float = EasingLimits.defaultC(easing), val curveD: Float = EasingLimits.defaultD(easing)
 ) {
     init {
         // Signed anchor-relative time: split segments retain keys before their in-point.
         require(value.isFinite()) { "Keyframe value must be finite" }
+        EasingLimits.validate(easing, curveA, curveB, curveC, curveD)
     }
+    val curve: EasingCurve get() = EasingCurve(easing, curveA, curveB, curveC, curveD)
+    fun withCurve(c: EasingCurve) = copy(easing = c.type, curveA = c.a, curveB = c.b, curveC = c.c, curveD = c.d)
 }
 
 data class Keyframe2D(
     val timeUs: Long,
     val x: Float,
     val y: Float,
-    val easing: EasingPreset = EasingPreset.EASY_EASE
+    val easing: EasingPreset = EasingPreset.EASY_EASE,
+    val curveA: Float = EasingLimits.defaultA(easing), val curveB: Float = EasingLimits.defaultB(easing),
+    val curveC: Float = EasingLimits.defaultC(easing), val curveD: Float = EasingLimits.defaultD(easing)
 ) {
     init {
         // Signed anchor-relative time: split segments retain keys before their in-point.
         require(x.isFinite() && y.isFinite()) { "Keyframe coordinates must be finite" }
+        EasingLimits.validate(easing, curveA, curveB, curveC, curveD)
     }
+    /** One curve drives both the X and Y channels (separate dimensions are a later pass). */
+    val curve: EasingCurve get() = EasingCurve(easing, curveA, curveB, curveC, curveD)
+    fun withCurve(c: EasingCurve) = copy(easing = c.type, curveA = c.a, curveB = c.b, curveC = c.c, curveD = c.d)
 }
 
 object KeyframeEvaluator {
@@ -123,6 +148,10 @@ object KeyframeEvaluator {
         (3f * s * s - 2f * s * s * s).coerceIn(0f, 1f)
     }
 
+    /**
+     * Linear / Easy Ease fast path (unchanged, bit for bit). Other types use their default parameters here; keyed
+     * evaluation passes the key's own parameters through [ease].
+     */
     fun easeProgress(p: Float, easing: EasingPreset): Float {
         val clamped = p.coerceIn(0f, 1f)
         return when (easing) {
@@ -132,7 +161,37 @@ object KeyframeEvaluator {
                 val frac = clamped * 1023f - index
                 EASY_EASE_LUT[index] * (1f - frac) + EASY_EASE_LUT[index + 1] * frac
             }
+            else -> ease(p, easing, EasingLimits.defaultA(easing), EasingLimits.defaultB(easing),
+                EasingLimits.defaultC(easing), EasingLimits.defaultD(easing))
         }
+    }
+
+    /**
+     * GRAPH G1: eased progress of one segment with its curve parameters. Zero allocation, no shared state (UI and
+     * render threads both evaluate). Hold is a step (0 until the next key's time); Custom/Elastic may leave [0, 1].
+     */
+    fun ease(p: Float, easing: EasingPreset, a: Float, b: Float, c: Float, d: Float): Float {
+        val clamped = p.coerceIn(0f, 1f)
+        return when (easing) {
+            EasingPreset.LINEAR, EasingPreset.EASY_EASE -> easeProgress(clamped, easing)
+            EasingPreset.HOLD -> if (clamped >= 1f) 1f else 0f
+            EasingPreset.CUSTOM -> EasingMath.bezier(clamped, a, b, c, d)
+            EasingPreset.BOUNCE -> EasingMath.bounce(clamped, a, b)
+            EasingPreset.ELASTIC -> EasingMath.elastic(clamped, a, b)
+        }
+    }
+
+    @Suppress("NOTHING_TO_INLINE")
+    private inline fun ease1D(progress: Float, k: Keyframe1D): Float {
+        val e = k.easing
+        return if (e == EasingPreset.EASY_EASE || e == EasingPreset.LINEAR) easeProgress(progress, e)
+            else ease(progress, e, k.curveA, k.curveB, k.curveC, k.curveD)
+    }
+    @Suppress("NOTHING_TO_INLINE")
+    private inline fun ease2D(progress: Float, k: Keyframe2D): Float {
+        val e = k.easing
+        return if (e == EasingPreset.EASY_EASE || e == EasingPreset.LINEAR) easeProgress(progress, e)
+            else ease(progress, e, k.curveA, k.curveB, k.curveC, k.curveD)
     }
 
     fun evaluate1D(keyframes: List<Keyframe1D>, staticValue: Float, isAnimated: Boolean, timeUs: Long): Float {
@@ -147,7 +206,7 @@ object KeyframeEvaluator {
         val dt = k1.timeUs - k0.timeUs
         if (dt <= 0L) return k1.value
         val progress = (timeUs - k0.timeUs).toFloat() / dt.toFloat()
-        val ease = easeProgress(progress, k0.easing)
+        val ease = ease1D(progress, k0)
         return (k0.value.toDouble() * (1.0 - ease) + k1.value.toDouble() * ease).toFloat()
     }
 
@@ -183,7 +242,7 @@ object KeyframeEvaluator {
             return
         }
         val progress = (timeUs - k0.timeUs).toFloat() / dt.toFloat()
-        val ease = easeProgress(progress, k0.easing)
+        val ease = ease2D(progress, k0)
         out[offset] = (k0.x.toDouble() * (1.0 - ease) + k1.x.toDouble() * ease).toFloat()
         out[offset + 1] = (k0.y.toDouble() * (1.0 - ease) + k1.y.toDouble() * ease).toFloat()
     }

@@ -107,6 +107,23 @@ internal object InspectorIcons {
     private fun direction(m: Boolean) = p(m).line(10f, 4f, 10f, 13f).line(14f, 4f, 14f, 13f).line(16f, 4f, 9f, 4f).arc(9f, 4f, 3f, 3f, 0, 0, 9f, 10f)
         .line(9f, 10f, 10f, 10f).line(4f, 18f, 20f, 18f).line(17.5f, 15.5f, 20f, 18f, 17.5f, 20.5f).build()
     private fun keyDiamond(b: IconPath) = b.poly(2f, 12f, 3f, 21f, 12f, 12f, 21f, 3f, 12f)
+    /** An eased curve as one open polyline on the grid (x 4..20; [low]..[high] mapped to y 20..4). */
+    private fun sampled(b: IconPath, f: (Float) -> Float, low: Float, high: Float, steps: Int = 32): IconPath {
+        val points = FloatArray((steps + 1) * 2)
+        for (i in 0..steps) {
+            val t = i / steps.toFloat()
+            points[i * 2] = 4f + 16f * t
+            points[i * 2 + 1] = 20f - (f(t).coerceIn(low, high) - low) / (high - low) * 16f
+        }
+        return b.line(*points)
+    }
+    /**
+     * GRAPH G1 preset strip glyphs: the curve itself in the family's stroke, caps and joins (built once per key and
+     * cached). Not part of [VISIBLE]: presets are data, drawn from their own values.
+     */
+    fun curve(key: String, ease: (Float) -> Float, low: Float = -.7f, high: Float = 1.7f): ImageVector = synchronized(cache) {
+        cache.getOrPut("curve.$key") { build("curve.$key", sampled(p(), ease, low, high, 40).build(), false) }
+    }
 
     /** Path data for every named icon. Unknown names fail loudly in tests (no silent default glyph). */
     val PATHS: Map<String, String> = buildMap {
@@ -141,6 +158,45 @@ internal object InspectorIcons {
         put("HOLD_ANIM", p().rect(5f, 5f, 14f, 14f, 3f).poly(1f, 12f, 9f, 15f, 12f, 12f, 15f, 9f, 12f).build())
         put("HOLD_ON", p().rect(5f, 5f, 14f, 14f, 3f).build())
         put("GRAPH", p().line(4f, 4f, 4f, 20f, 20f, 20f).cubic(6.5f, 17f, 11.5f, 17f, 11.5f, 7f, 19f, 7f).build())
+        // GRAPH G1: Graph page modes (Value | Speed | Ease), the Ease view's type chooser and tools.
+        put("GRAPH_VALUE", p().line(4f, 4f, 4f, 20f, 20f, 20f).cubic(6f, 17f, 8.5f, 7f, 12f, 8f, 12f, 8f).cubic(12f, 8f, 15.5f, 9f, 16f, 15f, 20f, 12f).build())
+        put("GRAPH_SPEED", p().line(4f, 4f, 4f, 20f, 20f, 20f).cubic(6f, 18f, 9.5f, 18f, 10f, 7f, 12.5f, 7f).cubic(12.5f, 7f, 15f, 7f, 15.5f, 18f, 20f, 18f).build())
+        put("GRAPH_EASE", p().rect(4f, 4f, 16f, 16f, 2.5f).cubic(4f, 20f, 13f, 20f, 11f, 4f, 20f, 4f).build())
+        put("EASE_HOLD", p().line(4f, 19f, 12f, 19f, 12f, 5f, 20f, 5f).build())
+        put("EASE_LINEAR", p().line(4f, 19f, 20f, 5f).circle(4f, 19f, 1f).circle(20f, 5f, 1f).build())
+        put("EASE_EASY", p().cubic(4f, 19f, 9.3f, 19f, 14.7f, 5f, 20f, 5f).build())
+        put("EASE_IN", p().cubic(4f, 19f, 10.7f, 19f, 20f, 5f, 20f, 5f).build())
+        put("EASE_OUT", p().cubic(4f, 19f, 4f, 19f, 13.3f, 5f, 20f, 5f).build())
+        put("EASE_CUSTOM", p().cubic(4f, 19f, 9f, 11f, 15f, 13f, 20f, 5f).line(4f, 19f, 9f, 11f).circle(9f, 11f, 1.5f)
+            .line(20f, 5f, 15f, 13f).circle(15f, 13f, 1.5f).build())
+        put("EASE_BOUNCE", sampled(p(), { com.fluxx.android.model.EasingMath.bounce(it, 3f, .5f) }, -.1f, 1.1f).build())
+        put("EASE_ELASTIC", sampled(p(), { com.fluxx.android.model.EasingMath.elastic(it, 2f, .25f) }, -.1f, 1.6f).build())
+        put("EASE_SNAP", p().rect(4f, 4f, 16f, 16f, 2.5f).line(4f, 12f, 20f, 12f).line(12f, 4f, 12f, 20f).circle(16f, 8f, 1.5f).build())
+        put("EASE_MIRROR", p().line(12f, 3f, 12f, 21f).poly(1.5f, 9.5f, 6f, 9.5f, 18f, 3.5f, 18f).poly(1.5f, 14.5f, 6f, 20.5f, 18f, 14.5f, 18f).build())
+        // GRAPH G3: Smooth through key: a curve through a key with a level tangent (the matched speed).
+        put("GRAPH_SMOOTH", p().cubic(3f, 19f, 7f, 19f, 8f, 12f, 12f, 12f).cubic(12f, 12f, 16f, 12f, 17f, 5f, 21f, 5f).line(7f, 12f, 17f, 12f).circle(12f, 12f, 1.5f).build())
+        put("EASE_INVERT", p().line(4f, 8f, 18f, 8f).line(15f, 5f, 18f, 8f, 15f, 11f).line(20f, 16f, 6f, 16f).line(9f, 13f, 6f, 16f, 9f, 19f).build())
+        put("EASE_APPLY_ALL", p().poly(1f, 6f, 8.5f, 9f, 11.5f, 6f, 14.5f, 3f, 11.5f).poly(1f, 12f, 8.5f, 15f, 11.5f, 12f, 14.5f, 9f, 11.5f)
+            .poly(1f, 18f, 8.5f, 21f, 11.5f, 18f, 14.5f, 15f, 11.5f).line(3f, 19f, 21f, 19f).build())
+        // GRAPH G1.1: the Graph rail's Tools (snap / mirror / apply to all): three slider knobs on a vertical axis.
+        // GRAPH G2L: curve library glyphs.
+        // Library: three stacked curve cards.
+        put("GRAPH_LIBRARY", p().rect(4f, 4f, 13f, 13f, 2.5f).line(8f, 20f, 18f, 20f).arc(18f, 20f, 2f, 2f, 0, 0, 20f, 18f).line(20f, 18f, 20f, 8f)
+            .cubic(6.5f, 14.5f, 9.5f, 14.5f, 11f, 6.5f, 14.5f, 6.5f).build())
+        // Star: five rounded points.
+        put("GRAPH_STAR", p().poly(1.2f, 12f, 3f, 14.6f, 8.6f, 20.6f, 9.2f, 16f, 13.4f, 17.3f, 19.8f, 12f, 16.6f, 6.7f, 19.8f, 8f, 13.4f, 3.4f, 9.2f, 9.4f, 8.6f).build())
+        // Save curve: a curve dropping into a tray.
+        put("GRAPH_SAVE", p().line(4f, 14f, 4f, 18f).arc(4f, 18f, 2f, 2f, 0, 0, 6f, 20f).line(6f, 20f, 18f, 20f).arc(18f, 20f, 2f, 2f, 0, 0, 20f, 18f)
+            .line(20f, 18f, 20f, 14f).line(12f, 3f, 12f, 14f).line(8.5f, 10.5f, 12f, 14f, 15.5f, 10.5f).cubic(4f, 9f, 6f, 9f, 6f, 4f, 9f, 4f).build())
+        // Import / export: opposed arrows.
+        put("GRAPH_EXCHANGE", p().line(8f, 4f, 8f, 18f).line(5f, 15f, 8f, 18f, 11f, 15f).line(16f, 20f, 16f, 6f).line(13f, 9f, 16f, 6f, 19f, 9f).build())
+        put("GRAPH_EXPORT", p().line(12f, 15f, 12f, 4f).line(8f, 8f, 12f, 4f, 16f, 8f).line(4f, 15f, 4f, 18f).arc(4f, 18f, 2f, 2f, 0, 0, 6f, 20f)
+            .line(6f, 20f, 18f, 20f).arc(18f, 20f, 2f, 2f, 0, 0, 20f, 18f).line(20f, 18f, 20f, 15f).build())
+        // Edit values: x and y letters.
+        put("GRAPH_XY", p().line(4f, 7f, 10f, 17f).line(10f, 7f, 4f, 17f).line(14f, 7f, 17f, 12f, 20f, 7f).line(17f, 12f, 17f, 17f).build())
+        // Rename: a pencil.
+        put("GRAPH_RENAME", p().poly(1f, 15.5f, 4.5f, 19.5f, 8.5f, 8.5f, 19.5f, 4.5f, 19.5f, 4.5f, 15.5f).line(13.5f, 6.5f, 17.5f, 10.5f).line(12f, 20f, 20f, 20f).build())
+        put("GRAPH_TOOLS", p().line(6f, 4f, 6f, 20f).line(12f, 4f, 12f, 20f).line(18f, 4f, 18f, 20f).circle(6f, 15f, 2f).circle(12f, 8f, 2f).circle(18f, 13f, 2f).build())
         put("CUBE", p().poly(2f, 12f, 3f, 20f, 7.5f, 20f, 16.5f, 12f, 21f, 4f, 16.5f, 4f, 7.5f).line(4.6f, 7.9f, 12f, 12f, 19.4f, 7.9f).line(12f, 12f, 12f, 20.3f).build())
         // ---- Landing grid categories --------------------------------------------------------------------
         put("TRANSFORM", p().line(3f, 12f, 21f, 12f).line(12f, 3f, 12f, 21f).line(6f, 9f, 3f, 12f, 6f, 15f).line(18f, 9f, 21f, 12f, 18f, 15f)

@@ -60,6 +60,7 @@ internal fun categoryIconName(section: InspectorSection, type: LayerType): Strin
     InspectorSection.CONTEXTUAL_EDIT -> when (type) { LayerType.SOLID -> "EDIT_SOLID"; LayerType.TEXT -> "EDIT_TEXT"; else -> "EDIT_FOOTAGE" }
     InspectorSection.EFFECTS -> "EFFECTS"; InspectorSection.LAYER_STYLES -> "LAYER_STYLES"; InspectorSection.TRACK_MATTES -> "TRACK_MATTES"
     InspectorSection.MOTION_BLUR -> "MOTION_BLUR"; InspectorSection.AUDIO -> "AUDIO"
+    InspectorSection.GRAPH -> "GRAPH" // GRAPH G1: opened from the rail, never from the landing grid.
 }
 @Composable internal fun InspectorCategoryIcon(section: InspectorSection, color: Color, type: LayerType) {
     Icon(InspectorIcons.icon(categoryIconName(section, type)), null, Modifier.size(InspectorIcons.SIZE), tint = color)

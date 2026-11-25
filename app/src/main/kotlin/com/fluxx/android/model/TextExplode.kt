@@ -32,12 +32,12 @@ object TextExplode {
         val original=layer.text;val document=original.source.evaluateDocument(local)
         fun held(value: Float)=AnimatableProperty1D(staticValue=value)
         val frozen=original.copy(source=AnimatableString(staticValue=document.text,document=document),
-            size=held(original.size.evaluate(local)),tracking=held(original.tracking.evaluate(local)),
+            size=held(original.sizeAt(local)),tracking=held(original.tracking.evaluate(local)),
             leading=held(original.leading.evaluate(local)),baselineShift=held(original.baselineShift.evaluate(local)),
             ligatures=held(if(options.split==TextSplit.CHARACTERS) 0f else original.ligatures.hold(local)),
             animators=FrozenList.empty(),fill=AnimatableColour(staticValue=original.fill.evaluate(local)),
             strokeColour=AnimatableColour(staticValue=original.strokeColour.evaluate(local)),
-            strokeWidth=held(original.strokeWidth.evaluate(local)),strokeOverFill=held(original.strokeOverFill.hold(local)))
+            strokeWidth=held(original.strokeWidthAt(local)),strokeOverFill=held(original.strokeOverFill.hold(local)))
         // The reference includes evaluated layout animators; pieces must reproduce those positions or refuse.
         val reference=geometry(original.copy(source=frozen.source,ligatures=frozen.ligatures))
         if(options.split==TextSplit.CHARACTERS && original.animators.isNotEmpty()) {

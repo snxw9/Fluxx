@@ -1,14 +1,25 @@
 namespace fluxx.schema;
 
+// v13 (GRAPH G1): explicit wire values, independent of the Kotlin enum order.
 enum EasingType : byte {
   LINEAR = 0,
-  EASY_EASE = 1
+  EASY_EASE = 1,
+  HOLD = 2,
+  CUSTOM = 3,
+  BOUNCE = 4,
+  ELASTIC = 5
 }
 
+// v13: generic curve parameters of the departing key's segment. CUSTOM: cubic-bezier (x1, y1, x2, y2);
+// BOUNCE: (count, restitution, -, -); ELASTIC: (oscillations, damping, -, -). Defaults are the Easy Ease bezier.
 table Keyframe1D {
   time_us: long;
   value: float;
   easing: EasingType = EASY_EASE;
+  curve_a: float = 0.33;
+  curve_b: float = 0;
+  curve_c: float = 0.67;
+  curve_d: float = 1;
 }
 
 table Keyframe2D {
@@ -16,6 +27,11 @@ table Keyframe2D {
   x: float;
   y: float;
   easing: EasingType = EASY_EASE;
+  // v13: one curve shared by the X and Y channels.
+  curve_a: float = 0.33;
+  curve_b: float = 0;
+  curve_c: float = 0.67;
+  curve_d: float = 1;
 }
 
 table AnimatableProperty1D {
@@ -38,7 +54,7 @@ table Marker {
   description: string;
 }
 
-table ColourKeyframe { time_us: long; argb: int = -1; easing: EasingType = EASY_EASE; }
+table ColourKeyframe { time_us: long; argb: int = -1; easing: EasingType = EASY_EASE; curve_a: float = 0.33; curve_b: float = 0; curve_c: float = 0.67; curve_d: float = 1; }
 table FontAxisValue { tag: string; value: AnimatableProperty1D; }
 table TextFontReference { family: string; style: int; sha256: string; face_index: int; named_instance: int = -1; axes: [FontAxisValue]; post_script_name: string; style_name: string; }
 table TextManualKerning { character: int; amount: float; }

@@ -144,7 +144,9 @@ internal object ScaleRulerMath {
  */
 @Composable internal fun LogScaleRuler(label: String, value: Float, onBegin: () -> Unit, onPreview: (Float) -> Unit,
     onCommit: () -> Unit, onCancel: () -> Unit, onTyped: (Float) -> Unit, onReset: () -> Unit, modifier: Modifier = Modifier,
-    readoutDp: Float? = null, stripDp: Float = ScaleRulerMath.STRIP_DP) {
+    readoutDp: Float? = null, stripDp: Float = ScaleRulerMath.STRIP_DP,
+    /** GRAPH G2.1 §9: magnetic 25% detents while dragging (and during inertia); typed values are never snapped. */
+    magnetic: Boolean = false) {
     val view = LocalView.current
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
@@ -160,7 +162,10 @@ internal object ScaleRulerMath {
     val current by rememberUpdatedState(value)
     LaunchedEffect(value) { if (!dragging && inertia?.isActive != true) shown = value }
     DisposableEffect(Unit) { onDispose { if (dragging || inertia?.isActive == true) { inertia?.cancel(); cancel() } } }
-    fun publish(next: Float) {
+    val magnet = remember(magnetic, density) { if (magnetic) with(density) {
+        TransformDetents.scale(ScaleRulerMath.DP_PER_DOUBLING.dp.toPx(), TransformDetents.ZONE_DP.dp.toPx()) } else null }
+    fun publish(raw: Float) {
+        val next = magnet?.apply(raw) { InspectorHaptics.tick(view) } ?: raw
         when (ScaleRulerMath.detent(shown, next)) { 2 -> InspectorHaptics.strong(view); 1 -> InspectorHaptics.tick(view) }
         shown = next; preview(next)
     }
@@ -196,6 +201,7 @@ internal object ScaleRulerMath {
                     val tracker = VelocityTracker()
                     tracker.addPosition(down.uptimeMillis, down.position)
                     val base = current
+                    magnet?.reset()
                     var travel = 0f
                     var started = false
                     val pxPerDp = density.density

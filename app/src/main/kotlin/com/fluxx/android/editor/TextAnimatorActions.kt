@@ -108,8 +108,9 @@ object TextAnimatorActions {
             return FrozenList.of(result.sortedBy(get))
         }
         fun scalar(p: AnimatableProperty1D,hold: Boolean): AnimatableProperty1D {
-            val sample=if(hold) p.hold(time) else p.evaluate(time)
-            val k=keys(p.keyframes,{ it.timeUs },{ key,t -> key.copy(timeUs=t) }) { Keyframe1D(time,e.value ?: sample,e.easing) }
+            // GRAPH G1: a sample from an overshooting curve is clamped to the field's legal range before it is stored.
+            val sample=if(hold) p.hold(time) else TextAnimatorEdits.clamp(e.address,p.evaluate(time))
+            val k=keys(p.keyframes,{ it.timeUs },{ key,t -> key.copy(timeUs=t) }) { rekey1D(p.keyframes.firstOrNull { it.timeUs==time },time,e.value ?: sample,e.easing) }
             val reset=when {
                 e.address.selectorId!=null -> TextRangeSelector(1).tracks[requireNotNull(e.address.field).ordinal].staticValue
                 e.address.property==AnimatorProperty.OPACITY || e.address.property==AnimatorProperty.FILL_OPACITY ||
@@ -155,14 +156,14 @@ object TextAnimatorActions {
             p.scalar!=null -> p.copy(scalar=scalar(p.scalar,false))
             p.vector!=null -> {
                 val sample=FloatArray(2);p.vector.evaluate(time,sample,0)
-                val k=keys(p.vector.keyframes,{ it.timeUs },{ key,t -> key.copy(timeUs=t) }) { Keyframe2D(time,e.value ?: sample[0],e.y ?: sample[1],e.easing) }
+                val k=keys(p.vector.keyframes,{ it.timeUs },{ key,t -> key.copy(timeUs=t) }) { rekey2D(p.vector.keyframes.firstOrNull { it.timeUs==time },time,e.value ?: sample[0],e.y ?: sample[1],e.easing) }
                 val reset=if(property==AnimatorProperty.SCALE) 100f else 0f
                 p.copy(vector=p.vector.copy(isAnimated=k.isNotEmpty(),staticX=if(e.operation==AnimatorKeyOperation.RESET) reset else sample[0],
                     staticY=if(e.operation==AnimatorKeyOperation.RESET) reset else sample[1],keyframes=k))
             }
             else -> {
                 val track=requireNotNull(p.colour);val sample=track.evaluate(time)
-                val k=keys(track.keyframes,{ it.timeUs },{ key,t -> key.copy(timeUs=t) }) { ColourKeyframe(time,e.argb ?: sample,e.easing) }
+                val k=keys(track.keyframes,{ it.timeUs },{ key,t -> key.copy(timeUs=t) }) { rekeyColour(track.keyframes.firstOrNull { it.timeUs==time },time,e.argb ?: sample,e.easing) }
                 val reset=if(property==AnimatorProperty.STROKE_COLOUR) 0xff000000.toInt() else -1
                 p.copy(colour=track.copy(isAnimated=k.isNotEmpty(),staticValue=if(e.operation==AnimatorKeyOperation.RESET) reset else sample,keyframes=k))
             }

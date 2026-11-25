@@ -7,20 +7,18 @@ import fluxx.schema.TextPropertyOverride as SP
 
 /** Additive v11/v12 tables; existing universal track payloads are reused. */
 internal object TextAnimatorCodec {
-    private fun easing(p: EasingPreset): Byte = if(p==EasingPreset.LINEAR) 0 else 1
-    private fun easing(p: Byte): EasingPreset { require(p.toInt() in 0..1);return if(p.toInt()==0) EasingPreset.LINEAR else EasingPreset.EASY_EASE }
     private fun scalar(b: FlatBufferBuilder,p: AnimatableProperty1D): Int {
-        val keys=p.keyframes.map { fluxx.schema.Keyframe1D.createKeyframe1D(b,it.timeUs,it.value,easing(it.easing)) }.toIntArray()
+        val keys=p.keyframes.map { EasingWire.key1D(b,it) }.toIntArray()
         val v=fluxx.schema.AnimatableProperty1D.createKeyframesVector(b,keys)
         return fluxx.schema.AnimatableProperty1D.createAnimatableProperty1D(b,p.isAnimated,p.staticValue,v)
     }
     private fun vector(b: FlatBufferBuilder,p: AnimatableProperty2D): Int {
-        val keys=p.keyframes.map { fluxx.schema.Keyframe2D.createKeyframe2D(b,it.timeUs,it.x,it.y,easing(it.easing)) }.toIntArray()
+        val keys=p.keyframes.map { EasingWire.key2D(b,it) }.toIntArray()
         val v=fluxx.schema.AnimatableProperty2D.createKeyframesVector(b,keys)
         return fluxx.schema.AnimatableProperty2D.createAnimatableProperty2D(b,p.isAnimated,p.staticX,p.staticY,v)
     }
     private fun colour(b: FlatBufferBuilder,p: AnimatableColour): Int {
-        val keys=p.keyframes.map { fluxx.schema.ColourKeyframe.createColourKeyframe(b,it.timeUs,it.argb,easing(it.easing)) }.toIntArray()
+        val keys=p.keyframes.map { EasingWire.colourKey(b,it) }.toIntArray()
         val v=fluxx.schema.AnimatableColour.createKeyframesVector(b,keys)
         return fluxx.schema.AnimatableColour.createAnimatableColour(b,p.isAnimated,p.staticValue,v)
     }
@@ -51,17 +49,17 @@ internal object TextAnimatorCodec {
         fun scalar(p: fluxx.schema.AnimatableProperty1D?): AnimatableProperty1D {
             requireNotNull(p);count(p.keyframesLength)
             return AnimatableProperty1D(p.isAnimated,p.staticValue,FrozenList.of((0 until p.keyframesLength).map {
-                val k=requireNotNull(p.keyframes(it));Keyframe1D(k.timeUs,k.value,easing(k.easing)) }))
+                EasingWire.key1D(requireNotNull(p.keyframes(it)),version,false) }))
         }
         fun vector(p: fluxx.schema.AnimatableProperty2D): AnimatableProperty2D {
             count(p.keyframesLength)
             return AnimatableProperty2D(p.isAnimated,p.staticX,p.staticY,FrozenList.of((0 until p.keyframesLength).map {
-                val k=requireNotNull(p.keyframes(it));Keyframe2D(k.timeUs,k.x,k.y,easing(k.easing)) }))
+                EasingWire.key2D(requireNotNull(p.keyframes(it)),version,false) }))
         }
         fun colour(p: fluxx.schema.AnimatableColour): AnimatableColour {
             count(p.keyframesLength)
             return AnimatableColour(p.isAnimated,p.staticValue,FrozenList.of((0 until p.keyframesLength).map {
-                val k=requireNotNull(p.keyframes(it));ColourKeyframe(k.timeUs,k.argb,easing(k.easing)) }))
+                EasingWire.colourKey(requireNotNull(p.keyframes(it)),version) }))
         }
         return FrozenList.of((0 until payload.textAnimatorsLength).map { index ->
             val a=requireNotNull(payload.textAnimators(index));require(a.version==2u) { "Unsupported text animator version ${a.version}; open with a compatible Fluxx version. 3D, paths and expressions are not supported." }

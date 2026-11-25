@@ -200,3 +200,22 @@ fun TextProperties.withFreshAnimatorIds(): TextProperties {
     return copy(animators=FrozenList.of(animators.map { a -> a.copy(id=next(),
         selectors=FrozenList.of(a.selectors.map { it.copy(id=next()) })) }))
 }
+
+/**
+ * GRAPH G1: legal ranges of evaluated animator values (the same ranges [TextRangeSelector] / [TextPropertyOverride]
+ * validate for stored values). A Custom/Elastic segment can evaluate outside its keys, so consumers clamp here; stored
+ * data is never changed. Identity for every in-range value.
+ */
+object AnimatorLimits {
+    const val SMOOTHNESS_MAX = 100.0
+    const val AMOUNT = 100.0
+    const val WIGGLES_MAX = 1000.0
+    const val CORRELATION_MAX = 100.0
+    fun percent(p: AnimatorProperty) = p == AnimatorProperty.OPACITY || p == AnimatorProperty.LINE_ANCHOR ||
+        p == AnimatorProperty.FILL_OPACITY || p == AnimatorProperty.STROKE_OPACITY
+    fun clamp(p: AnimatorProperty, value: Float): Float = if (percent(p)) value.coerceIn(0f, 100f) else value
+    fun amount(value: Float): Double = SelectorMath.clamp(value.toDouble(), -AMOUNT, AMOUNT)
+    fun smoothness(value: Float): Double = SelectorMath.clamp(value.toDouble(), 0.0, SMOOTHNESS_MAX)
+    fun wiggles(value: Float): Double = SelectorMath.clamp(value.toDouble(), 0.0, WIGGLES_MAX)
+    fun correlation(value: Float): Double = SelectorMath.clamp(value.toDouble(), 0.0, CORRELATION_MAX)
+}

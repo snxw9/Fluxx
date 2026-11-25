@@ -24,13 +24,25 @@ data class FluxxColor(val r: Float, val g: Float, val b: Float, val a: Float = 1
     companion object {
         fun fromArgb(argb: Int) = FluxxColor((argb ushr 16 and 255) / 255f,
             (argb ushr 8 and 255) / 255f, (argb and 255) / 255f, (argb ushr 24) / 255f)
+        /**
+         * The one hex parser (GRAPH G2.1 §2). Case-insensitive, optional leading `#`, surrounding whitespace ignored.
+         * `RGB` (each digit doubled) and `RRGGBB` take [alpha]; `AARRGGBB` sets alpha too. Any other length, a non-hex
+         * character or empty text is invalid (null).
+         */
         fun parseHex(text: String, alpha: Float = 1f): FluxxColor? {
-            val digits = text.trim().removePrefix("#")
-            if (digits.length != 6 && digits.length != 8) return null
-            if (!digits.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) return null
+            val raw = text.trim().removePrefix("#")
+            if (!raw.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) return null
+            val digits = when (raw.length) { 3 -> raw.map { "$it$it" }.joinToString(""); 6, 8 -> raw; else -> return null }
             val bits = digits.toUIntOrNull(16) ?: return null
             val value = fromArgb(bits.toInt())
             return if (digits.length == 6) value.copy(a = alpha) else value
+        }
+        /** While typing, only complete 6 / 8-digit values apply live (a 3-digit prefix of a longer value would flash). */
+        fun hexAppliesLive(text: String) = text.trim().removePrefix("#").length.let { it == 6 || it == 8 }
+        /** Typed hex entry on packed ARGB: 3/6 digits keep [current]'s alpha byte exactly; 8 digits replace it. */
+        fun parseHexEntry(text: String, current: Int): Int? {
+            val argb = parseHex(text)?.toArgb() ?: return null
+            return if (text.trim().removePrefix("#").length == 8) argb else (argb and 0x00FFFFFF) or (current and 0xFF000000.toInt())
         }
         fun fromHsv(hue: Float, saturation: Float, value: Float, alpha: Float = 1f): FluxxColor {
             require(hue.isFinite() && saturation in 0f..1f && value in 0f..1f)

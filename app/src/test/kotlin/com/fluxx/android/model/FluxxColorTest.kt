@@ -27,7 +27,7 @@ class FluxxColorTest {
     @Test fun hexUsesArgbForEightDigitsAndPreservesAlphaForSix() {
         assertEquals(0x80336699.toInt(),FluxxColor.parseHex("#80336699")!!.toArgb())
         assertEquals(.25f,FluxxColor.parseHex("336699",.25f)!!.a,0f)
-        for(text in listOf("", "123", "GG0011", "123456789", "-11223", "+11223")) assertNull(FluxxColor.parseHex(text))
+        for(text in listOf("", "12", "1234", "GG0011", "123456789", "-11223", "+11223")) assertNull(FluxxColor.parseHex(text))
         val color=FluxxColor.fromArgb(0x80336699.toInt())
         assertEquals("80336699",color.toHexString(true))
         assertEquals("336699",color.toHexString(false))

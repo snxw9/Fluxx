@@ -175,10 +175,24 @@ internal object InspectorHaptics {
  */
 internal class TypedEntry(private val onCommit: (String) -> Unit, private val onCancel: () -> Unit) {
     var finished = false; private set
-    private var keyboardSeen = false
+    /**
+     * GRAPH G2 (A4 fix): "the keyboard hid, so Back was pressed" only counts once THIS field's keyboard is up. A field
+     * opened right after another entry closed sees the previous keyboard still sliding down; treating that as Back
+     * cancelled the new entry at once (it opened and closed, and typed values were lost). Armed by a rising IME edge,
+     * or by the IME staying visible ([settled], 150ms without change); a falling IME never arms it.
+     */
+    private var armed = false
+    private var last = -1
     fun commit(text: String) { if (!finished) { finished = true; onCommit(text) } }
     fun cancel() { if (!finished) { finished = true; onCancel() } }
-    fun keyboard(visible: Boolean) { if (visible) keyboardSeen = true else if (keyboardSeen) cancel() }
+    /** Every change of the IME bottom inset (px, 0 = hidden). */
+    fun ime(bottom: Int) {
+        if (bottom <= 0) { if (armed) cancel() }
+        else if (last >= 0 && bottom > last) armed = true
+        last = bottom
+    }
+    /** The IME has stayed at [bottom] for a while (not mid-animation). */
+    fun settled(bottom: Int) { if (bottom > 0) armed = true }
     fun dispose(text: String) = commit(text)
 }
 
@@ -246,7 +260,7 @@ internal fun Modifier.blocksPopoverSwipe(): Modifier = composed {
  * The caller decides how Back cancels (it hides the IME first, then closes the popover without committing).
  */
 @Composable internal fun InspectorValueField(initial: String, label: String, unit: String, onCommit: (String) -> Unit, onCancel: () -> Unit,
-    modifier: Modifier = Modifier, keyboardType: KeyboardType = KeyboardType.DecimalSigned) {
+    modifier: Modifier = Modifier, keyboardType: KeyboardType = KeyboardType.DecimalSigned, autoFocus: Boolean = true) {
     var field by remember { mutableStateOf(TextFieldValue(initial, TextRange(0, initial.length))) }
     val requester = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
@@ -259,13 +273,14 @@ internal fun Modifier.blocksPopoverSwipe(): Modifier = composed {
     DisposableEffect(typing) { typing?.let { it.intValue++ }; onDispose { typing?.let { it.intValue-- } } }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) {
+        if (!autoFocus) return@LaunchedEffect
         if (typing != null) { withFrameNanos { }; withFrameNanos { } }
         runCatching { requester.requestFocus() }
         if (typing != null) keyboard?.show()
     }
     val hostIme = LocalHostImeBottom.current
     val ime = if (hostIme >= 0) hostIme else WindowInsets.ime.getBottom(LocalDensity.current)
-    LaunchedEffect(ime) { entry.keyboard(ime > 0) }
+    LaunchedEffect(ime) { entry.ime(ime); if (ime > 0) { kotlinx.coroutines.delay(150); entry.settled(ime) } }
     DisposableEffect(Unit) { onDispose { entry.dispose(field.text) } }
     Row(modifier.height(36.dp).clip(RoundedCornerShape(8.dp)).background(Surface).border(1.dp, TextPrimary, RoundedCornerShape(8.dp))
         .padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {

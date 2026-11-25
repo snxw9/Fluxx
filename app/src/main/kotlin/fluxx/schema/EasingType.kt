@@ -7,5 +7,9 @@ class EasingType private constructor() {
     companion object {
         const val LINEAR: Byte = 0
         const val EASY_EASE: Byte = 1
+        const val HOLD: Byte = 2
+        const val CUSTOM: Byte = 3
+        const val BOUNCE: Byte = 4
+        const val ELASTIC: Byte = 5
     }
 }

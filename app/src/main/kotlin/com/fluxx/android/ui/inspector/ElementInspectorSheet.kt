@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.drawText
@@ -74,7 +75,9 @@ enum class InspectorSection {
     BLENDING_OPACITY,
     TIMING,
     AUDIO,
-    CONTEXTUAL_EDIT, EFFECTS, LAYER_STYLES, TRACK_MATTES, MOTION_BLUR
+    CONTEXTUAL_EDIT, EFFECTS, LAYER_STYLES, TRACK_MATTES, MOTION_BLUR,
+    /** GRAPH G1: the Graph Editor page (Ease view), opened from the rail's Graph icon of the page it returns to. */
+    GRAPH
 }
 
 enum class TransformSubMode {
@@ -129,6 +132,8 @@ fun ElementInspectorSheet(
     onTextScalarPreview: (AnimPropertyType, Float) -> Unit = { _, _ -> },
     onTextPayloadPreview: (TextProperties)->Unit = {},
     textFrameRate: FrameRate=FrameRate(),
+    /** GRAPH G2.1 §6a: the composition start timecode, so Graph times read like the transport. */
+    compositionStartTimecodeUs: Long = 0L,
     onTextBeginDraft: (Boolean,(CompositionLayer)->Unit)->Unit={_,ready->ready(layer)},
     textFinishing: Boolean=false,
     textStrokeClamp: String?=null,
@@ -140,19 +145,46 @@ fun ElementInspectorSheet(
     textSelection: TextSelectionRange?=null,onTextSelection: (TextSelectionRange?)->Unit = {},
     onExplodePrepare: (TextExplodeOptions,(Result<TextExplodePlan>)->Unit)->Unit = {_,reply->reply(Result.failure(IllegalStateException("Explode preparation unavailable")))},
     onExplodeCommit: (TextExplodePlan,(String?)->Unit)->Unit = {_,reply->reply("Explode unavailable")},
-    onTextEditVisible: (Boolean)->Unit = {}
+    onTextEditVisible: (Boolean)->Unit = {},
+    /** GRAPH G1: live preview of a Graph page drag (SetKeyEasing) inside the begin/commit/cancel gesture. */
+    onGesturePreview: (EditorAction) -> Unit = {}
 ) {
     key(layer.id) {
         var section by rememberSaveable { mutableStateOf<InspectorSection?>(null) }
+        // GRAPH G1: the Graph page's property and the page it returns to. The return page's saveable state (tab, focused
+        // field, transform mode) is kept by [pages] while the Graph page is open and dropped on any other navigation.
+        var graphTarget by remember { mutableStateOf<GraphTarget?>(null) }
+        var graphReturn by rememberSaveable { mutableStateOf<InspectorSection?>(null) }
+        val pages = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+        val currentLayer by rememberUpdatedState(layer)
+        val graphContext = androidx.compose.ui.platform.LocalContext.current
+        val graphHost = remember {
+            var host: GraphHost? = null
+            GraphHost({ currentLayer }, { graphTarget },
+                open = { target ->
+                    // GRAPH G3: open on the last-used tab (the page falls back to Ease where that tab is unavailable).
+                    if (section != InspectorSection.GRAPH || graphTarget != target) host?.session?.reset(GraphTabs.stored(graphContext))
+                    if (section != InspectorSection.GRAPH) graphReturn = section; graphTarget = target; section = InspectorSection.GRAPH },
+                close = { host?.session?.reset(); section = graphReturn; graphTarget = null }).also { host = it }
+        }
+        // A restored GRAPH page without its target (process death) returns to the page it came from.
+        if (section == InspectorSection.GRAPH && graphTarget == null) LaunchedEffect(Unit) { section = graphReturn }
         val textEditVisible by rememberUpdatedState(onTextEditVisible)
-        // Edit Text uses one fixed sheet height; the editor needs to know when it is showing.
-        LaunchedEffect(section) { textEditVisible(layer.type == LayerType.TEXT && section == InspectorSection.CONTEXTUAL_EDIT) }
+        // Edit Text uses one fixed sheet height; the editor needs to know when it is showing (the Graph page opened from
+        // it keeps the editor's top-bar Back routing).
+        LaunchedEffect(section) { textEditVisible(layer.type == LayerType.TEXT && (section == InspectorSection.CONTEXTUAL_EDIT ||
+            (section == InspectorSection.GRAPH && graphReturn == InspectorSection.CONTEXTUAL_EDIT))) }
         DisposableEffect(Unit) { onDispose { textEditVisible(false) } }
         var textColourProperty by remember { mutableStateOf(AnimPropertyType.FILL_COLOUR) }
         val focusManager = LocalFocusManager.current
         val focusCallback by rememberUpdatedState(onPropertyFocus)
-        LaunchedEffect(section) {
-            if (section != InspectorSection.TRANSFORM) focusCallback(if (section == InspectorSection.BLENDING_OPACITY) AnimPropertyType.OPACITY else null)
+        val animatorFocusCallback by rememberUpdatedState(onAnimatorFocus)
+        LaunchedEffect(section, graphTarget) {
+            // The Graph page keeps the timeline focus and Prev/Next on the property it edits.
+            if (section == InspectorSection.GRAPH) { graphTarget?.let { focusCallback(it.property); animatorFocusCallback(it.animator) } }
+            else if (section != InspectorSection.TRANSFORM) focusCallback(if (section == InspectorSection.BLENDING_OPACITY) AnimPropertyType.OPACITY else null)
+            // Leaving a page other than for the Graph page forgets its kept state (unchanged navigation behaviour).
+            if (section != InspectorSection.GRAPH) InspectorSection.entries.filter { it != section }.forEach { pages.removeState(it.name) }
         }
         DisposableEffect(layer.id) { onDispose { focusCallback(null) } }
         val dismiss by rememberUpdatedState(onDismiss)
@@ -180,7 +212,10 @@ fun ElementInspectorSheet(
                     // own single header row (back, Character / Paragraph / Animate, menu) in place of the parent chrome.
                     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
                         // Section pages: ONE header row (← | page tabs), exactly like Edit Text.
-                        if (!textTyping && section != null && !textSection) SectionHeader(sections, section!!, layer.type,
+                        // GRAPH G1.1: the Graph page's header sits in the same full-width header row as every section page.
+                        if (!textTyping && section == InspectorSection.GRAPH) graphTarget?.let { GraphPageHeader(layer, it, playheadUs, textFrameRate, onBack = graphHost.close, session = graphHost.session,
+                            compositionWidth = compositionWidth, compositionHeight = compositionHeight) }
+                        if (!textTyping && section != null && !textSection && section != InspectorSection.GRAPH) SectionHeader(sections, section!!, layer.type,
                             onBack = { focusManager.clearFocus(); section = null },
                             onSelect = { focusManager.clearFocus(); section = it })
                         // The landing grid keeps its arrangement: handle, layer name with duplicate / delete, quick actions.
@@ -233,6 +268,8 @@ fun ElementInspectorSheet(
                         }
                         }
                         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = if(textSection) 0.dp else InspectorChromeBudget.CONTENT_TOP.dp)) {
+                          CompositionLocalProvider(LocalGraphHost provides graphHost) {
+                          pages.SaveableStateProvider(section?.name ?: "landing") {
                             when (section) {
                                 null -> InspectorLandingGrid(layer.type) { section=it }
                                 InspectorSection.TRANSFORM -> OverhauledTransformSectionContent(
@@ -257,8 +294,15 @@ fun ElementInspectorSheet(
                                     onBegin = onTransformBegin, onPreview = { onColorPreview(it) }, onFinish = onTransformCommit,
                                     onCancel = onTransformCancel, modifier = Modifier.fillMaxSize(), name = "solid colour",
                                     palette = paletteRepository, onEyedropper = onEyedropperRequest)
+                                InspectorSection.GRAPH -> graphTarget?.let { target ->
+                                    GraphPage(layer, target, playheadUs, textFrameRate, onAction, onTransformBegin, onGesturePreview,
+                                        onTransformCommit, onTransformCancel, onClose = graphHost.close, session = graphHost.session,
+                                        compositionWidth = compositionWidth, compositionHeight = compositionHeight, startTimecodeUs = compositionStartTimecodeUs)
+                                }
                                 else -> Unit // Disabled categories cannot be opened.
                             }
+                          }
+                          }
                         }
                     }
                 }
@@ -423,21 +467,29 @@ internal fun PositionTrackpad(
 internal fun RotationDialController(
     rotationDegrees: Float,
     onBegin: () -> Unit, onPreview: (Float) -> Unit,
-    onCommit: () -> Unit, onCancel: () -> Unit, onEdit: (Float) -> Unit, valueHeight: Dp = SectionLayout.VALUE_BOX.dp
+    onCommit: () -> Unit, onCancel: () -> Unit, onEdit: (Float) -> Unit, valueHeight: Dp = SectionLayout.VALUE_BOX.dp,
+    /** GRAPH G2.1 §9: magnetic 5° detents while dragging (Transform); typed values are never snapped. */
+    magnetic: Boolean = false
 ) {
     var previousAngle by remember { mutableFloatStateOf(0f) }
     var accumulated by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+    val view = LocalView.current
+    var magnet by remember { mutableStateOf<Magnet?>(null) }
     fun angle(point: Offset, bounds: Size) = Math.toDegrees(atan2(
         (point.y - bounds.height / 2).toDouble(), (point.x - bounds.width / 2).toDouble())).toFloat()
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize().inspectorDrag(
-            onStart = { point, bounds -> previousAngle = angle(point, bounds); accumulated = rotationDegrees; onBegin() },
+            onStart = { point, bounds -> previousAngle = angle(point, bounds); accumulated = rotationDegrees
+                // The handle runs on the circle drawn below (radius = half the dial minus 12dp).
+                magnet = if (magnetic) with(density) { TransformDetents.rotation(bounds.minDimension / 2f - 12.dp.toPx(), TransformDetents.ZONE_DP.dp.toPx()) } else null
+                onBegin() },
             onMove = { point, bounds ->
                 val next = angle(point, bounds)
                 val delta = ((next - previousAngle + 540f) % 360f) - 180f
                 accumulated += delta
                 previousAngle = next
-                onPreview(accumulated)
+                onPreview(magnet?.apply(accumulated) { InspectorHaptics.tick(view) } ?: accumulated)
             }, onCommit = onCommit, onCancel = onCancel)) {
             val radius = (size.minDimension / 2f - 12.dp.toPx()).coerceAtLeast(0f)
             drawCircle(Border, radius, center, style = Stroke(1.3.dp.toPx()))
@@ -451,7 +503,7 @@ internal fun RotationDialController(
             val handle = center + Offset(cos(radians).toFloat(), sin(radians).toFloat()) * radius
             drawCircle(Highlight, 6.dp.toPx(), handle)
         }
-        CompactValueBox("", formatRotation(rotationDegrees), "\u00b0", onEdit,
+        CompactValueBox("", PropertyDisplay.ROTATION.storedText(rotationDegrees), "\u00b0", onEdit,
             modifier = Modifier.fillMaxWidth(.7f), keyboardType = KeyboardType.Text,
             parse = ::parseRotation, height = valueHeight, large = true)
     }
@@ -464,7 +516,7 @@ internal fun formatRotation(degrees: Float): String {
     return "${turns}x${number(remainder.toFloat())}"
 }
 
-private fun parseRotation(input: String): Float? {
+internal fun parseRotation(input: String): Float? {
     val text = input.trim().removeSuffix("\u00b0").replace(',', '.')
     val parts = text.lowercase().split('x', '\u00d7')
     if (parts.size == 1) return ValueParsing.number(parts[0])?.toFloat()?.takeIf { it.isFinite() }
@@ -489,7 +541,7 @@ internal fun ScaleController(
     Column(Modifier.fillMaxWidth().testTag("scale-controller"), verticalArrangement = Arrangement.spacedBy(ScaleRulerMath.GAP_DP.dp)) {
         key(linked) {
             Box(Modifier.fillMaxWidth()) {
-                LogScaleRuler(if (linked) "Scale" else "Width", scaleX,
+                LogScaleRuler(if (linked) "Scale" else "Width", scaleX, magnetic = true,
                     onBegin = { initial = Offset(scaleX, scaleY); onBegin() },
                     onPreview = { value -> onPreview(value, if (linked) ScaleRulerMath.linkedY(initial.x, initial.y, value) else initial.y) },
                     onCommit = onCommit, onCancel = onCancel,
@@ -498,7 +550,7 @@ internal fun ScaleController(
                 Box(Modifier.align(Alignment.TopEnd)) { linkToggle() }
             }
             if (!linked) {
-                LogScaleRuler("Height", scaleY,
+                LogScaleRuler("Height", scaleY, magnetic = true,
                     onBegin = { initial = Offset(scaleX, scaleY); onBegin() },
                     onPreview = { onPreview(initial.x, it) },
                     onCommit = onCommit, onCancel = onCancel,
@@ -591,9 +643,15 @@ internal fun InspectorUtilityRail(resetLabel: String, onReset: () -> Unit,
     hasKeyframeAtPlayhead: Boolean = false, onToggleKeyframe: (() -> Unit)? = null,
     show3D: Boolean = true, keyIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     keyLabel: String? = null, keyState: String? = null, extraItems: List<RailMenuItem> = emptyList(),
-    confirm: Pair<String, () -> Unit>? = null, onConfirmDismiss: () -> Unit = {}, menuAnchor: @Composable () -> Unit = {}) {
+    confirm: Pair<String, () -> Unit>? = null, onConfirmDismiss: () -> Unit = {}, menuAnchor: @Composable () -> Unit = {},
+    graphTarget: GraphTarget? = null) {
     var menu by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
+    // GRAPH G1: the Graph icon opens the Graph page for this rail's focused property (continuous, >= 2 keys) and,
+    // on the Graph page itself, returns to the page it was opened from. Otherwise it stays visible and disabled.
+    val graphHost = LocalGraphHost.current
+    val graphOpen = graphHost != null && graphTarget != null && graphHost.openTarget == graphTarget
+    val graphEnabled = graphOpen || (graphHost != null && graphTarget != null && GraphModel.enabled(graphHost.layer(), graphTarget))
     BoxWithConstraints(Modifier.width(RailBudget.TILE.dp).fillMaxHeight().testTag("inspector-rail")) {
         val disabledCount = if (show3D) 2 else 1
         val placeholder = RailBudget.disabledHeight(maxHeight.value, 2, disabledCount).dp
@@ -604,7 +662,17 @@ internal fun InspectorUtilityRail(resetLabel: String, onReset: () -> Unit,
                 Modifier.testTag("inspector-key-diamond").semantics {
                     if (keyState != null) { stateDescription = keyState; liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }
                 }, enabled = onToggleKeyframe != null, tint = tint) { focus.clearFocus(); onToggleKeyframe?.invoke() }
-            Box(Modifier.size(RailBudget.TILE.dp, placeholder).semantics { contentDescription = "Graph editor (not yet available)"; disabled() }.testTag("inspector-rail-graph"),
+            if (graphEnabled) Box(Modifier.size(RailBudget.TILE.dp, placeholder).clip(RoundedCornerShape(10.dp))
+                .background(if (graphOpen) Surface else Color.Transparent)
+                .clickable(role = Role.Button, onClickLabel = if (graphOpen) "Close graph editor" else "Open graph editor") {
+                    focus.clearFocus(); PopoverDismissal.request()
+                    if (graphOpen) graphHost!!.close() else graphHost!!.open(graphTarget!!)
+                }
+                .semantics { contentDescription = "Graph editor"; stateDescription = if (graphOpen) "Open" else "Closed"; selected = graphOpen }
+                .testTag("inspector-rail-graph"), contentAlignment = Alignment.Center) {
+                Icon(InspectorIcons.icon("GRAPH"), null, Modifier.size(minOf(InspectorIcons.SIZE, placeholder)), tint = if (graphOpen) Highlight else TextSecondary)
+            }
+            else Box(Modifier.size(RailBudget.TILE.dp, placeholder).semantics { contentDescription = "Graph editor (needs a continuous property with two keys)"; disabled() }.testTag("inspector-rail-graph"),
                 contentAlignment = Alignment.Center) { Icon(InspectorIcons.icon("GRAPH"), null, Modifier.size(minOf(InspectorIcons.SIZE, placeholder)), tint = TextDisabled) }
             if (show3D) Box(Modifier.size(RailBudget.TILE.dp, placeholder).semantics { contentDescription = "3D layer controls (not yet available)"; disabled() }.testTag("inspector-rail-3d"),
                 contentAlignment = Alignment.Center) { Icon(InspectorIcons.icon("CUBE"), null, Modifier.size(minOf(InspectorIcons.SIZE, placeholder)), tint = TextDisabled) }
@@ -639,19 +707,18 @@ private fun OverhauledTransformSectionContent(
     onAnchorModeChange: (Boolean) -> Unit,
     onAnchorPreview: (EditorAction.SetAnchorPoint) -> Unit
 ) {
-    var mode by remember { mutableStateOf(TransformSubMode.POSITION) }
-    var isAnchorMode by remember { mutableStateOf(false) }
+    // GRAPH G1: saveable, so returning from the Graph page restores the mode it was opened from.
+    var mode by rememberSaveable { mutableStateOf(TransformSubMode.POSITION) }
+    var isAnchorMode by rememberSaveable { mutableStateOf(false) }
     val anchorModeCallback by rememberUpdatedState(onAnchorModeChange)
     SideEffect { anchorModeCallback(isAnchorMode) }
     DisposableEffect(Unit) { onDispose { anchorModeCallback(false) } }
-    var linked by remember { mutableStateOf(true) }
+    var linked by rememberSaveable { mutableStateOf(true) }
     val focusManager = LocalFocusManager.current
     val currentTransform = remember(layer, playheadUs) { layer.evaluatedTransform(playheadUs) }
     val transform = currentTransform
     val refW = layer.referenceWidth.takeIf { it > 0 } ?: compositionWidth
     val refH = layer.referenceHeight.takeIf { it > 0 } ?: compositionHeight
-    val halfReferenceW = refW / 2f
-    val halfReferenceH = refH / 2f
     val context = LocalContext.current
     val heldSource = layer.text.source.evaluateDocument(playheadUs - layer.resolvedKeyframeAnchorUs)
     val ligatures=layer.text.effectiveLigatures(playheadUs-layer.resolvedKeyframeAnchorUs)
@@ -693,8 +760,10 @@ private fun OverhauledTransformSectionContent(
         }
         return EditorAction.SetAnchorPoint(layer.id, ax, ay, position)
     }
-    val pixelX = compositionWidth / 2f + transform.positionX * halfReferenceW
-    val pixelY = compositionHeight / 2f + transform.positionY * halfReferenceH
+    // GRAPH G2.1 §5: the shared stored → shown conversion (the Value graph uses the same helper).
+    val unitsX = PropertyDisplay.positionX(compositionWidth, refW); val unitsY = PropertyDisplay.positionY(compositionHeight, refH)
+    val pixelX = unitsX.toDisplay(transform.positionX)
+    val pixelY = unitsY.toDisplay(transform.positionY)
     var gestureBase by remember { mutableStateOf(transform) }
     val begin = { gestureBase = transform; onBeginGesture() }
 
@@ -766,7 +835,8 @@ private fun OverhauledTransformSectionContent(
                     }
                 }
               }
-            }
+            },
+            graphTarget = if (isAnchorMode) null else GraphTarget(currentProp)
         )
         // The active mode's control group is centred vertically in the content area and horizontally between the
         // rail and the mode column (CentredSectionGroup); sizes are SectionLayout constants, never the sheet height.
@@ -783,20 +853,20 @@ private fun OverhauledTransformSectionContent(
                   } else CentredSectionGroup(SectionLayout.positionGroup(fontScale), "transform-group-position") {
                     val limitX = PropertyLimits.position(compositionWidth); val limitY = PropertyLimits.position(compositionHeight)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)) {
-                        CompactValueBox("X", number(pixelX), onCommitValue = {
-                            val newPosX = (limitX.typed(it) - compositionWidth / 2f) / halfReferenceW
+                        CompactValueBox("X", unitsX.text(pixelX), onCommitValue = {
+                            val newPosX = unitsX.toStored(limitX.typed(it))
                             onEdit(transform.copy(positionX = newPosX))
                         }, modifier = Modifier.weight(1f), height = valueBox, large = true)
-                        CompactValueBox("Y", number(pixelY), onCommitValue = {
-                            val newPosY = (limitY.typed(it) - compositionHeight / 2f) / halfReferenceH
+                        CompactValueBox("Y", unitsY.text(pixelY), onCommitValue = {
+                            val newPosY = unitsY.toStored(limitY.typed(it))
                             onEdit(transform.copy(positionY = newPosY))
                         }, modifier = Modifier.weight(1f), height = valueBox, large = true)
                     }
                     Spacer(Modifier.height(SectionLayout.GAP.dp))
                     // Planned: Z position requires a 3D layer model. The pad never clamps inside ±10× the composition.
                     Box(Modifier.size(SectionLayout.PAD.dp).testTag("position-pad")) { PositionTrackpad(pixelX / compositionWidth, pixelY / compositionHeight, begin, { x, y ->
-                        val newPosX = (limitX.hard(x * compositionWidth) - compositionWidth / 2f) / halfReferenceW
-                        val newPosY = (limitY.hard(y * compositionHeight) - compositionHeight / 2f) / halfReferenceH
+                        val newPosX = unitsX.toStored(limitX.hard(x * compositionWidth))
+                        val newPosY = unitsY.toStored(limitY.hard(y * compositionHeight))
                         onPreviewGesture(gestureBase.copy(positionX = newPosX, positionY = newPosY))
                     }, onCommitGesture, onCancelGesture) }
                   }
@@ -810,7 +880,7 @@ private fun OverhauledTransformSectionContent(
                         }, onCommitGesture, onCancelGesture,
                         {
                             onEdit(transform.copy(rotationDegrees = PropertyLimits.ROTATION.typed(it)))
-                        }, valueBox) }
+                        }, valueBox, magnetic = true) }
                 }
                 TransformSubMode.SCALE -> CentredSectionGroup(SectionLayout.scaleGroup(linked, fontScale), "transform-group-scale") {
                     // Typed values (±50000%) come from each ruler's readout; Flip H/V stays in the layer menu.
@@ -904,7 +974,8 @@ private fun CompactOpacitySectionContent(
                 } else {
                     onAction(EditorAction.SetKeyframe(layer.id, AnimPropertyType.OPACITY, localTimeUs, opacity))
                 }
-            }
+            },
+            graphTarget = GraphTarget(AnimPropertyType.OPACITY)
         )
         // Fixed sizes (SectionLayout): a 40dp blend-mode row and one slider row (20 label + 48 touch), centred.
         Box(Modifier.weight(1f).fillMaxHeight()) {
@@ -924,14 +995,14 @@ private fun CompactOpacitySectionContent(
                     SliderRowLabel("Opacity", row, badge)
                     Row(Modifier.fillMaxWidth().height(row.touch.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(SectionLayout.GAP.dp)) {
-                        SectionSlider(opacity, row, "Opacity",
+                        SectionSlider(opacity, row, "Opacity", detents = { track, zone -> TransformDetents.opacity(track, zone) },
                             onBegin = { if (!dragging) { onBeginGesture(); dragging = true } },
                             onChange = { onPreviewGesture(it) },
                             onFinish = { if (dragging) { dragging = false; onCommitGesture() } },
                             onCancel = { if (dragging) { dragging = false; onCancelGesture() } },
                             modifier = Modifier.weight(1f))
-                        CompactValueBox("", number(opacity * 100f), "%", {
-                            val newOp = PropertyLimits.OPACITY.typed(it) / 100f
+                        CompactValueBox("", PropertyDisplay.OPACITY.storedText(opacity), "%", {
+                            val newOp = PropertyDisplay.OPACITY.toStored(PropertyLimits.OPACITY.typed(it))
                             onEdit(newOp)
                         }, modifier = Modifier.width(row.valueWidth.dp).semantics { contentDescription = "Opacity percentage" },
                             height = row.valueHeight.dp, large = true)

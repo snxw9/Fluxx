@@ -79,7 +79,7 @@ The inspector reports the focused Position/Rotation/Scale/Opacity property to th
 - **Quick-Navigation Bar:** Selecting a functional category reveals persistent tabs to quickly switch between active sections (Transform, Timing, Blending & Opacity, Contextual Edit for Solids) without returning to the landing view. Inert placeholder categories do not appear in the tab bar to prevent false affordances.
 - **Shared Utility Rail:** Every applicable tab receives the same left-side utility rail containing:
   1. Keyframe diamond button (toggle/add/remove keyframe)
-  2. Graph editor icon (visible, disabled & inert)
+  2. Graph editor icon: **enabled (GRAPH G1)** when the rail's focused property is continuous and has two or more keys; opens the Graph page (Ease view) in the same sheet, and tapping it again returns. Visible and disabled otherwise (including discrete properties). See [GRAPH G1](GRAPH_G1.md#5-ui-the-graph-page-ease-view).
   3. **3D icon** (visible, disabled & inert; positioned below Graph, above Overflow)
   4. Overflow dots icon (Reset options menu)
 - **Sheet Placement & Alignment:**
@@ -132,7 +132,7 @@ Transform mode provides a right rail to toggle between **Position**, **Rotation*
 ### Blending & Opacity (formerly Opacity)
 - **Blend Mode Row:** Inert placeholder row showing "Blend Mode: Normal" (styled with `TextDisabled` and non-clickable), reserving the visual slot for future blend-mode selection (see [AE_PARITY_VISION.md](../architecture/AE_PARITY_VISION.md) §26).
 - **Opacity Slider:** Dedicated horizontal slider with fine scrub (0–100%).
-- **Utility Rail:** Shared rail with keyframe diamond, disabled Graph icon, disabled 3D icon, and overflow menu with **Reset opacity** (resets to 100%).
+- **Utility Rail:** Shared rail with keyframe diamond, Graph icon (enabled for animated Opacity with two or more keys, GRAPH G1), disabled 3D icon, and overflow menu with **Reset opacity** (resets to 100%).
 - **Value Box:** Direct numeric entry with percentage display.
 
 ### Contextual Edit (Edit Solid / Edit Footage)
@@ -196,7 +196,29 @@ The following controls are rendered as inert/disabled placeholders pending futur
 - **Blend Mode Row:** Inert "Blend Mode: Normal" row in the Blending & Opacity tab.
 - **Z-Position & XYZ Rotation:** Planned for 3D engine support.
 - **Keyframe Diamonds:** Now enabled by Phase 2 Step D; see [keyframe implementation](KEYFRAME_ANIMATION.md). Property focus also controls timeline marker prominence and interaction.
-- **Graph Editor Icons:** Visible in Transform and Opacity rails; disabled pending the dual Value/Speed Graph Editor.
+- **Graph Editor Icons:** Visible in every rail with a diamond (Transform, Blending & Opacity, Edit Text pages, Animate). GRAPH G1: enabled for a continuous focused property with two or more keys; opens the **Graph page** (`InspectorSection.GRAPH`). GRAPH G1.1 layout: the shared header row (back arrow, Value | Speed | Ease with Value and Speed disabled, the segment label right-aligned); a Graph-only left rail (diamond, Graph, Invert, Tools popover with Snap / Mirror / Apply to all, ⋮ with Copy / Paste cubic-bezier and Reset); the centre item, one rounded box holding the touchpad (handles with direct and relative drag; Bounce/Elastic as an XY pad) over the values bar (x1 y1 x2 y2, or Bounces/Height, Oscillations/Damping; tap to type); and a right rail list of the type tiles and 30 built-in presets. Non-modal; the back arrow, the Graph icon or Back returns to the page it came from with its state. GRAPH G2L: the right rail became a type strip inside the centre box plus a pinned rail (up to 15 curves; long-press then drag to pin, reorder, replace or unpin); a floating library icon opens the curve library over the strip and rail (touchpad and values bar keep their bounds; Back closes it first), with save, import/export, and a rename/delete menu on user curves; ⋮ gained "Show playhead dot"; the header names the curve. GRAPH G2: the header's **Value** tab is live (disabled for colour): the value-over-time curve with draggable keys (time and value, one undo), the selected segment's handles, tap to select a key / double tap to seek, pan, axis-aware pinch zoom, double tap to fit, and a Time / Value (/ X|Y) values bar; the library is a 2-column grid (Pinned / Presets / My curves) and a user curve's xy popover edits its values. GRAPH G2.1:
+- Value graph keys are tap and double-tap only (no drag).
+- Its tiles, axis and header use each page's own units and formatting (shared `PropertyDisplay`).
+- The Value tile shows the live value at the playhead, and the Time tile reads like the transport.
+- Snap is on by default; the xy popover is a 2 × 2 grid of independent fields.
+- Library and rail drags lift, follow and reflow.
+- The Transform Rotation dial, Opacity slider and Scale ruler have magnetic detents (5°, 25%, 25%).
+
+GRAPH G3:
+- The header's **Speed** tab is live: speed over time in the page's units/s, with speed / influence handles.
+- The Speed values bar has Speed out / Influence out / Speed in / Influence in.
+- Tools → Smooth through key matches speeds across a key in the Speed view.
+- The page opens on the last-used tab.
+
+TL1: the Value view's Time tile shows the playhead's timecode when no key is selected.
+
+[G1](GRAPH_G1.md), [G1.1](GRAPH_G1_1.md), [G2L](GRAPH_G2L.md), [G2](GRAPH_G2.md), [G2.1](GRAPH_G2_1.md), GRAPH G3.1:
+- The Speed view frames the selected segment and stays still while editing.
+- There's no pan; a tapped handle can be dragged from anywhere at ×0.35.
+- Its handles stop before crossing.
+- Snap adds magnetic landmarks (0, average, the other handle, the neighbour).
+
+[TL1](TL1.md), [G3](GRAPH_G3.md), [G3.1](GRAPH_G3_1.md).
 
 ---
 
@@ -272,7 +294,7 @@ Video Extend In clamps to `max(0, start - sourceIn)`. Images and solids extend t
 
 ### Persistence
 
-Signed key times and persistent animation origins were introduced in **version 5**; the current writer uses v12. Versions 1-4 still load, with absent anchors resolving to clip start.
+Signed key times and persistent animation origins were introduced in **version 5**; the current writer uses v13 (GRAPH G1 easing). Versions 1-4 still load, with absent anchors resolving to clip start.
 
 The additive Layer fields are `keyframe_anchor_us:long=-1` and `has_keyframe_anchor:bool=false`. The presence bit is necessary: moving a trimmed clip earlier can create a legitimate negative anchor, including exactly -1. Null remains null on round-trip; explicit -1 survives as an explicit value. Decoding also accepts a non-sentinel anchor without the presence flag.
 

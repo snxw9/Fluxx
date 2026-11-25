@@ -591,6 +591,23 @@ Plan for:
 
 Fluxx's existing trackpad interaction system could potentially be used to provide more precise graph manipulation on mobile.
 
+**Implementation update — GRAPH G1 (2026-11-23):** Implemented in source; phone acceptance pending. The curve backend (Hold, Linear, Easy Ease, Custom bezier with overshoot, Bounce, Elastic; schema v13) and the Graph page's **Ease view** (normalised curve of the segment at the playhead, type chooser, 32 standard presets, handles with a loupe, snap / mirror / invert, numeric entry, `cubic-bezier()` copy/paste, apply to all keys) are in. The Value and Speed graphs are visible, disabled placeholders (G2/G3). The trackpad idea is used as relative handle drag: after selecting a handle, a drag on empty canvas moves it at reduced sensitivity. It is implemented in the Graph canvas because `PositionTrackpad` is a complete Position control, not a reusable drag core. See [GRAPH G1](../checkpoints/GRAPH_G1.md).
+
+**GRAPH G1.1 (2026-11-24):** the Graph page was relaid out: the shared header row, a Graph-only left rail (diamond, Graph, Invert, Tools, ⋮), one touchpad + values-bar item (typed values replace the numeric popover; the loupe is gone; Bounce and Elastic are edited as an XY pad) and a right rail of types and presets. See [GRAPH G1.1](../checkpoints/GRAPH_G1_1.md).
+
+**GRAPH G2L (2026-11-24):** the Ease view gained a type strip inside the centre box, a pinned rail and a curve library (Pinned / Types / Presets / My curves) that opens over the strip and rail without resizing the touchpad. Users can save, rename, delete, pin and reorder curves, and import/export them as `.fluxxcurves`; the library is app-level, not per project. See [GRAPH G2L](../checkpoints/GRAPH_G2L.md).
+
+**GRAPH G2 (2026-11-24):** the **Value Graph** is live: the property's value over time from the real evaluator, keys draggable in time (frame-snapped, never crossing a neighbour) and value with one undo, the selected segment's influence handles on the curve, tap to select a key, double tap to seek to it, pan, axis-aware pinch zoom and fit, and a Time / Value / X|Y values bar. Colour properties have no Value graph (no single axis). The Speed Graph remains (G3). See [GRAPH G2](../checkpoints/GRAPH_G2.md).
+
+**GRAPH G3 (2026-11-24):** the **Speed Graph** is live. It plots speed over time across all keys, in each property's units per second (one combined curve for Position and Scale), from the evaluator's own easing derivative.
+
+- **Handles:** After-Effects-style speed/influence handles on the selected segment, editing the same stored curves as the Ease and Value views.
+- **Values bar:** Speed / Influence in and out, typed.
+- **Smooth through key:** a Tools toggle that matches speeds across a key (both 0 at a peak or valley), one undo.
+- **Tab memory:** the page opens on the last-used tab.
+
+G2.1 / TL1 also made the Value graph use the inspector pages' units, made scrubbing frame-exact and gave the ruler second / half-second / frame tiers. See [GRAPH G3](../checkpoints/GRAPH_G3.md) and [TL1](../checkpoints/TL1.md).
+
 ---
 
 # 21. Expressions

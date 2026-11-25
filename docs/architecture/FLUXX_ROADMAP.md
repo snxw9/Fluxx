@@ -1,6 +1,6 @@
 # Fluxx Roadmap: v0.1 → Full Vision
 
-**Current status (2026-11-22):** Phase 2 remains active. **The text phase is complete** and the next big item is the [graph editor](#next-big-item-graph-editor-planned-not-started). Every text plan, spec and stage record is now one document, the [text record](../checkpoints/TEXT.md). In brief: E1–E3, F1, T1–T4 and the Edit Text UI were user-tested; FIX/EXPLODE are committed; T5 is stopped (below); TEXT FIX 9 and PERF 10/11 were device-assisted A16 passes (`4c85cb2`). F3 (the Animate tab) and its F3.1–F3.3 follow-ups are merged to master (F3.1/F3.2 in `c8109d9`, F3.3 in `67df5f3`), with A16 instrumented tests passing and **phone acceptance of F3.1–F3.3 done** (user-confirmed). F3.4 (the Character Tracking cap and these docs fixes) is on the single `text` branch, merged to master. Open decisions: T5 cross-style shaping ownership; a non-debuggable measurement build; animator threading or a batch/draw contract change for 30 animated layers under 16.6 ms p95. Stage-by-stage evidence is in the text record.
+**Current status (2026-11-22):** Phase 2 remains active. **The text phase is complete** and the current big item is the [graph editor](#graph-editor-in-progress-g1-in-source): G1 (curve backend + Ease view) is implemented in source, phone acceptance pending. Every text plan, spec and stage record is now one document, the [text record](../checkpoints/TEXT.md). In brief: E1–E3, F1, T1–T4 and the Edit Text UI were user-tested; FIX/EXPLODE are committed; T5 is stopped (below); TEXT FIX 9 and PERF 10/11 were device-assisted A16 passes (`4c85cb2`). F3 (the Animate tab) and its F3.1–F3.3 follow-ups are merged to master (F3.1/F3.2 in `c8109d9`, F3.3 in `67df5f3`), with A16 instrumented tests passing and **phone acceptance of F3.1–F3.3 done** (user-confirmed). F3.4 (the Character Tracking cap and these docs fixes) is on the single `text` branch, merged to master. Open decisions: T5 cross-style shaping ownership; a non-debuggable measurement build; animator threading or a batch/draw contract change for 30 animated layers under 16.6 ms p95. Stage-by-stage evidence is in the text record.
 
 **Current T5 stop (2026-10-09):** FIX `85b9de4` and EXPLODE `59a54a0` passed their compile/JVM/host gates and are implemented in source, device-unverified. T5 is dropped under the approved droppable-stage rule. The user's indivisible cursive-word decision resolves the historical emergency-wrap finding, but a new host proof shows mandatory Arabic lam-alef is lost across separate style items even with full source context and optional ligatures off. Cross-style shaping requires a further style-ownership decision beyond the approved wrapping change. No partial RTL code or production fonts remain; stored RTL still receives the existing rendering error. The diagnostic and this report remain uncommitted after the two feature commits. [Evidence, limits and exact manual tests](../checkpoints/TEXT.md#rec-text-fix-explode-t5). Earlier checkpoint statements below retain their historical context.
 
@@ -145,9 +145,53 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.
 
-### Next big item: graph editor (planned, not started)
+### Graph editor (in progress: G1, G1.1, G2L, G2, G2.1, TL1 and G3 in source)
 
-The graph editor (value and speed curves for keyframes, reached from the rail's placeholder) is the next big item now that the text phase is complete.
+The graph editor (value and speed curves for keyframes, reached from the rail's Graph icon) is the current big item. It is planned in these passes:
+- [x] **G1: curve backend + Ease view** — schema v13 easing (Hold, Linear, Easy Ease, Custom bezier with overshoot, Bounce, Elastic), `SetKeyEasing`, overshoot-safe consumers, and the Graph page's Ease view with presets, handles, numeric entry and `cubic-bezier()` clipboard. Implemented in source on `graph-g1`; JVM 518/518 and the targeted A16 layout/render tests pass; phone acceptance pending ([record](../checkpoints/GRAPH_G1.md)).
+- [x] **G1.1: Graph page layout rework** — shared header row, Graph-only left rail with a Tools popover, touchpad + values bar as one item, Bounce/Elastic XY pad, right rail of types and presets; loupe, tile grid, numeric popover and preset strip removed. The reported playhead jump was a stale Graph drag callback that re-sent the playhead from when the page opened (after Prev/Next); fixed at the call sites and guarded by an A16 test that fails without the fix. JVM 524/524, A16 Graph and layout suites pass; phone acceptance pending ([record](../checkpoints/GRAPH_G1_1.md)).
+- [x] **G2L: Ease view layout rework + curve library** — type strip inside the centre box, a pinned rail (up to 15, drag to pin/reorder/replace/unpin), a library that morphs over the strip + rail without resizing the touchpad, user curves (save, rename, delete, 60 max, app-level store), `.fluxxcurves` import/export via SAF, and a "Show playhead dot" toggle. The user-preset part of the old G4 moved here. No schema change, no new action. JVM 531/531; A16 Graph, layout and render suites pass; phone acceptance pending ([record](../checkpoints/GRAPH_G2L.md)).
+- [x] **G2: Value graph** — the property's value over time from the real evaluator; key selection (tap) and seek (double tap); key dragging in time and value with the existing `MoveKeyframe` / `SetKeyframe(2D)` / animator Key MOVE+SET actions (one undo, frame snap, neighbour clamp); the selected segment's handles on the curve; pan, axis-aware pinch zoom and fit; Time / Value / X|Y values bar. Colour has no Value graph. Plus G2L carry-over: 2-column library grid without Types, the icon fade, an editable xy popover, and the typed-entry self-cancel fix (A4). No schema change, no new action. JVM 542/542; A16 Graph, layout and render suites pass; phone acceptance pending ([record](../checkpoints/GRAPH_G2.md)).
+- [x] **G2.1: acceptance fixes**:
+  - a shared hex parser (3, 6 and 8 digits);
+  - Value graph keys are not draggable;
+  - nothing draws through the values bar;
+  - the Graph uses the inspector pages' units (shared `PropertyDisplay`);
+  - a live Value tile and an inert Time tile;
+  - the time audit, with Graph times now in the transport's timecode;
+  - a compact independent xy popover;
+  - library and rail drags lift, follow and reflow, with 3.75× auto-scroll;
+  - Snap on by default and persisted;
+  - magnetic Transform detents (Rotation 5°, Opacity and Scale 25%).
+
+  No schema change, no new action. A16 suites pass, with two flaky tests reported; phone acceptance pending ([record](../checkpoints/GRAPH_G2_1.md)).
+- [x] **TL1: timeline**:
+  - scrubs land on whole frames;
+  - the playhead readouts floor (the frame on screen) and pause rests on it;
+  - a tiered ruler (second / half-second / frame) that adapts to zoom;
+  - one frame → x function for ticks and playhead (0.00 px offset);
+  - a live Graph Time tile.
+
+  No schema change, no new action. JVM 571/571; A16 TimeAuditTest passes; phone acceptance pending ([record](../checkpoints/TL1.md)).
+- [x] **G3: Speed graph**:
+  - speed over time in the page's units/s, one combined curve for Position and Scale;
+  - speed / influence handles;
+  - a Speed / Influence values bar;
+  - Smooth through key (Speed view, one undo);
+  - the page opens on the last-used tab.
+
+  No schema change, no new action. JVM 581/581; A16 `GraphSpeedTest` passes; phone acceptance pending ([record](../checkpoints/GRAPH_G3.md)).
+- [x] **G3.1**:
+  - the G3 verification finished;
+  - the rail auto-scroll hardened;
+  - ruler tiers always three at the default zoom (major 12, mid 5, minor 3dp);
+  - the Speed view is segment-framed and stable, with no pan and an Ease-style relative drag;
+  - Speed handles cannot cross;
+  - magnetic speed / influence landmarks.
+
+  JVM 587/587; A16 sweep green ([record](../checkpoints/GRAPH_G3_1.md)).
+- [ ] **G4: convert Bounce/Elastic to keys** and extra curve libraries. Next.
+- Later: share-sheet export of curves, separate X/Y easing and dimensions (needs schema v14) and multi-select.
 
 ### Timeline productivity (parked)
 
@@ -161,6 +205,8 @@ Still parked after the text phase. These are user ideas recorded for planning; n
 
 ### Parked / follow-ups
 
+- **Parked (GRAPH G2.1 / TL1 / G3 / G3.1):** Position detents (needs layer geometry), drop-frame timecode, the Interface size setting, separate X/Y easing (needs schema v14), a "Make continuous" action, and Smooth through key in the Value and Ease views. The live Time tile shipped in TL1.
+- **Interface size setting** (from GRAPH G2L): an app-level size for inspector tiles and thumbnails; several Graph widths (strip, rail, library) now follow fixed tile sizes.
 - **Landscape editor layout.** Rotation now keeps the project open, but the landscape layout is cramped and the preview distorts.
 - **T5 right-to-left text.** Stopped; needs the cross-style shaping ownership decision.
 - **Shapes and masks from text.**

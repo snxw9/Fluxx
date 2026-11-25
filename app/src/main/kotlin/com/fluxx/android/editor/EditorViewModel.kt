@@ -180,7 +180,7 @@ class EditorViewModel : ViewModel() {
     private fun transientAllowed(action: EditorAction) = action is EditorAction.SetAnchorPoint || action is EditorAction.SetColor ||
         action is EditorAction.ReorderLayer || action is EditorAction.Batch || action is EditorAction.Move || action is EditorAction.Trim ||
         action is EditorAction.SetTransform || action is EditorAction.MoveKeyframe || action is EditorAction.SetKeyframe ||
-        action is EditorAction.SetKeyframe2D || action is EditorAction.EditTextAnimator
+        action is EditorAction.SetKeyframe2D || action is EditorAction.EditTextAnimator || action is EditorAction.SetKeyEasing
     /** The last gesture preview/commit that failed (shown once by the screen, then [clearGestureError]). */
     var gestureError by mutableStateOf<String?>(null)
         private set

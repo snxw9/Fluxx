@@ -18,7 +18,7 @@ object ProjectCodec {
 
             val animPosOffset = run {
                 val kfOffsets = layer.animTransform.position.keyframes.map { kf ->
-                    fluxx.schema.Keyframe2D.createKeyframe2D(b, kf.timeUs, kf.x, kf.y, (if (kf.easing == EasingPreset.LINEAR) 0 else 1).toByte())
+                    EasingWire.key2D(b, kf)
                 }.toIntArray()
                 val kfVec = fluxx.schema.AnimatableProperty2D.createKeyframesVector(b, kfOffsets)
                 fluxx.schema.AnimatableProperty2D.createAnimatableProperty2D(b, layer.animTransform.position.isAnimated,
@@ -27,7 +27,7 @@ object ProjectCodec {
 
             val animScaleOffset = run {
                 val kfOffsets = layer.animTransform.scale.keyframes.map { kf ->
-                    fluxx.schema.Keyframe2D.createKeyframe2D(b, kf.timeUs, kf.x, kf.y, (if (kf.easing == EasingPreset.LINEAR) 0 else 1).toByte())
+                    EasingWire.key2D(b, kf)
                 }.toIntArray()
                 val kfVec = fluxx.schema.AnimatableProperty2D.createKeyframesVector(b, kfOffsets)
                 fluxx.schema.AnimatableProperty2D.createAnimatableProperty2D(b, layer.animTransform.scale.isAnimated,
@@ -36,7 +36,7 @@ object ProjectCodec {
 
             val animRotOffset = run {
                 val kfOffsets = layer.animTransform.rotation.keyframes.map { kf ->
-                    fluxx.schema.Keyframe1D.createKeyframe1D(b, kf.timeUs, kf.value, (if (kf.easing == EasingPreset.LINEAR) 0 else 1).toByte())
+                    EasingWire.key1D(b, kf)
                 }.toIntArray()
                 val kfVec = fluxx.schema.AnimatableProperty1D.createKeyframesVector(b, kfOffsets)
                 fluxx.schema.AnimatableProperty1D.createAnimatableProperty1D(b, layer.animTransform.rotation.isAnimated,
@@ -45,7 +45,7 @@ object ProjectCodec {
 
             val animOpOffset = run {
                 val kfOffsets = layer.animTransform.opacity.keyframes.map { kf ->
-                    fluxx.schema.Keyframe1D.createKeyframe1D(b, kf.timeUs, kf.value, (if (kf.easing == EasingPreset.LINEAR) 0 else 1).toByte())
+                    EasingWire.key1D(b, kf)
                 }.toIntArray()
                 val kfVec = fluxx.schema.AnimatableProperty1D.createKeyframesVector(b, kfOffsets)
                 fluxx.schema.AnimatableProperty1D.createAnimatableProperty1D(b, layer.animTransform.opacity.isAnimated,
@@ -105,24 +105,20 @@ object ProjectCodec {
         val value = b.createString(text.source.staticValue)
         val document=text.source.document?.let { TextSourceDocumentCodec.encode(b,it) } ?: 0
         val source = fluxx.schema.AnimatableString.createAnimatableString(b, text.source.isAnimated, value, stringKeys, document)
-        val sizes = text.size.keyframes.map { fluxx.schema.Keyframe1D.createKeyframe1D(b, it.timeUs, it.value,
-            (if (it.easing == EasingPreset.LINEAR) 0 else 1).toByte()) }.toIntArray()
+        val sizes = text.size.keyframes.map { EasingWire.key1D(b, it) }.toIntArray()
         val sizeKeys = fluxx.schema.AnimatableProperty1D.createKeyframesVector(b, sizes)
         val size = fluxx.schema.AnimatableProperty1D.createAnimatableProperty1D(b, text.size.isAnimated, text.size.staticValue, sizeKeys)
-        val colours = text.fill.keyframes.map { fluxx.schema.ColourKeyframe.createColourKeyframe(b, it.timeUs, it.argb,
-            (if (it.easing == EasingPreset.LINEAR) 0 else 1).toByte()) }.toIntArray()
+        val colours = text.fill.keyframes.map { EasingWire.colourKey(b, it) }.toIntArray()
         val colourKeys = fluxx.schema.AnimatableColour.createKeyframesVector(b, colours)
         val fill = fluxx.schema.AnimatableColour.createAnimatableColour(b, text.fill.isAnimated, text.fill.staticValue, colourKeys)
         val font = b.createString(text.fontId)
         fun scalar(p: AnimatableProperty1D): Int {
-            val keys = p.keyframes.map { fluxx.schema.Keyframe1D.createKeyframe1D(b, it.timeUs, it.value,
-                (if (it.easing == EasingPreset.LINEAR) 0 else 1).toByte()) }.toIntArray()
+            val keys = p.keyframes.map { EasingWire.key1D(b, it) }.toIntArray()
             val vector = fluxx.schema.AnimatableProperty1D.createKeyframesVector(b, keys)
             return fluxx.schema.AnimatableProperty1D.createAnimatableProperty1D(b, p.isAnimated, p.staticValue, vector)
         }
         fun colour(p: AnimatableColour): Int {
-            val keys = p.keyframes.map { fluxx.schema.ColourKeyframe.createColourKeyframe(b, it.timeUs, it.argb,
-                (if (it.easing == EasingPreset.LINEAR) 0 else 1).toByte()) }.toIntArray()
+            val keys = p.keyframes.map { EasingWire.colourKey(b, it) }.toIntArray()
             val vector = fluxx.schema.AnimatableColour.createKeyframesVector(b, keys)
             return fluxx.schema.AnimatableColour.createAnimatableColour(b, p.isAnimated, p.staticValue, vector)
         }
@@ -144,8 +140,6 @@ object ProjectCodec {
                 .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
             return decoder.decode(buffer.duplicate()).toString().also(TextLimits::validateSource)
         }
-        fun easing(value: Byte): EasingPreset { require(value.toInt() in 0..1) { "Unsupported text easing" }
-            return if (value.toInt() == 0) EasingPreset.LINEAR else EasingPreset.EASY_EASE }
         val source = payload.source?.let { p ->
             count(p.keyframesLength)
             val value=source(p.staticValueAsByteBuffer)
@@ -157,25 +151,25 @@ object ProjectCodec {
         val size = payload.size?.let { p ->
             count(p.keyframesLength)
             val keys = (0 until p.keyframesLength).map { val k = requireNotNull(p.keyframes(it))
-                Keyframe1D(k.timeUs, TextLimits.decodeSize(k.value), easing(k.easing)) }
+                EasingWire.key1D(k, version, false, TextLimits.decodeSize(k.value)) }
             TextLimits.ordered(keys.map { it.timeUs })
             AnimatableProperty1D(p.isAnimated, TextLimits.decodeSize(p.staticValue), FrozenList.of(keys))
         } ?: AnimatableProperty1D(staticValue = 72f)
         val fill = payload.fill?.let { p ->
             count(p.keyframesLength)
             AnimatableColour(p.isAnimated, p.staticValue, FrozenList.of((0 until p.keyframesLength).map {
-                val k = requireNotNull(p.keyframes(it)); ColourKeyframe(k.timeUs, k.argb, easing(k.easing)) }))
+                EasingWire.colourKey(requireNotNull(p.keyframes(it)), version) }))
         } ?: AnimatableColour()
         fun scalar(p: fluxx.schema.AnimatableProperty1D?): AnimatableProperty1D {
             if (p == null) return AnimatableProperty1D()
             count(p.keyframesLength)
             return AnimatableProperty1D(p.isAnimated, p.staticValue, FrozenList.of((0 until p.keyframesLength).map {
-                val k = requireNotNull(p.keyframes(it)); Keyframe1D(k.timeUs, k.value, easing(k.easing)) }))
+                EasingWire.key1D(requireNotNull(p.keyframes(it)), version, false) }))
         }
         val stroke = payload.strokeColour?.let { p ->
             count(p.keyframesLength)
             AnimatableColour(p.isAnimated, p.staticValue, FrozenList.of((0 until p.keyframesLength).map {
-                val k = requireNotNull(p.keyframes(it)); ColourKeyframe(k.timeUs, k.argb, easing(k.easing)) }))
+                EasingWire.colourKey(requireNotNull(p.keyframes(it)), version) }))
         } ?: AnimatableColour(staticValue = 0xff000000.toInt())
         // This additive loader permanently accepts v9 defaults and v10 tracks, including after F2/v11.
         return TextProperties(source, size, fill, payload.fontId ?: "fluxx.sans",
@@ -230,7 +224,7 @@ object ProjectCodec {
             val posProp = if (animPos != null) {
                 val kfs = (0 until animPos.keyframesLength).mapNotNull { idx ->
                     animPos.keyframes(idx)?.let { k ->
-                        Keyframe2D(k.timeUs, k.x, k.y, if (k.easing.toInt() == 0) EasingPreset.LINEAR else EasingPreset.EASY_EASE)
+                        EasingWire.key2D(k, p.version, true)
                     }
                 }
                 AnimatableProperty2D(animPos.isAnimated, animPos.staticX, animPos.staticY, FrozenList.of(kfs.associateBy { it.timeUs }.values.sortedBy { it.timeUs }))
@@ -242,7 +236,7 @@ object ProjectCodec {
             val scaleProp = if (animScale != null) {
                 val kfs = (0 until animScale.keyframesLength).mapNotNull { idx ->
                     animScale.keyframes(idx)?.let { k ->
-                        Keyframe2D(k.timeUs, k.x, k.y, if (k.easing.toInt() == 0) EasingPreset.LINEAR else EasingPreset.EASY_EASE)
+                        EasingWire.key2D(k, p.version, true)
                     }
                 }
                 AnimatableProperty2D(animScale.isAnimated, animScale.staticX, animScale.staticY, FrozenList.of(kfs.associateBy { it.timeUs }.values.sortedBy { it.timeUs }))
@@ -254,7 +248,7 @@ object ProjectCodec {
             val rotProp = if (animRot != null) {
                 val kfs = (0 until animRot.keyframesLength).mapNotNull { idx ->
                     animRot.keyframes(idx)?.let { k ->
-                        Keyframe1D(k.timeUs, k.value, if (k.easing.toInt() == 0) EasingPreset.LINEAR else EasingPreset.EASY_EASE)
+                        EasingWire.key1D(k, p.version, true)
                     }
                 }
                 AnimatableProperty1D(animRot.isAnimated, animRot.staticValue, FrozenList.of(kfs.associateBy { it.timeUs }.values.sortedBy { it.timeUs }))
@@ -266,7 +260,7 @@ object ProjectCodec {
             val opProp = if (animOp != null) {
                 val kfs = (0 until animOp.keyframesLength).mapNotNull { idx ->
                     animOp.keyframes(idx)?.let { k ->
-                        Keyframe1D(k.timeUs, k.value, if (k.easing.toInt() == 0) EasingPreset.LINEAR else EasingPreset.EASY_EASE)
+                        EasingWire.key1D(k, p.version, true)
                     }
                 }
                 AnimatableProperty1D(animOp.isAnimated, animOp.staticValue, FrozenList.of(kfs.associateBy { it.timeUs }.values.sortedBy { it.timeUs }))
