@@ -4,6 +4,11 @@
 
 Local branch `tlp`, created from `master` at `2377a83` (after the graph merge). **Not pushed, not merged.**
 
+**Status:** T0–T5 implemented in source. T6: the eyedropper is done; the coverage highlight was skipped (questions in §T6).
+- **JVM:** 621 / 621 in one full run (46 s).
+- **A16:** `TlpUiTest` **not run to a result**. The phone's screen was off, so the preview surface never appeared and all three tests timed out in setup (`host()`), before any TLP code ran (§Tests).
+- **Phone acceptance:** pending.
+
 ## T0. Selection architecture (written before the code)
 
 ### Audit: every use of `selectedLayerId` today
@@ -166,3 +171,38 @@ Local branch `tlp`, created from `master` at `2377a83` (after the graph merge). 
   3. **Style:** a per-character box, an underline, or a tint over the glyphs? Monochrome like the rest of the UI?
   4. **Several selectors** (Add / Subtract / Intersect modes): the combined coverage, or the focused selector's alone?
 - Excluded as asked: the landscape layout and the Interface size setting.
+
+## Tests
+
+- **JVM** (Gradle 9.7.1): **621 / 621**, one full run, 46 s wall. That is the 600 of Stage 1 plus 21 new: `TlpSelectionTest` 5, `TlpMultiLayerTest` 6, `HiddenLayerTest` 4, `TlpKeyTest` 6.
+- **A16, `TlpUiTest`** (new; the real `EditorScreen` with a fixture composition):
+  - **Run:** one invocation, 48 s wall, 3 / 3 failed in setup: `ComposeTimeoutException` in `host()` waiting for the preview surface.
+  - **Cause:** a screencap showed the screen off (all black). It is environmental, not a TLP failure: no TLP assertion ran.
+  - **Not re-run:** waking the phone needs an input event, which is outside the allowed adb use, so re-running would only repeat the timeout.
+  - **To run it with the screen on:** `adb shell am instrument -w -r -e class com.fluxx.android.ui.TlpUiTest com.fluxx.android.debug.test/androidx.test.runner.AndroidJUnitRunner`. The debug and test APKs with this branch are already installed (`install -r`).
+- **What `TlpUiTest` covers:**
+  - D-button geometry (56 × 28dp on the left edge), states and fade stops; outside the mode the eye toggles one layer.
+  - Long-press entry; add by D-button and by body; bulk eye (one undo); remove by body and by long-press; the empty-space exit without a seek; selection not in history.
+  - The bottom bar never moves or resizes the timeline, and matches the top bar's width with 48dp height.
+  - Odd / Even / Select all, and Back.
+- **Crash buffer:** empty (read with `-d`).
+
+## Not verified
+
+- Every TLP device behaviour (`TlpUiTest` did not run; see above).
+- Haptics, TalkBack, and real-finger feel: D-button long-press, double tap on keys, the single-tap seek delay that the double-tap detector adds.
+- Device memory and decoder / texture release timing for hidden layers.
+- The key bottom bar overlaying the inspector's bottom 48dp (layout to check on the phone).
+- The animator-colour eyedropper on the phone.
+
+## Phone test list
+
+1. Long-press a layer's D-button: selection mode, the accent bars appear, and the inspector closes. Tap other D-buttons and bodies to add; tap a selected body to remove; tap empty track space to exit (the playhead must not move).
+2. With several selected, tap a selected eye: all hide or show together; one Undo restores.
+3. Hold-drag a selected clip: all selected clips move together by whole frames; one Undo.
+4. Bottom bar: Trim / Move with mixed layers ("Skipped N layers"); Stagger 5 and Sequence (gap 0, 10, −15; Reverse).
+5. Top bar: Odd / Even, Select all, Trash (one Undo), Back.
+6. 6th icon: no selection (Select all, Paste); selection mode (Duplicate, Duplicate ×3, Copy, Paste keeps timing and stacking, Invert).
+7. Hide a video layer: playback stays smooth; toggle it quickly off and on (no stutter); export without it.
+8. Property page open: double-tap keys to select, tap to toggle, Select all / Odd / Even / Trash, Hold / Linear / Easy Ease / More, Stagger 4, Sequence; Copy keys, move the playhead, Paste keys.
+9. Animate tab → a Fill colour animator → colour popover → eyedropper.
