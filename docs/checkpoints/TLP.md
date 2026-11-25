@@ -89,3 +89,23 @@ Local branch `tlp`, created from `master` at `2377a83` (after the graph merge). 
   - **Limit:** the release happens on the next rendered frame after the 3 s, not on a timer. A paused, untouched preview keeps the resource until something renders. `PreviewController` is frozen, so no timer was added there.
 - **Hidden layers stay** in the timeline, undo and the saved file, and can be selected and edited (JVM).
 - Tests: `HiddenLayerTest`. **Device memory was not measured** (not verified).
+
+## T3. Layer selection bars and move together
+
+- **Top bar** (`SelectionTopBar`, `ui/editor/SelectionBars.kt`) replaces the editor top bar in selection mode. It is accent-filled (`primary` / `onPrimary`), 48dp.
+  - **Back:** exits selection mode, never the project. System Back also exits the mode first.
+  - **Title:** "N layers selected".
+  - **Group:** a non-modal popover with Precompose, Group and mask and Group and exclude, all disabled placeholders.
+  - **Select all:** timeline order.
+  - **Odd / Even:** a popover with Select Odd (positions 1, 3, 5 …) and Select Even (2, 4, 6 …), counted from the top over all layers. It replaces the selection.
+  - **Trash:** deletes the selected layers in one `Batch`, one undo. The single-layer delete has no confirmation, so neither does this.
+- **Bottom bar** (`SelectionBottomBar`) is an overlay above the timeline, aligned to the bottom, with the top bar's height and width.
+  - **Layout:** it does not resize the timeline. The timeline gets the same extra bottom scroll padding (`TimelineView(extraBottomPadding)`).
+  - **Contents:** the primary layer's contextual trim / move set at the playhead (`ClipQuickActions.available`), then Stagger and Sequence (enabled in T4).
+  - **Trim / move:** applies to every selected layer where that action is valid in its own context (one `Batch`). A brief "Skipped N layers" toast names the rest.
+- **Inspector:** closes on entering selection mode, and timeline taps no longer open it while in the mode. Clip options are ignored in the mode. On exit it stays closed.
+- **Move together** (`MultiLayerEdits.moveTogether`): a hold-drag on a selected layer previews `Batch(Move …)` for every selected layer.
+  - **Gesture:** the same begin / preview / commit / cancel calls, previews built from the drag's base project. One undo. **No gesture-protocol change.**
+  - **Offsets:** the delta is whole frames, clamped so the earliest selected clip stays at ≥ 0. Frame-aligned starts keep exact relative offsets.
+  - **Unselected layer:** a hold-drag on one in the mode moves that layer alone and does not change the selection.
+- Icons added to the family: `GROUP`, `ODD_EVEN`, `STAGGER`, `SEQUENCE`. Tests: `TlpMultiLayerTest` (JVM).

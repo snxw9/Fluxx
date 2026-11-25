@@ -172,6 +172,8 @@ fun TimelineView(
     onDTap: (Long, com.fluxx.android.editor.DZone) -> Unit = { id, zone ->
         if (zone == com.fluxx.android.editor.DZone.EYE) project.composition.layers.firstOrNull { it.id == id }?.let { onToggleVisibility(id, !it.visible) } },
     onDLongPress: (Long) -> Unit = {},
+    /** TLP T3: extra bottom scroll padding under the last row (the selection bar overlays the timeline, never resizing it). */
+    extraBottomPadding: Dp = 0.dp,
     modifier: Modifier = Modifier
 ) {
     val comp = project.composition
@@ -439,7 +441,7 @@ fun TimelineView(
                                 state = verticalScrollState,
                                 modifier = Modifier.fillMaxSize(),
                                 verticalArrangement = Arrangement.spacedBy(TRACK_GAP_DP.dp),
-                                contentPadding = PaddingValues(bottom = bottomPadding)
+                                contentPadding = PaddingValues(bottom = bottomPadding + extraBottomPadding)
                             ) {
                                 items(sortedLayers, key = { it.id }) { layer ->
                                     val isDragging = layer.id == reorder.draggingId
@@ -487,7 +489,8 @@ fun TimelineView(
                                         onPreviewGesture = onPreviewGesture,
                                         onCommitGesture = commitEdit,
                                         onCancelGesture = cancelEdit,
-                                        onOptionsClick = { onOpenClipOptions(layer.id) }
+                                        onOptionsClick = { onOpenClipOptions(layer.id) },
+                                        groupSelection = selection?.takeIf { layer.id in it }
                                     )
                                 }
 
@@ -750,6 +753,8 @@ private fun TimelineClipRow(
     onCommitGesture: () -> Unit,
     onCancelGesture: () -> Unit,
     onOptionsClick: () -> Unit,
+    /** TLP T3: the selection when this layer is part of it (a hold-drag then moves every selected layer). */
+    groupSelection: com.fluxx.android.editor.LayerSelection? = null,
     modifier: Modifier = Modifier
 ) {
     val currentLayer by rememberUpdatedState(layer)
@@ -774,13 +779,18 @@ private fun TimelineClipRow(
     val moveEdge by rememberUpdatedState(onMoveEdge)
     val selectMarker by rememberUpdatedState(onMarkerSelect)
     var moveBase by remember { mutableStateOf<CompositionLayer?>(null) }
+    var moveProject by remember { mutableStateOf<ProjectDocument?>(null) }
+    val group by rememberUpdatedState(groupSelection)
+    val currentProject by rememberUpdatedState(project)
     var movePixels by remember { mutableFloatStateOf(0f) }
     var moveScrollOrigin by remember { mutableStateOf(0) }
     var labelRootX by remember { mutableFloatStateOf(0f) }
     fun previewMove() {
         val base = moveBase ?: return
         val delta = ((movePixels + currentScroll - moveScrollOrigin) / pxPerUs).roundToLong()
-        preview(TimelineEdits.move(project, base, base.timing.startUs + delta))
+        // TLP T3: a selected layer moves the whole selection by the same frames (one Batch of Move, same gesture calls).
+        val together = group?.let { g -> moveProject?.let { p -> com.fluxx.android.editor.MultiLayerEdits.moveTogether(p, g, delta) ?: EditorAction.Batch(emptyList()) } }
+        preview(together ?: TimelineEdits.move(project, base, base.timing.startUs + delta))
     }
     LaunchedEffect(scrollOffsetPx) { if (moveBase != null) previewMove() }
     DisposableEffect(layer.id) { onDispose { if (moveBase != null) { moveEdge(null); cancel() } } }
@@ -915,7 +925,7 @@ private fun TimelineClipRow(
                 .pointerInput(layer.id, pxPerUs) {
                     detectDragGesturesAfterLongPress(
                         onDragStart = { point ->
-                            moveBase = currentLayer; movePixels = 0f; moveScrollOrigin = currentScroll
+                            moveBase = currentLayer; moveProject = currentProject; movePixels = 0f; moveScrollOrigin = currentScroll
                             selectForDrag(); begin(); moveEdge(labelRootX + point.x)
                         },
                         onDragEnd = { previewMove(); moveBase = null; moveEdge(null); commit() },

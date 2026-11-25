@@ -56,6 +56,49 @@ object MultiLayerEdits {
         val edits = layers(project, selection).filter { it.visible != target }.map { EditorAction.SetVisibility(it.id, target) }
         return edits.takeIf { it.isNotEmpty() }?.let { EditorAction.Batch(it) }
     }
+
+    /**
+     * T3 move together: every selected layer moves by the same number of FRAMES, so relative offsets are kept exactly.
+     * [deltaUs] is the drag's raw delta; it becomes whole frames on the composition grid, clamped so the earliest selected
+     * clip never goes before 0. A start that is on a frame lands on a frame; any other start moves by the same µs.
+     * Built from the gesture's [base] project (absolute starts), so each preview replaces the last. Null if nothing moves.
+     */
+    fun moveTogether(base: ProjectDocument, selection: LayerSelection, deltaUs: Long): EditorAction? {
+        val rate = base.composition.frameRate
+        val moving = layers(base, selection).filter { it.timing.durationUs != 0L }
+        if (moving.isEmpty()) return null
+        val earliest = moving.minBy { it.timing.startUs }
+        val fe = rate.nearestFrame(earliest.timing.startUs)
+        val df = (rate.nearestFrame((earliest.timing.startUs + deltaUs).coerceAtLeast(0)) - fe).coerceAtLeast(-fe)
+        if (df == 0L) return null
+        val shiftUs = rate.frameTimeUs(fe + df) - rate.frameTimeUs(fe)
+        return EditorAction.Batch(moving.map { l ->
+            val s = l.timing.startUs; val f = rate.nearestFrame(s)
+            val to = if (rate.frameTimeUs(f) == s) rate.frameTimeUs(f + df) else (s + shiftUs).coerceAtLeast(0)
+            EditorAction.Move(l.id, to)
+        })
+    }
+
+    /** T3: the contextual trim / move set is the PRIMARY layer's ([ClipQuickActions.available] at the playhead). */
+    fun quickSet(project: ProjectDocument, selection: LayerSelection, playheadUs: Long): List<ClipQuickAction> {
+        val primary = selection.primary?.let { id -> project.composition.layers.firstOrNull { it.id == id } } ?: return emptyList()
+        return ClipQuickActions.available(primary, playheadUs)
+    }
+
+    /** A multi-layer quick action: the Batch for every selected layer where [kind] is valid in its own context, and the count skipped. */
+    data class Applied(val action: EditorAction?, val skipped: Int)
+    fun quick(kind: ClipQuickAction, project: ProjectDocument, selection: LayerSelection, playheadUs: Long): Applied {
+        val edits = ArrayList<EditorAction>(); var skipped = 0
+        for (l in layers(project, selection)) {
+            val a = ClipQuickActions.action(kind, l, playheadUs, project.composition.durationUs)
+            if (a == null) skipped++ else edits += a
+        }
+        return Applied(edits.takeIf { it.isNotEmpty() }?.let { EditorAction.Batch(it) }, skipped)
+    }
+
+    /** T3 Trash: every selected layer, one undo (the single-layer delete has no confirmation, so neither does this). */
+    fun delete(selection: LayerSelection): EditorAction? =
+        selection.ids.map { EditorAction.Remove(it) }.takeIf { it.isNotEmpty() }?.let { EditorAction.Batch(it) }
 }
 
 /** TLP T1: the two zones of the D-button (left: the eye; right: the arrow). */

@@ -314,6 +314,25 @@ fun EditorScreen(
 
     Scaffold(
         topBar = {
+            val layerSel = editor.layerSelection
+            if (layerSel != null) {
+                // TLP T3: the selection top bar replaces the editor top bar; Back exits selection mode, not the project.
+                val all = editor.state.project.composition.layers
+                SelectionTopBar(if (layerSel.size == 1) "1 layer selected" else "${layerSel.size} layers selected",
+                    onBack = { editor.exitSelection() }) {
+                    BarPopoverIcon("GROUP", "Group", "sel-group", "selection-group") { _ ->
+                        PopoverRow("Precompose", enabled = false); PopoverRow("Group and mask", enabled = false); PopoverRow("Group and exclude", enabled = false)
+                    }
+                    BarIcon("SELECT_ALL", "Select all layers", testTag = "selection-select-all") { editor.setSelection(LayerOrder.all(all)) }
+                    BarPopoverIcon("ODD_EVEN", "Select odd or even layers", "sel-odd-even", "selection-odd-even") { close ->
+                        PopoverRow("Select Odd", testTag = "selection-odd") { editor.setSelection(LayerOrder.odd(editor.state.project.composition.layers)); close() }
+                        PopoverRow("Select Even", testTag = "selection-even") { editor.setSelection(LayerOrder.even(editor.state.project.composition.layers)); close() }
+                    }
+                    BarIcon("DELETE", "Delete the selected layers", testTag = "selection-delete") {
+                        MultiLayerEdits.delete(layerSel)?.let { applyLayerAction(it) }
+                    }
+                }
+            } else
             EditorTopBar(
                 projectName = projectName,
                 onProjectNameChange = { projectName = it },
@@ -542,6 +561,7 @@ fun EditorScreen(
                     },
                     onDismissInspector = { dismissInspector() },
                     selection = editor.layerSelection,
+                    extraBottomPadding = if (editor.selectionMode) SelectionBarHeight else 0.dp,
                     onDTap = { id, zone -> selectionEffect(DButtonRules.tap(editor.selectionMode, editor.layerSelection?.contains(id) == true, zone), id) },
                     onDLongPress = { id -> selectionEffect(DButtonRules.longPress(editor.selectionMode, editor.layerSelection?.contains(id) == true), id) },
                     onSelectLayer = { id ->
@@ -593,7 +613,7 @@ fun EditorScreen(
                         if (id != null) editor.cancelGesture(id)
                         previewController?.update(editor.state.project, playheadUs, false)
                     },
-                    onOpenClipOptions = { id ->
+                    onOpenClipOptions = { id -> if (editor.selectionMode) return@TimelineView
                         editor.dispatch(EditorAction.Select(id))
                         inspectorSheetVisible = true
                     },
@@ -601,6 +621,25 @@ fun EditorScreen(
                         .fillMaxWidth()
                         .weight(1f)
                 )
+            }
+
+            // TLP T3: the selection bottom bar overlays the timeline (it never resizes it; the timeline has the same bottom
+            // scroll padding). The primary layer's trim / move set at the playhead, then Stagger and Sequence (T4).
+            editor.layerSelection?.let { layerSel ->
+                SelectionBottomBar(Modifier.align(Alignment.BottomCenter)) {
+                    val doc = editor.state.project
+                    for (kind in MultiLayerEdits.quickSet(doc, layerSel, editor.state.playheadUs)) {
+                        val applied = MultiLayerEdits.quick(kind, doc, layerSel, editor.state.playheadUs)
+                        BarIcon(kind.name, kind.label, enabled = applied.action != null, testTag = "selection-quick-${kind.name}") {
+                            val now = MultiLayerEdits.quick(kind, editor.state.project, layerSel, editor.state.playheadUs)
+                            now.action?.let { applyLayerAction(it) }
+                            if (now.skipped > 0) android.widget.Toast.makeText(context, "Skipped ${now.skipped} layer${if (now.skipped == 1) "" else "s"}",
+                                android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    BarIcon("STAGGER", "Stagger the selected layers", enabled = false, testTag = "selection-stagger") {}
+                    BarIcon("SEQUENCE", "Sequence the selected layers", enabled = false, testTag = "selection-sequence") {}
+                }
             }
 
             // 4. Layer Inspector Panel (overlay docked at bottom over timeline, preventing workspace resizing)

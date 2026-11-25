@@ -293,6 +293,11 @@ internal object InspectorIcons {
         put("EXPANDED", p().line(5f, 9f, 12f, 16f, 19f, 9f).build())
         // TLP T1: the D-button's arrow (an open chevron toward the timeline; expands the layer in TL3).
         put("ARROW", p().line(9.5f, 5f, 16.5f, 12f, 9.5f, 19f).build())
+        // TLP T3/T4 selection bars: group (overlapping boxes), odd / even (alternate rows), stagger (offset bars), sequence (boxes end to end).
+        put("GROUP", p().rect(3f, 8f, 11f, 11f, 2.5f).rect(10f, 5f, 11f, 11f, 2.5f).build())
+        put("ODD_EVEN", p().rect(4f, 4f, 16f, 4.5f, 2f).line(6f, 12f, 18f, 12f).rect(4f, 15.5f, 16f, 4.5f, 2f).build())
+        put("STAGGER", p().line(4f, 6f, 10f, 6f).line(9f, 12f, 15f, 12f).line(14f, 18f, 20f, 18f).build())
+        put("SEQUENCE", p().rect(2.5f, 9f, 6f, 6f, 2f).rect(9f, 9f, 6f, 6f, 2f).rect(15.5f, 9f, 6f, 6f, 2f).build())
         // TEXT F3.2: axis glyphs at the start of each two-axis slider row (Position, Anchor point, Scale X/Y).
         put("AXIS_X", p().line(7f, 7f, 17f, 17f).line(17f, 7f, 7f, 17f).build())
         put("AXIS_Y", p().line(7f, 6f, 12f, 12f).line(17f, 6f, 12f, 12f).line(12f, 12f, 12f, 18f).build())
