@@ -301,7 +301,7 @@ fun TimelineView(
                             if (event.changes.count { it.pressed } >= 2 && !editing) {
                                 pinching = true
                                 val zoom = event.calculateZoom()
-                                if (zoom.isFinite()) pxPerSecond = (pxPerSecond * zoom).coerceIn(12f, 2400f)
+                                if (zoom.isFinite()) pxPerSecond = com.fluxx.android.editor.TimelineZoom.clamp(pxPerSecond * zoom)
                             }
                             // Keep ownership until both fingers lift; don't finish with a one-finger seek.
                             if (pinching) event.changes.forEach { it.consume() }
@@ -645,7 +645,8 @@ private fun TimelineRuler(
                     val targetUs = (offset.x / pxPerUs).toLong().coerceIn(0L, durationUs)
                     val marker = markers.filter { it.timeUs <= durationUs }
                         .minByOrNull { abs(it.timeUs * pxPerUs - offset.x) }
-                    if (marker != null && abs(marker.timeUs * pxPerUs - offset.x) <= 18.dp.toPx()) selectMarker(marker)
+                    // GRAPH G4.2: a 48dp target (24dp each side); the nearest marker wins.
+                    if (marker != null && abs(marker.timeUs * pxPerUs - offset.x) <= (com.fluxx.android.editor.TimelineHits.TARGET_DP / 2f).dp.toPx()) selectMarker(marker)
                     else seek(frameRate.snap(targetUs).coerceAtMost(durationUs))
                 }
             }) {
@@ -863,29 +864,11 @@ private fun TimelineClipRow(
                 }
             }
 
-            // Center: Clip Name / Label & Drag Move
+            // Center: Clip Name / Label (the tap / hold-drag target is the hit box below, at least 48dp wide)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 8.dp)
-                    .pointerInput(layer.id) {
-                        detectTapGestures { onSelect() }
-                    }
-                    .onGloballyPositioned { labelRootX = it.positionInRoot().x }
-                    .pointerInput(layer.id, pxPerUs) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = { point ->
-                                moveBase = currentLayer; movePixels = 0f; moveScrollOrigin = currentScroll
-                                selectForDrag(); begin(); moveEdge(labelRootX + point.x)
-                            },
-                            onDragEnd = { previewMove(); moveBase = null; moveEdge(null); commit() },
-                            onDragCancel = { moveBase = null; moveEdge(null); cancel() },
-                            onDrag = { change, amount ->
-                                change.consume(); movePixels += amount.x
-                                moveEdge(labelRootX + change.position.x); previewMove()
-                            }
-                        )
-                    },
+                    .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
                 val label = if (layer.type == LayerType.TEXT) layer.text.source.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs)
@@ -908,6 +891,36 @@ private fun TimelineClipRow(
             }
 
         }
+
+        // GRAPH G4.2: the clip's tap / hold-drag target, at least 48dp wide (centred on a narrower clip), so a clip that
+        // is a sliver at the zoom floor stays reachable. Keys and markers are drawn above it and win where they sit.
+        val hitBox = com.fluxx.android.editor.TimelineHits.clipBox(startDp.value, widthDp.value)
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .offset(x = hitBox.first.dp)
+                .width(hitBox.second.dp)
+                .height(TRACK_ROW_HEIGHT_DP.dp)
+                .testTag("timeline-clip-hit-${layer.id}")
+                .pointerInput(layer.id) {
+                    detectTapGestures { onSelect() }
+                }
+                .onGloballyPositioned { labelRootX = it.positionInRoot().x }
+                .pointerInput(layer.id, pxPerUs) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { point ->
+                            moveBase = currentLayer; movePixels = 0f; moveScrollOrigin = currentScroll
+                            selectForDrag(); begin(); moveEdge(labelRootX + point.x)
+                        },
+                        onDragEnd = { previewMove(); moveBase = null; moveEdge(null); commit() },
+                        onDragCancel = { moveBase = null; moveEdge(null); cancel() },
+                        onDrag = { change, amount ->
+                            change.consume(); movePixels += amount.x
+                            moveEdge(labelRootX + change.position.x); previewMove()
+                        }
+                    )
+                }
+        )
 
         // Keyframe Markers Container (unclipped, layered above clip body)
         val anim = layer.animTransform
@@ -941,18 +954,27 @@ private fun TimelineClipRow(
                     .width(widthDp)
                     .fillMaxHeight()
             ) {
+                // GRAPH G4.2: editable keys split overlapping 48dp targets at their midpoints (nearest wins), so keys
+                // that cluster when zoomed far out all stay reachable; quiet keys are display only.
+                val editableTimes = keyframeTimes.filter { it in 0L..durationUs && isSelected && (it in focusedTimes || movingFrom == it) }
+                    .map { if (movingFrom == it) movingTo ?: it else it }.sorted()
+                val editableXs = editableTimes.map { with(density) { (it * pxPerUs).toFloat().toDp().value } }
+                val editableSpans = com.fluxx.android.editor.TimelineHits.spans(editableXs, LayerKeyMarkers.HIT_WIDTH_DP / 2f)
                 for (kfTimeUs in keyframeTimes) {
                     if (kfTimeUs in 0L..durationUs) {
                         val editable = isSelected && (kfTimeUs in focusedTimes || movingFrom == kfTimeUs)
                         val displayTime = if (movingFrom == kfTimeUs) movingTo ?: kfTimeUs else kfTimeUs
                         val kfOffsetDp = with(density) { (displayTime * pxPerUs).toFloat().toDp() }
                         val isAtPlayhead = playheadUs == startUs + displayTime
+                        val span = if (editable) editableSpans.getOrNull(editableTimes.indexOf(displayTime)) else null
+                        val hitLeft = span?.start?.dp ?: (kfOffsetDp - (LayerKeyMarkers.HIT_WIDTH_DP / 2).dp)
+                        val hitWidth = span?.let { (it.endInclusive - it.start).dp } ?: LayerKeyMarkers.HIT_WIDTH_DP.dp
 
                         Box(
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
-                                .offset(x = kfOffsetDp - (LayerKeyMarkers.HIT_WIDTH_DP / 2).dp)
-                                .size(width = LayerKeyMarkers.HIT_WIDTH_DP.dp, height = TRACK_ROW_HEIGHT_DP.dp)
+                                .offset(x = hitLeft)
+                                .size(width = hitWidth, height = TRACK_ROW_HEIGHT_DP.dp)
                                 .then(if (editable) Modifier.pointerInput(kfTimeUs, startUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
                                     detectTapGestures(
                                         onTap = {
@@ -999,12 +1021,14 @@ private fun TimelineClipRow(
                                         }
                                     )
                                 } else Modifier),
-                            contentAlignment = Alignment.Center
+                            contentAlignment = Alignment.CenterStart
                         ) {
                             // Focused-property keys: full ink, normal size. Other properties: quiet (dimmed, smaller), display only.
                             // Centred on the bar midline, above the layer name, with a knock-out ring in the bar colour.
+                            // The diamond stays centred on its own x even when its hit span is cut short by a neighbour.
                             val marker = LayerKeyMarkers.Marker(kfTimeUs, editable)
-                            Canvas(modifier = Modifier.size(marker.sizeDp.dp).alpha(marker.alpha)) {
+                            Canvas(modifier = Modifier.offset(x = kfOffsetDp - hitLeft - (marker.sizeDp / 2f).dp)
+                                .size(marker.sizeDp.dp).alpha(marker.alpha)) {
                                 LayerKeyMarkers.diamond(diamondPath, size)
                                 drawPath(path = diamondPath, color = clipBgColor, style = knockoutStroke)
                                 if (isAtPlayhead) {

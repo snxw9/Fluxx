@@ -49,8 +49,10 @@ const val TIMELINE_DEFAULT_DP_PER_SECOND = 120f
 /**
  * One zoom level of the tiered ruler: majors every [period] timecode frames ([stepSeconds] of timecode), mids at
  * [midOffset], minors either every [minorEvery] frames (1 s step) or at [minorDivisions] equal parts of the step (zoomed out).
+ * [minorGap]: the fewest frames a minor may sit from a major or a mid (its own minimum pitch, GRAPH G4.2).
  */
-data class RulerLevel(val stepSeconds: Long, val period: Long, val mids: Boolean, val minorEvery: Long = 0, val minorDivisions: Int = 0) {
+data class RulerLevel(val stepSeconds: Long, val period: Long, val mids: Boolean, val minorEvery: Long = 0, val minorDivisions: Int = 0,
+    val minorGap: Long = 1) {
     val midOffset: Long get() = period / 2
     val minors: Boolean get() = minorEvery > 0 || minorDivisions > 0
 }
@@ -64,7 +66,7 @@ data class RulerLevel(val stepSeconds: Long, val period: Long, val mids: Boolean
  *   pitch is at least [MID_DP] (always, given the major minimum).
  * - MINOR (1 s step): every frame when the frame pitch is at least [MINOR_DP]; otherwise every Nth frame, N the smallest of
  *   [MINOR_EVERY] with a pitch of at least [MINOR_DP] (so the default zoom shows three tiers at every rate, 60 fps
- *   included). Zoomed out: a tenth of the step when that is at least [MINOR_DP], else a fifth, else none; each on the frame
+ *   included). Zoomed out: a tenth of the step when that is at least [MINOR_DP], else a quarter, else none; each on the frame
  *   `floor(k·period / divisions)` (the mid rule's rounding). Minors skip frames that are majors or mids.
  */
 object RulerTiers {
@@ -83,12 +85,24 @@ object RulerTiers {
         val s = STEPS_SECONDS.firstOrNull { it * nominal * pxPerFrame >= major } ?: STEPS_SECONDS.last()
         val period = s * nominal
         val mids = period / 2 > 0 && minOf(period / 2, period - period / 2) * pxPerFrame >= mid
+        // GRAPH G4.2: a minor closer than its minimum pitch to a major or mid is skipped (e.g. every 6th frame beside a mid
+        // on 15, or every 4th beside a 25 fps major), so no shown pair of ticks is ever closer than 3dp.
+        val gap = kotlin.math.ceil(minor / pxPerFrame - 1e-9).toLong().coerceAtLeast(1)
         if (s == 1L) {
             val every = if (pxPerFrame >= minor) 1L else MINOR_EVERY.firstOrNull { it < period && it * pxPerFrame >= minor } ?: 0L
-            return RulerLevel(s, period, mids, minorEvery = every)
+            return RulerLevel(s, period, mids, minorEvery = every, minorGap = gap)
         }
-        val divisions = when { period / 10.0 * pxPerFrame >= minor -> 10; period / 5.0 * pxPerFrame >= minor -> 5; else -> 0 }
-        return RulerLevel(s, period, mids, minorDivisions = divisions)
+        // GRAPH G4.2: tenths, else quarters (both contain the mid, so no minor sits closer than its own pitch to it).
+        // The ticks sit on floor(k·period / d), so the smallest gap is floor(period / d) frames: that is what must fit.
+        val divisions = when { period / 10 * pxPerFrame >= minor -> 10; period / 4 * pxPerFrame >= minor -> 4; else -> 0 }
+        return RulerLevel(s, period, mids, minorDivisions = divisions, minorGap = gap)
+    }
+
+    /** True when a minor at period offset [r] keeps its minimum pitch from the majors and the mid. */
+    private fun clear(r: Long, level: RulerLevel): Boolean {
+        val g = level.minorGap
+        if (r < g || level.period - r < g) return false
+        return !(level.mids && kotlin.math.abs(r - level.midOffset) < g)
     }
 
     /** The tier of the tick at timecode frame [timecodeFrame] (start frame + composition frame), or null for no tick. */
@@ -97,6 +111,7 @@ object RulerTiers {
         val r = Math.floorMod(timecodeFrame, p)
         if (r == 0L) return TickTier.MAJOR
         if (level.mids && r == level.midOffset) return TickTier.MID
+        if (!clear(r, level)) return null
         if (level.minorEvery > 0) return if (r % level.minorEvery == 0L) TickTier.MINOR else null
         val d = level.minorDivisions
         if (d > 0) {
@@ -111,8 +126,45 @@ object RulerTiers {
         val p = level.period
         val out = sortedSetOf(0L)
         if (level.mids) out += level.midOffset
-        if (level.minorEvery > 0) { var f = level.minorEvery; while (f < p) { out += f; f += level.minorEvery } }
-        if (level.minorDivisions > 0) for (k in 1 until level.minorDivisions) out += k * p / level.minorDivisions
+        if (level.minorEvery > 0) { var f = level.minorEvery; while (f < p) { if (clear(f, level)) out += f; f += level.minorEvery } }
+        if (level.minorDivisions > 0) for (k in 1 until level.minorDivisions) { val f = k * p / level.minorDivisions; if (f == level.midOffset && level.mids || clear(f, level)) out += f }
         return out.toLongArray()
     }
+}
+
+/**
+ * GRAPH G4.2: the timeline's pinch range (dp per second). The floor is low enough for a whole composition to fit on screen
+ * (a 10 minute composition is 300dp at the floor); the default ([TIMELINE_DEFAULT_DP_PER_SECOND]) is unchanged.
+ */
+object TimelineZoom {
+    const val MIN_DP_PER_SECOND = .5f
+    const val MAX_DP_PER_SECOND = 2400f
+    fun clamp(dpPerSecond: Float) = dpPerSecond.coerceIn(MIN_DP_PER_SECOND, MAX_DP_PER_SECOND)
+}
+
+/**
+ * GRAPH G4.2: touch targets that stay tappable when zoomed far out. Every target is [TARGET_DP] wide, centred on its x;
+ * where neighbours overlap, the boundary is their midpoint, so the NEAREST target wins and none swallows another.
+ */
+object TimelineHits {
+    const val TARGET_DP = 48f
+
+    /** Hit spans [left, right] (same units as [xs], which must be ascending) of targets [half] wide on each side. */
+    fun spans(xs: List<Float>, half: Float = TARGET_DP / 2f): List<ClosedFloatingPointRange<Float>> = xs.indices.map { i ->
+        val x = xs[i]
+        val left = if (i > 0) maxOf(x - half, (xs[i - 1] + x) / 2f) else x - half
+        val right = if (i < xs.lastIndex) minOf(x + half, (xs[i + 1] + x) / 2f) else x + half
+        left..maxOf(left, right)
+    }
+
+    /** The index of the target hit at [x], or null (nearest wins inside the spans). */
+    fun hit(xs: List<Float>, x: Float, half: Float = TARGET_DP / 2f): Int? =
+        spans(xs, half).indexOfFirst { x in it }.takeIf { it >= 0 }
+
+    /**
+     * A clip's hit box: at least [TARGET_DP] wide, centred on the clip when the clip is narrower, so a clip that is a
+     * sliver at the zoom floor stays reachable. Returns (left, width) in the units of the inputs.
+     */
+    fun clipBox(startX: Float, widthX: Float, minWidth: Float = TARGET_DP): Pair<Float, Float> =
+        if (widthX >= minWidth) startX to widthX else (startX + widthX / 2f - minWidth / 2f) to minWidth
 }
