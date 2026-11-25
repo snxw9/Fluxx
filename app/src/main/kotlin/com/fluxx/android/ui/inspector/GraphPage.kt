@@ -429,7 +429,10 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
                     val text = runCatching { clipboard.getClipEntry()?.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() }.getOrNull()
                     CubicBezierText.parse(text)?.let { edit(it) } } },
                 onReset = { edit(EasingCurve.EASY_EASE) }, showDot = library.showPlayheadDot,
-                onToggleDot = { libraryStore.update { it.copy(showPlayheadDot = !it.showPlayheadDot) } })
+                onToggleDot = { libraryStore.update { it.copy(showPlayheadDot = !it.showPlayheadDot) } },
+                // GRAPH G4.1: the selected (or playhead) Bounce / Elastic segment becomes plain keys, one undo.
+                convertEnabled = GraphConvert.enabled(layer, target, segment),
+                onConvert = { GraphConvert.action(layer, target, segment, frameRate)?.let { focus.clearFocus(); latestAction(it) } })
             // Centre: ONE rounded item (touchpad over values bar, type strip on its right edge), then the right column.
             // With the library open the strip and the pinned rail fold into the library column, which takes exactly their
             // combined width, so the touchpad and the values bar never move or resize.
@@ -494,7 +497,8 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
 @Composable private fun GraphLeftRail(tile: Float, curve: EasingCurve, onKey: Boolean, snap: Boolean, mirror: Boolean,
     onToggleKey: () -> Unit, onGraph: () -> Unit, onInvert: () -> Unit, onSnap: () -> Unit,
     smooth: Boolean, onSmooth: () -> Unit, onMirror: () -> Unit, onApplyAll: () -> Unit,
-    onCopy: () -> Unit, onPaste: () -> Unit, onReset: () -> Unit, showDot: Boolean, onToggleDot: () -> Unit) {
+    onCopy: () -> Unit, onPaste: () -> Unit, onReset: () -> Unit, showDot: Boolean, onToggleDot: () -> Unit,
+    convertEnabled: Boolean = false, onConvert: () -> Unit = {}) {
     val focus = LocalFocusManager.current
     val handles = curve.bezierOrNull() != null
     var tools by remember { mutableStateOf(false) }
@@ -533,6 +537,8 @@ private fun seconds(us: Long) = String.format(java.util.Locale.ROOT, "%.2fs", us
                 DropdownMenuItem(text = { Text("Copy cubic-bezier") }, enabled = handles, onClick = { menu = false; onCopy() }, modifier = Modifier.testTag("graph-menu-copy"))
                 DropdownMenuItem(text = { Text("Paste cubic-bezier") }, onClick = { menu = false; onPaste() }, modifier = Modifier.testTag("graph-menu-paste"))
                 DropdownMenuItem(text = { Text("Reset curve to Easy Ease") }, onClick = { menu = false; onReset() }, modifier = Modifier.testTag("graph-menu-reset"))
+                DropdownMenuItem(text = { Text("Convert to keys") }, enabled = convertEnabled, onClick = { menu = false; onConvert() },
+                    modifier = Modifier.testTag("graph-menu-convert"))
                 DropdownMenuItem(text = { Text("Show playhead dot") }, onClick = { menu = false; onToggleDot() },
                     trailingIcon = { Icon(InspectorIcons.icon(if (showDot) "EYE" else "EYE_OFF"), if (showDot) "On" else "Off", Modifier.size(InspectorIcons.INLINE), tint = TextPrimary) },
                     modifier = Modifier.testTag("graph-menu-dot").semantics { stateDescription = if (showDot) "On" else "Off" })
