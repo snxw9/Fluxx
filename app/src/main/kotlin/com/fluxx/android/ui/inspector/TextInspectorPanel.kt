@@ -522,7 +522,8 @@ import kotlinx.coroutines.delay
                         hit=hitSize,modifier=Modifier.fillMaxSize())
                     face==null->TextAnimatePage(layer,time,frameRate,compositionWidth,compositionHeight,animateState,finishing,palette,animateControls,
                         onAction=onAction,onValueBegin=onValueBegin,onPayloadPreview=onPayloadPreview,onFinish=onFinish,onCancel=onCancel,
-                        onMessage={message=it},metrics=AnimateMetrics(bodyHeight,bodyWidth,hitSize<48.dp),modifier=Modifier.fillMaxSize())
+                        onMessage={message=it},metrics=AnimateMetrics(bodyHeight,bodyWidth,hitSize<48.dp),modifier=Modifier.fillMaxSize(),
+                        sampleColour=sampleColour)
                     large->{
                         // Large font scales: labelled 3-column reflow of the same controls; whole rows page from a button.
                         val pitch=TextInspectorBudget.LABELLED_PITCH

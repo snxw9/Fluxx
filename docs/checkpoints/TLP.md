@@ -154,3 +154,15 @@ Local branch `tlp`, created from `master` at `2377a83` (after the graph merge). 
   - **Targets:** the same property kind only (otherwise disabled). Colour and Source Text keys are not copyable (no numeric value channels).
   - **Undo:** one `Batch`.
 - Tests: `TlpKeyTest` (JVM).
+
+## T6. Small leftovers
+
+- **Eyedropper in the animator colour popover: done.**
+  - **Record** (roadmap, TEXT F3 follow-up): "wire the existing eyedropper to Fill/Stroke colour animator properties".
+  - **Behaviour, matching the Edit Text colour picker:** the popover closes; the same preview sampler (`sampleColour`, the `onTextSampleColour` path in `EditorScreen`) runs; the release writes one animator colour edit (`TextAnimatorEdits.set`, one undo). A release outside the composition or Back changes nothing.
+- **On-preview selector coverage highlight: SKIPPED (ambiguous record).** The record is one line: "show which characters a selector covers on the preview, now that the Range strip is gone". Questions for you:
+  1. **When:** while the Animate tab is open, only while a selector (or its Range field) is focused, or always?
+  2. **Partial coverage:** a selector covers characters by an amount (0–100%, with Shape / Smoothness / Ease). Should the highlight show that amount (opacity or fill level), or only covered / not covered?
+  3. **Style:** a per-character box, an underline, or a tint over the glyphs? Monochrome like the rest of the UI?
+  4. **Several selectors** (Add / Subtract / Intersect modes): the combined coverage, or the focused selector's alone?
+- Excluded as asked: the landscape layout and the Interface size setting.

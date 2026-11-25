@@ -92,7 +92,9 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
 @Composable internal fun TextAnimatePage(layer: CompositionLayer, time: Long, frameRate: FrameRate, compositionWidth: Int, compositionHeight: Int,
     state: AnimatePageState, finishing: Boolean, palette: PaletteRepository?, controls: AnimateControls,
     onAction: (EditorAction) -> Unit, onValueBegin: () -> Unit, onPayloadPreview: (TextProperties) -> Unit,
-    onFinish: () -> Unit, onCancel: () -> Unit, onMessage: (String) -> Unit, metrics: AnimateMetrics, modifier: Modifier = Modifier) {
+    onFinish: () -> Unit, onCancel: () -> Unit, onMessage: (String) -> Unit, metrics: AnimateMetrics, modifier: Modifier = Modifier,
+    /** TLP T6: the preview eyedropper (the same sampler the Edit Text colour picker uses); null = no eyedropper. */
+    sampleColour: (((Int?) -> Unit) -> Unit)? = null) {
     val text = layer.text
     val local = Math.subtractExact(frameRate.snap(time), layer.resolvedKeyframeAnchorUs)
     val resolved = state.bars.resolve(text)
@@ -274,6 +276,9 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                                 onPreview = { c -> preview { t -> TextAnimatorEdits.set(t, address, local, argb = c) } }, onFinish = ::finish, onCancel = ::cancel,
                                 modifier = Modifier.testTag("animate-colour-picker"), name = spec.label.lowercase(), swatches = paletteSwatches(palette, TEXT_DEFAULT_SWATCHES),
                                 onReset = { commit { listOf(TextAnimatorEdits.reset(it, address, local)) } },
+                                // TLP T6: the eyedropper, as the main colour picker: close the popover, sample on the preview,
+                                // one edit on release (a release outside the composition, or Back, changes nothing).
+                                onEyedropper = sampleColour?.let { sample -> { close(); sample { c -> if (c != null) set(address, argb = c) } } },
                                 onSwatch = { c -> set(address, argb = TextColourEdit.swatch(argb, c)) })
                         }
                     }) { focus(address); popover = PopoverToggle.next(popover, key(address)) }
