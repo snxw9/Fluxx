@@ -19,7 +19,7 @@ class TimelineZoomFloorTest {
         assertTrue(600 * TimelineZoom.MIN_DP_PER_SECOND <= 320f)
     }
 
-    /** Majors are on timecode :00 of the chosen step, at least 12dp apart; mids and minors keep their minimum pitches. */
+    /** Majors are on timecode :00 of the chosen step, at least 12dp apart; mids and minors keep their own minimum pitches (G3.1 rule). */
     @Test fun rulerStepsKeepTheTierRulesAtEveryZoom() {
         val seen = sortedSetOf<Long>()
         for (rate in rates) {
@@ -33,8 +33,9 @@ class TimelineZoomFloorTest {
                 assertTrue("$rate $dp major pitch", level.period * s.pxPerFrame >= RulerTiers.MAJOR_DP * density - 1e-6)
                 if (level.mids) assertTrue(level.midOffset * s.pxPerFrame >= RulerTiers.MID_DP * density - 1e-6)
                 assertEquals(level.period / 2, level.midOffset)
-                val offsets = RulerTiers.offsets(level)
-                for (i in 1 until offsets.size) assertTrue("$rate $dp minor pitch", (offsets[i] - offsets[i - 1]) * s.pxPerFrame >= RulerTiers.MINOR_DP * density - 1e-6)
+                // Each tier keeps its own minimum pitch (the G3.1 rule: minor to minor, as TL1Test checks).
+                if (level.minorEvery > 0) assertTrue("$rate $dp minor pitch", level.minorEvery * s.pxPerFrame >= RulerTiers.MINOR_DP * density - 1e-6)
+                if (level.minorDivisions > 0) assertTrue("$rate $dp minor pitch", level.period.toDouble() / level.minorDivisions * s.pxPerFrame >= RulerTiers.MINOR_DP * density - 1e-6)
                 assertEquals(TickTier.MAJOR, RulerTiers.tier(0, level)); assertEquals(TickTier.MAJOR, RulerTiers.tier(level.period * 7, level))
                 dp *= 1.37f
             }

@@ -225,10 +225,15 @@ internal object SpeedFrame {
     }
     /**
      * GRAPH G4.3: after a library / type-strip / preset tap, the window to animate to: the segment-framed [home] when a
-     * handle of the new curve lies outside [vp] or within [EDGE] of an edge, else null (the window does not move).
+     * handle of the new curve lies outside [vp], or within [EDGE] of its top or bottom (speed); else null (the window does
+     * not move). In time only "outside" counts: the segment frame itself puts a handle with no influence at the segment's
+     * end, inside the 8% no-neighbour sliver, so a time-edge margin would re-frame every Linear tap.
      */
-    fun reframe(vp: ValueViewport, handles: List<Pair<Double, Double>>, home: ValueViewport?): ValueViewport? =
-        if (home != null && handles.isNotEmpty() && nearEdge(vp, handles) && home != vp) home else null
+    fun reframe(vp: ValueViewport, handles: List<Pair<Double, Double>>, home: ValueViewport?): ValueViewport? {
+        if (home == null || home == vp) return null
+        val needed = handles.any { (t, v) -> t < vp.t0 || t > vp.t1 || v < vp.v0 + EDGE * vp.valueSpan || v > vp.v1 - EDGE * vp.valueSpan }
+        return if (needed) home else null
+    }
     /** A dragged point clamped inside the (frozen) window. */
     fun clamp(vp: ValueViewport, t: Double, v: Double): Pair<Double, Double> = t.coerceIn(vp.t0, vp.t1) to v.coerceIn(vp.v0, vp.v1)
 }

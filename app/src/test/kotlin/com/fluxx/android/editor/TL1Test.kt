@@ -122,15 +122,13 @@ class TL1Test {
         fun at(r: FrameRate) = RulerTiers.level(r, TIMELINE_DEFAULT_DP_PER_SECOND * density / (r.numerator.toDouble() / r.denominator), density)
         assertEquals(1L, at(FrameRate(24, 1)).minorEvery); assertEquals(1L, at(FrameRate(30, 1)).minorEvery)
         assertEquals(2L, at(FrameRate(60, 1)).minorEvery); assertEquals(2L, at(FrameRate(60000, 1001)).minorEvery)
-        // Zoomed out at 30 fps: 10dp/s → 2 s majors (20dp), mid at 1 s (10dp), minors at quarters (5dp: tenths would be 2dp).
-        // GRAPH G4.2: quarters replace fifths, which never contain the mid (2/5 and 3/5 sit a tenth from it, under 3dp).
+        // Zoomed out at 30 fps: 10dp/s → 2 s majors (20dp), mid at 1 s (10dp), minors at fifths (4dp: tenths would be 2dp).
         val z = RulerTiers.level(FrameRate(30, 1), 10f * density / 30.0, density)
-        assertEquals(RulerLevel(2, 60, true, minorDivisions = 4), z.copy(minorGap = 1))
-        // 25 fps 5 s step (3dp/s): mid on floor(125 / 2) = 62; tenths would be 1.5dp, so minors on quarters (31, 62 = the mid, 93).
+        assertEquals(RulerLevel(2, 60, true, minorDivisions = 5), z)
+        // 25 fps 5 s step (3dp/s): mid on floor(125 / 2) = 62; tenths would be 1.5dp, so minors on fifths (25, 50, 75, 100).
         val q = RulerTiers.level(FrameRate(25, 1), 3f * density / 25.0, density)
         assertEquals(5L, q.stepSeconds); assertEquals(62L, q.midOffset)
-        assertEquals(4, q.minorDivisions); assertEquals(TickTier.MINOR, RulerTiers.tier(31, q)); assertEquals(TickTier.MINOR, RulerTiers.tier(93, q))
-        assertNull(RulerTiers.tier(25, q))
+        assertEquals(5, q.minorDivisions); assertEquals(TickTier.MINOR, RulerTiers.tier(25, q)); assertEquals(TickTier.MINOR, RulerTiers.tier(100, q))
         assertNull(RulerTiers.tier(12, q)); assertEquals(TickTier.MID, RulerTiers.tier(62, q))
     }
 

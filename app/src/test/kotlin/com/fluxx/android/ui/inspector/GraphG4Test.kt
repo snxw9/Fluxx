@@ -166,8 +166,10 @@ class GraphG43ReframeTest {
         assertEquals(home, SpeedFrame.reframe(vp, listOf(300_000.0 to 250.0, 700_000.0 to 40.0), home))
         // Within 10% of the bottom edge (−10 + 12 = 2): to the segment frame.
         assertEquals(home, SpeedFrame.reframe(vp, listOf(300_000.0 to 1.0, 700_000.0 to 40.0), home))
-        // Within 10% of a time edge.
-        assertEquals(home, SpeedFrame.reframe(vp, listOf(50_000.0 to 50.0), home))
+        // Time edges:
+        // Near a time edge but inside: no move (the frame puts zero-influence handles there); outside in time: move.
+        assertNull(SpeedFrame.reframe(vp, listOf(50_000.0 to 50.0), home))
+        assertEquals(home, SpeedFrame.reframe(vp, listOf(-1.0 to 50.0), home))
         // No handles (Bounce / Elastic / Hold) or already home: nothing.
         assertNull(SpeedFrame.reframe(vp, emptyList(), home))
         assertNull(SpeedFrame.reframe(home, listOf(0.0 to 1e9), home))
