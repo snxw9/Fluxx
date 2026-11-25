@@ -242,7 +242,7 @@ fun TimelineView(
     val durationUs = comp.resolvedDurationUs
 
     val density = LocalDensity.current
-    var pxPerSecond by remember { mutableFloatStateOf(120f) }
+    var pxPerSecond by remember { mutableFloatStateOf(com.fluxx.android.editor.TIMELINE_DEFAULT_DP_PER_SECOND) }
     val pxPerUs = (pxPerSecond * density.density) / 1_000_000.0
     // TL1: the one time <-> x mapping (frame x = round(frame x pxPerFrame)); ticks and the playhead's scroll both use it.
     val scale = remember(comp.frameRate, pxPerUs) { com.fluxx.android.editor.TimelineScale(comp.frameRate, pxPerUs) }
@@ -673,12 +673,13 @@ private fun TimelineRuler(
                 drawRect(if (major) tickColour else minorColour, topLeft = Offset((scale.frameX(frame) - w / 2).toFloat(), top),
                     size = androidx.compose.ui.geometry.Size(w.toFloat(), h))
             }
-            if (level.minors) { var f = firstFrame; while (f <= lastFrame) { tick(f); f++ } }
+            if (level.minorEvery == 1L) { var f = firstFrame; while (f <= lastFrame) { tick(f); f++ } }
             else {
-                // Only each period's major and mid: from the period boundary at or before the window.
+                // Each period's ticks only (major, mid, minors), from the period boundary at or before the window.
+                val offsets = com.fluxx.android.editor.RulerTiers.offsets(level)
                 var boundary = Math.floorDiv(firstFrame + startFrame, level.period) * level.period - startFrame
                 while (boundary <= lastFrame) {
-                    tick(boundary); if (level.mids) tick(boundary + level.midOffset)
+                    for (o in offsets) tick(boundary + o)
                     boundary += level.period
                 }
             }

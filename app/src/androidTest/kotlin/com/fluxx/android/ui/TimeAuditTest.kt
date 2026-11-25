@@ -181,15 +181,17 @@ class TimeAuditTest {
         host(rate, start)
         val log = StringBuilder("\nTL1 ${CompositionTimecode.frameRateLabel(rate)} fps, start ${start}us\n")
         val offsets = ArrayList<Float>()
-        for ((zoomName, factor) in listOf("default 120dp/s" to 1f, "zoomed in" to maxOf(2.2f, 7f * CompositionTimecode.nominal(rate) / 120f), "zoomed out" to .12f)) {
-            if (factor != 1f) zoom(factor)
+        // GRAPH G3.1: three tiers at the default zoom and at two zoomed-out levels (×0.12 ≈ 14dp/s; ×0.2 twice ≈ 4.8dp/s).
+        val states = listOf("default 120dp/s" to listOf(), "zoomed in" to listOf(maxOf(2.2f, 7f * CompositionTimecode.nominal(rate) / 120f)),
+            "zoomed out x0.12" to listOf(.12f), "zoomed out x0.04" to listOf(.2f, .2f))
+        for ((zoomName, factors) in states) {
+            for (f in factors) zoom(f)
             for (dx in listOf(-73.7f, -211.3f, 57.1f)) { scrub(dx); offsets += check(rate, start, log, "$zoomName scrub $dx") }
             val tiers = scan(rate, start, log, "$zoomName ${CompositionTimecode.frameRateLabel(rate)}")
-            // Zoomed in, minors and mids show (at 60 fps a second is wider than the screen, so a major may be off-window);
-            // at the default zoom majors and mids show.
+            // Zoomed in, a second can be wider than the screen (60 fps), so a major may be off-window.
             if (zoomName == "zoomed in") assertTrue("minors and mids when zoomed in: $tiers", TickTier.MINOR in tiers && TickTier.MID in tiers)
-            if (zoomName.startsWith("default")) assertTrue("majors and mids at 120dp/s: $tiers", TickTier.MAJOR in tiers && TickTier.MID in tiers)
-            if (factor != 1f) zoom(1f / factor)
+            else assertEquals("three tiers at $zoomName: $tiers", setOf(TickTier.MAJOR, TickTier.MID, TickTier.MINOR), tiers)
+            for (f in factors.reversed()) zoom(1f / f)
         }
         android.util.Log.d("TL1", log.toString())
         assertTrue(offsets.all { abs(it) <= .5f })

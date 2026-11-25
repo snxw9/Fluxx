@@ -9,6 +9,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -448,9 +449,13 @@ class GraphLibraryTest {
     @Test fun railReorderLiftsFollowsAndWritesOnce() {
         start()
         val p = store.state.value.pinned; val writes = store.writes
-        val rail = bounds("graph-pinned-rail"); val a = bounds("graph-pinned-${p[0]}"); val d = bounds("graph-pinned-${p[1]}")
-        // Outside both auto-scroll zones (the rail would scroll under the finger and the slot would run on).
-        android.util.Log.d("GraphG21", "rail ${rail.height}dp tall; target ${d.center.y - rail.top}dp from the top")
+        // GRAPH G3.1: start AND end outside both 56dp auto-scroll zones. The first item's centre is 20dp from the top, inside
+        // the top zone, so lifting it kept auto-scroll active for the whole drag and made the result timing-dependent.
+        val rail = bounds("graph-pinned-rail"); val a = bounds("graph-pinned-${p[1]}"); val d = bounds("graph-pinned-${p[2]}")
+        val zone = DragAutoScroll.EDGE_DP
+        assertTrue("start outside the zones", a.center.y - rail.top > zone && rail.bottom - a.center.y > zone)
+        assertTrue("end outside the zones", d.center.y - rail.top > zone && rail.bottom - d.center.y > zone)
+        fun railScroll() = compose.onNodeWithTag("graph-pinned-rail").fetchSemanticsNode().config.getOrNull(SemanticsProperties.VerticalScrollAxisRange)?.value?.invoke()
         compose.mainClock.autoAdvance = false
         val s0 = Offset(a.center.x - rail.left, a.center.y - rail.top)
         compose.onNodeWithTag("graph-pinned-rail").performTouchInput { down(s0 * density) }
@@ -460,11 +465,12 @@ class GraphLibraryTest {
         while (y < end) { y = minOf(end, y + 6f); val at = Offset(s0.x, y); compose.onNodeWithTag("graph-pinned-rail").performTouchInput { moveTo(at * density) }; compose.mainClock.advanceTimeBy(16) }
         compose.onNodeWithTag("graph-drag-lifted", useUnmergedTree = true).assertExists()
         compose.mainClock.advanceTimeBy(300)
+        assertEquals("the rail never scrolled under the finger", 0f, railScroll() ?: 0f, 0f)
         assertEquals(writes, store.writes)
         compose.onNodeWithTag("graph-pinned-rail").performTouchInput { up() }
         compose.mainClock.advanceTimeBy(300); compose.mainClock.autoAdvance = true; compose.waitForIdle()
         assertEquals(writes + 1, store.writes)
-        assertEquals("moved to slot 2: ${store.state.value.pinned}", 1, store.state.value.pinned.indexOf(p[0]))
+        assertEquals("moved to slot 3: ${store.state.value.pinned}", 2, store.state.value.pinned.indexOf(p[1]))
         assertEquals(1_234_567L, vm.state.playheadUs)
     }
 

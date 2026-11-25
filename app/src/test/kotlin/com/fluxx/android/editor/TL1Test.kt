@@ -71,33 +71,65 @@ class TL1Test {
         assertEquals(25L, RulerTiers.level(FrameRate(50, 1), 40.0 * density, density).midOffset)
     }
 
-    /** Zooming out: minors, then mids drop; majors step 1, 2, 5, 10, 30 s, … and are never closer than 12dp: no solid wall. */
-    @Test fun zoomAdaptationDropsTiersInOrder() {
+    /**
+     * GRAPH G3.1 density rules: majors ≥ 12dp (the step grows only when 1 s is under that), mids ≥ 5dp, minors ≥ 3dp (every
+     * frame, else every Nth frame, else tenths / fifths of a zoomed-out step). Never a solid wall: every shown pitch ≥ 3dp.
+     */
+    @Test fun zoomAdaptationKeepsThreeTiersWherePossible() {
         for (r in rates) {
             val n = CompositionTimecode.nominal(r)
-            var last = RulerLevel(1, n, true, true)
-            var sawMidsOff = false
-            for (dpPerSecond in listOf(2400f, 600f, 240f, 180f, 120f, 60f, 24f, 16f, 12f, 8f, 4f, 2f, 1f, .5f, .2f, .1f, .03f)) {
+            var lastStep = 1L
+            for (dpPerSecond in listOf(2400f, 600f, 240f, 180f, 120f, 90f, 60f, 24f, 16f, 12f, 8f, 4f, 2f, 1f, .5f, .2f, .1f, .03f)) {
                 val pxPerFrame = dpPerSecond * density / (r.numerator.toDouble() / r.denominator)
                 val l = RulerTiers.level(r, pxPerFrame, density)
-                // Tiers only ever drop or the step only grows as we zoom out.
-                assertTrue(l.stepSeconds >= last.stepSeconds); if (!last.minors) assertFalse(l.minors)
-                if (l.minors) assertTrue(pxPerFrame >= RulerTiers.MINOR_DP * density)
-                if (l.mids) assertTrue(l.midOffset * pxPerFrame >= RulerTiers.MID_DP * density)
-                if (!l.minors && l.stepSeconds < RulerTiers.STEPS_SECONDS.last()) assertTrue(l.period * pxPerFrame >= RulerTiers.MAJOR_DP * density)
-                if (!l.minors && !l.mids) sawMidsOff = true
-                last = l
+                assertTrue(l.stepSeconds >= lastStep); lastStep = l.stepSeconds
+                // Majors step up only when 1 s is under 12dp.
+                if (dpPerSecond >= RulerTiers.MAJOR_DP) assertEquals("$r $dpPerSecond", 1L, l.stepSeconds)
+                if (l.stepSeconds < RulerTiers.STEPS_SECONDS.last()) assertTrue(l.period * pxPerFrame >= RulerTiers.MAJOR_DP * density - 1e-6)
+                // Mids whenever their pitch is ≥ 5dp (with the major minimum, always).
+                val half = minOf(l.period / 2, l.period - l.period / 2) * pxPerFrame
+                assertEquals("$r $dpPerSecond mids", half >= RulerTiers.MID_DP * density, l.mids)
+                // Minors: every frame at ≥ 3dp, else the smallest N, else tenths / fifths; never denser than 3dp.
+                if (l.stepSeconds == 1L) {
+                    if (pxPerFrame >= RulerTiers.MINOR_DP * density) assertEquals(1L, l.minorEvery)
+                    else if (l.minorEvery > 0) {
+                        assertTrue(l.minorEvery * pxPerFrame >= RulerTiers.MINOR_DP * density)
+                        val smaller = RulerTiers.MINOR_EVERY.filter { it < l.minorEvery }
+                        assertTrue(smaller.all { it * pxPerFrame < RulerTiers.MINOR_DP * density })
+                    }
+                } else if (l.minorDivisions > 0) assertTrue(l.period.toDouble() / l.minorDivisions * pxPerFrame >= RulerTiers.MINOR_DP * density)
+                // Every tick sits on a frame and the drawn offsets agree with the classifier.
+                for (o in RulerTiers.offsets(l)) assertNotNull(RulerTiers.tier(o, l))
+                for (f in 0L until l.period) assertEquals(f in RulerTiers.offsets(l).toList(), RulerTiers.tier(f, l) != null)
             }
-            assertFalse(last.minors); assertTrue(last.stepSeconds >= 60); assertTrue(sawMidsOff)
         }
-        // The 30 fps sequence, explicitly.
-        val r = FrameRate(30, 1)
-        fun at(dp: Float) = RulerTiers.level(r, dp * density / 30.0, density)
-        assertEquals(RulerLevel(1, 30, true, true), at(240f))      // 8dp per frame: all frames
-        assertEquals(RulerLevel(1, 30, true, false), at(120f))     // 4dp per frame: minors hidden
-        assertEquals(RulerLevel(1, 30, false, false), at(14f))     // half a second 7dp: mids hidden
-        assertEquals(RulerLevel(2, 60, true, false), at(10f))      // 1 s 10dp < 12dp: majors every 2 s, mid at 1 s
-        assertEquals(RulerLevel(5, 150, true, false), at(4f))      // 2 s 8dp < 12dp: majors every 5 s (20dp), mid at 2.5 s (10dp)
+    }
+
+    /** At the default zoom (a new timeline) all three tiers are visible at every supported rate. */
+    @Test fun threeTiersAtTheDefaultZoomForEveryRate() {
+        for (r in rates) for (start in listOf(0L, 3_600_000_000L, 1_234_567L)) {
+            val pxPerFrame = TIMELINE_DEFAULT_DP_PER_SECOND * density / (r.numerator.toDouble() / r.denominator)
+            val l = RulerTiers.level(r, pxPerFrame, density)
+            assertEquals(1L, l.stepSeconds); assertTrue(l.mids); assertTrue("$r minors at the default zoom", l.minors)
+            val sf = CompositionTimecode.startFrame(start, r)
+            val tiers = (0L until 3 * l.period).mapNotNull { RulerTiers.tier(sf + it, l) }.toSet()
+            assertEquals(setOf(TickTier.MAJOR, TickTier.MID, TickTier.MINOR), tiers)
+            // Majors exactly where the readout shows :00.
+            for (f in 0L until 3 * l.period) if (RulerTiers.tier(sf + f, l) == TickTier.MAJOR)
+                assertEquals("00", CompositionTimecode.formatPlayhead(r.frameTimeUs(f), start, r).takeLast(2))
+        }
+        // The pitches at the default zoom (120dp/s): 24 fps 5dp per frame (every frame); 30 fps 4dp; 60 fps every 2nd frame (4dp).
+        fun at(r: FrameRate) = RulerTiers.level(r, TIMELINE_DEFAULT_DP_PER_SECOND * density / (r.numerator.toDouble() / r.denominator), density)
+        assertEquals(1L, at(FrameRate(24, 1)).minorEvery); assertEquals(1L, at(FrameRate(30, 1)).minorEvery)
+        assertEquals(2L, at(FrameRate(60, 1)).minorEvery); assertEquals(2L, at(FrameRate(60000, 1001)).minorEvery)
+        // Zoomed out at 30 fps: 10dp/s → 2 s majors (20dp), mid at 1 s (10dp), minors at fifths (4dp: tenths would be 2dp).
+        val z = RulerTiers.level(FrameRate(30, 1), 10f * density / 30.0, density)
+        assertEquals(RulerLevel(2, 60, true, minorDivisions = 5), z)
+        // 25 fps 5 s step (3dp/s): mid on floor(125 / 2) = 62; tenths would be 1.5dp, so minors on fifths (25, 50, 75, 100).
+        val q = RulerTiers.level(FrameRate(25, 1), 3f * density / 25.0, density)
+        assertEquals(5L, q.stepSeconds); assertEquals(62L, q.midOffset)
+        assertEquals(5, q.minorDivisions); assertEquals(TickTier.MINOR, RulerTiers.tier(25, q)); assertEquals(TickTier.MINOR, RulerTiers.tier(100, q))
+        assertNull(RulerTiers.tier(12, q)); assertEquals(TickTier.MID, RulerTiers.tier(62, q))
     }
 
     /** One frame → x function: ticks and the playhead's scroll agree for every frame at several zooms. */

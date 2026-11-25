@@ -180,3 +180,118 @@ internal object SmoothThroughKey {
             nb.t0 to EasingCurve.bezier(nbNew[0], nbNew[1], nbNew[2], nbNew[3])), e)
     }
 }
+
+/**
+ * GRAPH G3.1 §3: the Speed view's stable window. It frames the selected segment plus 30% of each neighbouring segment's
+ * duration on each side (8% of the segment where there is no neighbour), and in speed the curve over that window, 0, the
+ * average speed and both handles' speeds, with [HEADROOM] of the span added above and below. It is computed on entering
+ * the view, when the selected segment changes, on double-tap Fit, and never while the curve changes. After a drag
+ * ends, the window expands once if a handle is within [EDGE] of an edge.
+ */
+internal object SpeedFrame {
+    const val NEIGHBOUR = .3
+    const val NO_NEIGHBOUR = .08
+    const val HEADROOM = .35
+    const val EDGE = .1
+    /** The smallest speed span (display units/s) for a flat segment, so the plot never collapses. */
+    const val MIN_SPAN = 1.0
+
+    fun frame(segs: List<SpeedSegment>, index: Int): ValueViewport? {
+        val seg = segs.getOrNull(index) ?: return null
+        val dt = (seg.t1 - seg.t0).toDouble()
+        val left = segs.getOrNull(index - 1)?.let { NEIGHBOUR * (it.t1 - it.t0) } ?: (NO_NEIGHBOUR * dt)
+        val right = segs.getOrNull(index + 1)?.let { NEIGHBOUR * (it.t1 - it.t0) } ?: (NO_NEIGHBOUR * dt)
+        val t0 = seg.t0 - left; val t1 = seg.t1 + right
+        var lo = 0.0; var hi = 0.0
+        fun take(v: Double) { if (v.isFinite()) { lo = minOf(lo, v); hi = maxOf(hi, v) } }
+        val n = 240
+        for (i in 0..n) take(GraphSpeed.speedAt(segs, (t0 + (t1 - t0) * i / n).toLong()))
+        take(seg.rate)
+        seg.bezier?.let { b -> for (h in 0..1) take(SpeedHandles.speed(seg, b, h)) }
+        val span = maxOf(hi - lo, MIN_SPAN)
+        return ValueViewport(t0, t1, lo - span * HEADROOM, hi + span * HEADROOM)
+    }
+    /** A point (t, speed) lies within [EDGE] of the window's top or bottom (or left / right). */
+    fun nearEdge(vp: ValueViewport, points: List<Pair<Double, Double>>): Boolean = points.any { (t, v) ->
+        v < vp.v0 + EDGE * vp.valueSpan || v > vp.v1 - EDGE * vp.valueSpan || t < vp.t0 + EDGE * vp.timeSpan || t > vp.t1 - EDGE * vp.timeSpan }
+    /** The window grown (never shrunk) so every point has [HEADROOM] of the span between it and the edges. */
+    fun expand(vp: ValueViewport, points: List<Pair<Double, Double>>): ValueViewport {
+        var r = vp
+        for ((t, v) in points) {
+            val sv = r.valueSpan * HEADROOM; val st = r.timeSpan * EDGE * 2
+            r = ValueViewport(minOf(r.t0, t - st), maxOf(r.t1, t + st), minOf(r.v0, v - sv), maxOf(r.v1, v + sv))
+        }
+        return r
+    }
+    /** A dragged point clamped inside the (frozen) window. */
+    fun clamp(vp: ValueViewport, t: Double, v: Double): Pair<Double, Double> = t.coerceIn(vp.t0, vp.t1) to v.coerceIn(vp.v0, vp.v1)
+}
+
+/**
+ * GRAPH G3.1 §4: in the Speed view the handles cannot cross. With influences i0 (out) and i1 (in) they cross when
+ * i0 + i1 > 1. A dragged handle stops a [gap] (fraction of the segment) before the other one. A curve that STARTS crossed
+ * (e.g. the Back eases, x1 > x2) may only uncross: the dragged influence may not grow beyond its value at the drag's
+ * start. Typed influences are clamped the same way (not discarded).
+ */
+internal object SpeedCross {
+    const val GAP = .01
+    /** The largest influence handle [h] may take, from the curve [start] at the beginning of the drag (or entry). */
+    fun maxInfluence(start: FloatArray, h: Int, gap: Double = GAP): Double {
+        val own = SpeedHandles.influence(start, h); val other = SpeedHandles.influence(start, 1 - h)
+        val limit = if (own + other <= 1.0 + 1e-9) 1.0 - other - gap else own
+        return limit.coerceIn(SpeedHandles.INFLUENCE_MIN.toDouble(), 1.0)
+    }
+}
+
+/**
+ * GRAPH G3.1 §5: magnetic landmarks for a Speed view handle drag (under the Snap toggle; typed values never snap). Speed
+ * landmarks: 0, the average speed D/Δt, the other handle's speed and the neighbouring segment's speed at the same key. A
+ * flat segment has none. Influence landmarks: 33.3%, 50% and the other handle's influence. Each locks within [speedZone] /
+ * [influenceZone] (10dp on screen, converted by the caller), never more than 35% of the distance to the nearest other
+ * landmark, and releases beyond it. Outside every zone the existing snaps apply (influence 5%, speed the grid step).
+ * One instance per drag.
+ */
+internal class SpeedSnap(val speedLandmarks: List<Double>, val influenceLandmarks: List<Double>, speedZone: Double, influenceZone: Double,
+    private val grid: Double, private val onLock: () -> Unit = {}) {
+    private val speedMagnet = magnet(speedLandmarks, speedZone)
+    private val influenceMagnet = magnet(influenceLandmarks, influenceZone)
+    val lockedSpeed: Double? get() = speedMagnet?.locked?.toDouble()
+    val lockedInfluence: Double? get() = influenceMagnet?.locked?.toDouble()
+    fun speed(raw: Double): Double {
+        val m = speedMagnet
+        val out = m?.apply(raw.toFloat(), onLock)?.toDouble() ?: raw
+        if (m?.locked != null) return m.locked!!.toDouble()
+        return if (grid > 0) Math.round(out / grid) * grid else out
+    }
+    fun influence(raw: Double): Double {
+        val m = influenceMagnet
+        m?.apply(raw.toFloat(), onLock)
+        if (m?.locked != null) return m.locked!!.toDouble()
+        return Math.round(raw / .05) * .05
+    }
+    companion object {
+        const val ZONE_DP = 10f
+        const val MAX_ZONE_FRACTION = .35
+        private fun magnet(points: List<Double>, zone: Double): Magnet? {
+            val ls = points.filter { it.isFinite() }.distinctBy { Math.round(it * 1e6) }.sorted()
+            if (ls.isEmpty()) return null
+            fun zoneOf(l: Double): Double {
+                val others = ls.filter { it != l }.map { abs(it - l) }
+                return if (others.isEmpty()) zone else minOf(zone, MAX_ZONE_FRACTION * others.min())
+            }
+            val zones = ls.associateWith { zoneOf(it) }
+            return Magnet({ v -> ls.minByOrNull { abs(it - v) }?.toFloat() }, { a, b -> abs(a - b) },
+                { d -> zones.entries.minByOrNull { abs(it.key - d) }!!.value.toFloat() })
+        }
+        /** The landmarks of handle [h] of segment [index] (its curve [b]). */
+        fun landmarks(segs: List<SpeedSegment>, index: Int, b: FloatArray, h: Int): Pair<List<Double>, List<Double>> {
+            val seg = segs[index]
+            val influence = listOf(1.0 / 3, .5, SpeedHandles.influence(b, 1 - h))
+            if (seg.flat) return emptyList<Double>() to influence
+            val speeds = mutableListOf(0.0, seg.rate, SpeedHandles.speed(seg, b, 1 - h))
+            val nb = segs.getOrNull(if (h == 0) index - 1 else index + 1)
+            nb?.bezier?.let { nbB -> if (!nb.flat) speeds += SpeedHandles.speed(nb, nbB, if (h == 0) 1 else 0) }
+            return speeds to influence
+        }
+    }
+}

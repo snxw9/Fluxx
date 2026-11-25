@@ -181,6 +181,15 @@ The graph editor (value and speed curves for keyframes, reached from the rail's 
   - the page opens on the last-used tab.
 
   No schema change, no new action. JVM 581/581; A16 `GraphSpeedTest` passes; phone acceptance pending ([record](../checkpoints/GRAPH_G3.md)).
+- [x] **G3.1**:
+  - the G3 verification finished;
+  - the rail auto-scroll hardened;
+  - ruler tiers always three at the default zoom (major 12, mid 5, minor 3dp);
+  - the Speed view is segment-framed and stable, with no pan and an Ease-style relative drag;
+  - Speed handles cannot cross;
+  - magnetic speed / influence landmarks.
+
+  JVM 587/587; A16 sweep green ([record](../checkpoints/GRAPH_G3_1.md)).
 - [ ] **G4: convert Bounce/Elastic to keys** and extra curve libraries. Next.
 - Later: share-sheet export of curves, separate X/Y easing and dimensions (needs schema v14) and multi-select.
 
@@ -196,7 +205,7 @@ Still parked after the text phase. These are user ideas recorded for planning; n
 
 ### Parked / follow-ups
 
-- **Parked (GRAPH G2.1 / TL1 / G3):** Position detents (needs layer geometry), drop-frame timecode, the Interface size setting, and separate X/Y easing (needs schema v14). The live Time tile shipped in TL1.
+- **Parked (GRAPH G2.1 / TL1 / G3 / G3.1):** Position detents (needs layer geometry), drop-frame timecode, the Interface size setting, separate X/Y easing (needs schema v14), a "Make continuous" action, and Smooth through key in the Value and Ease views. The live Time tile shipped in TL1.
 - **Interface size setting** (from GRAPH G2L): an app-level size for inspector tiles and thumbnails; several Graph widths (strip, rail, library) now follow fixed tile sizes.
 - **Landscape editor layout.** Rotation now keeps the project open, but the landscape layout is cramped and the preview distorts.
 - **T5 right-to-left text.** Stopped; needs the cross-style shaping ownership decision.

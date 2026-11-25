@@ -112,6 +112,17 @@ internal class ValueScene(val layer: CompositionLayer, val target: GraphTarget, 
         val (x, yy) = ValueHandles.normalised(b, h, t, y, keyTimes[k].toDouble(), keyValue(k), keyTimes[k + 1].toDouble(), keyValue(k + 1))
         return HandleEdit(EaseMath.moveHandle(b, h, x, yy, snap, mirror))
     }
+    /** G3.1: the Speed view's stable home window (segment-framed, [SpeedFrame]); the Value view's fit. */
+    val home: ValueViewport get() = if (speed) SpeedFrame.frame(speedSegs, segStart) ?: fit else fit
+    /** G3.1: the selected segment's speed segment (Speed view). */
+    val selectedSpeed: SpeedSegment? get() = speedSeg
+    /** G3.1: a Speed handle edit at influence [influence] and [speedValue] from the drag's starting curve [b] (+ Smooth through key). */
+    fun speedEdit(b: FloatArray, h: Int, influence: Double, speedValue: Double): HandleEdit? {
+        val sg = speedSeg ?: return null
+        val nb = SpeedHandles.set(sg, b, h, influence, speedValue)
+        val r = SmoothThroughKey.apply(speedSegs, segStart, h, nb, smooth)
+        return HandleEdit(r.edits.first().second, r.edits.drop(1))
+    }
     /** A value-axis tick label: the page's formatting (Speed: per second, Rotation as a plain number). */
     fun tickLabel(v: Double, step: Double): String {
         val axis = axes[curve.coerceAtMost(axes.lastIndex)]
@@ -140,13 +151,33 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
     val density = LocalDensity.current
     val inset = with(density) { 12.dp.toPx() }
     val hit = with(density) { 24.dp.toPx() }
-    // G3: the Speed view keeps its own viewport next to the Value one.
-    val vp = session.viewportFor(scene.speed) ?: scene.fit
+    // G3: the Speed view keeps its own viewport next to the Value one. G3.1: it is the stable segment frame, set on entering
+    // the view and when the selected segment changes (never while the curve changes).
+    val vp = session.viewportFor(scene.speed) ?: scene.home
+    if (scene.speed) LaunchedEffect(scene.speed, scene.segment.startUs) { session.speedViewport = scene.home }
+    val view = androidx.compose.ui.platform.LocalView.current
+    val zonePx = with(density) { SpeedSnap.ZONE_DP.dp.toPx() }
+    val gapPx = with(density) { 4.dp.toPx() }
+    // Guides while a Speed handle is dragged (dashed landmark levels; the locked one solid).
+    var guides by remember { mutableStateOf<SpeedGuides?>(null) }
     val current by rememberUpdatedState(scene); val currentVp by rememberUpdatedState(vp)
     val snapOn by rememberUpdatedState(snap); val mirrorOn by rememberUpdatedState(mirror)
     val select by rememberUpdatedState(onSelectKey); val seek by rememberUpdatedState(onSeekKey)
     val hBegin by rememberUpdatedState(onHandleBegin); val hDrag by rememberUpdatedState(onHandleDrag)
     val hEnd by rememberUpdatedState(onHandleEnd); val hCancel by rememberUpdatedState(onHandleCancel)
+    // One post-release expansion check per finished Speed drag.
+    var settle by remember { mutableIntStateOf(0) }
+    LaunchedEffect(settle) {
+        if (settle == 0) return@LaunchedEffect
+        val sc = current; val from = session.speedViewport ?: return@LaunchedEffect
+        val pts = (0..1).mapNotNull { sc.handlePoint(it) }
+        if (!SpeedFrame.nearEdge(from, pts)) return@LaunchedEffect
+        val to = SpeedFrame.expand(from, pts)
+        androidx.compose.animation.core.Animatable(0f).animateTo(1f, androidx.compose.animation.core.tween(150)) {
+            val f = value.toDouble()
+            session.speedViewport = ValueViewport(from.t0 + (to.t0 - from.t0) * f, from.t1 + (to.t1 - from.t1) * f, from.v0 + (to.v0 - from.v0) * f, from.v1 + (to.v1 - from.v1) * f)
+        }
+    }
     // Double-tap detection across gestures (plain holder: never read by composition).
     val lastTap = remember { arrayOfNulls<Any>(3) } // [uptime, hit, position]
     BoxWithConstraints(modifier.clipToBounds().semantics {
@@ -199,9 +230,12 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
                 val double = prevAt != null && now - prevAt <= doubleTap && prevHit == target && prevPos != null && (prevPos - down.position).getDistance() < 2 * hit
                 when {
                     double && target is ValueHit.Key -> { seek(s.keyTimes[target.i]); lastTap[0] = null }
-                    double && target == ValueHit.Empty -> { session.setViewportFor(s.speed, null); lastTap[0] = null }
+                    // Fit: the Value view refits its curve; the Speed view re-frames the segment (G3.1).
+                    double && target == ValueHit.Empty -> { session.setViewportFor(s.speed, if (s.speed) s.home else null); lastTap[0] = null }
                     else -> {
                         if (target is ValueHit.Key) select(s.keyTimes[target.i]) else if (target == ValueHit.Empty) select(null)
+                        // G3.1: a tap on a Speed handle selects it (for the relative drag).
+                        if (s.speed && target is ValueHit.Handle) session.speedHandle = target.i
                         lastTap[0] = now; lastTap[1] = target; lastTap[2] = down.position
                     }
                 }
@@ -209,6 +243,54 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
             }
             lastTap[0] = null
             val first = moved
+            // ---- G3.1 Speed view: no pan. A handle drags directly; elsewhere the selected handle drags relatively (×0.35). ----
+            if (s.speed) {
+                val h = (target as? ValueHit.Handle)?.i ?: session.speedHandle
+                if (h == null) { drag(first.id) { it.consume() }; return@awaitEachGesture } // no pan, nothing selected: nothing
+                val b = s.bezier ?: return@awaitEachGesture
+                val sg = s.selectedSpeed ?: return@awaitEachGesture
+                val (ht, hv) = s.handlePoint(h) ?: return@awaitEachGesture
+                val direct = target is ValueHit.Handle
+                session.speedHandle = h
+                session.speedViewport = v0 // frozen for the whole drag
+                val dtUs = (sg.t1 - sg.t0).toDouble().coerceAtLeast(1.0)
+                // Crossing limit (from the curve at the drag's start), with a gap of 1% of the segment and at least 4dp.
+                val gap = maxOf(SpeedCross.GAP, gapPx / plot.plotWidth * v0.timeSpan / dtUs)
+                val maxI = SpeedCross.maxInfluence(b, h, gap)
+                val (speedLandmarks, influenceLandmarks) = SpeedSnap.landmarks(s.speedSegs, s.segStart, b, h)
+                val snapper = if (snapOn) SpeedSnap(speedLandmarks, influenceLandmarks, zonePx / plot.plotHeight * v0.valueSpan,
+                    zonePx / plot.plotWidth * v0.timeSpan / dtUs, ValueView.step(v0.valueSpan)) { InspectorHaptics.tick(view) } else null
+                val grab = Offset(plot.x(ht), plot.y(hv)) - down.position
+                val i0 = SpeedHandles.influence(b, h); val sp0 = hv
+                var stopped = false
+                hBegin()
+                var completed = false
+                try {
+                    completed = drag(first.id) { change ->
+                        change.consume()
+                        val (ti, sv) = if (direct) {
+                            val at = change.position + grab
+                            val (t, v) = SpeedFrame.clamp(v0, plot.time(at.x), plot.value(at.y))
+                            (if (h == 0) (t - sg.t0) / dtUs else (sg.t1 - t) / dtUs) to v
+                        } else {
+                            val d = (change.position - down.position) * RELATIVE_DRAG
+                            val di = d.x / plot.plotWidth * v0.timeSpan / dtUs * (if (h == 0) 1 else -1)
+                            val (_, v) = SpeedFrame.clamp(v0, ht, sp0 - d.y / plot.plotHeight * v0.valueSpan)
+                            (i0 + di) to v
+                        }
+                        var inf = snapper?.influence(ti) ?: ti
+                        val spd = snapper?.speed(sv) ?: sv
+                        // The stop: never past the other handle (a light haptic once on reaching it).
+                        if (inf >= maxI) { if (!stopped) InspectorHaptics.tick(view); stopped = true; inf = maxI } else stopped = false
+                        guides = SpeedGuides(speedLandmarks, snapper?.lockedSpeed)
+                        hDrag(s.speedEdit(b, h, inf, spd) ?: return@drag)
+                    }
+                } finally {
+                    guides = null
+                    if (completed) { hEnd(); settle++ } else hCancel()
+                }
+                return@awaitEachGesture
+            }
             when (target) {
                 ValueHit.Empty, is ValueHit.Key -> {
                     // One-finger pan (G2.1 §3: a drag that starts on a key pans too).
@@ -248,6 +330,7 @@ private sealed interface ValueHit { data class Handle(val i: Int) : ValueHit; da
         val labels = maxWidth >= 120.dp && maxHeight >= 120.dp
         ValueCurveLayer(scene, vp, inset, labels)
         val plot = ValuePlot(w, h, inset, vp)
+        if (scene.speed) SpeedOverlay(scene, vp, inset, guides, session.speedHandle)
         // Semantics-only markers at the key and handle positions (tests and accessibility); no pointer input of their own.
         scene.keys.forEachIndexed { i, k ->
             val x = plot.x(k.timeUs.toDouble()); val y = plot.y(scene.keyY(i))
@@ -277,6 +360,31 @@ private fun hitTest(s: ValueScene, plot: ValuePlot, at: Offset, radius: Float): 
         if (d < dist) { dist = d; best = ValueHit.Handle(h) }
     }
     return best
+}
+
+/** G3.1: the Speed view's drag guides: landmark speed levels (dashed) and the locked one (solid). */
+internal data class SpeedGuides(val levels: List<Double>, val locked: Double?)
+
+/** Ease-view relative drag sensitivity (the selected handle follows a drag elsewhere at this fraction). */
+internal const val RELATIVE_DRAG = .35f
+
+/** G3.1: the Speed view's overlay: drag guides and the selected handle's ring. */
+@Composable private fun SpeedOverlay(scene: ValueScene, vp: ValueViewport, inset: Float, guides: SpeedGuides?, selectedHandle: Int?) {
+    androidx.compose.foundation.Canvas(Modifier.fillMaxSize().testTag("graph-speed-guides")
+        .semantics { stateDescription = guides?.let { g -> "guides ${g.levels.size}" + (g.locked?.let { ", locked" } ?: "") } ?: "no guides" }) {
+        val plot = ValuePlot(size.width, size.height, inset, vp)
+        guides?.let { g ->
+            val dash = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
+            for (l in g.levels) {
+                val y = plot.y(l)
+                if (y !in 0f..size.height) continue
+                val on = g.locked != null && abs(l - g.locked) < 1e-9 * (1 + abs(l))
+                drawLine(TextSecondary.copy(alpha = if (on) .9f else .45f), Offset(0f, y), Offset(size.width, y), (if (on) 1.2.dp else .8.dp).toPx(),
+                    pathEffect = if (on) null else dash)
+            }
+        }
+        selectedHandle?.let { h -> scene.handlePoint(h)?.let { (t, v) -> drawCircle(Highlight, 7.dp.toPx(), Offset(plot.x(t), plot.y(v)), style = Stroke(1.2.dp.toPx())) } }
+    }
 }
 
 /** Grid, labels, curve(s), keys and handles; rebuilt only when the scene, viewport or size changes. */
@@ -446,7 +554,8 @@ internal fun valueLabel(v: Double, step: Double, axis: ValueAxis): String {
     val unit = GraphSpeed.unit(axis)
     fun edit(h: Int, influence: Double, speed: Double?) {
         val sg = seg ?: return; val bb = b ?: return
-        val nb = SpeedHandles.set(sg, bb, h, influence, speed ?: SpeedHandles.speed(sg, bb, h))
+        // G3.1 §4: a typed influence is clamped so the handles never cross (a crossed curve may only uncross).
+        val nb = SpeedHandles.set(sg, bb, h, minOf(influence, SpeedCross.maxInfluence(bb, h)), speed ?: SpeedHandles.speed(sg, bb, h))
         val r = SmoothThroughKey.apply(scene.speedSegs, k, h, nb, scene.smooth)
         onCommit(HandleEdit(r.edits.first().second, r.edits.drop(1)))
     }

@@ -24,6 +24,7 @@ Start with the [roadmap](architecture/FLUXX_ROADMAP.md) for active scope. The [P
 | [Element inspector](checkpoints/ELEMENT_INSPECTOR.md) | Inspector navigation, transforms/anchor, layer actions, trim/extend/split |
 | [Global colour picker](checkpoints/GLOBAL_COLOUR_PICKER.md) | Shared picker, palettes and eyedropper ownership |
 | [Keyframe animation](checkpoints/KEYFRAME_ANIMATION.md) | Transform evaluator, tracks, editing and interpolation contracts |
+| [Graph editor G3.1](checkpoints/GRAPH_G3_1.md) | The finished G3 verification table and the rail test cause, the ruler's new density rules and pitches, the Speed view's framing, stability, navigation, no-crossing stop and magnetic landmarks, run times |
 | [Graph editor G3](checkpoints/GRAPH_G3.md) | The Speed graph: the speed definition and units, the handle mapping formulas, Smooth through key and where it applies, the Speed values bar, the last-used tab, tests and run times |
 | [Timeline TL1](checkpoints/TL1.md) | Frame-snapped scrubbing (the call sites), floor readouts and the pause snap, the tiered ruler and its mid-tick rule, the one frame → x function, the live Graph Time tile, measured offsets before / after, run times |
 | [Graph editor G2.1](checkpoints/GRAPH_G2_1.md) | A16 acceptance fixes: hex entry, non-draggable keys, the opaque bar, the units audit table, the live value, the time audit table, the xy popover cause, library drag lift/reflow and auto-scroll, Snap and magnetic detents, test run times and flaky tests |

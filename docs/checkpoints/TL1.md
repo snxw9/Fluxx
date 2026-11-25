@@ -2,6 +2,8 @@
 
 # TL1: frame-snapped scrubbing, tiered ruler, live Time tile
 
+> **GRAPH G3.1 replaced the tier densities.** The minimums are now major 12dp, mid 5dp and minor 3dp. Minors fall back to every Nth frame, so all three tiers show at the default zoom for every rate, and mids stay visible. See [GRAPH G3.1 §2](GRAPH_G3_1.md#2-ruler-tiers-always-three-tiers-mids-stay-visible).
+
 Branch `graph-g3`, created from `graph-g2-1` at `c5f143d` (`graph-g2-1` is not merged into `master`). Part 1 of the TL1 + G3 run, committed separately. Not merged.
 
 **Status:** implemented in source.

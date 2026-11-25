@@ -367,7 +367,10 @@ internal const val DRAG_HYSTERESIS = 8f
             if (!drag.moved) continue
             val b = drag.listBounds
             val v = DragAutoScroll.velocity(drag.pointerY / density, b.top / density, b.bottom / density)
-            if (v != 0f && dt > 0f) list.scrollBy(v * dt * density)
+            // GRAPH G3.1: never scroll past an end. A drag that starts inside an edge zone (lifting the first rail item) used to
+            // call scrollBy every frame at the top; that no-op scroll competed with the slot's requestScrollToItem anchor.
+            val canMove = (v < 0f && list.canScrollBackward) || (v > 0f && list.canScrollForward)
+            if (canMove && dt > 0f) list.scrollBy(v * dt * density)
             drag.onRefresh?.invoke()
         }
     }

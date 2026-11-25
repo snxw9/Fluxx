@@ -395,13 +395,15 @@ internal class GraphSession {
     var viewport by mutableStateOf<ValueViewport?>(null)
     /** GRAPH G3: the Speed view's own viewport (reset with the page, i.e. when the property changes). */
     var speedViewport by mutableStateOf<ValueViewport?>(null)
+    /** GRAPH G3.1: the Speed view's selected handle (0 out, 1 in), for the Ease-style relative drag. */
+    var speedHandle by mutableStateOf<Int?>(null)
     var channel by mutableStateOf(0)
     var libraryGrid = LazyGridState()
         private set
     fun viewportFor(speed: Boolean) = if (speed) speedViewport else viewport
     fun setViewportFor(speed: Boolean, v: ValueViewport?) { if (speed) speedViewport = v else viewport = v }
     /** [mode]: the tab to open on (G3: the last-used tab, persisted app-level; it falls back to Ease where unavailable). */
-    fun reset(mode: GraphMode = GraphMode.EASE) { this.mode = mode; selection = null; viewport = null; speedViewport = null; channel = 0; libraryGrid = LazyGridState() }
+    fun reset(mode: GraphMode = GraphMode.EASE) { this.mode = mode; selection = null; viewport = null; speedViewport = null; speedHandle = null; channel = 0; libraryGrid = LazyGridState() }
 }
 
 // ---- Library grid -------------------------------------------------------------------------------------------------

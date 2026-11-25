@@ -43,27 +43,36 @@ class TimelineScale(val rate: FrameRate, val pxPerUs: Double) {
 
 enum class TickTier { MAJOR, MID, MINOR }
 
-/** One zoom level of the tiered ruler: majors every [period] timecode frames, mids at [midOffset], minors on every frame. */
-data class RulerLevel(val stepSeconds: Long, val period: Long, val mids: Boolean, val minors: Boolean) {
+/** The zoom a new timeline opens at (dp per second of composition time). */
+const val TIMELINE_DEFAULT_DP_PER_SECOND = 120f
+
+/**
+ * One zoom level of the tiered ruler: majors every [period] timecode frames ([stepSeconds] of timecode), mids at
+ * [midOffset], minors either every [minorEvery] frames (1 s step) or at [minorDivisions] equal parts of the step (zoomed out).
+ */
+data class RulerLevel(val stepSeconds: Long, val period: Long, val mids: Boolean, val minorEvery: Long = 0, val minorDivisions: Int = 0) {
     val midOffset: Long get() = period / 2
+    val minors: Boolean get() = minorEvery > 0 || minorDivisions > 0
 }
 
 /**
- * TL1 tiered ruler. Ticks are classified by the DISPLAYED timecode frame (start frame + composition frame), so majors
- * land exactly where the timecode shows `:00` frames.
- * - MAJOR: every step boundary (1 s when zoomed in: at 30 fps frames 0, 30, 60…).
- * - MID: the middle of the step, on frame `floor(period / 2)` (30 fps: 15; 25 fps: 12, as 12.5 is not a frame; 23.976: 12).
- *   The same rule for every rate and every step.
- * - MINOR: every other frame (only at the 1 s step).
- * Zooming out, tiers drop in order: minors when the frame pitch is under [MINOR_DP] (the ruler's existing 6dp minimum),
- * then mids when half a step is under [MID_DP], then the major step grows (2, 5, 10, 30 s, 1, 2, 5, 10, 30 min, 1 h) to keep
- * majors at least [MAJOR_DP] apart, with mids at half the step again when they fit.
+ * TL1 / GRAPH G3.1 tiered ruler. Ticks are classified by the DISPLAYED timecode frame (start frame + composition frame), so
+ * majors land exactly where the timecode shows `:00` frames, and every tick sits on a frame.
+ * - MAJOR: every step boundary (1 s, or 2, 5, 10, 30 s, 1 min … zoomed out); the step grows only when the 1 s pitch drops
+ *   under [MAJOR_DP].
+ * - MID: the middle of the step, on frame `floor(period / 2)` (30 fps: 15; 25 fps: 12; 23.976 / 24: 12), shown whenever its
+ *   pitch is at least [MID_DP] (always, given the major minimum).
+ * - MINOR (1 s step): every frame when the frame pitch is at least [MINOR_DP]; otherwise every Nth frame, N the smallest of
+ *   [MINOR_EVERY] with a pitch of at least [MINOR_DP] (so the default zoom shows three tiers at every rate, 60 fps
+ *   included). Zoomed out: a tenth of the step when that is at least [MINOR_DP], else a fifth, else none; each on the frame
+ *   `floor(k·period / divisions)` (the mid rule's rounding). Minors skip frames that are majors or mids.
  */
 object RulerTiers {
-    const val MINOR_DP = 6f
-    const val MID_DP = 8f
     const val MAJOR_DP = 12f
+    const val MID_DP = 5f
+    const val MINOR_DP = 3f
     val STEPS_SECONDS = longArrayOf(1, 2, 5, 10, 30, 60, 120, 300, 600, 1800, 3600)
+    val MINOR_EVERY = longArrayOf(2, 3, 4, 5, 6, 10, 15, 30)
     /** Tick heights relative to the major tick (≈ 60% and 35%). */
     const val MID_HEIGHT = .6f
     const val MINOR_HEIGHT = .35f
@@ -71,25 +80,39 @@ object RulerTiers {
     fun level(rate: FrameRate, pxPerFrame: Double, density: Float): RulerLevel {
         val nominal = CompositionTimecode.nominal(rate)
         val minor = MINOR_DP * density; val mid = MID_DP * density; val major = MAJOR_DP * density
-        if (pxPerFrame >= minor) return RulerLevel(1, nominal, mids = true, minors = true)
-        for (s in STEPS_SECONDS) {
-            val period = s * nominal
-            if (period * pxPerFrame < major) continue
-            val half = minOf(period / 2, period - period / 2)
-            return RulerLevel(s, period, mids = half > 0 && half * pxPerFrame >= mid, minors = false)
+        val s = STEPS_SECONDS.firstOrNull { it * nominal * pxPerFrame >= major } ?: STEPS_SECONDS.last()
+        val period = s * nominal
+        val mids = period / 2 > 0 && minOf(period / 2, period - period / 2) * pxPerFrame >= mid
+        if (s == 1L) {
+            val every = if (pxPerFrame >= minor) 1L else MINOR_EVERY.firstOrNull { it < period && it * pxPerFrame >= minor } ?: 0L
+            return RulerLevel(s, period, mids, minorEvery = every)
         }
-        val last = STEPS_SECONDS.last()
-        return RulerLevel(last, last * nominal, mids = false, minors = false)
+        val divisions = when { period / 10.0 * pxPerFrame >= minor -> 10; period / 5.0 * pxPerFrame >= minor -> 5; else -> 0 }
+        return RulerLevel(s, period, mids, minorDivisions = divisions)
     }
 
     /** The tier of the tick at timecode frame [timecodeFrame] (start frame + composition frame), or null for no tick. */
     fun tier(timecodeFrame: Long, level: RulerLevel): TickTier? {
-        val r = Math.floorMod(timecodeFrame, level.period)
-        return when {
-            r == 0L -> TickTier.MAJOR
-            level.mids && r == level.midOffset -> TickTier.MID
-            level.minors -> TickTier.MINOR
-            else -> null
+        val p = level.period
+        val r = Math.floorMod(timecodeFrame, p)
+        if (r == 0L) return TickTier.MAJOR
+        if (level.mids && r == level.midOffset) return TickTier.MID
+        if (level.minorEvery > 0) return if (r % level.minorEvery == 0L) TickTier.MINOR else null
+        val d = level.minorDivisions
+        if (d > 0) {
+            val k = r * d / p
+            for (c in k..k + 1) if (c in 1 until d && c * p / d == r) return TickTier.MINOR
         }
+        return null
+    }
+
+    /** The tick offsets inside one period (frames from its major), for drawing without visiting every frame. */
+    fun offsets(level: RulerLevel): LongArray {
+        val p = level.period
+        val out = sortedSetOf(0L)
+        if (level.mids) out += level.midOffset
+        if (level.minorEvery > 0) { var f = level.minorEvery; while (f < p) { out += f; f += level.minorEvery } }
+        if (level.minorDivisions > 0) for (k in 1 until level.minorDivisions) out += k * p / level.minorDivisions
+        return out.toLongArray()
     }
 }

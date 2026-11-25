@@ -2,6 +2,8 @@
 
 # GRAPH G3: the Speed graph (with Smooth through key)
 
+> **Next: [GRAPH G3.1](GRAPH_G3_1.md).** It finished this pass's interrupted A16 sweep and hardened the rail auto-scroll. It also made the Speed view stable and segment-framed, with no pan and Ease-style relative drags, stopped its handles from crossing, and added magnetic landmarks.
+
 Branch `graph-g3`, on top of TL1 (`4eae6ac`), from `graph-g2-1` (not merged into `master`). Part 2 of the TL1 + G3 run, committed separately. Not merged.
 
 **Status:** implemented in source.

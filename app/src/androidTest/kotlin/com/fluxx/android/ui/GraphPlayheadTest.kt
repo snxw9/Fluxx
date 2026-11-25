@@ -163,8 +163,8 @@ class GraphPlayheadTest {
         compose.onNodeWithTag("graph-tools", useUnmergedTree = true).performClick(); compose.waitForIdle()
         compose.onNodeWithTag("graph-tool-smooth", useUnmergedTree = true).performClick(); compose.waitForIdle()
         compose.onNodeWithTag("graph-tools", useUnmergedTree = true).performClick(); settle()
-        canvas { click(at("graph-value-key-0")) }
-        canvas { down(at("graph-value-handle-1")); repeat(20) { moveBy(Offset(-1f, -4f)) }; advanceEventTime(600); up() }
+        // G3.1 framing: the playhead's segment (key 2 → 3) is framed; its out handle at key 2 has a neighbour (Smooth: two keys).
+        canvas { down(at("graph-value-handle-0")); repeat(20) { moveBy(Offset(1f, -4f)) }; advanceEventTime(600); up() }
         assertEquals(EasingPreset.CUSTOM, keys()[0].easing); assertEquals(EasingPreset.CUSTOM, keys()[1].easing); unchanged()
         compose.onNodeWithTag("graph-speed-out-speed").performClick(); compose.waitForIdle()
         compose.onNodeWithContentDescription("Speed out, exact value in °/s").performTextReplacement("30")

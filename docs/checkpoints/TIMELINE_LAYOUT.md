@@ -38,6 +38,15 @@ The action bar is 40dp tall, with 20dp vectors and 48dp-wide controls. The View 
 > - **One position function:** every tick is a whole-pixel rect at `frameX = round(frame × pxPerFrame)`, the same function that places the playhead's scroll, so the line covers its tick exactly (0.00 px on the A16, 48 checks).
 >
 > Record: [TL1](TL1.md).
+>
+> **GRAPH G3.1 densities:**
+> - **Minimums:** major 12dp, mid 5dp, minor 3dp.
+> - **Minors:** every frame, else every Nth of {2, 3, 4, 5, 6, 10, 15, 30}; zoomed out, tenths or fifths of the step.
+> - **Mids** always show; the major step grows only under 12dp per second.
+> - **Default zoom:** 120dp/s (`TIMELINE_DEFAULT_DP_PER_SECOND`) shows all three tiers at every rate.
+> - **Reachable range:** the zoom stops at 12dp/s, so majors stay at 1 s in the app.
+>
+> Record: [GRAPH G3.1](GRAPH_G3_1.md).
 
 Ticks now rise from a dedicated baseline in the lower ruler band. The time chip and marker descriptions use the upper band. Ticks have no duration-number labels. Major/minor strides are integer frame counts, chosen for readable pixel spacing; all x coordinates come from `FrameRate.frameTimeUs(frame)`. At 30000/1001fps, frame 30 is at 1,001,000µs, not at an invented one-second tick. The time chip uses the existing non-drop-frame minutes:seconds:frames convention, plus the saved display origin. Tick drawing starts at the visible frame range and does not iterate from zero for every viewport.
 

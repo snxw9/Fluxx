@@ -212,7 +212,13 @@ GRAPH G3:
 
 TL1: the Value view's Time tile shows the playhead's timecode when no key is selected.
 
-[G1](GRAPH_G1.md), [G1.1](GRAPH_G1_1.md), [G2L](GRAPH_G2L.md), [G2](GRAPH_G2.md), [G2.1](GRAPH_G2_1.md), [TL1](TL1.md), [G3](GRAPH_G3.md).
+[G1](GRAPH_G1.md), [G1.1](GRAPH_G1_1.md), [G2L](GRAPH_G2L.md), [G2](GRAPH_G2.md), [G2.1](GRAPH_G2_1.md), GRAPH G3.1:
+- The Speed view frames the selected segment and stays still while editing.
+- There's no pan; a tapped handle can be dragged from anywhere at ×0.35.
+- Its handles stop before crossing.
+- Snap adds magnetic landmarks (0, average, the other handle, the neighbour).
+
+[TL1](TL1.md), [G3](GRAPH_G3.md), [G3.1](GRAPH_G3_1.md).
 
 ---
 
