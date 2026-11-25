@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.Saver
@@ -255,7 +256,43 @@ fun EditorScreen(
             DEffect.EXIT -> editor.exitSelection()
         }
     }
-    BackHandler { focusManager.clearFocus(); textEditor.finish { if (editor.selectionMode) editor.exitSelection() else leaveSelectionOrEditor() } }
+    BackHandler { focusManager.clearFocus(); textEditor.finish { when {
+        editor.selectionMode -> editor.exitSelection()
+        editor.keySelection != null -> editor.exitKeySelection()
+        else -> leaveSelectionOrEditor() } } }
+    // TLP T5: the active property on the open property page, the only scope of key selection. Key selection mode ends
+    // when the page, the property or the layer changes (or the inspector closes).
+    val keyTarget: GraphTarget? = if (!inspectorSheetVisible || selectedLayer == null) null
+        else focusedProperty?.let { GraphTarget(property = it) } ?: focusedAnimatorTrack?.let { GraphTarget(animator = it) }
+    LaunchedEffect(keyTarget, selectedLayer?.id) {
+        val k = editor.keySelection ?: return@LaunchedEffect
+        if (k.target != keyTarget || k.layerId != selectedLayer?.id) editor.exitKeySelection()
+    }
+    fun applyKeys(moved: KeyEdits.Moved?) {
+        if (moved == null) return
+        previewController?.pause()
+        textEditor.finish {
+            val sel = editor.keySelection
+            editor.dispatch(moved.action)
+            // The selection follows its keys to their new times.
+            if (sel != null) editor.selectKeys(sel.copy(times = moved.times))
+            previewController?.update(editor.state.project, editor.state.playheadUs, false)
+        }
+    }
+    /** TLP T5: the 6th icon's menu on an open property page. */
+    val keyMenuContent: @Composable ColumnScope.(() -> Unit) -> Unit = { close ->
+        val target = keyTarget
+        val layer = editor.state.selectedLayer
+        val sel = editor.keySelection
+        DropdownMenuItem(text = { Text("Copy keys") }, enabled = target != null && layer != null && sel != null && KeyEdits.copyable(layer, sel.target),
+            onClick = { close(); if (layer != null && sel != null) KeyEdits.copy(layer, sel)?.let { clip -> editor.keyClipboard = clip
+                android.widget.Toast.makeText(context, if (clip.keys.size == 1) "Keyframe copied" else "${clip.keys.size} keyframes copied", android.widget.Toast.LENGTH_SHORT).show() } },
+            modifier = Modifier.testTag("key-menu-copy"))
+        DropdownMenuItem(text = { Text("Paste keys") }, enabled = target != null && layer != null && KeyEdits.canPaste(layer, target, editor.keyClipboard),
+            onClick = { close(); val clip = editor.keyClipboard
+                if (target != null && layer != null && clip != null) applyKeys(KeyEdits.paste(editor.state.project, layer, target, clip, editor.state.playheadUs)) },
+            modifier = Modifier.testTag("key-menu-paste"))
+    }
     LaunchedEffect(selectedLayer?.id, inspectorSheetVisible, previewState.playing) {
         if (!inspectorSheetVisible || selectedLayer?.id != eyedropperLayerId || previewState.playing) eyedropperLayerId=null
     }
@@ -330,6 +367,23 @@ fun EditorScreen(
                     }
                     BarIcon("DELETE", "Delete the selected layers", testTag = "selection-delete") {
                         MultiLayerEdits.delete(layerSel)?.let { applyLayerAction(it) }
+                    }
+                }
+            } else if (editor.keySelection != null) {
+                // TLP T5: the key selection top bar (time order within the active property).
+                val keySel = editor.keySelection!!
+                val keyLayer = editor.state.project.composition.layers.firstOrNull { it.id == keySel.layerId }
+                SelectionTopBar(if (keySel.size == 1) "1 keyframe selected" else "${keySel.size} keyframes selected",
+                    onBack = { editor.exitKeySelection() }, testTag = "key-top-bar") {
+                    if (keyLayer != null) {
+                        BarIcon("SELECT_ALL", "Select all keyframes", testTag = "key-select-all") { editor.selectKeys(KeyEdits.selectAll(keyLayer, keySel.target)) }
+                        BarPopoverIcon("ODD_EVEN", "Select odd or even keyframes", "key-odd-even", "key-odd-even") { close ->
+                            PopoverRow("Select Odd", testTag = "key-odd") { editor.selectKeys(KeyEdits.odd(keyLayer, keySel.target)); close() }
+                            PopoverRow("Select Even", testTag = "key-even") { editor.selectKeys(KeyEdits.even(keyLayer, keySel.target)); close() }
+                        }
+                        BarIcon("DELETE", "Delete the selected keyframes", testTag = "key-delete") {
+                            KeyEdits.delete(keyLayer, keySel)?.let { applyLayerAction(it) }
+                        }
                     }
                 }
             } else
@@ -525,6 +579,8 @@ fun EditorScreen(
                         previewController?.update(editor.state.project, editor.state.playheadUs, false) } },
                     onCopySelection = { editor.layerSelection?.let { sel -> if (editor.copyLayers(sel.ids))
                         android.widget.Toast.makeText(context, if (sel.size == 1) "Layer copied" else "${sel.size} layers copied", android.widget.Toast.LENGTH_SHORT).show() } },
+                    // TLP T5: with a property page open, the 6th icon offers Copy keys / Paste keys (same property kind only).
+                    keyMenu = if (keyTarget != null) keyMenuContent else null,
                     viewSettings = viewSettings,
                     onViewSettingsChange = { viewSettings = it },
                     previewResolution = previewResolution,
@@ -576,11 +632,20 @@ fun EditorScreen(
                     },
                     onDismissInspector = { dismissInspector() },
                     selection = editor.layerSelection,
-                    extraBottomPadding = if (editor.selectionMode) SelectionBarHeight else 0.dp,
+                    extraBottomPadding = if (editor.selectionMode || editor.keySelection != null) SelectionBarHeight else 0.dp,
+                    selectedKeys = editor.keySelection?.times?.toSet(),
+                    onKeyDoubleTap = { t -> val layer = editor.state.selectedLayer; val target = keyTarget
+                        if (layer != null && target != null && t in KeyEdits.times(layer, target)) editor.selectKeys(KeyframeSelection(layer.id, target, listOf(t))) },
+                    onKeyToggle = { t -> editor.keySelection?.let { sel -> val next = sel.toggle(t)
+                        if (next.times.isEmpty()) editor.exitKeySelection() else editor.selectKeys(next) } },
                     onDTap = { id, zone -> selectionEffect(DButtonRules.tap(editor.selectionMode, editor.layerSelection?.contains(id) == true, zone), id) },
                     onDLongPress = { id -> selectionEffect(DButtonRules.longPress(editor.selectionMode, editor.layerSelection?.contains(id) == true), id) },
                     onSelectLayer = { id ->
-                        if (editor.selectionMode) {
+                        if (editor.keySelection != null) {
+                            // TLP T5: a tap off the keys (body, empty space) deselects all keys and exits key selection mode;
+                            // nothing seeks, scrolls or changes the layer selection.
+                            editor.exitKeySelection()
+                        } else if (editor.selectionMode) {
                             // TLP T1: a body tap adds / removes; an empty-space tap (id == null) deselects all and exits.
                             // Neither dispatches a Seek or scrolls, and the inspector stays closed.
                             selectionEffect(if (id == null) DButtonRules.empty(true) else DButtonRules.body(true, editor.layerSelection?.contains(id) == true), id)
@@ -636,6 +701,32 @@ fun EditorScreen(
                         .fillMaxWidth()
                         .weight(1f)
                 )
+            }
+
+            // TLP T5: the key selection bottom bar (same overlay rules as the layer bar).
+            editor.keySelection?.let { keySel ->
+                val keyLayer = editor.state.project.composition.layers.firstOrNull { it.id == keySel.layerId }
+                if (keyLayer != null) SelectionBottomBar(Modifier.align(Alignment.BottomCenter), testTag = "key-bottom-bar") {
+                    val easable = !GraphModel.discrete(keySel.target)
+                    fun ease(c: EasingCurve) { KeyEdits.ease(keyLayer, keySel, c)?.let { applyLayerAction(it) } }
+                    BarIcon("EASE_HOLD", "Hold", enabled = easable, testTag = "key-hold") { ease(EasingCurve.HOLD) }
+                    BarIcon("EASE_LINEAR", "Linear", enabled = easable, testTag = "key-linear") { ease(EasingCurve.LINEAR) }
+                    BarIcon("EASE_EASY", "Easy Ease", enabled = easable, testTag = "key-easy-ease") { ease(EasingCurve.EASY_EASE) }
+                    BarPopoverIcon("OVERFLOW", "More easings", "key-more", "key-more", enabled = easable) { close ->
+                        for (choice in listOf(EaseChoice.EASE_IN, EaseChoice.EASE_OUT, EaseChoice.BOUNCE, EaseChoice.ELASTIC))
+                            PopoverRow(choice.label, testTag = "key-more-${choice.name}") { ease(EaseChoice.curve(choice, EasingCurve.EASY_EASE)); close() }
+                        val library by remember(context) { CurveLibraryStore.get(context) }.state.collectAsState()
+                        for (entry in CurveLibrary.sections(library).pinned)
+                            PopoverRow(entry.name, testTag = "key-more-pinned-${entry.id}") { ease(entry.curve); close() }
+                    }
+                    BarPopoverIcon("STAGGER", "Stagger the selected keyframes", "key-stagger", "key-stagger", enabled = keySel.size > 1) { close ->
+                        FramesPopoverContent("Stagger", "frames", 2, false, {}, { n ->
+                            applyKeys(KeyEdits.pack(editor.state.project, keyLayer, keySel, n)) }, close, "key-stagger", showReverse = false, minimum = 1)
+                    }
+                    BarIcon("SEQUENCE", "Sequence the selected keyframes one frame apart", enabled = keySel.size > 1, testTag = "key-sequence") {
+                        applyKeys(KeyEdits.pack(editor.state.project, keyLayer, keySel, 1))
+                    }
+                }
             }
 
             // TLP T3: the selection bottom bar overlays the timeline (it never resizes it; the timeline has the same bottom

@@ -120,7 +120,14 @@ class EditorViewModel : ViewModel() {
         val ids = state.project.composition.layers.map { it.id }.toSet()
         layerSelection = next.prune(ids).takeUnless { it.isEmpty }; syncPrimary()
     }
-    private fun syncSelection() { layerSelection?.let { setSelection(it) } }
+    private fun syncSelection() { layerSelection?.let { setSelection(it) }; keySelection?.let { selectKeys(it) } }
+    /** TLP T5: key selection mode (null = off), one property's keys on one layer; UI state only, pruned like the layers. */
+    var keySelection by mutableStateOf<KeyframeSelection?>(null)
+        private set
+    /** TLP T5: copied keys (session clipboard, like the layer clipboard; not document state). */
+    var keyClipboard by mutableStateOf<KeyClipboard?>(null)
+    fun selectKeys(next: KeyframeSelection?) { keySelection = next?.let { KeyEdits.prune(state.project, it) } }
+    fun exitKeySelection() { keySelection = null }
     private fun syncPrimary() {
         val p = layerSelection?.primary ?: return
         if (state.selectedLayerId != p) state = EditorReducer.reduce(state, EditorAction.Select(p))
@@ -166,7 +173,7 @@ class EditorViewModel : ViewModel() {
             redoStack.clear()
         }
         state = next
-        if (action is EditorAction.Load) layerSelection = null else syncSelection()
+        if (action is EditorAction.Load) { layerSelection = null; keySelection = null; keyClipboard = null } else syncSelection()
     }
 
     /** Resolve and apply transport navigation from one current snapshot, at click time. */

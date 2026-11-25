@@ -1,0 +1,108 @@
+package com.fluxx.android.editor
+
+import com.fluxx.android.model.*
+import org.junit.Assert.*
+import org.junit.Test
+
+/** TLP T5: key selection (one property), odd / even, trash, easing, sequence / stagger, copy / paste. */
+class TlpKeyTest {
+    private val rate = FrameRate(30, 1)
+    private fun f(n: Long) = rate.frameTimeUs(n)
+    private val rot = GraphTarget(AnimPropertyType.ROTATION)
+    private val pos = GraphTarget(AnimPropertyType.POSITION)
+    /** Rotation keys at frames 0, 10, 20, 30, 40, 50 (values 0, 10 … 50); Position keys at 0, 15, 45. */
+    private fun layer(start: Long = 0) = CompositionLayer(1, LayerType.SOLID, timing = ClipTiming(start, 0, f(120)), animTransform = AnimatableTransform(
+        rotation = AnimatableProperty1D(true, 0f, FrozenList.of((0..5).map { Keyframe1D(f(10L * it), 10f * it) })),
+        position = AnimatableProperty2D(true, keyframes = FrozenList.of(listOf(Keyframe2D(0, 0f, 0f), Keyframe2D(f(15), .5f, .25f), Keyframe2D(f(45), 1f, -1f))))))
+    private fun vm(l: CompositionLayer = layer()) = EditorViewModel().also {
+        it.dispatch(EditorAction.Load(ProjectDocument(Composition(durationUs = 20_000_000, frameRate = rate, layers = FrozenList.of(listOf(l))))))
+        it.dispatch(EditorAction.Select(1))
+    }
+    private fun EditorViewModel.layer() = state.project.composition.layers.single()
+    private fun EditorViewModel.rotTimes() = layer().animTransform.rotation.keyframes.map { it.timeUs }
+
+    @Test fun selectionIsScopedToOnePropertyOddEvenAndPrune() {
+        val l = layer()
+        assertEquals(KeyEdits.times(l, rot), KeyEdits.selectAll(l, rot).times)
+        assertEquals(listOf(f(0), f(20), f(40)), KeyEdits.odd(l, rot).times)
+        assertEquals(listOf(f(10), f(30), f(50)), KeyEdits.even(l, rot).times)
+        assertEquals(listOf(0L, f(45)), KeyEdits.odd(l, pos).times)
+        val v = vm(); v.selectKeys(KeyframeSelection(1, rot, listOf(f(20), f(40))))
+        assertFalse("selecting keys is not an undoable edit", v.canUndo)
+        v.dispatch(EditorAction.RemoveKeyframe(1, AnimPropertyType.ROTATION, f(20)))
+        assertEquals(listOf(f(40)), v.keySelection!!.times)
+        v.dispatch(EditorAction.RemoveKeyframe(1, AnimPropertyType.ROTATION, f(40)))
+        assertNull("no selected key left: key selection mode exits", v.keySelection)
+        assertNull(KeyEdits.prune(v.state.project, KeyframeSelection(9, rot, listOf(0))))
+    }
+
+    @Test fun trashAndEasingAreOneUndo() {
+        val v = vm(); val before = v.state.project
+        val sel = KeyEdits.even(v.layer(), rot)
+        v.dispatch(KeyEdits.delete(v.layer(), sel)!!)
+        assertEquals(listOf(f(0), f(20), f(40)), v.rotTimes())
+        v.undo(); assertEquals(before, v.state.project)
+        v.dispatch(KeyEdits.ease(v.layer(), sel, EasingCurve.HOLD)!!)
+        val keys = v.layer().animTransform.rotation.keyframes
+        assertEquals(listOf(EasingPreset.EASY_EASE, EasingPreset.HOLD, EasingPreset.EASY_EASE, EasingPreset.HOLD, EasingPreset.EASY_EASE, EasingPreset.HOLD), keys.map { it.easing })
+        v.undo(); assertEquals(before, v.state.project)
+        // Hold-only tracks (Source Text) have no easing.
+        assertNull(KeyEdits.ease(v.layer(), KeyframeSelection(1, GraphTarget(AnimPropertyType.SOURCE_TEXT), listOf(0L)), EasingCurve.LINEAR))
+    }
+
+    @Test fun sequencePacksOneFrameApartAnchoredOnTheFirstSelectedKey() {
+        val v = vm(); val before = v.state.project
+        // Keys 10, 30, 50 → 10, 11, 12; unselected 0, 20, 40 untouched; order preserved; selection follows.
+        val sel = KeyframeSelection(1, rot, listOf(f(30), f(10), f(50)))
+        val moved = KeyEdits.pack(v.state.project, v.layer(), sel, 1)!!
+        v.dispatch(moved.action)
+        assertEquals(listOf(f(0), f(10), f(11), f(12), f(20), f(40)), v.rotTimes())
+        assertEquals(listOf(30f, 50f), listOf(f(11), f(12)).map { t -> v.layer().animTransform.rotation.keyframes.first { it.timeUs == t }.value })
+        assertEquals(listOf(f(11), f(10), f(12)), moved.times)
+        v.undo(); assertEquals(before, v.state.project)
+        // Stagger 4: 10, 14, 18.
+        v.dispatch(KeyEdits.pack(v.state.project, v.layer(), sel, 4)!!.action)
+        assertEquals(listOf(f(0), f(10), f(14), f(18), f(20), f(40)), v.rotTimes())
+    }
+
+    @Test fun movesAreOrderedSoSelectedKeysNeverCollideAndUnselectedKeysAreReplaced() {
+        // Selected 0, 10, 20 with stagger 20 → 0, 20, 40: 10 → 20 needs 20 to move first (right movers latest first).
+        val v = vm()
+        v.dispatch(KeyEdits.pack(v.state.project, v.layer(), KeyframeSelection(1, rot, listOf(f(0), f(10), f(20))), 20)!!.action)
+        val keys = v.layer().animTransform.rotation.keyframes
+        // MoveKeyframe's rule: a moved key that lands on an UNSELECTED key replaces it (the unselected key at 40 is gone).
+        assertEquals(listOf(f(0), f(20), f(30), f(40), f(50)), keys.map { it.timeUs })
+        assertEquals(listOf(0f, 10f, 30f, 20f, 50f), keys.map { it.value })
+        // Left movers earliest first: 30, 40, 50 → 30, 31, 32 never pass through each other.
+        val w = vm()
+        w.dispatch(KeyEdits.pack(w.state.project, w.layer(), KeyframeSelection(1, rot, listOf(f(30), f(40), f(50))), 1)!!.action)
+        assertEquals(listOf(30f, 40f, 50f), listOf(f(30), f(31), f(32)).map { t -> w.layer().animTransform.rotation.keyframes.first { it.timeUs == t }.value })
+    }
+
+    @Test fun twoDimensionalKeysMoveBothAxes() {
+        val v = vm()
+        v.dispatch(KeyEdits.pack(v.state.project, v.layer(), KeyframeSelection(1, pos, listOf(0L, f(45))), 3)!!.action)
+        val k = v.layer().animTransform.position.keyframes
+        assertEquals(listOf(0L, f(3), f(15)), k.map { it.timeUs })
+        assertEquals(1f, k[1].x, 0f); assertEquals(-1f, k[1].y, 0f)
+    }
+
+    @Test fun copyPasteKeepsRelativeTimingAtThePlayheadInLocalTimeAndOnlyOntoTheSameProperty() {
+        // The layer starts at frame 100; its keys are anchor-relative.
+        val v = vm(layer(start = f(100)))
+        val l = v.layer()
+        val clip = KeyEdits.copy(l, KeyframeSelection(1, rot, listOf(f(30), f(10))))!!
+        assertEquals(listOf(0L, f(30) - f(10)), clip.keys.map { it.relativeUs }) // exact µs, not re-rounded to frames
+        assertTrue(KeyEdits.canPaste(l, rot, clip)); assertFalse(KeyEdits.canPaste(l, pos, clip))
+        assertFalse(KeyEdits.copyable(l, GraphTarget(AnimPropertyType.FILL_COLOUR)))
+        // Playhead at frame 300 (local 200): keys at local 200 and 220, values and curves kept. Outside the clip is fine.
+        v.dispatch(EditorAction.Seek(f(300)))
+        val pasted = KeyEdits.paste(v.state.project, v.layer(), rot, clip, v.state.playheadUs)!!
+        v.dispatch(pasted.action)
+        val keys = v.layer().animTransform.rotation.keyframes
+        assertEquals(10f, keys.first { it.timeUs == f(300) - l.resolvedKeyframeAnchorUs }.value, 0f)
+        assertEquals(30f, keys.first { it.timeUs == f(300) - l.resolvedKeyframeAnchorUs + (f(30) - f(10)) }.value, 0f)
+        assertEquals(8, keys.size)
+        v.undo(); assertEquals(6, v.layer().animTransform.rotation.keyframes.size)
+    }
+}

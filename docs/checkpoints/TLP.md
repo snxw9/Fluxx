@@ -127,3 +127,30 @@ Local branch `tlp`, created from `master` at `2377a83` (after the graph merge). 
   - **Duplicate ×N** places each copy directly above its source (the existing duplicate rule).
   - **Undo:** paste, duplicate and ×N are one `Batch` each. Each step is computed on the state after the previous ones, so the batch replays exactly.
 - Tests: `TlpMultiLayerTest` (JVM): the stagger / sequence maths, duplicate ×N and multi-layer copy / paste.
+
+## T5. Keyframe selection, bars, copy / paste
+
+- **Scope:** one property's keys, the active property (or animator field) on the open property page, on the selected layer (`KeyframeSelection`, `editor/KeySelection.kt`). UI state only: never in undo history, pruned after every change.
+  - Key selection mode is separate from layer selection. It ends when the page, property or layer changes, or the inspector closes.
+- **On the timeline:**
+  - **Double tap:** selects an editable key. In key selection mode, taps (and double taps) toggle keys and do not seek.
+  - **Outside the mode:** a single tap still seeks. The key's tap detector now also listens for a double tap, so a single tap seeks after the double-tap timeout instead of at once (*not verified on a finger*).
+  - **Empty tap:** a tap off the keys (clip body or empty track space) deselects all keys and exits, with no seek, no scroll and no selection change.
+  - **Drawing:** selected keys get an accent outline. Deselecting the last key exits.
+- **Top bar** (accent): Back, "N keyframes selected", Select all, Odd / Even (time order within the property), Trash (one undo).
+- **Bottom bar** (same overlay rules as T3):
+  - **Easing:** Hold, Linear, Easy Ease, and More (Ease In, Ease Out, Bounce, Elastic, then the pinned Graph curves). Each sets every selected key's departing segment with one `SetKeyEasing` (the selected key times) in one `Batch`. Disabled on hold-only tracks.
+  - **Stagger** (typed N ≥ 1) and **Sequence** (one frame apart).
+  - **Layout:** with the inspector open the bar overlays the inspector's bottom 48dp. *Layout to check on the phone.*
+- **Sequence / Stagger (keys)** (`KeyEdits.pack`):
+  - **Placement:** the selected keys in time order, N frames apart (N = 1 is Sequence), anchored on the first selected key, which stays. Unselected keys are not in the plan, and the selection follows its keys.
+  - **Actions:** frame grid only. Existing `MoveKeyframe` (transform / text tracks) and the animator's `Key MOVE`, one `Batch`.
+  - **Collision (exactly what `MoveKeyframe` does):** it drops any key already at the target time. A moved key that lands on an UNSELECTED key's frame replaces it, and that unselected key is deleted. Example (JVM): selected 0, 10, 20 staggered by 20 → the key moved to 40 replaces the unselected 40.
+  - **Ordering:** left-moving keys first (earliest first), then right-moving keys (latest first), so selected keys never collide mid-batch.
+  - **X/Y keys** move whole (both axes).
+- **Copy keys / Paste keys** (6th icon whenever a property page is open):
+  - **Copy:** stores the selected keys' values, curves and exact relative timing.
+  - **Paste:** puts the first copied key at the playhead in the target layer's own local time, keeping exact relative µs. The playhead may be outside the clip. Existing keys at those times are replaced (the set-key actions' rule). Text and animator times are frame-snapped, as their actions do.
+  - **Targets:** the same property kind only (otherwise disabled). Colour and Source Text keys are not copyable (no numeric value channels).
+  - **Undo:** one `Batch`.
+- Tests: `TlpKeyTest` (JVM).

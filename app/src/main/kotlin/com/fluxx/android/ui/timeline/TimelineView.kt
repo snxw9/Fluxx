@@ -174,6 +174,10 @@ fun TimelineView(
     onDLongPress: (Long) -> Unit = {},
     /** TLP T3: extra bottom scroll padding under the last row (the selection bar overlays the timeline, never resizing it). */
     extraBottomPadding: Dp = 0.dp,
+    /** TLP T5: key selection mode on the selected layer's focused property (local key times), and its key taps. */
+    selectedKeys: Set<Long>? = null,
+    onKeyToggle: (Long) -> Unit = {},
+    onKeyDoubleTap: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val comp = project.composition
@@ -490,7 +494,9 @@ fun TimelineView(
                                         onCommitGesture = commitEdit,
                                         onCancelGesture = cancelEdit,
                                         onOptionsClick = { onOpenClipOptions(layer.id) },
-                                        groupSelection = selection?.takeIf { layer.id in it }
+                                        groupSelection = selection?.takeIf { layer.id in it },
+                                        selectedKeys = selectedKeys?.takeIf { layer.id == selectedLayerId },
+                                        onKeyToggle = onKeyToggle, onKeyDoubleTap = onKeyDoubleTap
                                     )
                                 }
 
@@ -755,6 +761,10 @@ private fun TimelineClipRow(
     onOptionsClick: () -> Unit,
     /** TLP T3: the selection when this layer is part of it (a hold-drag then moves every selected layer). */
     groupSelection: com.fluxx.android.editor.LayerSelection? = null,
+    /** TLP T5: the selected keys (local times) of this row in key selection mode, else null. */
+    selectedKeys: Set<Long>? = null,
+    onKeyToggle: (Long) -> Unit = {},
+    onKeyDoubleTap: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val currentLayer by rememberUpdatedState(layer)
@@ -782,6 +792,9 @@ private fun TimelineClipRow(
     var moveProject by remember { mutableStateOf<ProjectDocument?>(null) }
     val group by rememberUpdatedState(groupSelection)
     val currentProject by rememberUpdatedState(project)
+    val keyMode by rememberUpdatedState(selectedKeys != null)
+    val keyToggle by rememberUpdatedState(onKeyToggle)
+    val keyDoubleTap by rememberUpdatedState(onKeyDoubleTap)
     var movePixels by remember { mutableFloatStateOf(0f) }
     var moveScrollOrigin by remember { mutableStateOf(0) }
     var labelRootX by remember { mutableFloatStateOf(0f) }
@@ -992,10 +1005,13 @@ private fun TimelineClipRow(
                                 .offset(x = hitLeft)
                                 .size(width = hitWidth, height = TRACK_ROW_HEIGHT_DP.dp)
                                 .then(if (editable) Modifier.pointerInput(kfTimeUs, startUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
+                                    // TLP T5: a double tap selects the key; in key selection mode taps toggle keys (no seek).
+                                    val local = kfTimeUs - anchorOffsetUs
                                     detectTapGestures(
                                         onTap = {
-                                            onSeek(startUs + kfTimeUs, false)
-                                        }
+                                            if (keyMode) keyToggle(local) else onSeek(startUs + kfTimeUs, false)
+                                        },
+                                        onDoubleTap = { if (keyMode) keyToggle(local) else keyDoubleTap(local) }
                                     )
                                 }
                                 .pointerInput(kfTimeUs, startUs, durationUs, pxPerUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
@@ -1047,6 +1063,8 @@ private fun TimelineClipRow(
                                 .size(marker.sizeDp.dp).alpha(marker.alpha)) {
                                 LayerKeyMarkers.diamond(diamondPath, size)
                                 drawPath(path = diamondPath, color = clipBgColor, style = knockoutStroke)
+                                // TLP T5: a selected key gets an outer accent outline (beside the playhead fill rule).
+                                if (selectedKeys?.contains(kfTimeUs - anchorOffsetUs) == true) drawPath(path = diamondPath, color = Highlight, style = Stroke(width = 2.5.dp.toPx()))
                                 if (isAtPlayhead) {
                                     drawPath(
                                         path = diamondPath,

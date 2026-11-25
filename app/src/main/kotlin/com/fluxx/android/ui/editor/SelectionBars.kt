@@ -96,16 +96,16 @@ internal val SelectionBarHeight = 48.dp
  * Reverse toggle. [onApply] receives the typed value and the toggle.
  */
 @Composable internal fun FramesPopoverContent(label: String, unit: String, initial: Int, reverse: Boolean, onReverse: () -> Unit,
-    onApply: (Int) -> Unit, close: () -> Unit, testTag: String, allowNegative: Boolean = false) {
+    onApply: (Int) -> Unit, close: () -> Unit, testTag: String, allowNegative: Boolean = false, showReverse: Boolean = true, minimum: Int = 0) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(4.dp)) {
         InspectorValueField(initial.toString(), label, unit, onCommit = { text ->
             val n = text.trim().toIntOrNull()
-            if (n != null && (allowNegative || n >= 0)) { onApply(n); close() }
+            if (n != null && (allowNegative || n >= minimum)) { onApply(n); close() }
         }, onCancel = close, modifier = Modifier.testTag("$testTag-field"),
             keyboardType = if (allowNegative) androidx.compose.ui.text.input.KeyboardType.DecimalSigned else androidx.compose.ui.text.input.KeyboardType.Number,
             autoFocus = false)
-        Spacer(Modifier.width(4.dp))
-        com.fluxx.android.ui.inspector.InspectorIconButton(InspectorIcons.icon("EASE_INVERT"), if (reverse) "Reverse order: on" else "Reverse order: off",
+        if (showReverse) Spacer(Modifier.width(4.dp))
+        if (showReverse) com.fluxx.android.ui.inspector.InspectorIconButton(InspectorIcons.icon("EASE_INVERT"), if (reverse) "Reverse order: on" else "Reverse order: off",
             Modifier.testTag("$testTag-reverse").semantics { stateDescription = if (reverse) "On" else "Off" }, selected = reverse) { onReverse() }
     }
 }
