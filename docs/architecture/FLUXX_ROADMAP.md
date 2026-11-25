@@ -32,7 +32,7 @@ The full SDD scope — dual Graph Editor, 15 effects, masks/mattes/blend modes, 
 
 ## Current Status & Active Phase
 
-Fluxx is currently in **Phase 2: Timeline + Multiple Layers**. F1/F2 text are user-accepted. Their deferred device suites have since run on the A16 in [TEXT FIX 9](../checkpoints/TEXT.md#9d-deferred-device-suites-results-fixes-findings) and TEXT PERF 10/11. Results and the remaining environmental failures (Vulkan validation layer, golden source asset) are recorded there. The F3 animator UI is implemented and merged, reworked by F3.1 and polished by F3.2–F3.4, with phone acceptance of F3.1–F3.3 done; the text phase is complete ([text record](../checkpoints/TEXT.md)). See the [existing text animation plan](../checkpoints/TEXT.md#f2b-implementation-and-verification).
+Fluxx is currently in **Phase 2: Timeline + Multiple Layers**. F1/F2 text are user-accepted. Their deferred device suites have since run on the A16 in [TEXT FIX 9](../checkpoints/TEXT.md#9d-deferred-device-suites-results-fixes-findings) and TEXT PERF 10/11. Results and the remaining environmental failures (Vulkan validation layer, golden source asset) are recorded there. The F3 animator UI is implemented and merged, reworked by F3.1 and polished by F3.2–F3.4, with phone acceptance of F3.1–F3.3 done; the text phase is complete ([text record](../checkpoints/TEXT.md)). See the [existing text animation plan](../checkpoints/TEXT.md#f2b-implementation-and-verification). The graph editor (G1–G4) and the TL1 timeline are merged to `master` from one `graph` branch ([G4 record](../checkpoints/GRAPH_G4.md)).
 - **Steps A, B, and C** (backend composition model, Vulkan multi-layer rendering, audio mixing, and mobile editing UI across shell, inspector, timeline, browser, and autosave) are **implemented in source**.
 - Android debug Kotlin and native debug/release compilation passed during E1b/E1c; the user confirmed A16 E1a render/playback/export smoke. Feature-specific phone/JVM acceptance remains where explicitly listed; see the status matrix and text checkpoint.
 - Comprehensive feature specifications and verification checklists are consolidated under [`docs/checkpoints/`](../checkpoints/):
@@ -145,7 +145,7 @@ No user-facing features. Goal: confidence the hard technical bets actually work 
 
 **Done when:** a simple multi-layer, multi-keyframe composition previews and exports correctly.
 
-### Graph editor (in progress: G1, G1.1, G2L, G2, G2.1, TL1 and G3 in source)
+### Graph editor (G1, G1.1, G2L, G2, G2.1, TL1, G3, G3.1 and G4 merged to `master` from the one `graph` branch)
 
 The graph editor (value and speed curves for keyframes, reached from the rail's Graph icon) is the current big item. It is planned in these passes:
 - [x] **G1: curve backend + Ease view** — schema v13 easing (Hold, Linear, Easy Ease, Custom bezier with overshoot, Bounce, Elastic), `SetKeyEasing`, overshoot-safe consumers, and the Graph page's Ease view with presets, handles, numeric entry and `cubic-bezier()` clipboard. Implemented in source on `graph-g1`; JVM 518/518 and the targeted A16 layout/render tests pass; phone acceptance pending ([record](../checkpoints/GRAPH_G1.md)).
@@ -190,12 +190,19 @@ The graph editor (value and speed curves for keyframes, reached from the rail's 
   - magnetic speed / influence landmarks.
 
   JVM 587/587; A16 sweep green ([record](../checkpoints/GRAPH_G3_1.md)).
-- [ ] **G4: convert Bounce/Elastic to keys** and extra curve libraries. Next.
+- [x] **G4**:
+  - Convert to keys for Bounce (exact on transform tracks) and Elastic (fitted, max error 0.40% of travel);
+  - the timeline zoom floor drops to 0.5dp/s, with clips, keys and markers tappable at 48dp (nearest wins);
+  - the Speed view re-frames once after a library / strip / preset tap when a handle leaves the window.
+
+  The G3.1 ruler rules are kept, with a mixed-tier spacing finding recorded. No schema change, no new action. JVM 600/600; A16 `GraphG4UiTest`, `TimeAuditTest` and `GraphPlayheadTest` green after the fixed failures were re-run; phone acceptance pending ([record](../checkpoints/GRAPH_G4.md)).
+- [x] **Consolidation:** the `graph-*` branches were replaced by one `graph` branch, merged into `master`.
+- [ ] Extra curve libraries (from the old G4 plan): not built.
 - Later: share-sheet export of curves, separate X/Y easing and dimensions (needs schema v14) and multi-select.
 
-### Timeline productivity (parked)
+### Timeline productivity (TLP: next, on a local `tlp` branch)
 
-Still parked after the text phase. These are user ideas recorded for planning; none is built.
+Started after the graph merge on a local `tlp` branch (its record, `docs/checkpoints/TLP.md`, lives on that branch); not merged. The ideas:
 
 - **Select all and multi-select for layers.** This is the foundation for the rest; "Select all" is still a disabled placeholder.
 - **Duplicate count.** Hold the duplicate button on a layer to choose how many duplicates to make, instead of tapping once per copy.
