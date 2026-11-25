@@ -2,6 +2,7 @@ package com.fluxx.android.editor
 
 import com.fluxx.android.model.CompositionLayer
 import com.fluxx.android.model.ProjectDocument
+import com.fluxx.android.model.FrameRate
 
 /**
  * TLP T0/T1: the timeline's multi-layer selection, an ORDERED set of layer ids in selection order. [primary] is the last
@@ -94,6 +95,52 @@ object MultiLayerEdits {
             if (a == null) skipped++ else edits += a
         }
         return Applied(edits.takeIf { it.isNotEmpty() }?.let { EditorAction.Batch(it) }, skipped)
+    }
+
+    /** [base] + [frames] on the composition grid: whole frames from a frame-aligned [base], else the same µs shift. */
+    private fun plusFrames(rate: FrameRate, base: Long, frames: Long): Long {
+        val f = rate.nearestFrame(base)
+        val to = if (rate.frameTimeUs(f) == base) { val t = f + frames; if (t >= 0) rate.frameTimeUs(t) else 0L }
+            else base + (if (frames >= 0) rate.frameTimeUs(frames) else -rate.frameTimeUs(-frames))
+        return to.coerceAtLeast(0)
+    }
+    private fun ordered(project: ProjectDocument, selection: LayerSelection, reverse: Boolean) =
+        layers(project, selection).let { if (reverse) it.reversed() else it }
+
+    /**
+     * T4 Stagger, in SELECTION order (or reversed): layer 1 stays; layer k starts [frames] after layer k−1's start. Whole
+     * clips move (duration and in-point kept) with existing [EditorAction.Move]s, one Batch. Null when nothing moves.
+     */
+    fun stagger(project: ProjectDocument, selection: LayerSelection, frames: Int, reverse: Boolean = false): EditorAction? {
+        require(frames >= 0) { "Stagger by zero or more frames" }
+        val rate = project.composition.frameRate
+        val list = ordered(project, selection, reverse)
+        if (list.size < 2) return null
+        var start = list[0].timing.startUs
+        val moves = ArrayList<EditorAction>()
+        for (l in list.drop(1)) {
+            start = plusFrames(rate, start, frames.toLong())
+            if (l.timing.startUs != start) moves += EditorAction.Move(l.id, start)
+        }
+        return moves.takeIf { it.isNotEmpty() }?.let { EditorAction.Batch(it) }
+    }
+
+    /**
+     * T4 Sequence, end to end in SELECTION order (or reversed): each layer starts at the previous one's end plus [gapFrames]
+     * (negative = overlap; never before 0). Layer 1 stays. An unresolved duration counts as zero. One Batch of Moves.
+     */
+    fun sequence(project: ProjectDocument, selection: LayerSelection, gapFrames: Int = 0, reverse: Boolean = false): EditorAction? {
+        val rate = project.composition.frameRate
+        val list = ordered(project, selection, reverse)
+        if (list.size < 2) return null
+        var start = list[0].timing.startUs; var duration = list[0].timing.durationUs ?: 0L
+        val moves = ArrayList<EditorAction>()
+        for (l in list.drop(1)) {
+            start = plusFrames(rate, start + duration, gapFrames.toLong())
+            if (l.timing.startUs != start) moves += EditorAction.Move(l.id, start)
+            duration = l.timing.durationUs ?: 0L
+        }
+        return moves.takeIf { it.isNotEmpty() }?.let { EditorAction.Batch(it) }
     }
 
     /** T3 Trash: every selected layer, one undo (the single-layer delete has no confirmation, so neither does this). */

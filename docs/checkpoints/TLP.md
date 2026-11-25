@@ -109,3 +109,21 @@ Local branch `tlp`, created from `master` at `2377a83` (after the graph merge). 
   - **Offsets:** the delta is whole frames, clamped so the earliest selected clip stays at ≥ 0. Frame-aligned starts keep exact relative offsets.
   - **Unselected layer:** a hold-drag on one in the mode moves that layer alone and does not change the selection.
 - Icons added to the family: `GROUP`, `ODD_EVEN`, `STAGGER`, `SEQUENCE`. Tests: `TlpMultiLayerTest` (JVM).
+
+## T4. Multi-layer actions
+
+- **Stagger** (bottom bar popover): a typed whole number of frames N (no steppers; it applies on IME Done or focus loss, and invalid input is discarded) and a Reverse toggle.
+  - **Order:** selection order. Layer 1 stays; layer k starts N frames after layer k−1's start.
+  - **Edit:** whole clips move (duration and in-point kept) with existing `Move`s, one `Batch`.
+- **Sequence** (popover): end to end in selection order (or reversed). Each layer starts at the previous one's end plus a typed gap in frames (negative = overlap, default 0), never before 0.
+  - An unresolved clip duration counts as zero. Same actions, one `Batch`.
+- **6th toolbar icon (context-aware)** (`EditorActionBar` → `LayerMenuButton`):
+  - **No selection:** Select all, Paste.
+  - **One layer (outside the mode):** the existing items, then Paste and Select all (Select all is no longer a disabled placeholder).
+  - **Selection mode:** Duplicate; Duplicate ×N (a typed count 1–99 inside the menu); Copy; Paste; Select all; Invert selection.
+  - **Select all from outside the mode** enters it.
+- **Clipboard:** `layerClipboard` holds a list (timeline order).
+  - **Paste** puts the earliest copied layer at the frame-snapped playhead. The others keep their timing offsets, and all keep their relative stacking above the existing layers (the existing paste rule: a fresh id tied on the top z-order).
+  - **Duplicate ×N** places each copy directly above its source (the existing duplicate rule).
+  - **Undo:** paste, duplicate and ×N are one `Batch` each. Each step is computed on the state after the previous ones, so the batch replays exactly.
+- Tests: `TlpMultiLayerTest` (JVM): the stagger / sequence maths, duplicate ×N and multi-layer copy / paste.

@@ -510,6 +510,21 @@ fun EditorScreen(
                             previewController?.update(editor.state.project, editor.state.playheadUs, false)
                         }
                     },
+                    // TLP T4: the 6th icon is context-aware.
+                    selectionMode = editor.selectionMode,
+                    onSelectAll = {
+                        val all = LayerOrder.all(editor.state.project.composition.layers)
+                        if (!all.isEmpty) textEditor.finish {
+                            if (!editor.selectionMode) { dismissInspector(); editor.enterSelection(all.ids.first()) }
+                            editor.setSelection(all)
+                        }
+                    },
+                    onInvertSelection = { editor.layerSelection?.let { editor.setSelection(LayerOrder.invert(editor.state.project.composition.layers, it)) } },
+                    onDuplicateSelection = { n -> editor.layerSelection?.let { sel ->
+                        previewController?.pause(); editor.duplicateLayers(sel.ids, n)
+                        previewController?.update(editor.state.project, editor.state.playheadUs, false) } },
+                    onCopySelection = { editor.layerSelection?.let { sel -> if (editor.copyLayers(sel.ids))
+                        android.widget.Toast.makeText(context, if (sel.size == 1) "Layer copied" else "${sel.size} layers copied", android.widget.Toast.LENGTH_SHORT).show() } },
                     viewSettings = viewSettings,
                     onViewSettingsChange = { viewSettings = it },
                     previewResolution = previewResolution,
@@ -637,8 +652,15 @@ fun EditorScreen(
                                 android.widget.Toast.LENGTH_SHORT).show()
                         }
                     }
-                    BarIcon("STAGGER", "Stagger the selected layers", enabled = false, testTag = "selection-stagger") {}
-                    BarIcon("SEQUENCE", "Sequence the selected layers", enabled = false, testTag = "selection-sequence") {}
+                    var reverse by remember { mutableStateOf(false) }
+                    BarPopoverIcon("STAGGER", "Stagger the selected layers", "sel-stagger", "selection-stagger", enabled = layerSel.size > 1) { close ->
+                        FramesPopoverContent("Stagger", "frames", 2, reverse, { reverse = !reverse }, { n ->
+                            MultiLayerEdits.stagger(editor.state.project, layerSel, n, reverse)?.let { applyLayerAction(it) } }, close, "selection-stagger")
+                    }
+                    BarPopoverIcon("SEQUENCE", "Sequence the selected layers end to end", "sel-sequence", "selection-sequence", enabled = layerSel.size > 1) { close ->
+                        FramesPopoverContent("Gap", "frames", 0, reverse, { reverse = !reverse }, { n ->
+                            MultiLayerEdits.sequence(editor.state.project, layerSel, n, reverse)?.let { applyLayerAction(it) } }, close, "selection-sequence", allowNegative = true)
+                    }
                 }
             }
 

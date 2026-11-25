@@ -57,4 +57,53 @@ class TlpMultiLayerTest {
         assertFalse(v.selectionMode)
         v.undo(); assertEquals(before, v.state.project)
     }
+
+    @Test fun staggerUsesSelectionOrderInFramesAndKeepsDurations() {
+        val v = vm(); v.enterSelection(3); v.setSelection(v.layerSelection!!.add(1).add(4)) // order 3, 1, 4
+        val before = v.state.project
+        v.dispatch(MultiLayerEdits.stagger(v.state.project, v.layerSelection!!, 5)!!)
+        assertEquals(f(90), v.start(3))          // layer 1 of the order stays
+        assertEquals(f(95), v.start(1)); assertEquals(f(100), v.start(4))
+        listOf(1L, 3L, 4L).forEach { assertEquals(f(60), v.dur(it)) }
+        v.undo(); assertEquals(before, v.state.project)
+        // Reverse: 4, 1, 3 → 4 stays at 120.
+        v.dispatch(MultiLayerEdits.stagger(v.state.project, v.layerSelection!!, 5, reverse = true)!!)
+        assertEquals(f(120), v.start(4)); assertEquals(f(125), v.start(1)); assertEquals(f(130), v.start(3))
+        // N = 0 stacks them on the first start.
+        v.undo(); v.dispatch(MultiLayerEdits.stagger(v.state.project, v.layerSelection!!, 0)!!)
+        assertEquals(f(90), v.start(1)); assertEquals(f(90), v.start(4))
+    }
+
+    @Test fun sequencePlacesClipsEndToEndWithAGapOrOverlap() {
+        val v = vm(); v.enterSelection(2); v.setSelection(v.layerSelection!!.add(1).add(3)) // order 2, 1, 3 (60 frames each)
+        v.dispatch(MultiLayerEdits.sequence(v.state.project, v.layerSelection!!)!!)
+        assertEquals(f(60), v.start(2)); assertEquals(f(120), v.start(1)); assertEquals(f(180), v.start(3))
+        v.undo(); v.dispatch(MultiLayerEdits.sequence(v.state.project, v.layerSelection!!, gapFrames = 10)!!)
+        assertEquals(f(130), v.start(1)); assertEquals(f(200), v.start(3))
+        v.undo(); v.dispatch(MultiLayerEdits.sequence(v.state.project, v.layerSelection!!, gapFrames = -15)!!)
+        assertEquals(f(105), v.start(1)); assertEquals(f(150), v.start(3))
+        // A large overlap never goes before 0.
+        v.undo(); v.dispatch(MultiLayerEdits.sequence(v.state.project, v.layerSelection!!, gapFrames = -1000)!!)
+        assertEquals(0L, v.start(1)); assertEquals(0L, v.start(3))
+        // In-points are kept (Move, not Trim).
+        assertEquals(0L, v.state.project.composition.layers.first { it.id == 1L }.timing.sourceInUs)
+    }
+
+    @Test fun duplicateTimesNAndMultiLayerCopyPasteAreOneUndo() {
+        val v = vm(3)
+        v.duplicateLayers(listOf(1L, 3L), 3)
+        assertEquals(3 + 6, v.state.project.composition.layers.size)
+        val order = LayerOrder.timeline(v.state.project.composition.layers).map { it.name }
+        // Each source's copies sit directly above it.
+        assertEquals(listOf("L1 Copy", "L1 Copy", "L1 Copy", "L1", "L2", "L3 Copy", "L3 Copy", "L3 Copy", "L3"), order)
+        v.undo(); assertEquals(3, v.state.project.composition.layers.size)
+        // Copy layers 3 and 1, paste at frame 300: the earliest (1 at 30) goes to 300, 3 keeps +60 frames; stacking kept on top.
+        assertTrue(v.copyLayers(listOf(3L, 1L))); assertEquals(2, v.copiedLayerCount)
+        v.dispatch(EditorAction.Seek(f(300)))
+        v.pasteLayer()
+        val pasted = LayerOrder.timeline(v.state.project.composition.layers)
+        assertEquals(listOf("L1 Copy", "L3 Copy", "L1", "L2", "L3"), pasted.map { it.name })
+        assertEquals(f(300), pasted[0].timing.startUs); assertEquals(f(360), pasted[1].timing.startUs)
+        v.undo(); assertEquals(3, v.state.project.composition.layers.size)
+    }
 }

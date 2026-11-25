@@ -20,30 +20,63 @@ class EditorViewModel : ViewModel() {
     val activeGestureId: Long? get() = gestureSerial.takeIf { gestureBase != null }
     private var projectGeneration = 0L
     // One session clipboard; it is neither document state nor an undoable selection.
-    private var copiedLayer by mutableStateOf<CompositionLayer?>(null)
-    val hasCopiedLayer: Boolean get() = copiedLayer != null
+    // TLP T4: it holds a LIST of layers (timeline order, top first), so copy / paste are multi-layer.
+    private var copiedLayers by mutableStateOf<List<CompositionLayer>>(emptyList())
+    val hasCopiedLayer: Boolean get() = copiedLayers.isNotEmpty()
+    val copiedLayerCount: Int get() = copiedLayers.size
 
-    fun copyLayer(id: Long): Boolean {
+    fun copyLayer(id: Long): Boolean = copyLayers(listOf(id))
+
+    /** TLP T4: copies [ids] (stored in timeline order so paste keeps their stacking). */
+    fun copyLayers(ids: Collection<Long>): Boolean {
         commitGesture()
-        val layer = state.project.composition.layers.firstOrNull { it.id == id } ?: return false
         val comp = state.project.composition
-        copiedLayer = layer.withReferenceCanvas(comp.width, comp.height)
+        val layers = LayerOrder.timeline(comp.layers).filter { it.id in ids }
+        if (layers.isEmpty()) return false
+        copiedLayers = layers.map { it.withReferenceCanvas(comp.width, comp.height) }
         return true
     }
 
-    fun duplicateLayer(id: Long) {
+    fun duplicateLayer(id: Long) = duplicateLayers(listOf(id), 1)
+
+    /**
+     * TLP T4: [count] copies of each of [ids], each directly above its source (the existing duplicate rule), as ONE Batch
+     * (one undo). Each step's actions are computed against the state after the previous steps, so the batch replays exactly.
+     */
+    fun duplicateLayers(ids: List<Long>, count: Int) {
+        if (count < 1) return
         commitGesture()
-        val layer = state.project.composition.layers.firstOrNull { it.id == id } ?: return
-        insertLayerCopy(layer, layer.timing.startUs, directlyAboveSource = true)
+        var s = state
+        val actions = ArrayList<EditorAction>()
+        for (id in ids) repeat(count) {
+            val source = s.project.composition.layers.firstOrNull { it.id == id } ?: return@repeat
+            val step = copyActions(s, source, source.timing.startUs, directlyAboveSource = true)
+            actions += step; s = EditorReducer.reduce(s, EditorAction.Batch(step))
+        }
+        if (actions.isNotEmpty()) dispatch(EditorAction.Batch(actions))
     }
 
+    /**
+     * Paste at the frame-snapped playhead. TLP T4: several copied layers keep their relative timing (the earliest goes to
+     * the playhead) and their relative stacking (all above the existing layers), as ONE Batch (one undo).
+     */
     fun pasteLayer() {
-        val layer = copiedLayer ?: return
+        val layers = copiedLayers
+        if (layers.isEmpty()) return
         commitGesture()
-        insertLayerCopy(layer, state.project.composition.frameRate.snap(state.playheadUs))
+        val at = state.project.composition.frameRate.snap(state.playheadUs)
+        val earliest = layers.minOf { it.timing.startUs }
+        var s = state
+        val actions = ArrayList<EditorAction>()
+        // Bottom first: each new layer sorts above the previous ones (fresh higher ids tie on the top z-order).
+        for (source in layers.reversed()) {
+            val step = copyActions(s, source, (at + (source.timing.startUs - earliest)).coerceAtLeast(0))
+            actions += step; s = EditorReducer.reduce(s, EditorAction.Batch(step))
+        }
+        dispatch(if (actions.size == 1) actions.single() else EditorAction.Batch(actions))
     }
 
-    private fun insertLayerCopy(source: CompositionLayer, startUs: Long, directlyAboveSource: Boolean = false) {
+    private fun copyActions(state: EditorState, source: CompositionLayer, startUs: Long, directlyAboveSource: Boolean = false): List<EditorAction> {
         val comp = state.project.composition
         val id = EditorReducer.nextLayerId(state.project)
         // A copied media snapshot may outlive a relink. Avoid giving two different references one asset ID.
@@ -61,11 +94,10 @@ class EditorViewModel : ViewModel() {
         ))
         val ordered = comp.layers.sortedWith(compareByDescending<CompositionLayer> { it.zOrder }.thenByDescending { it.id })
         val sourceIndex = ordered.indexOfFirst { it.id == source.id }
-        if (directlyAboveSource && sourceIndex > 0) {
-            // Reorder targets are indices before removal. From the top, moving to the source's
-            // predecessor inserts immediately above the source. Batch keeps creation+order atomic.
-            dispatch(EditorAction.Batch(listOf(add, EditorAction.ReorderLayer(id, ordered[sourceIndex - 1].id))))
-        } else dispatch(add)
+        // Reorder targets are indices before removal. From the top, moving to the source's
+        // predecessor inserts immediately above the source. Batch keeps creation+order atomic.
+        return if (directlyAboveSource && sourceIndex > 0) listOf(add, EditorAction.ReorderLayer(id, ordered[sourceIndex - 1].id))
+            else listOf(add)
     }
 
 
@@ -126,7 +158,7 @@ class EditorViewModel : ViewModel() {
         val next = EditorReducer.reduce(state, action)
         if (action is EditorAction.Load) {
             projectGeneration++
-            copiedLayer = null
+            copiedLayers = emptyList()
             undoStack.clear()
             redoStack.clear()
         } else if (action !is EditorAction.Seek && action !is EditorAction.Select && next.project != state.project) {
