@@ -316,7 +316,7 @@ class Tl31MeasureTest {
         val file = Tl31Fixtures.videoWithAudio(context, "tl31-d2-60.mp4", 60.0)
         val uri = android.net.Uri.fromFile(file).toString()
         val video = CompositionLayer(1, LayerType.VIDEO, name = "fixture", timing = ClipTiming(0, 0, 60_000_000),
-            asset = AssetReference("tl31-d2", uri, durationUs = 60_000_000))
+            asset = AssetReference("tl31-d2", uri, access = MediaAccess.AVAILABLE, durationUs = 60_000_000)) // the generated fixture is readable
         editor = EditorViewModel()
         editor.dispatch(EditorAction.Load(ProjectDocument(Composition(durationUs = 60_000_000, frameRate = rate, layers = FrozenList.of(listOf(video))))))
         compose.setContent { FluxxTheme { EditorScreen(editor, MediaRepository(context), controller.value, null, true, false,
@@ -344,5 +344,39 @@ class Tl31MeasureTest {
             report("D2 round $round (60s fixture): play -> audio playing ${readyMs}ms; underruns in 8s: $underruns; AudioTrack buffer $bufferFrames frames (%.0fms) during playback".format(bufferFrames / 48.0), frames)
             Thread.sleep(800); compose.runOnIdle { c.seek(0) }; Thread.sleep(500)
         }
+    }
+
+    /** D1 breakdown on the 60 s fixture: extractor only / decode (outputs drained untouched) / decode + every sample read. */
+    @Test fun d1DecodeBreakdown() {
+        val file = Tl31Fixtures.videoWithAudio(context, "tl31-d-60b.mp4", 60.0)
+        fun timed(label: String, touchSamples: Boolean, decode: Boolean, waitUs: Long) {
+            val ex = android.media.MediaExtractor(); ex.setDataSource(file.path)
+            val track = (0 until ex.trackCount).first { ex.getTrackFormat(it).getString(android.media.MediaFormat.KEY_MIME)!!.startsWith("audio/") }
+            ex.selectTrack(track); val fmt = ex.getTrackFormat(track)
+            val t0 = System.nanoTime(); var samples = 0L; var outputs = 0
+            if (!decode) { val buf = java.nio.ByteBuffer.allocate(1 shl 16); while (ex.readSampleData(buf, 0) >= 0) { samples++; ex.advance() } }
+            else {
+                val c = android.media.MediaCodec.createDecoderByType(fmt.getString(android.media.MediaFormat.KEY_MIME)!!)
+                c.configure(fmt, null, null, 0); c.start()
+                val info = android.media.MediaCodec.BufferInfo(); var inEnd = false; var end = false; var sink = 0f
+                while (!end) {
+                    while (!inEnd) { val i = c.dequeueInputBuffer(0); if (i < 0) break
+                        val n = ex.readSampleData(c.getInputBuffer(i)!!, 0)
+                        if (n < 0) { c.queueInputBuffer(i, 0, 0, 0, android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM); inEnd = true } else { c.queueInputBuffer(i, 0, n, ex.sampleTime, 0); ex.advance() } }
+                    val o = c.dequeueOutputBuffer(info, waitUs)
+                    if (o >= 0) { outputs++
+                        if (touchSamples) { val b = c.getOutputBuffer(o)!!.order(java.nio.ByteOrder.LITTLE_ENDIAN); b.position(info.offset); b.limit(info.offset + info.size)
+                            while (b.remaining() >= 2) { sink += b.short / 32768f; samples++ } }
+                        end = info.flags and android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0; c.releaseOutputBuffer(o, false) }
+                }
+                c.stop(); c.release()
+            }
+            ex.release()
+            report("D1 breakdown 60s: $label ${(System.nanoTime() - t0) / 1_000_000}ms (outputs $outputs, samples $samples)", emptyList())
+        }
+        timed("extractor only (read every AAC frame)", touchSamples = false, decode = false, waitUs = 0)
+        timed("decode, outputs drained untouched, 2ms output wait", touchSamples = false, decode = true, waitUs = 2000)
+        timed("decode, outputs drained untouched, no output wait", touchSamples = false, decode = true, waitUs = 0)
+        timed("decode + every 16-bit sample read in Kotlin", touchSamples = true, decode = true, waitUs = 0)
     }
 }

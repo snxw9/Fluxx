@@ -112,15 +112,16 @@ class AudioPeakProvider private constructor(private val context: Context) {
             var inputEnded = false; var ended = false
             while (!ended) {
                 currentCoroutineContext().ensureActive()
-                if (!inputEnded) {
+                // TL3.1 D: keep every free input buffer filled, and only wait for output once the input has ended (one
+                // input per loop plus a 2 ms wait starved the decoder: the decode was poll-bound, not decode-bound).
+                while (!inputEnded) {
                     val i = c.dequeueInputBuffer(0)
-                    if (i >= 0) {
-                        val n = extractor.readSampleData(requireNotNull(c.getInputBuffer(i)), 0)
-                        if (n < 0) { c.queueInputBuffer(i, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM); inputEnded = true }
-                        else { c.queueInputBuffer(i, 0, n, extractor.sampleTime, 0); extractor.advance() }
-                    }
+                    if (i < 0) break
+                    val n = extractor.readSampleData(requireNotNull(c.getInputBuffer(i)), 0)
+                    if (n < 0) { c.queueInputBuffer(i, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM); inputEnded = true }
+                    else { c.queueInputBuffer(i, 0, n, extractor.sampleTime, 0); extractor.advance() }
                 }
-                val o = c.dequeueOutputBuffer(info, 2000)
+                val o = c.dequeueOutputBuffer(info, if (inputEnded) 2000 else 500)
                 if (o == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                     val out = c.outputFormat
                     rate = out.getInteger(MediaFormat.KEY_SAMPLE_RATE); channels = out.getInteger(MediaFormat.KEY_CHANNEL_COUNT)

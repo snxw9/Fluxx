@@ -51,7 +51,9 @@ class PeakPyramid(val sampleRate: Int, val durationUs: Long, val levels: List<Pa
 
 /** TL3 B5: builds a [PeakPyramid] while samples stream in (no whole-file PCM in memory); cancellation is the caller's. */
 class PeakBuilder(private val sampleRate: Int) {
-    private val mins = ArrayList<Float>(); private val maxs = ArrayList<Float>()
+    // Primitive arrays (grown by doubling): no boxing per sample.
+    private var mins = FloatArray(1024) { Float.MAX_VALUE }; private var maxs = FloatArray(1024) { -Float.MAX_VALUE }
+    private var used = 0
     /** One past the last sample index written. */
     var samples = 0L; private set
 
@@ -66,17 +68,22 @@ class PeakBuilder(private val sampleRate: Int) {
     fun addAt(index: Long, sample: Float) {
         if (index < 0) return
         val b = (index / PeakPyramid.BASE).toInt()
-        while (mins.size <= b) { mins += Float.MAX_VALUE; maxs += -Float.MAX_VALUE }
+        if (b >= mins.size) {
+            val n = maxOf(b + 1, mins.size * 2)
+            mins = mins.copyOf(n).also { for (i in mins.size until n) it[i] = Float.MAX_VALUE }
+            maxs = maxs.copyOf(n).also { for (i in maxs.size until n) it[i] = -Float.MAX_VALUE }
+        }
+        if (b + 1 > used) used = b + 1
         if (sample < mins[b]) mins[b] = sample
         if (sample > maxs[b]) maxs[b] = sample
         if (index + 1 > samples) samples = index + 1
     }
-    private fun flush() { for (i in mins.indices) if (mins[i] == Float.MAX_VALUE) { mins[i] = 0f; maxs[i] = 0f } }
+    private fun flush() { for (i in 0 until used) if (mins[i] == Float.MAX_VALUE) { mins[i] = 0f; maxs[i] = 0f } }
 
     fun build(): PeakPyramid {
         flush()
         val levels = ArrayList<Pair<FloatArray, FloatArray>>()
-        var mn = mins.toFloatArray(); var mx = maxs.toFloatArray()
+        var mn = mins.copyOf(used); var mx = maxs.copyOf(used)
         levels += mn to mx
         while (mn.size > 1) {
             val n = (mn.size + PeakPyramid.FACTOR - 1) / PeakPyramid.FACTOR

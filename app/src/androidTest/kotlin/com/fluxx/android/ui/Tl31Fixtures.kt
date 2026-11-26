@@ -70,7 +70,7 @@ object Tl31Fixtures {
     }
 
     /** A tiny H.264 video (grey frames, [fps] frames a second, all keyframes once a second) of [seconds]. */
-    private fun encodeVideo(seconds: Double, fps: Int = 10, w: Int = 160, h: Int = 96): Pair<MediaFormat, List<Sample>> {
+    private fun encodeVideo(seconds: Double, fps: Int = 10, w: Int = 320, h: Int = 240): Pair<MediaFormat, List<Sample>> {
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
             setInteger(MediaFormat.KEY_BIT_RATE, 200_000); setInteger(MediaFormat.KEY_FRAME_RATE, fps); setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
