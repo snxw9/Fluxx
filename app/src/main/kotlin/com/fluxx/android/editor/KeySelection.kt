@@ -83,6 +83,33 @@ object KeyEdits {
         return Moved(EditorAction.Batch(actions), sel.times.map { byOld.getValue(it) })
     }
 
+    /**
+     * TLP.1 part 5: a hold-drag on a selected key moves EVERY selected key by the same time delta (relative offsets
+     * kept in frames). [dragDeltaUs] is the raw drag in local time; it is turned into whole frames on the composition grid,
+     * measured at the earliest selected key, and every key moves that many frames (landing on frame times). Clamped so the earliest
+     * selected key stays at local time >= 0. The existing key-move actions (MoveKeyframe / animator Key MOVE) in one
+     * Batch, ordered as in [pack] so selected keys never collide mid-batch (all move the same way: left movers earliest
+     * first, right movers latest first). A key landing on an UNSELECTED key's time replaces it (MoveKeyframe's rule).
+     * X/Y keys move whole. Null when the delta is zero frames.
+     */
+    fun moveTogether(project: ProjectDocument, layer: CompositionLayer, sel: KeyframeSelection, dragDeltaUs: Long): Moved? {
+        val sorted = sel.times.sorted()
+        if (sorted.isEmpty()) return null
+        val rate = project.composition.frameRate
+        val earliest = sorted[0]
+        val f0 = frame(layer, rate, earliest)
+        var frames = frame(layer, rate, Math.addExact(earliest, dragDeltaUs)) - f0
+        while (timeOf(layer, rate, f0 + frames) < 0) frames++
+        if (frames == 0L) return null
+        // Each key moves the same number of frames ON THE GRID (a constant µs shift would leave keys 1µs off the frame
+        // they land on, so they would sit beside an unselected key instead of replacing it).
+        val to = sorted.associateWith { timeOf(layer, rate, frame(layer, rate, it) + frames) }
+        val ordered = if (frames < 0) sorted else sorted.reversed()
+        val actions = ordered.filter { to.getValue(it) != it }.map { move(layer, sel.target, it, to.getValue(it)) }
+        if (actions.isEmpty()) return null
+        return Moved(EditorAction.Batch(actions), sel.times.map { to.getValue(it) })
+    }
+
     // ---- Copy / paste -----------------------------------------------------------------------------------------------
     /** The paste-compatibility kind of a target: the same transform / text property, or the same animator property / field. */
     fun kind(target: GraphTarget): String = target.animator?.let { a ->

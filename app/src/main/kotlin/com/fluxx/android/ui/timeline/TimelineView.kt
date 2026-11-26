@@ -178,6 +178,8 @@ fun TimelineView(
     selectedKeys: Set<Long>? = null,
     onKeyToggle: (Long) -> Unit = {},
     onKeyDoubleTap: (Long) -> Unit = {},
+    /** TLP.1: a hold-drag on a selected key moved the selected keys (old → new local times); called just before the commit. */
+    onKeysMoved: (Map<Long, Long>) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val comp = project.composition
@@ -496,7 +498,7 @@ fun TimelineView(
                                         onOptionsClick = { onOpenClipOptions(layer.id) },
                                         groupSelection = selection?.takeIf { layer.id in it },
                                         selectedKeys = selectedKeys?.takeIf { layer.id == selectedLayerId },
-                                        onKeyToggle = onKeyToggle, onKeyDoubleTap = onKeyDoubleTap
+                                        onKeyToggle = onKeyToggle, onKeyDoubleTap = onKeyDoubleTap, onKeysMoved = onKeysMoved
                                     )
                                 }
 
@@ -765,6 +767,7 @@ private fun TimelineClipRow(
     selectedKeys: Set<Long>? = null,
     onKeyToggle: (Long) -> Unit = {},
     onKeyDoubleTap: (Long) -> Unit = {},
+    onKeysMoved: (Map<Long, Long>) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val currentLayer by rememberUpdatedState(layer)
@@ -795,6 +798,8 @@ private fun TimelineClipRow(
     val keyMode by rememberUpdatedState(selectedKeys != null)
     val keyToggle by rememberUpdatedState(onKeyToggle)
     val keyDoubleTap by rememberUpdatedState(onKeyDoubleTap)
+    val keysMoved by rememberUpdatedState(onKeysMoved)
+    val latestSelectedKeys by rememberUpdatedState(selectedKeys)
     var movePixels by remember { mutableFloatStateOf(0f) }
     var moveScrollOrigin by remember { mutableStateOf(0) }
     var labelRootX by remember { mutableFloatStateOf(0f) }
@@ -967,6 +972,9 @@ private fun TimelineClipRow(
         var dragTimes by remember(layer.id) { mutableStateOf<List<Long>?>(null) }
         var movingFrom by remember(layer.id) { mutableStateOf<Long?>(null) }
         var movingTo by remember(layer.id) { mutableStateOf<Long?>(null) }
+        // TLP.1: a hold-drag on a selected key moves every selected key; old → new clip-relative times while it runs.
+        var groupMap by remember(layer.id) { mutableStateOf<Map<Long, Long>?>(null) }
+        var groupBase by remember(layer.id) { mutableStateOf<Pair<ProjectDocument, com.fluxx.android.editor.KeyframeSelection>?>(null) }
         val keyframeTimes = dragTimes ?: observedTimes
         val latestPlayhead by rememberUpdatedState(playheadUs)
         val latestTimes by rememberUpdatedState(observedTimes)
@@ -986,13 +994,13 @@ private fun TimelineClipRow(
                 // GRAPH G4.2: editable keys split overlapping 48dp targets at their midpoints (nearest wins), so keys
                 // that cluster when zoomed far out all stay reachable; quiet keys are display only.
                 val editableTimes = keyframeTimes.filter { it in 0L..durationUs && isSelected && (it in focusedTimes || movingFrom == it) }
-                    .map { if (movingFrom == it) movingTo ?: it else it }.sorted()
+                    .map { groupMap?.get(it) ?: if (movingFrom == it) movingTo ?: it else it }.sorted()
                 val editableXs = editableTimes.map { with(density) { (it * pxPerUs).toFloat().toDp().value } }
                 val editableSpans = com.fluxx.android.editor.TimelineHits.spans(editableXs, LayerKeyMarkers.HIT_WIDTH_DP / 2f)
                 for (kfTimeUs in keyframeTimes) {
                     if (kfTimeUs in 0L..durationUs) {
-                        val editable = isSelected && (kfTimeUs in focusedTimes || movingFrom == kfTimeUs)
-                        val displayTime = if (movingFrom == kfTimeUs) movingTo ?: kfTimeUs else kfTimeUs
+                        val editable = isSelected && (kfTimeUs in focusedTimes || movingFrom == kfTimeUs || groupMap?.containsKey(kfTimeUs) == true)
+                        val displayTime = groupMap?.get(kfTimeUs) ?: if (movingFrom == kfTimeUs) movingTo ?: kfTimeUs else kfTimeUs
                         val kfOffsetDp = with(density) { (displayTime * pxPerUs).toFloat().toDp() }
                         val isAtPlayhead = playheadUs == startUs + displayTime
                         val span = if (editable) editableSpans.getOrNull(editableTimes.indexOf(displayTime)) else null
@@ -1024,6 +1032,16 @@ private fun TimelineClipRow(
                                     var accumulatedUs = kfTimeUs
                                     detectDragGesturesAfterLongPress(
                                         onDragStart = {
+                                            val sel = latestSelectedKeys
+                                            val local = kfTimeUs - anchorOffsetUs
+                                            if (keyMode && sel != null && local in sel) {
+                                                // TLP.1: a selected key carries the whole selection (KeyEdits.moveTogether), previewed
+                                                // from the drag's base project, committed once. Unselected keys still move alone.
+                                                val target = if (activeProperty == null && activeAnimatorTrack != null) com.fluxx.android.editor.GraphTarget(animator = activeAnimatorTrack)
+                                                    else com.fluxx.android.editor.GraphTarget(property = activeProperty)
+                                                groupBase = currentProject to com.fluxx.android.editor.KeyframeSelection(layer.id, target, sel.toList())
+                                                groupMap = emptyMap()
+                                            }
                                             initialKfTime = kfTimeUs
                                             accumulatedUs = kfTimeUs
                                             dragTimes = latestTimes
@@ -1031,12 +1049,24 @@ private fun TimelineClipRow(
                                             movingTo = kfTimeUs
                                             begin()
                                         },
-                                        onDragEnd = { commit(); dragTimes = null; movingFrom = null; movingTo = null },
-                                        onDragCancel = { cancel(); dragTimes = null; movingFrom = null; movingTo = null },
+                                        onDragEnd = {
+                                            groupMap?.let { m -> keysMoved(m.entries.associate { (from, to) -> (from - anchorOffsetUs) to (to - anchorOffsetUs) }) }
+                                            commit(); dragTimes = null; movingFrom = null; movingTo = null; groupMap = null; groupBase = null
+                                        },
+                                        onDragCancel = { cancel(); dragTimes = null; movingFrom = null; movingTo = null; groupMap = null; groupBase = null },
                                         onDrag = { change, dragAmount ->
                                             change.consume()
                                             val deltaUs = (dragAmount.x / pxPerUs).roundToLong()
                                             accumulatedUs += deltaUs
+                                            val base = groupBase
+                                            if (base != null) {
+                                                val (project0, sel0) = base
+                                                val layer0 = project0.composition.layers.first { it.id == layer.id }
+                                                val moved = com.fluxx.android.editor.KeyEdits.moveTogether(project0, layer0, sel0, accumulatedUs - initialKfTime)
+                                                preview(moved?.action ?: EditorAction.Batch(emptyList()))
+                                                groupMap = moved?.let { m -> sel0.times.zip(m.times).associate { (from, to) -> (from + anchorOffsetUs) to (to + anchorOffsetUs) } } ?: emptyMap()
+                                                return@detectDragGesturesAfterLongPress
+                                            }
                                             val snappedUs = TimelineEdits.snapKeyframeTime(
                                                 rawTimeUs = accumulatedUs,
                                                 playheadLocalUs = latestPlayhead - startUs,

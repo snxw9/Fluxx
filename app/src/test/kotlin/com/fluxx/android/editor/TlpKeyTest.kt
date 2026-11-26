@@ -156,3 +156,61 @@ class TlpKeyMenuTest {
         v.undo(); assertEquals(3, v.state.project.composition.layers.single().animTransform.rotation.keyframes.size)
     }
 }
+
+/** TLP.1 part 5: selected keys move together (whole frames, clamp at 0, collision-free order, unselected keys replaced). */
+class TlpKeyGroupMoveTest {
+    private val rate = FrameRate(30, 1)
+    private fun f(n: Long) = rate.frameTimeUs(n)
+    private val rot = GraphTarget(AnimPropertyType.ROTATION)
+    private val pos = GraphTarget(AnimPropertyType.POSITION)
+    /** Rotation keys at frames 0, 10, 20, 30, 40, 50 (values 0 … 50); Position at 5, 15. */
+    private val fixture = CompositionLayer(1, LayerType.SOLID, timing = ClipTiming(0, 0, f(120)), animTransform = AnimatableTransform(
+        rotation = AnimatableProperty1D(true, 0f, FrozenList.of((0..5).map { Keyframe1D(f(10L * it), 10f * it) })),
+        position = AnimatableProperty2D(true, keyframes = FrozenList.of(listOf(Keyframe2D(f(5), .1f, .2f), Keyframe2D(f(15), .3f, .4f))))))
+    private fun vm() = EditorViewModel().also {
+        it.dispatch(EditorAction.Load(ProjectDocument(Composition(durationUs = 20_000_000, frameRate = rate, layers = FrozenList.of(listOf(fixture))))))
+    }
+    private fun EditorViewModel.layer() = state.project.composition.layers.single()
+    private fun EditorViewModel.rot() = layer().animTransform.rotation.keyframes.map { it.timeUs to it.value }
+
+    @Test fun wholeFramesOffsetsKeptOneUndoThroughTheGesture() {
+        val v = vm(); val base = v.state.project
+        val sel = KeyframeSelection(1, rot, listOf(f(30), f(10)))
+        v.beginGesture()
+        v.previewGesture(KeyEdits.moveTogether(base, base.composition.layers.single(), sel, f(1))!!.action)
+        val moved = KeyEdits.moveTogether(base, base.composition.layers.single(), sel, f(2) + 4_000)!! // 2.12 frames → 2
+        v.previewGesture(moved.action); v.commitGesture()
+        assertEquals(listOf(f(32), f(12)), moved.times) // selection order kept, times follow
+        assertEquals(listOf(0L to 0f, f(12) to 10f, f(20) to 20f, f(32) to 30f, f(40) to 40f, f(50) to 50f), v.rot())
+        v.undo(); assertEquals(base, v.state.project)
+        assertNull("under half a frame: nothing moves", KeyEdits.moveTogether(base, v.layer(), sel, 10_000))
+    }
+
+    @Test fun clampKeepsTheEarliestKeyAtZero() {
+        val v = vm()
+        val m = KeyEdits.moveTogether(v.state.project, v.layer(), KeyframeSelection(1, rot, listOf(f(10), f(30))), -f(100))!!
+        assertEquals(listOf(0L, f(20)), m.times)
+        // Left movers earliest first: 10 → 0 replaces the unselected key at 0, then 30 → 20 replaces the one at 20.
+        assertEquals(listOf(EditorAction.MoveKeyframe(1, AnimPropertyType.ROTATION, f(10), 0), EditorAction.MoveKeyframe(1, AnimPropertyType.ROTATION, f(30), f(20))),
+            (m.action as EditorAction.Batch).actions)
+        v.dispatch(m.action)
+        assertEquals(listOf(0L to 10f, f(20) to 30f, f(40) to 40f, f(50) to 50f), v.rot())
+        assertNull("already at 0: a leftward drag does nothing", KeyEdits.moveTogether(v.state.project, v.layer(), KeyframeSelection(1, rot, listOf(0L, f(20))), -f(5)))
+    }
+
+    @Test fun adjacentSelectedKeysNeverCollideMidBatch() {
+        // 0, 10, 20 → +10: right movers latest first (20 → 30 before 10 → 20 before 0 → 10); 30 (unselected) is replaced.
+        val v = vm()
+        val m = KeyEdits.moveTogether(v.state.project, v.layer(), KeyframeSelection(1, rot, listOf(0L, f(10), f(20))), f(10))!!
+        assertEquals(listOf(f(20), f(10), 0L), (m.action as EditorAction.Batch).actions.map { (it as EditorAction.MoveKeyframe).oldTimeUs })
+        v.dispatch(m.action)
+        assertEquals(listOf(f(10) to 0f, f(20) to 10f, f(30) to 20f, f(40) to 40f, f(50) to 50f), v.rot())
+    }
+
+    @Test fun twoDimensionalKeysMoveWhole() {
+        val v = vm()
+        v.dispatch(KeyEdits.moveTogether(v.state.project, v.layer(), KeyframeSelection(1, pos, listOf(f(5), f(15))), f(3))!!.action)
+        val k = v.layer().animTransform.position.keyframes
+        assertEquals(listOf(f(8), f(18)), k.map { it.timeUs }); assertEquals(listOf(.1f, .3f), k.map { it.x }); assertEquals(listOf(.2f, .4f), k.map { it.y })
+    }
+}

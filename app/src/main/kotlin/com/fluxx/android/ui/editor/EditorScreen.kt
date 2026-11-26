@@ -260,6 +260,8 @@ fun EditorScreen(
         editor.selectionMode -> editor.exitSelection()
         editor.keySelection != null -> editor.exitKeySelection()
         else -> leaveSelectionOrEditor() } } }
+    // TLP.1: the moved selection, set by the timeline just before it commits a group key move; applied after the commit.
+    var pendingKeyFollow by remember { mutableStateOf<KeyframeSelection?>(null) }
     // TLP T5: the active property on the open property page, the only scope of key selection. Key selection mode ends
     // when the page, the property or the layer changes (or the inspector closes).
     val keyTarget: GraphTarget? = if (!inspectorSheetVisible || selectedLayer == null) null
@@ -636,6 +638,7 @@ fun EditorScreen(
                     selection = editor.layerSelection,
                     extraBottomPadding = if (editor.selectionMode || editor.keySelection != null) SelectionBarHeight else 0.dp,
                     selectedKeys = editor.keySelection?.times?.toSet(),
+                    onKeysMoved = { moved -> pendingKeyFollow = editor.keySelection?.let { s -> s.copy(times = s.times.map { moved[it] ?: it }) } },
                     onKeyDoubleTap = { t -> val layer = editor.state.selectedLayer; val target = keyTarget
                         if (layer != null && target != null && t in KeyEdits.times(layer, target)) editor.selectKeys(KeyframeSelection(layer.id, target, listOf(t))) },
                     onKeyToggle = { t -> editor.keySelection?.let { sel -> val next = sel.toggle(t)
@@ -687,12 +690,15 @@ fun EditorScreen(
                         val id = timelineGestureId
                         timelineGestureId = null
                         if (id != null) editor.commitGesture(id)
+                        // TLP.1: the key selection follows a group key move (commit prunes it first).
+                        pendingKeyFollow?.let { editor.selectKeys(it) }; pendingKeyFollow = null
                         previewController?.update(editor.state.project, playheadUs, false)
                     },
                     onCancelGesture = {
                         val id = timelineGestureId
                         timelineGestureId = null
                         if (id != null) editor.cancelGesture(id)
+                        pendingKeyFollow = null
                         previewController?.update(editor.state.project, playheadUs, false)
                     },
                     onOpenClipOptions = { id -> if (editor.selectionMode) return@TimelineView
