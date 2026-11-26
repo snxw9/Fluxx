@@ -206,3 +206,128 @@ Local branch `tlp`, created from `master` at `2377a83` (after the graph merge). 
 7. Hide a video layer: playback stays smooth; toggle it quickly off and on (no stutter); export without it.
 8. Property page open: double-tap keys to select, tap to toggle, Select all / Odd / Even / Trash, Hold / Linear / Easy Ease / More, Stagger 4, Sequence; Copy keys, move the playhead, Paste keys.
 9. Animate tab → a Fill colour animator → colour popover → eyedropper.
+
+---
+
+# TLP.1: fixes from phone testing, key hold-drag, selector coverage box
+
+Branch `tlp`, continued from `83cb803`. One commit per part, then the device test and this record.
+
+**Status:** Parts 1, 2, 4, 5 and 6 done. **Part 3 stopped on a blocker** (below); the key bottom bar is unchanged.
+
+| Part | Status | Commit |
+|---|---|---|
+| 1. Layer Stagger / Sequence Reverse defaults | Done | `a9f17e7` |
+| 2. Key tap rules (timeline) | Done | `9946dde` |
+| 3. Key bottom bar placement | **Blocked, not changed** | — |
+| 4. Copy / Paste keys in the property ⋮ | Done | `325826c` |
+| 5. Hold-drag moves selected keys together | Done | `9d1b51d` |
+| 6. Selector coverage box | Done (one deviation: the colour) | `941fc14` |
+
+## Part 1: Stagger / Sequence defaults
+- `MultiLayerEdits.STAGGER_REVERSE_DEFAULT = true`, `SEQUENCE_REVERSE_DEFAULT = false`; the `stagger` / `sequence` default arguments use them.
+- Each popover remembers its Reverse inside its own content, which leaves composition when the popover closes, so every open starts from the default. Nothing is persisted, and the two popovers no longer share one toggle.
+- Key Stagger / Sequence: unchanged (no Reverse).
+- `TlpMultiLayerTest`: the two forward-order stagger calls now pass `reverse = false`; a new test asserts the defaults.
+
+## Part 2: Key tap rules
+- `KeyTapRules` (pure): outside key selection mode a tap does **nothing** and a double tap **selects** (enters the mode); in the mode a tap or a double tap **toggles**. No rule seeks. The T5 seek on a single tap is gone.
+- The tap is still consumed by the key's own detector, so it never reaches the clip.
+- Kept: in the mode a single tap still waits out the double-tap window before toggling, because a double tap must toggle once, not twice. Outside the mode the wait has no visible effect (the tap does nothing).
+- Editable keys carry the test tag `timeline-key-<layer>-<local time>`.
+
+## Part 3: Key bottom bar placement: BLOCKED
+With the inspector open, the space between the preview and the sheet is the action bar (40dp), then the timeline viewport: ruler 32dp, gap 8dp, **the single visible track row 28dp**, gap 8dp (`TimelineInspectorAnchorHeight`). A 48dp bar sitting directly above the sheet covers the bottom 4dp of the ruler, the gap, **the whole key row** and the gap below it.
+- The keys being selected would be hidden and untappable, and so would hold-drag (Part 5) and the empty-space tap that exits the mode.
+- Extra bottom scroll padding cannot help: with the inspector open the timeline viewport is exactly one row tall (`TimelineTracksBottom`), so there is nowhere to scroll the row to.
+
+Nothing was changed: the key bar is still where T5 put it (under the sheet). Options for Snxw:
+- **(a)** The bar replaces the 40dp editor action bar while key selection is active. This is the only strip that is free; the bar would be 40dp, or 48dp overlapping 8dp of the preview's bottom edge.
+- **(b)** The bar overlays the top 48dp of the inspector sheet (the sheet height unchanged), covering the page header.
+- **(c)** The sheet keeps its height but the timeline anchor gains 48dp (a layout change to the preview / inspector budget).
+
+## Part 4: Copy keys / Paste keys
+- **Where the property menu lives (audit):** every animated property page already uses the shared rail `InspectorUtilityRail`. Its ⋮ is the "Property options" menu (`inspector-rail-menu`), which also holds Reset and the easing rows.
+  - It is used by Transform (Position, Scale, Rotation), Opacity, and the text tabs, including Animate (animator fields).
+  - The Graph page has its own rail and ⋮ (`GraphLeftRail`), which is not touched; Graph keeps Copy / Paste graph.
+- **New:**
+  - `KeyClipboardHost` (a composition local, provided by EditorScreen) adds **Copy keys** / **Paste keys** to that ⋮, for the rail's own property (its `graphTarget`).
+  - Copy takes the key selection when it is on that layer and property, otherwise **every key** of the property (`KeyEdits.copyScope`). It is disabled for colour and text source, and when there are no keys.
+  - Paste is enabled for a same-kind clipboard, with or without a key selection. T5 semantics are unchanged (one `Batch`, one undo).
+  - The text tab rail passes no property while a partial text selection is the scope (existing rule), so the two items are hidden there.
+- **Removed:** the 6th icon's `keyMenu` (`key-menu-copy` / `key-menu-paste`). With a property page open the 6th icon shows its normal one-layer menu again; the layer-mode and no-selection menus are unchanged.
+
+## Part 5: Hold-drag moves the selected keys
+- `KeyEdits.moveTogether`:
+  - The raw drag (local µs) is turned into whole frames at the earliest selected key, and every selected key moves that many frames on the grid (relative offsets kept in frames).
+  - The earliest key is clamped to local time ≥ 0.
+  - The result is one `Batch` of the existing `MoveKeyframe` / animator `Key MOVE`. All moves go the same way: earliest first when moving left, latest first when moving right, so selected keys never collide mid-batch. 2-D keys move whole.
+  - Grid, not a constant µs shift: at 30 fps a constant shift leaves keys 1µs off the frame they land on, so a key would sit beside an unselected key instead of replacing it. A JVM test caught this.
+- **Replacement (reported):** a moved key that lands on an UNSELECTED key's frame replaces it; this is `MoveKeyframe`'s existing rule.
+- **Timeline gesture:**
+  - A long-press drag on a selected key (in key mode) carries the whole selection. It is previewed from the drag's base project through the existing `previewGesture`, and committed once (one undo).
+  - A zero-frame drag previews an empty `Batch` (no change, no undo entry).
+  - An unselected key moves alone as before (with its snapping) and does not change the selection.
+  - The selection follows its keys: the row hands the old → new map to EditorScreen just before the commit, and EditorScreen re-selects after `commitGesture` (whose sync prunes the moved-away times).
+- The group drag does not snap to the playhead or markers (it moves in whole frames only); the single-key drag keeps its snapping.
+
+## Part 6: Selector coverage box
+- **Coverage audit:**
+  - The per-character coverage is computed in `PreparedSelectorEngine.coverage()` (private, cached per selector) and combined across selectors by mode in `evaluate()`.
+  - `PreparedTextAnimation` owns the engines and the `SelectorMembership`, which `evaluate()` updates for wrapped lines.
+  - Nothing exposed one selector's own coverage. The evaluator contract did not need to change: the selector engine is reusable as is.
+- **What was added (read only):**
+  - `PreparedTextAnimation.selectorCoverage(animator, selectorId, time)` builds a separate `PreparedSelectorEngine` for that ONE selector, with its mode forced to Add, over the evaluated membership, and returns its per-cluster coverage.
+  - `clusterBoxes()` returns a copy of the evaluated per-cluster visual boxes.
+  - Both are pure additions to the file (14 lines). The renderer never calls them; preparation, evaluation and the evaluator are unchanged. A JVM test checks that reading coverage leaves the renderer's modifier records identical.
+- **Box rule** (`SelectorCoverageBox`, pure):
+  - A cluster counts at |coverage| ≥ `THRESHOLD` (0.05).
+  - The box is the union of the cluster boxes from the first to the last covered cluster, so non-contiguous coverage gives one box.
+  - Nothing covered gives no box, and the preview shows the layer box.
+  - `TextLayoutMetrics.selectorBox` returns it in the same layout space as `bounds()`.
+- **Preview:**
+  - `PreviewLayerOverlay` gets the focused Animate-tab address. EditorScreen passes `focusedAnimatorTrack` when it has a `selectorId` (the selector or any of its Range fields), which is only reported on the Animate tab with the inspector open.
+  - The box is computed off the UI thread; the last box is kept while the next one computes (no flicker while scrubbing) and drawn only for the current layer and selector.
+  - It replaces the layer outline, with the same stroke (2.5dp black under 1dp colour) and the same matrix. The resize handles stay on the layer box.
+  - Hidden or inactive layers show nothing, and gestures are unchanged.
+  - The overlay exposes `stateDescription` "Selector box" / "Layer box" (tag `preview-layer-overlay`).
+- **Deviation, the colour:** the theme's `colorScheme.error` is off-white (`TextPrimary`): the scheme is monochrome. A box from that token would match the white layer box, and making the token red would recolour every error text in the app. So the red is ONE named token, `SelectorCoverageColour` (`0xFFFF453A`), in `ui/theme/Color.kt`, like the existing `MissingMediaWarning` exception. If `error` becomes red later, that one line can point at it.
+
+## Tests (TLP.1)
+- **JVM:** **637 / 637**, one full run, 44 s wall. That is the 621 of TLP plus 16 new:
+
+  | Class | New tests |
+  |---|---|
+  | `TlpMultiLayerTest` | 1 |
+  | `TlpKeyTapTest` | 2 |
+  | `TlpKeyMenuTest` | 2 |
+  | `TlpKeyGroupMoveTest` | 4 |
+  | `SelectorCoverageBoxTest` | 7 |
+
+- **Device keep-awake:** `stay_on_while_plugged_in` read as **0**, set with `svc power stayon true` (it read 15 after), and **restored to 0** after the device runs (confirmed). The phone was on wireless debugging and not plugged in (`mStayOn=false`), so stay-awake had no effect during the runs.
+- **Screen checks:** before each run `dumpsys power` showed `mWakefulness=Awake` and `dumpsys window` showed `isKeyguardShowing=false`. No class was skipped.
+- **Crash buffer:** cleared once before the first run (allowed this pass); empty after all runs.
+- **A16, `TlpOneUiTest`** (new; the real `EditorScreen` and the real preview overlay with fixture compositions; Compose test input only):
+  - **Run 1:** 49 s, 2 / 5 passed (Stagger / Sequence defaults; selector box on focus / blur).
+    - The 3 key tests failed in setup: the test tapped the clip but never opened the Transform page, so no property was focused and no key was editable. Fixed in the test (it now opens Transform, as the Graph tests do).
+  - **Re-run of the 3 failed methods:** 29 s, 2 / 3 passed (hold-drag; ⋮ Copy / Paste keys).
+    - `keyTaps…` failed again on a single key tap in key mode. A key's single tap fires after the double-tap timeout, which only passes on the Compose test clock (`Thread.sleep` does not advance it). The same tap passed in the hold-drag test because the next touch resolved it.
+    - A repeat of the one method (11 s) failed the same way, so it is **not flaky**: a test timing bug. Fixed in the test (`mainClock.advanceTimeBy` after a key tap).
+  - **Re-run of that method:** passed, 13 s. **All 5 methods have passed.** No product code changed between the runs.
+- **A16, `TlpUiTest`** (regression for the selection bars, which Part 1 touched): 3 / 3, 28 s.
+- **Not written:** the Part 3 device test (the part is blocked).
+- **Flaky:** none.
+
+## Not verified (TLP.1)
+- Real-finger feel: double tap on keys, the hold-drag of several keys, the key tap toggle delay in the mode. Haptics; TalkBack (the new ⋮ items, the overlay's state).
+- The red box's look on the phone (colour, stroke over text); the box on wrapped / multi-line and character-animated text; wiggly selectors (covered by the same engine, not tested on the device).
+- Copy / Paste keys on the text tabs and animator fields from the ⋮ (JVM-tested through `KeyEdits`; the device test covers Transform Position only).
+- Part 3 (blocked).
+
+## Phone test list (TLP.1)
+1. Select 3 layers → Stagger: Reverse is on; turn it off, close, reopen: on again. Sequence: Reverse off.
+2. Property page open, not in key mode: single-tap a key → nothing (no seek, the clip does not react). Double-tap a key → it is selected, the playhead does not move.
+3. In key mode: tap keys to add / remove, double tap toggles once; tap empty track → exits, no seek.
+4. Select two keys, hold one and drag: both move together by whole frames; drag left past 0: the earliest stops at 0; one Undo puts them back. Drag an unselected key: it moves alone, the selection stays.
+5. Property ⋮: Copy keys with no selection copies all keys; move the playhead, Paste keys. The 6th icon no longer lists key items.
+6. Text layer → Animate → focus a selector (or its Start / End): the red box wraps the covered characters and follows Start / End / Offset / Shape; focus a property field or leave the tab: the white layer box returns.
