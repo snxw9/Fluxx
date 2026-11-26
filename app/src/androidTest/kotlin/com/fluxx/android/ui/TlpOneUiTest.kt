@@ -66,8 +66,10 @@ class TlpOneUiTest {
     private fun click(tag: String) { node(tag).performClick(); settle() }
     private fun state(tag: String) = node(tag).fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription)
     private fun key(n: Long) = "timeline-key-1-${f(n)}"
-    /** A single tap on a key: its tap fires after the double-tap timeout, which only passes on the Compose test clock. */
-    private fun tapKey(n: Long) { node(key(n)).performTouchInput { click() }; compose.mainClock.advanceTimeBy(1_000); settle() }
+    /** TL3 B3: a tap acts at once (there is no double tap and no timeout wait any more). */
+    private fun tapKey(n: Long) { node(key(n)).performTouchInput { click() }; settle() }
+    /** TL3 B3: a hold released without moving (selects outside key mode). */
+    private fun holdKey(n: Long) { node(key(n)).performTouchInput { longClick() }; settle() }
     private fun times() = editor.state.project.composition.layers.first { it.id == 1L }.animTransform.position.keyframes.map { it.timeUs }
     /** Opens the inspector on layer 1 (a clip body tap), then its Transform page (Position), so the keys become editable. */
     private fun openLayer1() {
@@ -88,25 +90,27 @@ class TlpOneUiTest {
         click("selection-sequence"); assertEquals("Off", state("selection-sequence-reverse"))
     }
 
-    @Test fun keyTapsNeverSeekASingleTapDoesNothingADoubleTapSelects() {
+    @Test fun keyTapsNeverSeekATapDoesNothingAHoldReleaseSelects() {
         host(); openLayer1()
         val selected = editor.state.selectedLayerId
         tapKey(42)
         assertNull("a single tap selects nothing", editor.keySelection)
         assertEquals("no seek", playhead, editor.state.playheadUs); assertEquals(selected, editor.state.selectedLayerId)
-        node(key(36)).performTouchInput { doubleClick() }; settle()
+        holdKey(36)
         assertEquals(listOf(f(36)), editor.keySelection!!.times); assertEquals(playhead, editor.state.playheadUs)
-        // In the mode a tap toggles, a double tap toggles once.
+        // In the mode a tap toggles (at once); a hold release on a selected key does nothing with the sheet open.
         tapKey(48)
         assertEquals(listOf(f(36), f(48)), editor.keySelection!!.times)
-        node(key(48)).performTouchInput { doubleClick() }; settle()
+        holdKey(48)
+        assertEquals(listOf(f(36), f(48)), editor.keySelection!!.times)
+        tapKey(48)
         assertEquals(listOf(f(36)), editor.keySelection!!.times)
         assertEquals(playhead, editor.state.playheadUs); assertFalse("selection is not in undo history", editor.canUndo)
     }
 
     @Test fun holdDragOnASelectedKeyMovesTheSelectedKeysTogetherOneUndo() {
         host(); openLayer1()
-        node(key(36)).performTouchInput { doubleClick() }; settle()
+        holdKey(36)
         tapKey(48)
         val before = editor.state.project
         // Interior keys 36 → 42 are 6 frames apart and their hit spans are symmetric: px per frame from their centres.

@@ -108,7 +108,7 @@ class TlpTwoUiTest {
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("timeline-key-1-${f(36)}", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
         val header = bounds("inspector-section-header"); val rail = bounds("inspector-rail"); val key = bounds("timeline-key-1-${f(36)}")
         val ruler = bounds("timeline-ruler"); val strip = bounds("editor-action-bar-strip")
-        node("timeline-key-1-${f(36)}").performTouchInput { doubleClick() }; settle()
+        node("timeline-key-1-${f(36)}").performTouchInput { longClick() }; settle() // TL3: hold release selects
         assertEquals(listOf(f(36)), editor.keySelection!!.times)
         // The bar takes the header's exact place; the page below, the timeline and the action bar do not move by a pixel.
         node("inspector-section-header").assertDoesNotExist()

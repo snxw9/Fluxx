@@ -684,7 +684,7 @@ fun EditorScreen(
                     onDismissInspector = { dismissInspector() },
                     selection = editor.layerSelection,
                     // TLP.2: only the layer selection bar overlays the timeline (the key bar is in the sheet header).
-                    extraBottomPadding = if (editor.selectionMode) SelectionBarHeight else 0.dp,
+                    extraBottomPadding = if (editor.selectionMode || (editor.keySelection != null && !isInspectorOpen)) SelectionBarHeight else 0.dp,
                     selectedKeys = editor.keySelection?.let { s -> val l = selectedLayer; val t = keyTarget
                         if (l != null && t != null) s.timesOf(l.id, t) else emptySet() },
                     onDragInfo = { timelineDrag = it },
@@ -723,6 +723,18 @@ fun EditorScreen(
                     keySelection = editor.keySelection,
                     hasAudio = { false },
                     scrollToLayer = scrollToLayer,
+                    // TL3 B3: twirl-row keys: tap / hold / drag, the value popover and bulk value edits (one undo each).
+                    twirlHost = com.fluxx.android.ui.timeline.TwirlKeyHost(
+                        onEffect = { id, target, t, effect -> when (effect) {
+                            KeyGestureEffect.SELECT -> editor.selectKeys(KeySelectionSet.of(KeyframeSelection(id, target, listOf(t))))
+                            KeyGestureEffect.TOGGLE, KeyGestureEffect.ADD -> {
+                                val next = editor.keySelection?.toggle(id, target, t) ?: KeySelectionSet.of(KeyframeSelection(id, target, listOf(t)))
+                                if (next == null) editor.exitKeySelection() else editor.selectKeys(next)
+                            }
+                            else -> {}
+                        } },
+                        onMoved = { pendingKeyFollow = it },
+                        onValue = { scope, axis, v -> MultiKeyEdits.setValue(editor.state.project, scope, axis, v)?.let { applyLayerAction(it) } }),
                     onTwirlNameTap = { id, target -> editor.state.project.composition.layers.firstOrNull { it.id == id }?.let { l ->
                         // TL3 B1: select every key of the property (all selected already: deselect them; none left exits).
                         val all = KeyEdits.selectAll(l, target)
@@ -813,6 +825,18 @@ fun EditorScreen(
                     }
                 }
                 bar
+            }
+
+            // TL3 B3: with no sheet (twirl-downs) the key bar is a bottom overlay above the timeline with the layer bar's rules
+            // (the top bar's size, no timeline resize, extra bottom scroll padding). It slides on the shared motion spec while the
+            // sheet takes over (its header / landing name row then shows the bar), so key mode stays on through the transition.
+            var lastKeyBar by remember { mutableStateOf<(@Composable RowScope.() -> Unit)?>(null) }
+            if (keyHeaderBar != null) lastKeyBar = keyHeaderBar
+            AnimatedVisibility(visible = keyHeaderBar != null && !isInspectorOpen && !editor.selectionMode,
+                enter = slideInVertically(com.fluxx.android.ui.timeline.TL3Motion.spec(), initialOffsetY = { it }) + fadeIn(com.fluxx.android.ui.timeline.TL3Motion.spec()),
+                exit = slideOutVertically(com.fluxx.android.ui.timeline.TL3Motion.spec(), targetOffsetY = { it }) + fadeOut(com.fluxx.android.ui.timeline.TL3Motion.spec()),
+                modifier = Modifier.align(Alignment.BottomCenter)) {
+                lastKeyBar?.let { bar -> SelectionBottomBar(testTag = "key-bottom-bar", content = bar) }
             }
 
             // TLP T3: the selection bottom bar overlays the timeline (it never resizes it; the timeline has the same bottom

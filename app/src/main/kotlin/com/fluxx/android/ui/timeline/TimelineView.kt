@@ -194,6 +194,8 @@ fun TimelineView(
     onTwirlNameLongPress: (Long, com.fluxx.android.editor.GraphTarget) -> Unit = { _, _ -> },
     /** TL3 B1: scroll (animated) so this layer is at the top; the second value makes repeated requests distinct. */
     scrollToLayer: Pair<Long, Int>? = null,
+    /** TL3 B3: twirl-row key interactions (null: rows display only). */
+    twirlHost: TwirlKeyHost? = null,
     modifier: Modifier = Modifier
 ) {
     val comp = project.composition
@@ -295,6 +297,9 @@ fun TimelineView(
     val twirlMoving = settledExpanded != expandedLayers
     LaunchedEffect(expandedLayers) { delay(TL3Motion.MS.toLong()); settledExpanded = expandedLayers }
 
+    // TL3 B3 / B4: the ONE twirl popover (value or colour bar); UI state only.
+    var twirlPopover by remember { mutableStateOf<TwirlPopover?>(null) }
+    LaunchedEffect(expandedLayers) { twirlPopover?.let { if (it.layerId !in expandedLayers) twirlPopover = null } }
     val verticalScrollState = rememberLazyListState()
     // TL3 B1: on expand, the layer scrolls (animated) to the top, exactly where opening the inspector puts it.
     LaunchedEffect(scrollToLayer) {
@@ -506,8 +511,11 @@ fun TimelineView(
                                         val owner = project.layer(r.layerId) ?: return@items
                                         val m = Modifier.animateItem(fadeInSpec = TL3Motion.spec(), placementSpec = TL3Motion.spec(), fadeOutSpec = TL3Motion.spec())
                                         when (r) {
-                                            is com.fluxx.android.editor.TwirlRow.Property -> TwirlTrackRow(owner, r, pxPerUs, playheadUs,
-                                                keySelection?.timesOf(r.layerId, r.target).orEmpty(), visibleRange, m)
+                                            is com.fluxx.android.editor.TwirlRow.Property -> if (twirlHost != null) TwirlKeyRow(project, owner, r, pxPerUs, playheadUs,
+                                                keySelection, visibleRange, twirlPopover, { twirlPopover = it }, twirlHost,
+                                                TwirlGestures(beginEdit, onPreviewGesture, commitEdit, cancelEdit), snapLevel, snapStartFrame,
+                                                { dragInfo = it; reportDrag(it) }, m)
+                                                else TwirlTrackRow(owner, r, pxPerUs, playheadUs, keySelection?.timesOf(r.layerId, r.target).orEmpty(), visibleRange, m)
                                             is com.fluxx.android.editor.TwirlRow.Empty -> TwirlEmptyRow(r, m)
                                             is com.fluxx.android.editor.TwirlRow.Audio -> Box(m.fillMaxWidth().height(r.heightDp.dp).testTag("twirl-row-${r.key}"))
                                         }
@@ -877,6 +885,7 @@ private fun TimelineClipRow(
     val dragInfo by rememberUpdatedState(onDragInfo)
     val dragLevel by rememberUpdatedState(snapLevel)
     val view = androidx.compose.ui.platform.LocalView.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     /** TLP.2: the target the drag is locked to (the haptic ticks once per lock, like the inspector's Magnet). */
     var lockedTarget by remember { mutableStateOf<com.fluxx.android.editor.SnapTarget?>(null) }
     fun locked(target: com.fluxx.android.editor.SnapTarget?) {
@@ -1109,25 +1118,25 @@ private fun TimelineClipRow(
                                 .align(Alignment.CenterStart)
                                 .offset(x = hitLeft)
                                 .size(width = hitWidth, height = TRACK_ROW_HEIGHT_DP.dp)
-                                .then(if (editable) Modifier.testTag("timeline-key-${layer.id}-${kfTimeUs - anchorOffsetUs}").pointerInput(kfTimeUs, startUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
-                                    // TLP.1 (KeyTapRules): outside key selection mode a single tap does nothing (consumed
-                                    // here, so it never falls through to the clip) and a double tap selects the key; in the
-                                    // mode a tap or double tap toggles it. Nothing seeks.
-                                    val local = kfTimeUs - anchorOffsetUs
-                                    fun apply(effect: com.fluxx.android.editor.KeyTapEffect) = when (effect) {
-                                        com.fluxx.android.editor.KeyTapEffect.NONE -> Unit
-                                        com.fluxx.android.editor.KeyTapEffect.SELECT -> keyDoubleTap(local)
-                                        com.fluxx.android.editor.KeyTapEffect.TOGGLE -> keyToggle(local)
-                                    }
-                                    detectTapGestures(
-                                        onTap = { apply(com.fluxx.android.editor.KeyTapRules.tap(keyMode)) },
-                                        onDoubleTap = { apply(com.fluxx.android.editor.KeyTapRules.doubleTap(keyMode)) }
-                                    )
-                                }
-                                .pointerInput(kfTimeUs, startUs, durationUs, pxPerUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
+                                .then(if (editable) Modifier.testTag("timeline-key-${layer.id}-${kfTimeUs - anchorOffsetUs}").pointerInput(kfTimeUs, startUs, durationUs, pxPerUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
                                     var initialKfTime = kfTimeUs
                                     var accumulatedUs = kfTimeUs
-                                    detectDragGesturesAfterLongPress(
+                                    // TL3 B3 (KeyGestureRules, the sheet open on this property): a tap does nothing outside key
+                                    // mode and toggles in it (at once: no double tap, no wait); a hold released without moving
+                                    // selects and enters key mode (in the mode: adds an unselected key); a hold and drag moves the
+                                    // key, or the selection from a selected key. Nothing seeks.
+                                    val local = kfTimeUs - anchorOffsetUs
+                                    fun apply(effect: com.fluxx.android.editor.KeyGestureEffect) = when (effect) {
+                                        com.fluxx.android.editor.KeyGestureEffect.SELECT -> keyDoubleTap(local)
+                                        com.fluxx.android.editor.KeyGestureEffect.TOGGLE, com.fluxx.android.editor.KeyGestureEffect.ADD -> keyToggle(local)
+                                        else -> Unit
+                                    }
+                                    detectKeyGestures(
+                                        onDown = { true },
+                                        onTap = { apply(com.fluxx.android.editor.KeyGestureRules.tap(com.fluxx.android.editor.KeyPlace.SHEET, keyMode)) },
+                                        onLongPress = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) },
+                                        onHoldRelease = { apply(com.fluxx.android.editor.KeyGestureRules.holdRelease(com.fluxx.android.editor.KeyPlace.SHEET, keyMode,
+                                            latestSelectedKeys?.contains(local) == true)) },
                                         onDragStart = {
                                             val sel = latestSelectedKeys
                                             val local = kfTimeUs - anchorOffsetUs
@@ -1147,14 +1156,18 @@ private fun TimelineClipRow(
                                             begin()
                                         },
                                         onDragEnd = {
-                                            groupMap?.let { m -> keysMoved(m.entries.associate { (from, to) -> (from - anchorOffsetUs) to (to - anchorOffsetUs) }) }
-                                            commit(); dragTimes = null; movingFrom = null; movingTo = null; groupMap = null; groupBase = null; endMoveIndicators()
+                                            // Zero frames moved: no edit (the release is a hold release).
+                                            val moved = groupMap?.any { (from, to) -> from != to } ?: (movingTo != null && movingTo != initialKfTime)
+                                            if (moved) {
+                                                groupMap?.let { m -> keysMoved(m.entries.associate { (from, to) -> (from - anchorOffsetUs) to (to - anchorOffsetUs) }) }
+                                                commit()
+                                            } else cancel()
+                                            dragTimes = null; movingFrom = null; movingTo = null; groupMap = null; groupBase = null; endMoveIndicators()
+                                            moved
                                         },
                                         onDragCancel = { cancel(); dragTimes = null; movingFrom = null; movingTo = null; groupMap = null; groupBase = null; endMoveIndicators() },
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            val deltaUs = (dragAmount.x / pxPerUs).roundToLong()
-                                            accumulatedUs += deltaUs
+                                        onDrag = { dx ->
+                                            accumulatedUs = kfTimeUs + (dx / pxPerUs).roundToLong()
                                             val raw = accumulatedUs - initialKfTime
                                             val zoneUs = com.fluxx.android.editor.SnapZones.of(pxPerUs / density0.density, frameRate)
                                             val base = groupBase
@@ -1175,7 +1188,7 @@ private fun TimelineClipRow(
                                                 groupMap = moved?.let { m -> sel0.times.zip(m.times).associate { (from, to) -> (from + anchorOffsetUs) to (to + anchorOffsetUs) } } ?: emptyMap()
                                                 val now = (moved?.times ?: sel0.times).map { Math.addExact(anchor, it) }
                                                 dragInfo(com.fluxx.android.editor.TimelineDragInfo(now.min(), candidates.min(), now.min(), now.max()))
-                                                return@detectDragGesturesAfterLongPress
+                                                return@detectKeyGestures
                                             }
                                             // TLP.2: one key against the shared targets plus its existing ones (the other keys of
                                             // the property and its clip's start / end), all inside its clip (keys stay in the clip).

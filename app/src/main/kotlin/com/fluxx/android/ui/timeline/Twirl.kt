@@ -4,6 +4,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.Icon
@@ -209,3 +211,52 @@ internal fun nearestKey(times: List<Long>, layer: CompositionLayer, pxPerUs: Dou
 
 /** The current project's layer, for rows. */
 internal fun ProjectDocument.layer(id: Long) = composition.layers.firstOrNull { it.id == id }
+
+/**
+ * TL3 B3: the ONE key gesture (no double tap, no timeout wait anywhere). A tap (up before the long-press timeout, inside the
+ * touch slop) is [onTap] at once. A hold: [onLongPress] (haptic), then either released without moving ([onHoldRelease]) or
+ * moved: [onDragStart], [onDrag] with the total x since the down, and on release [onDragEnd], which returns false when the
+ * drag moved nothing (zero frames): that release is a hold release too. Moving past the slop before the hold leaves the
+ * gesture to the timeline (scroll). [onDown] decides whether the down is on a key at all.
+ */
+internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectKeyGestures(
+    onDown: (Offset) -> Boolean, onTap: (Offset) -> Unit, onLongPress: () -> Unit, onHoldRelease: (Offset) -> Unit,
+    onDragStart: (Offset) -> Unit, onDrag: (Float) -> Unit, onDragEnd: () -> Boolean, onDragCancel: () -> Unit) =
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        if (!onDown(down.position)) return@awaitEachGesture
+        val slop = viewConfiguration.touchSlop
+        var up: androidx.compose.ui.input.pointer.PointerInputChange? = null
+        val early = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+            var outcome = 0
+            while (outcome == 0) {
+                val e = awaitPointerEvent()
+                val c = e.changes.firstOrNull { it.id == down.id }
+                outcome = when {
+                    c == null || e.changes.count { it.pressed } > 1 -> 2
+                    !c.pressed -> { up = c; 1 }
+                    c.isConsumed || (c.position - down.position).getDistance() > slop -> 2
+                    else -> 0
+                }
+            }
+            outcome
+        }
+        if (early == 1) { up?.consume(); onTap(down.position); return@awaitEachGesture }
+        if (early == 2) return@awaitEachGesture
+        onLongPress()
+        var dragging = false; var finished = false
+        try {
+            while (!finished) {
+                val e = awaitPointerEvent()
+                val c = e.changes.firstOrNull { it.id == down.id }
+                if (c == null || (!dragging && e.changes.count { it.pressed } > 1)) { if (dragging) onDragCancel(); finished = true; continue }
+                if (!c.pressed) {
+                    c.consume(); finished = true
+                    if (!dragging || !onDragEnd()) onHoldRelease(down.position)
+                    continue
+                }
+                if (!dragging && c.position != c.previousPosition) { dragging = true; onDragStart(down.position) }
+                if (dragging) { c.consume(); onDrag(c.position.x - down.position.x) }
+            }
+        } finally { if (dragging && !finished) onDragCancel() }
+    }

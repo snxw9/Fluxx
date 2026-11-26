@@ -109,16 +109,24 @@ class TlpKeyTest {
 
 /** TLP.1 part 2: key tap rules on the timeline (no rule seeks). */
 class TlpKeyTapTest {
-    @Test fun outsideKeyModeATapDoesNothingAndADoubleTapSelects() {
-        assertEquals(KeyTapEffect.NONE, KeyTapRules.tap(keyMode = false))
-        assertEquals(KeyTapEffect.SELECT, KeyTapRules.doubleTap(keyMode = false))
+    // TL3 B3: the double-tap rules are gone; KeyGestureRules replaces them everywhere (tap / hold release / drag).
+    @Test fun sheetKeysTapDoesNothingOutsideKeyModeAndHoldReleaseSelects() {
+        assertEquals(KeyGestureEffect.NONE, KeyGestureRules.tap(KeyPlace.SHEET, keyMode = false))
+        assertEquals(KeyGestureEffect.SELECT, KeyGestureRules.holdRelease(KeyPlace.SHEET, keyMode = false, selected = false))
+        assertEquals(KeyGestureEffect.TOGGLE, KeyGestureRules.tap(KeyPlace.SHEET, keyMode = true))
+        assertEquals(KeyGestureEffect.NONE, KeyGestureRules.holdRelease(KeyPlace.SHEET, keyMode = true, selected = true))
+        assertEquals(KeyGestureEffect.ADD, KeyGestureRules.holdRelease(KeyPlace.SHEET, keyMode = true, selected = false))
     }
-    @Test fun inKeyModeTapsAndDoubleTapsToggle() {
-        assertEquals(KeyTapEffect.TOGGLE, KeyTapRules.tap(keyMode = true))
-        assertEquals(KeyTapEffect.TOGGLE, KeyTapRules.doubleTap(keyMode = true))
+    @Test fun twirlKeysTapOpensThePopoverAndHoldReleaseSelects() {
+        assertEquals(KeyGestureEffect.OPEN_POPOVER, KeyGestureRules.tap(KeyPlace.TWIRL, keyMode = false))
+        assertEquals(KeyGestureEffect.SELECT, KeyGestureRules.holdRelease(KeyPlace.TWIRL, keyMode = false, selected = false))
+        assertEquals(KeyGestureEffect.TOGGLE, KeyGestureRules.tap(KeyPlace.TWIRL, keyMode = true))
+        assertEquals(KeyGestureEffect.OPEN_POPOVER, KeyGestureRules.holdRelease(KeyPlace.TWIRL, keyMode = true, selected = true))
+        assertEquals(KeyGestureEffect.OPEN_POPOVER_SINGLE, KeyGestureRules.holdRelease(KeyPlace.TWIRL, keyMode = true, selected = false))
         // A toggle of the last selected key leaves nothing: the host exits key selection mode.
         val sel = KeyframeSelection(1, GraphTarget(AnimPropertyType.ROTATION), listOf(10L))
         assertTrue(sel.toggle(10L).times.isEmpty()); assertEquals(listOf(10L, 20L), sel.toggle(20L).times)
+        assertNull(KeySelectionSet.of(sel)!!.toggle(1, sel.target, 10L))
     }
 }
 

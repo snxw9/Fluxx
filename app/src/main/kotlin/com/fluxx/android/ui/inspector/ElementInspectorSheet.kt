@@ -227,7 +227,10 @@ fun ElementInspectorSheet(
                             contentAlignment = Alignment.Center) {
                             Box(Modifier.size(36.dp, 4.dp).background(Border, CircleShape))
                         }
-                        Row(Modifier.fillMaxWidth().height(InspectorChromeBudget.nameRow(compactHeight).dp), verticalAlignment = Alignment.CenterVertically) {
+                        // TL3 B3: while keys are selected the key bar replaces the landing grid's name row (same height: no shift).
+                        val landingKeyBar = com.fluxx.android.ui.editor.LocalKeyHeaderBar.current
+                        if (landingKeyBar != null) com.fluxx.android.ui.editor.KeyHeaderBar(InspectorChromeBudget.nameRow(compactHeight).dp, landingKeyBar)
+                        else Row(Modifier.fillMaxWidth().height(InspectorChromeBudget.nameRow(compactHeight).dp).testTag("inspector-name-row"), verticalAlignment = Alignment.CenterVertically) {
                             val hit = InspectorChromeBudget.nameRow(compactHeight).dp
                             BasicTextField(
                                 value = layer.name,
