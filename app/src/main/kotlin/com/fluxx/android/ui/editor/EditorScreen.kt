@@ -728,7 +728,9 @@ fun EditorScreen(
                         onEffect = { id, target, t, effect -> when (effect) {
                             KeyGestureEffect.SELECT -> editor.selectKeys(KeySelectionSet.of(KeyframeSelection(id, target, listOf(t))))
                             KeyGestureEffect.TOGGLE, KeyGestureEffect.ADD -> {
-                                val next = editor.keySelection?.toggle(id, target, t) ?: KeySelectionSet.of(KeyframeSelection(id, target, listOf(t)))
+                                // TL3.1 A1: toggling the LAST selected key exits key mode (it used to fall back to selecting it again).
+                                val sel = editor.keySelection
+                                val next = if (sel != null) sel.toggle(id, target, t) else KeySelectionSet.of(KeyframeSelection(id, target, listOf(t)))
                                 if (next == null) editor.exitKeySelection() else editor.selectKeys(next)
                             }
                             else -> {}

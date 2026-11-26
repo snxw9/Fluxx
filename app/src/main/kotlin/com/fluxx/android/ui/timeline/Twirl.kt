@@ -244,7 +244,7 @@ internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectK
         if (early == 1) { up?.consume(); onTap(down.position); return@awaitEachGesture }
         if (early == 2) return@awaitEachGesture
         onLongPress()
-        var dragging = false; var finished = false
+        var dragging = false; var finished = false; var travel = 0f
         try {
             while (!finished) {
                 val e = awaitPointerEvent()
@@ -252,9 +252,13 @@ internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectK
                 if (c == null || (!dragging && e.changes.count { it.pressed } > 1)) { if (dragging) onDragCancel(); finished = true; continue }
                 if (!c.pressed) {
                     c.consume(); finished = true
-                    if (!dragging || !onDragEnd()) onHoldRelease(down.position)
+                    // TL3.1 A1: a hold counts as "released without moving" only if the finger stayed inside the touch slop AND
+                    // nothing moved (zero frames). A drag beyond the slop never becomes a hold release, even back on its frame.
+                    if (!dragging) onHoldRelease(down.position)
+                    else if (!onDragEnd() && travel <= slop) onHoldRelease(down.position)
                     continue
                 }
+                travel = maxOf(travel, (c.position - down.position).getDistance())
                 if (!dragging && c.position != c.previousPosition) { dragging = true; onDragStart(down.position) }
                 if (dragging) { c.consume(); onDrag(c.position.x - down.position.x) }
             }

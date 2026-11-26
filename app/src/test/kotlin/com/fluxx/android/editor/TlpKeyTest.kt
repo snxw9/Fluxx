@@ -115,7 +115,7 @@ class TlpKeyTapTest {
         assertEquals(KeyGestureEffect.SELECT, KeyGestureRules.holdRelease(KeyPlace.SHEET, keyMode = false, selected = false))
         assertEquals(KeyGestureEffect.TOGGLE, KeyGestureRules.tap(KeyPlace.SHEET, keyMode = true))
         assertEquals(KeyGestureEffect.NONE, KeyGestureRules.holdRelease(KeyPlace.SHEET, keyMode = true, selected = true))
-        assertEquals(KeyGestureEffect.ADD, KeyGestureRules.holdRelease(KeyPlace.SHEET, keyMode = true, selected = false))
+        assertEquals(KeyGestureEffect.NONE, KeyGestureRules.holdRelease(KeyPlace.SHEET, keyMode = true, selected = false)) // TL3.1 A1
     }
     @Test fun twirlKeysTapOpensThePopoverAndHoldReleaseSelects() {
         assertEquals(KeyGestureEffect.OPEN_POPOVER, KeyGestureRules.tap(KeyPlace.TWIRL, keyMode = false))

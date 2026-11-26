@@ -62,8 +62,8 @@ object KeyGestureRules {
     fun holdRelease(place: KeyPlace, keyMode: Boolean, selected: Boolean): KeyGestureEffect = when {
         !keyMode -> KeyGestureEffect.SELECT
         place == KeyPlace.TWIRL -> if (selected) KeyGestureEffect.OPEN_POPOVER else KeyGestureEffect.OPEN_POPOVER_SINGLE
-        // Sheet open: the value is edited in the inspector; a hold release on an unselected key adds it.
-        else -> if (selected) KeyGestureEffect.NONE else KeyGestureEffect.ADD
+        // Sheet open, key mode: the value is edited in the inspector; a hold release does nothing (TL3.1 A1).
+        else -> KeyGestureEffect.NONE
     }
 }
 
