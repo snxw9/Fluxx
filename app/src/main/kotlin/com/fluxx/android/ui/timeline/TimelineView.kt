@@ -323,6 +323,8 @@ fun TimelineView(
     var skipInspectorRestore by remember { mutableStateOf(false) }
     var scrollAtOpen by remember { mutableStateOf<Pair<Long, Int>?>(null) }
     var editing by remember { mutableStateOf(false) }
+    /** TL3.1 B1: the view is easing back to the playhead after a key drag (not a scrub). */
+    var returning by remember { mutableStateOf(false) }
     var pinching by remember { mutableStateOf(false) }
     var edgeScroll by remember { mutableFloatStateOf(0f) }
     var viewportLeft by remember { mutableFloatStateOf(0f) }
@@ -413,7 +415,8 @@ fun TimelineView(
             val keyFinish = remember { { commitIt: Boolean ->
                 if (commitIt) latestCommitG() else latestCancelG()
                 edgeScroll = 0f; editing = false
-                keyScope.launch { horizontalScrollState.animateScrollTo(scale.timeX(playheadState.value.coerceIn(0L, durationUs)).toInt()) }
+                // Easing back to the (unchanged) playhead is not a scrub: no seek while it runs.
+                keyScope.launch { returning = true; try { horizontalScrollState.animateScrollTo(scale.timeX(playheadState.value.coerceIn(0L, durationUs)).toInt()) } finally { returning = false } }
                 Unit
             } }
             val keyCommitFn = remember { { keyFinish(true) } }
@@ -451,7 +454,7 @@ fun TimelineView(
                 androidx.compose.runtime.snapshotFlow { horizontalScrollState.value to horizontalScrollState.isScrollInProgress }.collect { (value, inProgress) ->
                     // TL1 scrub: the scroll position maps to the NEAREST whole frame; a Seek is sent only when that frame
                     // changes (at most one per frame crossed), and the preview receives the same snapped time.
-                    if (!editing && !pinching && inProgress && value.toLong() != scrubScale.timeX(scrubPlayhead)) {
+                    if (!editing && !pinching && !returning && inProgress && value.toLong() != scrubScale.timeX(scrubPlayhead)) {
                         val newTimeUs = scrubScale.snappedTime(value.toDouble(), scrubDuration)
                         if (newTimeUs != scrubPlayhead) scrubSeek(newTimeUs, true)
                     }

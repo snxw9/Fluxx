@@ -149,13 +149,6 @@ internal fun TimelineSideControls(layers: List<CompositionLayer>, selection: com
                             onGraph = (row as? com.fluxx.android.editor.TwirlRow.Property)?.takeIf { p -> selection == null && owner != null &&
                                 p.kind != com.fluxx.android.editor.TwirlValueKind.COLOUR && com.fluxx.android.editor.GraphModel.enabled(owner, p.target) }
                                 ?.let { p -> { onNameGraph(p.layerId, p.target) } })
-                        // TL3.1 B7: under the reorder grip, an add-keyframe button on every property row (not the audio row).
-                        val prop = row as? com.fluxx.android.editor.TwirlRow.Property
-                        if (prop != null && addKeyState != null) {
-                            val why = addKeyState(prop)
-                            AddKeyButton(prop, why, { onAddKey(prop) }, Modifier.align(Alignment.TopEnd)
-                                .offset { IntOffset(0, item.offset + listState.layoutInfo.beforeContentPadding) })
-                        }
                     }
                 } }
                 val layer = layers.firstOrNull { it.id == item.key } ?: continue
@@ -232,6 +225,17 @@ internal fun TimelineSideControls(layers: List<CompositionLayer>, selection: com
                     }
                 )
             })
+        // TL3.1 B7: under the reorder grip, an add-keyframe button on every twirl property row (not the audio row), drawn
+        // above the gutter (which would otherwise take their taps).
+        if (addKeyState != null) Box(Modifier.fillMaxSize().padding(top = TimelineTracksOrigin).clipToBounds()) {
+            for (item in listState.layoutInfo.visibleItemsInfo) {
+                val prop = (item.key as? String)?.let { rowsByKey[it]?.first } as? com.fluxx.android.editor.TwirlRow.Property ?: continue
+                key("add|" + prop.key) {
+                    AddKeyButton(prop, addKeyState(prop), { onAddKey(prop) }, Modifier.align(Alignment.TopEnd)
+                        .offset { IntOffset(0, item.offset + listState.layoutInfo.beforeContentPadding) })
+                }
+            }
+        }
     }
 }
 

@@ -79,6 +79,8 @@ internal fun DButton(layer: CompositionLayer, selected: Boolean, selectionMode: 
     }
     val haptic = LocalHapticFeedback.current
     val tap by rememberUpdatedState(onTap); val hold by rememberUpdatedState(onLongPress)
+    // TL3.1 A2: the zones depend on the CURRENT mode / selection (the gesture is keyed on the layer only).
+    val modeNow by rememberUpdatedState(selectionMode); val selectedNow by rememberUpdatedState(selected)
     val name = layer.name.ifBlank { "layer ${layer.id}" }
     val radius = DButtonLayout.RADIUS_DP.dp
     Box(modifier.layout { m, c ->
@@ -91,7 +93,7 @@ internal fun DButton(layer: CompositionLayer, selected: Boolean, selectionMode: 
         .testTag("d-button-${layer.id}")
         .pointerInput(layer.id) {
             detectTapGestures(
-                onTap = { p -> tap(com.fluxx.android.editor.DZones.zone(p.x.toDp().value, selectionMode, selected)) },
+                onTap = { p -> tap(com.fluxx.android.editor.DZones.zone(p.x.toDp().value, modeNow, selectedNow)) },
                 onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); hold() })
         }
         .semantics(mergeDescendants = false) {
