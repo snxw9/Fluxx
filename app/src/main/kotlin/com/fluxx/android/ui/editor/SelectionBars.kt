@@ -29,6 +29,25 @@ import com.fluxx.android.ui.theme.TextPrimary
 /** TLP T3: the selection bars' height (the editor top bar's 48dp). The bottom bar has the same height and width. */
 internal val SelectionBarHeight = 48.dp
 
+/** The target size of a [BarIcon]: 48dp in the selection bars; the header height when the key bar sits in the sheet header. */
+internal val LocalBarIconSize = compositionLocalOf { 48.dp }
+
+/**
+ * TLP.2 part 3: the key bar's icons (Hold, Linear, Easy Ease, More, Stagger, Sequence) while KEY selection is active, else
+ * null. Provided by the editor around the inspector sheet; the sheet's header row (section pages, Graph, Edit Text) shows
+ * them INSTEAD of its own contents, in a row of exactly the header's height, so nothing below the header moves.
+ */
+internal val LocalKeyHeaderBar = compositionLocalOf<(@Composable RowScope.() -> Unit)?> { null }
+
+/** The key bar in the sheet header: accent-filled like the selection bars, exactly [height] tall (the header's height). */
+@Composable internal fun KeyHeaderBar(height: androidx.compose.ui.unit.Dp, content: @Composable RowScope.() -> Unit) {
+    CompositionLocalProvider(LocalBarIconSize provides height) {
+        Row(Modifier.fillMaxWidth().height(height).testTag("key-header-bar").clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.primary), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly, content = content)
+    }
+}
+
 /**
  * TLP T3 / T5 top bar, shown instead of the editor top bar in selection mode: accent-filled ([MaterialTheme] `primary`,
  * content in `onPrimary`). Back exits selection mode (it never leaves the project), the title says what is selected,
@@ -56,11 +75,11 @@ internal val SelectionBarHeight = 48.dp
         .padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly, content = content)
 }
 
-/** One icon of a selection bar, in `onPrimary` (disabled: `onPrimary` at 38%), 48dp target. */
+/** One icon of a selection bar, in `onPrimary` (disabled: `onPrimary` at 38%); a 48dp target, or the header height in the sheet header. */
 @Composable internal fun BarIcon(icon: String, label: String, enabled: Boolean = true, selected: Boolean = false, testTag: String? = null,
     onClick: () -> Unit) {
     val ink = MaterialTheme.colorScheme.onPrimary
-    Box(Modifier.size(48.dp).clip(RoundedCornerShape(10.dp))
+    Box(Modifier.size(LocalBarIconSize.current).clip(RoundedCornerShape(10.dp))
         .background(if (selected) ink.copy(alpha = .14f) else androidx.compose.ui.graphics.Color.Transparent)
         .combinedClickable(enabled = enabled, role = Role.Button, onClick = onClick)
         .semantics { contentDescription = label; if (selected) stateDescription = "On" }

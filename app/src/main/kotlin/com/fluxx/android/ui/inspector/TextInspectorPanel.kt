@@ -412,7 +412,10 @@ import kotlinx.coroutines.delay
         if(it.key==Key.Escape && it.type==KeyEventType.KeyUp && (mode!=TextInspectorMode.Browse || popover!=null || resetAnimation)) {back();true} else false}) {
         // ---- Header: ← | Character | Paragraph | Animate | (⚠ only on error) ---------------------------------------
         val subPage=mode==TextInspectorMode.Fonts
-        Row(Modifier.fillMaxWidth().height(TextInspectorBudget.header(fontScale).dp).testTag("text-inspector-header"),verticalAlignment=Alignment.CenterVertically) {
+        // TLP.2: while key selection is active the key bar takes the header's place, at exactly its height.
+        val keyBar=com.fluxx.android.ui.editor.LocalKeyHeaderBar.current
+        if(keyBar!=null) com.fluxx.android.ui.editor.KeyHeaderBar(TextInspectorBudget.header(fontScale).dp,keyBar)
+        else Row(Modifier.fillMaxWidth().height(TextInspectorBudget.header(fontScale).dp).testTag("text-inspector-header"),verticalAlignment=Alignment.CenterVertically) {
             InspectorIconButton(InspectorIcons.icon("BACK"),if(subPage) "Back to ${tab.name.lowercase()}" else "Back to layer tools") {back()}
             if(subPage) Text("Fonts · $scopeLabel",Modifier.weight(1f).padding(horizontal=8.dp).semantics {heading()},color=TextPrimary,
                 style=MaterialTheme.typography.titleSmall,maxLines=1,overflow=TextOverflow.Ellipsis)

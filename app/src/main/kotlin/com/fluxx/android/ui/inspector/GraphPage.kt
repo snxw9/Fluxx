@@ -286,6 +286,8 @@ internal object GraphTabs {
  */
 @Composable internal fun GraphPageHeader(layer: CompositionLayer, target: GraphTarget, playheadUs: Long, frameRate: FrameRate, onBack: () -> Unit,
     session: GraphSession = remember { GraphSession() }, compositionWidth: Int = 1080, compositionHeight: Int = 1920) {
+    // TLP.2: while key selection is active the key bar takes the header's place, at exactly its height.
+    com.fluxx.android.ui.editor.LocalKeyHeaderBar.current?.let { bar -> com.fluxx.android.ui.editor.KeyHeaderBar(InspectorChromeBudget.header(LocalDensity.current.fontScale).dp, bar); return }
     val local = GraphModel.local(layer, target, playheadUs, frameRate)
     val segment = GraphSelection.segment(layer, target, session.selection, playheadUs, local)
     val valueAvailable = GraphValues.available(layer, target)

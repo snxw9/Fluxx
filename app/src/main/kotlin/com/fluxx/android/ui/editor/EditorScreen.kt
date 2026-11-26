@@ -638,7 +638,8 @@ fun EditorScreen(
                     },
                     onDismissInspector = { dismissInspector() },
                     selection = editor.layerSelection,
-                    extraBottomPadding = if (editor.selectionMode || editor.keySelection != null) SelectionBarHeight else 0.dp,
+                    // TLP.2: only the layer selection bar overlays the timeline (the key bar is in the sheet header).
+                    extraBottomPadding = if (editor.selectionMode) SelectionBarHeight else 0.dp,
                     selectedKeys = editor.keySelection?.times?.toSet(),
                     onKeysMoved = { moved -> pendingKeyFollow = editor.keySelection?.let { s -> s.copy(times = s.times.map { moved[it] ?: it }) } },
                     onKeyDoubleTap = { t -> val layer = editor.state.selectedLayer; val target = keyTarget
@@ -713,10 +714,12 @@ fun EditorScreen(
                 )
             }
 
-            // TLP T5: the key selection bottom bar (same overlay rules as the layer bar).
-            editor.keySelection?.let { keySel ->
+            // TLP.2 part 3: the key bar lives in the inspector sheet's HEADER while key selection is active (LocalKeyHeaderBar,
+            // provided around the sheet below); it replaces the header's contents at the header's height. Nothing under the sheet.
+            val keyHeaderBar: (@Composable RowScope.() -> Unit)? = editor.keySelection?.let { keySel ->
                 val keyLayer = editor.state.project.composition.layers.firstOrNull { it.id == keySel.layerId }
-                if (keyLayer != null) SelectionBottomBar(Modifier.align(Alignment.BottomCenter), testTag = "key-bottom-bar") {
+                if (keyLayer == null) return@let null
+                val bar: @Composable RowScope.() -> Unit = {
                     val easable = !GraphModel.discrete(keySel.target)
                     fun ease(c: EasingCurve) { KeyEdits.ease(keyLayer, keySel, c)?.let { applyLayerAction(it) } }
                     BarIcon("EASE_HOLD", "Hold", enabled = easable, testTag = "key-hold") { ease(EasingCurve.HOLD) }
@@ -737,6 +740,7 @@ fun EditorScreen(
                         applyKeys(KeyEdits.pack(editor.state.project, keyLayer, keySel, 1))
                     }
                 }
+                bar
             }
 
             // TLP T3: the selection bottom bar overlays the timeline (it never resizes it; the timeline has the same bottom
@@ -779,7 +783,7 @@ fun EditorScreen(
                     .height(inspectorHeight)
             ) {
                 selectedLayer?.let { layer ->
-                    androidx.compose.runtime.CompositionLocalProvider(com.fluxx.android.ui.inspector.LocalKeyClipboardHost provides keyClipboardHost) { ElementInspectorSheet(
+                    androidx.compose.runtime.CompositionLocalProvider(com.fluxx.android.ui.inspector.LocalKeyClipboardHost provides keyClipboardHost, LocalKeyHeaderBar provides keyHeaderBar) { ElementInspectorSheet(
                         onExplodePrepare={options,reply->
                             focusManager.clearFocus();previewController?.pause()
                             textEditor.finish {

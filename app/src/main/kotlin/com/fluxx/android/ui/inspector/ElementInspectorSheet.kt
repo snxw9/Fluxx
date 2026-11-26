@@ -329,6 +329,8 @@ internal fun sectionTitle(tab: InspectorSection, type: LayerType) = when (tab) {
 private fun SectionHeader(sections: List<InspectorSection>, section: InspectorSection, type: LayerType,
     onBack: () -> Unit, onSelect: (InspectorSection) -> Unit) {
     val fontScale = LocalDensity.current.fontScale
+    // TLP.2: while key selection is active the key bar takes this row's place, at exactly its height.
+    com.fluxx.android.ui.editor.LocalKeyHeaderBar.current?.let { bar -> com.fluxx.android.ui.editor.KeyHeaderBar(InspectorChromeBudget.header(fontScale).dp, bar); return }
     // The swipe-down-to-close gesture is the sheet's (InspectorSwipe), not this row's, so every page has it.
     Row(Modifier.fillMaxWidth().height(InspectorChromeBudget.header(fontScale).dp).testTag("inspector-section-header"),
         verticalAlignment = Alignment.CenterVertically) {
