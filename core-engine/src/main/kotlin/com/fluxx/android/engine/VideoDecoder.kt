@@ -87,7 +87,12 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
         lastApproximate = false
         fun log(kind: String) = probe?.invoke("$kind $probeKey t=$timeUs from=$probeFrom seek=$probeSeek decoded=$decoded how=$how us=${(SystemClock.elapsedRealtimeNanos() - probeStart) / 1000}")
         try {
-            cache.exact(timeUs)?.let { how = "cached"; log("frame"); return it }
+            cache.exact(timeUs)?.let { hit ->
+                // Playback: the hit is the look-ahead frame of the previous request; decode the next one now, so every
+                // frame costs one decode (without this, calls alternated 0 / 2 decodes and the pacing got uneven).
+                if (!approximate && !outputEnded && hit.timestamp / 1000 == outPos) { decodeNext(cancelled); decoded++ }
+                how = "cached"; log("frame"); return hit
+            }
             var sync = Long.MIN_VALUE
             val action = DecoderPlan.decide(timeUs, false, outPos, outputEnded) { prevSync(timeUs).also { sync = it } }
             if (action == DecoderPlan.Action.CACHED) {
