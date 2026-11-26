@@ -80,6 +80,58 @@ class DragSnapTest {
         assertTrue(20L in shifted && 50L in shifted && 35L in shifted)
     }
 
+    // ---- TLP.3 A2: per-class zones in frames, clamped in dp -----------------------------------------------------------
+    private val default = 120.0 / 1_000_000 // 120dp per second: 4dp per frame at 30 fps
+
+    @Test fun zonesAreFramesOfTheZoomClampedInDp() {
+        assertEquals(8f, SnapZones.dp(SnapKind.PLAYHEAD, default, rate), 1e-4f)   // 2 frames = 8dp (= the cap)
+        assertEquals(8f, SnapZones.dp(SnapKind.MARKER, default, rate), 1e-4f)
+        assertEquals(8f, SnapZones.dp(SnapKind.NEIGHBOUR, default, rate), 1e-4f)
+        assertEquals(4f, SnapZones.dp(SnapKind.TICK, default, rate), 1e-4f)       // 1 frame
+        assertEquals(4f, SnapZones.dp(SnapKind.MID_TICK, default, rate), 1e-4f)
+        // Zoomed in (20dp per frame): the caps.
+        val zoomed = 600.0 / 1_000_000
+        assertEquals(8f, SnapZones.dp(SnapKind.CLIP_EDGE, zoomed, rate), 1e-4f)
+        assertEquals(6f, SnapZones.dp(SnapKind.TICK, zoomed, rate), 1e-4f)
+        assertEquals(5f, SnapZones.dp(SnapKind.MID_TICK, zoomed, rate), 1e-4f)
+        // Zoomed far out (1dp per second): the 3dp floor holds for every class.
+        val far = 1.0 / 1_000_000
+        for (k in SnapKind.entries) assertEquals("$k", 3f, SnapZones.dp(k, far, rate), 1e-4f)
+        val farZone = SnapZones.of(far, rate)
+        assertTrue(DragSnap.snap(f(85), listOf(0), listOf(t(30 * 3, SnapKind.TICK)), farZone).target != null) // 5 frames off, inside 3dp = 3 s
+    }
+
+    @Test fun aMajorTickCapturesWithinOneFrameOnlyAndAMarkerWithinTwo() {
+        val zones = SnapZones.of(default, rate)
+        val tick = listOf(t(30, SnapKind.TICK))
+        // A drag across the major tick at frame 30 lands on 26, 27, 28 and 32, 33, 34 unsnapped; 29 and 31 snap to 30.
+        for (n in listOf(26L, 27L, 28L, 32L, 33L, 34L)) assertNull("$n", DragSnap.snap(f(n), listOf(0), tick, zones).target)
+        for (n in listOf(29L, 31L)) assertEquals("$n", f(30), DragSnap.snap(f(n), listOf(0), tick, zones).deltaUs)
+        // At every frame pair of the second (33333 / 33334us steps) one frame is inside the 1-frame zone.
+        for (n in 1L..59L) assertEquals("$n", f(n), DragSnap.snap(f(n - 1), listOf(0), listOf(t(n, SnapKind.TICK)), zones).deltaUs)
+        // A marker captures within 2 frames (8dp), not 3.
+        val marker = listOf(t(30, SnapKind.MARKER))
+        for (n in listOf(28L, 29L, 31L, 32L)) assertEquals("$n", f(30), DragSnap.snap(f(n), listOf(0), marker, zones).deltaUs)
+        for (n in listOf(27L, 33L)) assertNull("$n", DragSnap.snap(f(n), listOf(0), marker, zones).target)
+        // A mid tick: 1 frame.
+        assertNull(DragSnap.snap(f(13), listOf(0), listOf(t(15, SnapKind.MID_TICK)), zones).target)
+        assertEquals(f(15), DragSnap.snap(f(14), listOf(0), listOf(t(15, SnapKind.MID_TICK)), zones).deltaUs)
+    }
+
+    @Test fun perClassZonesKeepPriorityAndTheNearestWins() {
+        val zones = SnapZones.of(default, rate)
+        // Landing on frame 30.5-ish: a tick at 31 (0.5 frame) beats a marker at 32 (1.5 frames): nearest first.
+        val raw = (f(30) + f(31)) / 2
+        assertEquals(SnapKind.TICK, DragSnap.snap(raw, listOf(0), listOf(t(31, SnapKind.TICK), t(32, SnapKind.MARKER)), zones).target!!.kind)
+        // Landing 2 frames from a marker and 2 from a tick: the tick is outside its 1-frame zone, the marker captures.
+        assertEquals(SnapKind.MARKER, DragSnap.snap(f(30), listOf(0), listOf(t(32, SnapKind.TICK), t(28, SnapKind.MARKER)), zones).target!!.kind)
+        // An exact tie inside both zones: the playhead beats the major tick, the major tick beats the mid.
+        val c = listOf(1_000_000L)
+        fun winner(a: SnapKind, b: SnapKind) = DragSnap.snap(0, c, listOf(SnapTarget(990_000, a), SnapTarget(1_010_000, b)), zones).target!!.kind
+        assertEquals(SnapKind.PLAYHEAD, winner(SnapKind.TICK, SnapKind.PLAYHEAD))
+        assertEquals(SnapKind.TICK, winner(SnapKind.MID_TICK, SnapKind.TICK))
+    }
+
     @Test fun readoutsUseThePlayheadFormatWithASignedDelta() {
         assertEquals("00:01:15", DragReadout.start(f(45), 0, rate))
         assertEquals("+00:00:06", DragReadout.delta(f(45), f(51), rate))

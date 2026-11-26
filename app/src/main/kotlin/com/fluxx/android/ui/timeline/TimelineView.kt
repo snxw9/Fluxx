@@ -844,7 +844,7 @@ private fun TimelineClipRow(
         val candidates = members.flatMap { listOfNotNull(it.timing.startUs, it.timing.endUs) }
         val targets = com.fluxx.android.editor.DragSnap.withTicks(com.fluxx.android.editor.DragSnap.targets(p0, dragPlayhead, members.map { it.id }.toSet(), clipEdges = true),
             candidates, raw, frameRate, dragLevel, snapStartFrame)
-        val zoneUs = (with(density0) { com.fluxx.android.editor.DragSnap.ZONE_DP.dp.toPx() } / pxPerUs).toLong()
+        val zoneUs = com.fluxx.android.editor.SnapZones.of(pxPerUs / density0.density, frameRate)
         val snap = com.fluxx.android.editor.DragSnap.snap(raw, candidates, targets, zoneUs)
         locked(snap.target)
         // TLP T3: a selected layer moves the whole selection by the same frames (one Batch of Move, same gesture calls).
@@ -1109,7 +1109,7 @@ private fun TimelineClipRow(
                                             val deltaUs = (dragAmount.x / pxPerUs).roundToLong()
                                             accumulatedUs += deltaUs
                                             val raw = accumulatedUs - initialKfTime
-                                            val zoneUs = (with(density0) { com.fluxx.android.editor.DragSnap.ZONE_DP.dp.toPx() } / pxPerUs).toLong()
+                                            val zoneUs = com.fluxx.android.editor.SnapZones.of(pxPerUs / density0.density, frameRate)
                                             val base = groupBase
                                             if (base != null) {
                                                 // TLP.2: every selected key's time against the playhead, markers (the composition's and this
