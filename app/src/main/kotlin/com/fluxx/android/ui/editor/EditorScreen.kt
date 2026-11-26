@@ -1074,10 +1074,12 @@ fun EditorScreen(
                         onTimingChange = { timing ->
                             applyLayerAction(EditorAction.SetTiming(layer.id, timing))
                         },
-                        onAudioChange = { muted, gain ->
-                            editor.dispatch(EditorAction.SetAudio(layer.id, muted, gain))
-                            previewController?.update(editor.state.project, playheadUs, false)
-                        },
+                        // AUD2 B3: mute / a typed gain is one edit; a gain slider drag is ONE gesture whose steps play live
+                        // (GainEdits: playback continues, no new mix, no seek).
+                        onAudioChange = { muted, gain -> GainEdits.change(editor, previewController, layer.id, muted, gain) },
+                        onAudioBegin = { GainEdits.begin(editor) },
+                        onAudioPreview = { muted, gain -> GainEdits.preview(editor, previewController, layer.id, muted, gain) },
+                        onAudioCommit = { GainEdits.commit(editor, previewController) },
                         onColorChange = { argb ->
                             textEditor.finish { editor.dispatch(if (layer.type == LayerType.TEXT) TextEdits.fill(
                                 editor.state.project.composition.layers.first { it.id == layer.id }, composition.frameRate.snap(playheadUs), argb)

@@ -44,7 +44,8 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
     @Volatile private var lastSeekNs=Long.MIN_VALUE / 2
     // Accessed only on dispatcher, including sampling and destruction.
     private var samplingRenderer: CompositionRenderer? = null
-    private var playback: StreamingPlayback? = null
+    // AUD2 B3: volatile so a gain-only edit on the main thread reaches the running mix (applyGains is thread-safe).
+    @Volatile private var playback: StreamingPlayback? = null
     private var sampledEpoch = -1L
     private val worker=scope.launch {
         val repository=MediaRepository(app)
@@ -59,8 +60,8 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
         try {
             renderer=CompositionRenderer(app,repository,surface,width,height)
             samplingRenderer=renderer
-            while(isActive && !closed) {
             var approximateShown=false
+            while(isActive && !closed) {
                 // AUD2 B2: after an approximate scrub frame, the exact frame follows once no request came for SETTLE_MS.
                 var settle=false
                 if(!playing) {
@@ -98,7 +99,9 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
                     if(validated!==snapshot) { CompositionSupport.check(app,repository,snapshot);validated=snapshot }
                     // AUD1 B1: streaming playback straight from the per-source PCM cache: no whole-file mix before Play. Sound
                     // starts once ~0.5 s is decoded; "Preparing audio" shows only when that takes longer than 0.3 s.
-                    if(playing && playback==null) { playback=StreamingPlayback(app,snapshot,requestedUs); waitingSince=System.nanoTime(); preparingShown=false }
+                    if(playing && playback==null) { playback=StreamingPlayback(app,snapshot,requestedUs); waitingSince=System.nanoTime(); preparingShown=false
+                        // A gain-only edit that landed while this playback was being built.
+                        project.let { latest -> if(latest!==snapshot) playback?.applyGains(latest) } }
                     playback?.let { pb -> if(playing) {
                         val waited=(System.nanoTime()-waitingSince)/1_000_000
                         if(!pb.ready && StreamingWindow.showStatus(waited,false) && !preparingShown) { status(epoch,"Preparing audio"); preparingShown=true }
@@ -122,14 +125,14 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
                     var frame=rate.nearestFrame(time.coerceIn(0,duration))
                     if(time<duration && rate.frameTimeUs(frame)>=duration && frame>0) frame--
                     val frameTime=if(time>=duration) duration else rate.frameTimeUs(frame)
-                    if(lastDrawTime!=frameTime) {
-                        renderer.renderPreview(snapshot,frameTime,quality,cancel)
-                        if(!cancel()) {
                     if(settle) lastDrawTime=-1
-                            lastDrawTime=frameTime
+                    if(lastDrawTime!=frameTime) {
                         renderer.approximateFrames=!playing && !settle && scrubbing
-                            position(epoch,if (playing) frameTime else requestedUs);status(epoch,null)
+                        renderer.renderPreview(snapshot,frameTime,quality,cancel)
                         approximateShown=!playing && renderer.lastFrameApproximate
+                        if(!cancel()) {
+                            lastDrawTime=frameTime
+                            position(epoch,if (playing) frameTime else requestedUs);status(epoch,null)
                         }
                     }
                     if(playing) delay(4)
@@ -156,8 +159,23 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
         val a = clockAnchor ?: return null
         return (a[1] + (nanoTime - a[0]) / 1000).coerceIn(a[1], a[2])
     }
+    /**
+     * AUD2 B3: a gain-only edit (a gain slider step, or a typed gain). The running mix takes it live (no new mix, no
+     * feeding-thread restart, no re-gate, no seek; the picture is unchanged so nothing re-renders). Returns false when
+     * [next] changes more than gains (then use [update]).
+     */
+    fun previewGains(next: ProjectDocument): Boolean {
+        if(closed || !AudioGains.onlyGainsChanged(project,next)) return false
+        project=next
+        playback?.applyGains(next)
+        return true
+    }
     fun update(project: ProjectDocument,timeUs: Long,play: Boolean=false) {
         if(!play) clockAnchor=null
+        // AUD2 B2: seeks arriving back to back (a finger scrubbing) allow the decoders' bounded scrub decode.
+        val now=System.nanoTime(); val target=timeUs.coerceIn(0L, project.composition.resolvedDurationUs)
+        if(play) scrubbing=false
+        else if(target!=requestedUs) { scrubbing=ScrubPolicy.scrubbing(now-lastSeekNs); lastSeekNs=now }
         this.project=project;requestedUs=timeUs.coerceIn(0L, project.composition.resolvedDurationUs);playing=play && project.composition.resolvedDurationUs > 0
         mutableState.update { it.copy(playing=playing) }
         requestGeneration.incrementAndGet()
@@ -172,10 +190,6 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
         changes.trySend(Unit)
     }
     fun seek(timeUs: Long) = update(project,timeUs,false)
-        // AUD2 B2: seeks arriving back to back (a finger scrubbing) allow the decoders' bounded scrub decode.
-        val now=System.nanoTime(); val target=timeUs.coerceIn(0L, project.composition.resolvedDurationUs)
-        if(play) scrubbing=false
-        else if(target!=requestedUs) { scrubbing=ScrubPolicy.scrubbing(now-lastSeekNs); lastSeekNs=now }
     fun play() = update(project, requestedUs.takeIf { it < (project.composition.resolvedDurationUs) } ?: 0, true)
     fun pause() = update(project,requestedUs,false)
     /** Normalized workspace coordinates; native maps through its recorded blit rectangle. */

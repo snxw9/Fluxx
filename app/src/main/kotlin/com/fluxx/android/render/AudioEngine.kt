@@ -287,7 +287,8 @@ class SourcePcmCache private constructor(private val context: Context) {
  * unmuted video layers), mapped start + (t - in) at 1x.
  */
 class BlockMixer(context: Context, project: ProjectDocument) {
-    private class Voice(val pcm: SourcePcm, val startFrame: Long, val endFrame: Long, val inFrame: Long, val gain: Float)
+    /** AUD2 B3: [gain] is read once per block by the feeding thread; [BlockMixer.setGains] changes it live. */
+    private class Voice(val id: Long, val pcm: SourcePcm, val startFrame: Long, val endFrame: Long, val inFrame: Long, @Volatile var gain: Float)
     private val duration = project.composition.resolvedDurationUs
     val totalFrames = AudioTiming.frames(duration)
     private val voices: List<Voice>
@@ -297,11 +298,13 @@ class BlockMixer(context: Context, project: ProjectDocument) {
     init {
         val cache = SourcePcmCache.get(context)
         val headroom = AudioMixPolicy.headroom(project)
-        voices = project.composition.layers.filter { it.visible && it.type == LayerType.VIDEO && !it.muted && it.audioGain > 0 && it.timing.endUs != null && it.asset?.uri != null }
-            .map { l -> Voice(cache.get(l.asset!!.uri!!, l.asset.durationUs ?: (l.timing.sourceInUs + l.timing.durationUs!!)),
+        voices = AudioGains.audible(project)
+            .map { l -> Voice(l.id, cache.get(l.asset!!.uri!!, l.asset.durationUs ?: (l.timing.sourceInUs + l.timing.durationUs!!)),
                 AudioTiming.frames(l.timing.startUs), AudioTiming.frames(minOf(l.timing.endUs!!, duration)), AudioTiming.frames(l.timing.sourceInUs), l.audioGain * headroom) }
     }
     val hasAudio get() = voices.isNotEmpty()
+    /** AUD2 B3: new effective gains (layer id -> gain x headroom) for the voices playing; heard from the next block. */
+    fun setGains(gains: Map<Long, Float>) { for (v in voices) gains[v.id]?.let { v.gain = it } }
 
     /** Every active source has [ahead] frames decoded from [frame] (and is asked to decode them otherwise). */
     fun ready(frame: Long, ahead: Long): Boolean = voices.all { v ->
@@ -321,7 +324,7 @@ class BlockMixer(context: Context, project: ProjectDocument) {
             val off = ((a - frame) * 2).toInt(); val g = v.gain / 32768f
             for (i in 0 until n * 2) acc[off + i] += tmp[i] * g
         }
-        for (i in 0 until count * 2) out[i] = (acc[i].coerceIn(-1f, 1f) * 32767f).toInt().toShort()
+        for (i in 0 until count * 2) out[i] = AudioGains.saturate(acc[i])
     }
 }
 
@@ -341,9 +344,26 @@ internal class StreamingPlayback(context: Context, project: ProjectDocument, sta
         .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(AudioTiming.RATE).setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).build())
         .setBufferSizeInBytes(maxOf(minBuffer * 2, StreamingWindow.BLOCK_FRAMES * 4 * 4))
         .setTransferMode(AudioTrack.MODE_STREAM).build()
+    // AUD2 B3: the overall gain on the track (immediate), each layer's relative weight in the mix (from the next block).
+    init { setGains(project) }
     private val running = AtomicBoolean(true)
     @Volatile var error: Throwable? = null; private set
     @Volatile private var written = 0L
+
+    /**
+     * AUD2 B3: a gain-only edit while playing (any thread): no new mix, no feeding-thread restart, no re-gate. The track
+     * volume changes at once; relative weights from the next 20 ms block mixed.
+     */
+    fun applyGains(project: ProjectDocument) {
+        val volume = setGains(project)
+        PreviewFrames.testPlayback?.invoke("gain-live volume=$volume written=$written")
+    }
+    private fun setGains(project: ProjectDocument): Float {
+        val (volume, relative) = AudioGains.split(project)
+        mixer.setGains(relative)
+        runCatching { track.setVolume(volume) }
+        return volume
+    }
     @Volatile var ready = !mixer.hasAudio || mixer.ready(startFrame, AudioTiming.frames(StreamingWindow.READY_US)); private set
     private var playing = false
     private val stamp = AudioTimestamp()
@@ -382,6 +402,9 @@ internal class StreamingPlayback(context: Context, project: ProjectDocument, sta
         PreviewFrames.testClock?.invoke(now, head, ts != null && ts.nanoTime > 0, us)
         return us
     }
+    private val fallbackLagFrames = AvClock.fallbackLagFrames(latencyFrames, track.bufferSizeInFrames.toLong())
+    private var lastUs = AvClock.us(startFrame)
+    private var lastNs = 0L
     val underruns get() = track.underrunCount
     /** AUD2 B1: the track runs (the gate opened): [positionUs] now moves with what is heard. Preview worker only. */
     val started get() = playing
@@ -396,6 +419,3 @@ internal class StreamingPlayback(context: Context, project: ProjectDocument, sta
         runCatching { track.release() }
     }
 }
-    private val fallbackLagFrames = AvClock.fallbackLagFrames(latencyFrames, track.bufferSizeInFrames.toLong())
-    private var lastUs = AvClock.us(startFrame)
-    private var lastNs = 0L

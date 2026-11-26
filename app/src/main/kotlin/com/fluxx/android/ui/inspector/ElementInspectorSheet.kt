@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import com.fluxx.android.editor.*
 import com.fluxx.android.model.*
+import com.fluxx.android.render.AudioGains
 import com.fluxx.android.ui.theme.*
 import kotlinx.coroutines.flow.collect
 import kotlin.math.atan2
@@ -111,6 +112,10 @@ fun ElementInspectorSheet(
     onTransformEdit: (Transform) -> Unit,
     onTimingChange: (ClipTiming) -> Unit,
     onAudioChange: (muted: Boolean, gain: Float) -> Unit,
+    /** AUD2 B3: a gain slider drag is ONE gesture: begin, live previews, commit (a cancelled drag keeps its value). */
+    onAudioBegin: () -> Unit = {},
+    onAudioPreview: (muted: Boolean, gain: Float) -> Unit = onAudioChange,
+    onAudioCommit: () -> Unit = {},
     onColorChange: (Int) -> Unit,
     onEyedropperRequest: () -> Unit = {},
     onColorPreview: (Int) -> Unit = onColorChange,
@@ -292,7 +297,7 @@ fun ElementInspectorSheet(
                                     onTransformCommit, onTransformCancel,
                                     { onTransformEdit(layer.evaluatedTransform(playheadUs).copy(opacity = it)) })
                                 InspectorSection.TIMING -> CompactTimingSectionContent(layer.timing, layer.type == LayerType.VIDEO, onTimingChange)
-                                InspectorSection.AUDIO -> CompactAudioSectionContent(layer.muted, layer.audioGain, onAudioChange)
+                                InspectorSection.AUDIO -> CompactAudioSectionContent(layer.muted, layer.audioGain, onAudioChange, onAudioBegin, onAudioPreview, onAudioCommit)
                                 InspectorSection.CONTEXTUAL_EDIT -> if (layer.type == LayerType.TEXT) TextInspectorPanel(
                                     layer,playheadUs,textFrameRate,onAction,onPropertyFocus,onTextBegin,onTextDraftSelection,onTextFinish,onTextCancel,
                                     onTextSizeBegin,onTextPayloadPreview,onTextCharacter,onTextParagraph,onTextBoxWidth,compositionWidth,textSelection,onTextSelection,textError,
@@ -1109,7 +1114,10 @@ private fun CompactTimingSectionContent(
 private fun CompactAudioSectionContent(
     muted: Boolean,
     gain: Float,
-    onAudioChange: (Boolean, Float) -> Unit
+    onAudioChange: (Boolean, Float) -> Unit,
+    onAudioBegin: () -> Unit = {},
+    onAudioPreview: (Boolean, Float) -> Unit = onAudioChange,
+    onAudioCommit: () -> Unit = {}
 ) {
     // Same sizing discipline as Timing: fixed rows (SectionLayout), the measured group centred in the content area.
     val fontScale = LocalDensity.current.fontScale
@@ -1153,14 +1161,15 @@ private fun CompactAudioSectionContent(
             modifier = Modifier.fillMaxWidth(),
             label = "Gain",
             value = gain,
-            valueRange = 0f..2f,
+            // AUD2 B3: the model's range (CompositionLayer requires 0..1; 0..2 here crashed the app above 100 %). Above 100 %
+            // could not be louder anyway: the mix headroom divides by the summed gain (one layer at 150 % plays at 100 %).
+            valueRange = AudioGains.RANGE,
             displayValue = String.format("%.0f%%", gain * 100f),
-            onBegin = {},
-            onValueChange = { onAudioChange(muted, it) },
-            onCommit = {},
+            onBegin = onAudioBegin,
+            onValueChange = { onAudioPreview(muted, AudioGains.clamp(it)) },
+            onCommit = onAudioCommit,
             onDirectEdit = {
-                val clamped = (it / 100f).coerceIn(0f, 2f)
-                onAudioChange(muted, clamped)
+                onAudioChange(muted, AudioGains.clamp(it / 100f))
             },
             dialogTitle = "Set Volume Gain (%)"
         )

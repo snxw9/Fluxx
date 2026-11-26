@@ -13,20 +13,23 @@ import java.io.File
  * re-render, decoder work), then the Resume after a gain change. Numbers only.
  */
 class Aud2GainTest : Aud2Base() {
-    /** CompactSliderItem in ElementInspectorSheet: valueRange 0f..2f (and its direct entry clamps to 0..2). */
-    private val sliderMax = 2f
+    /**
+     * CompactSliderItem in ElementInspectorSheet. Before AUD2 B3: valueRange 0f..2f (its direct entry clamped to 0..2);
+     * after: [com.fluxx.android.render.AudioGains.RANGE] (the model's 0..1).
+     */
+    private val sliderMax = com.fluxx.android.render.AudioGains.RANGE.endInclusive
     private lateinit var m: Aud1Bench.Media
     private lateinit var f: File
 
     /**
-     * One slider event through the app's path. BEFORE the AUD2 fix this is exactly EditorScreen's onAudioChange: a full
-     * SetAudio dispatch (its own undo step) then PreviewController.update(.., play = false). [phase]: 0 begin, 1 preview,
-     * 2 commit (unused by the old path, which has no gesture).
+     * One slider event through the app's path. BEFORE the AUD2 fix (commit a24d63f) this was EditorScreen's onAudioChange:
+     * a full SetAudio dispatch (its own undo step) then PreviewController.update(.., play = false) for every step. AFTER
+     * (B3) it is exactly what the slider calls: [com.fluxx.android.ui.editor.GainEdits] begin / preview / commit.
      */
-    private fun gainEvent(phase: Int, gain: Float) {
-        if (phase != 1) return
-        editor.dispatch(EditorAction.SetAudio(1, false, gain))
-        c.update(editor.state.project, editor.state.playheadUs, false)
+    private fun gainEvent(phase: Int, gain: Float) = when (phase) {
+        0 -> com.fluxx.android.ui.editor.GainEdits.begin(editor)
+        1 -> com.fluxx.android.ui.editor.GainEdits.preview(editor, c, 1, false, gain)
+        else -> com.fluxx.android.ui.editor.GainEdits.commit(editor, c)
     }
 
     private fun undoDepth() = (com.fluxx.android.editor.EditorViewModel::class.java.getDeclaredField("undoStack").apply { isAccessible = true }.get(editor) as List<*>).size
@@ -63,7 +66,10 @@ class Aud2GainTest : Aud2Base() {
         // Open the inspector's Audio page (timeline selection opens the sheet), so the slider and its readout are on screen
         // and recompose with every step, as in the app.
         val opened = runCatching {
-            compose.onNodeWithTag("timeline-clip-hit-1", useUnmergedTree = true).performClick(); compose.waitForIdle(); Thread.sleep(600)
+            // At timeline 0 the clip starts under the playhead: tap a point of it that is on screen (its centre is not).
+            seekTo(0)
+            compose.onNodeWithTag("timeline-clip-hit-1", useUnmergedTree = true).performTouchInput { click(androidx.compose.ui.geometry.Offset(40f, height / 2f)) }
+            compose.waitForIdle(); Thread.sleep(600)
             compose.onAllNodesWithText("Audio", useUnmergedTree = true).onFirst().performClick(); compose.waitForIdle(); Thread.sleep(600)
             compose.onAllNodesWithText("Gain", substring = true, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
         }
@@ -74,12 +80,13 @@ class Aud2GainTest : Aud2Base() {
             val undoBefore = compose.runOnIdle { undoDepth() }
             rec.clear()
             val stepMs = ArrayList<Double>()
+            val stepAt = ArrayList<Long>()
             val steps = 60
             val ui = uiFrames(compose.activity.window) {
                 compose.runOnUiThread { gainEvent(0, 1f) }
                 for (i in 1..steps) {
                     val g = 1f - 0.9f * i / steps
-                    compose.runOnUiThread { val t = System.nanoTime(); gainEvent(1, g); stepMs += (System.nanoTime() - t) / 1e6 }
+                    compose.runOnUiThread { val t = System.nanoTime(); stepAt += t; gainEvent(1, g); stepMs += (System.nanoTime() - t) / 1e6 }
                     Thread.sleep(16)
                 }
                 compose.runOnUiThread { gainEvent(2, 0.1f) }
@@ -90,6 +97,18 @@ class Aud2GainTest : Aud2Base() {
             val dec = rec.decoder.toList()
             report("A4 drag ($label, $steps steps 1.0 -> 0.1): UI frames ${Aud2Bench.stats(ui)} ms; main-thread time per step ${Aud2Bench.stats(stepMs)} ms")
             report("A4 drag ($label): playback created ${ev.count { it.second.startsWith("playback-create") }}, closed ${ev.count { it.second == "playback-close" }}, track started ${ev.count { it.second == "track-play" }}, live gain updates ${ev.count { it.second.startsWith("gain-") }}; preview frames presented ${rec.frames.size}; decoder events ${dec.size} (flush+seek ${dec.count { it.second.startsWith("frame") && !it.second.contains("seek=-1") }}, frames decoded ${dec.filter { it.second.startsWith("frame") }.sumOf { Regex("decoded=(\\d+)").find(it.second)?.groupValues?.get(1)?.toInt() ?: 0 }}); still playing after the drag: $playing; undo entries added by the drag: ${compose.runOnIdle { undoDepth() } - undoBefore}")
+            // Live gain: from the step to the gain reaching the output (track volume: immediate; per-layer weights from the
+            // next block), and how much audio was already queued at that moment (heard later at the old weights).
+            val live = ev.filter { it.second.startsWith("gain-live") }
+            if (live.isNotEmpty()) {
+                val applied = stepAt.mapNotNull { s -> live.firstOrNull { it.first >= s }?.let { (it.first - s) / 1e6 } }
+                val queued = live.mapNotNull { e -> val w = Regex("written=(\\d+)").find(e.second)?.groupValues?.get(1)?.toLong() ?: return@mapNotNull null
+                    val start = rec.stamps.firstOrNull()?.get(2) ?: return@mapNotNull null
+                    val heard = rec.heardUs(e.first) ?: return@mapNotNull null
+                    w / 48.0 - (heard - start * 1_000_000 / 48_000) / 1000.0 }
+                val lag = Aud1Bench.track(c)?.let { t -> Aud1Bench.latencyMs(t)?.minus(t.bufferSizeInFrames / 48) }
+                report("A4 drag ($label): step -> gain applied (track volume set) ${Aud2Bench.stats(applied)} ms; audio already queued at that moment ${Aud2Bench.stats(queued)} ms; output path after the mixer (getLatency - buffer) ${lag ?: "?"} ms")
+            }
             // Resume after the gain change: what the next Play pays.
             if (playing) toggle()
             Thread.sleep(600)
