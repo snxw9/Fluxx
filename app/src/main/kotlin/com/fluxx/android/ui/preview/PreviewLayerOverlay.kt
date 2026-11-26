@@ -79,7 +79,7 @@ internal fun PreviewLayerOverlay(project: ProjectDocument, selected: Composition
     val shownSelectorBox = selectorBox?.takeIf { it.first == selectorKey && selected?.visible == true && selected.timing.isActive(playheadUs) }?.second?.takeIf { !it.empty }
     val matrix = remember { FloatArray(16) }
     Canvas(Modifier.fillMaxSize().testTag("preview-layer-overlay").semantics {
-        stateDescription = if (shownSelectorBox != null) "Selector box" else "Layer box" }) {
+        stateDescription = PreviewBoxRule.state(shownSelectorBox != null, PreviewBoxRule.handles(settings.showSelectionHandles, shownSelectorBox != null)) }) {
         if (settings.showGrid) {
             val gridColor = Border.copy(alpha = .35f)
             for (i in 1..7) {
@@ -124,8 +124,8 @@ internal fun PreviewLayerOverlay(project: ProjectDocument, selected: Composition
                 drawPath(outline, Color.Black, style = Stroke(2.5.dp.toPx()))
                 drawPath(outline, if (shownSelectorBox != null && layer.type == LayerType.TEXT) SelectorCoverageColour else Highlight, style = Stroke(1.dp.toPx()))
             }
-            if (settings.showSelectionHandles) {
-                // The handles stay on the layer box (the selector box is display only; gestures are unchanged).
+            if (PreviewBoxRule.handles(settings.showSelectionHandles, shownSelectorBox != null && layer.type == LayerType.TEXT)) {
+                // TLP.2: hidden while the red selector box shows (one box); gestures are unchanged either way.
                 val handles = layerCorners + layerCorners.indices.map { (layerCorners[it] + layerCorners[(it + 1) % 4]) / 2f }
                 handles.forEach { p ->
                     drawCircle(Color.Black, 4.dp.toPx(), p)

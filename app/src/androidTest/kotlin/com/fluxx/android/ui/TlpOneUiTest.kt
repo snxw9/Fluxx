@@ -12,12 +12,8 @@ import com.fluxx.android.editor.*
 import com.fluxx.android.media.MediaRepository
 import com.fluxx.android.model.*
 import com.fluxx.android.render.PreviewController
-import com.fluxx.android.render.TextMetricsRepository
 import com.fluxx.android.ui.editor.EditorScreen
-import com.fluxx.android.ui.preview.PreviewLayerOverlay
-import com.fluxx.android.ui.preview.ViewSettings
 import com.fluxx.android.ui.theme.FluxxTheme
-import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -27,7 +23,7 @@ import org.junit.Test
 /**
  * TLP.1 on the A16 (fixture compositions, never the user's projects; Compose test input only):
  * layer Stagger / Sequence Reverse defaults, key tap rules (no seek), Copy / Paste keys in the property ⋮ (not the 6th
- * icon), the hold-drag that moves selected keys together, and the selector coverage box on focus / blur.
+ * icon) and the hold-drag that moves selected keys together (the selector box test moved to TlpTwoUiTest in TLP.2).
  */
 class TlpOneUiTest {
     @get:Rule val compose = createComposeRule()
@@ -145,31 +141,5 @@ class TlpOneUiTest {
         click("inspector-rail-menu"); node("rail-menu-paste-keys").assertIsEnabled(); click("rail-menu-paste-keys")
         assertEquals(keyFrames.map { f(it) } + keyFrames.map { f(it + 60) }, times())
         editor.undo(); settle(); assertEquals(keyFrames.map { f(it) }, times())
-    }
-
-    @Test fun selectorBoxAppearsOnFocusAndRevertsOnBlur() {
-        // The real preview overlay with real text metrics: selector 2 covers the first half of "Selector box".
-        val text = TextProperties(source = AnimatableString(staticValue = "Selector box"), animators = FrozenList.of(listOf(
-            TextAnimator(1, selectors = FrozenList.of(listOf(TextRangeSelector(2, start = AnimatableProperty1D(staticValue = 0f),
-                end = AnimatableProperty1D(staticValue = 50f)))),
-                properties = FrozenList.of(listOf(TextPropertyOverride(AnimatorProperty.TRACKING, scalar = AnimatableProperty1D(staticValue = 50f))))))))
-        val layer = CompositionLayer(7, LayerType.TEXT, timing = ClipTiming(durationUs = 4_000_000), text = text)
-        val project = ProjectDocument(Composition(width = 1080, height = 1920, durationUs = 4_000_000, layers = FrozenList.of(listOf(layer))))
-        val focus = mutableStateOf<AnimatorTrackAddress?>(null)
-        compose.setContent { FluxxTheme { PreviewLayerOverlay(project, layer, 0, null, ViewSettings(), false, focus.value) } }
-        settle()
-        assertEquals("Layer box", state("preview-layer-overlay"))
-        // The box is the covered half: narrower than the layer box, in the same layout space.
-        val metrics = runBlocking { TextMetricsRepository.get(context).measure(text.fontId, text.source.evaluateDocument(0), text.effectiveLigatures(0), text) }
-        val box = metrics.selectorBox(text, 0, 1, 2)!!
-        assertTrue(box.width > 0f && box.width < metrics.bounds(text, 0).width)
-        focus.value = AnimatorTrackAddress(1, selectorId = 2, field = SelectorField.START)
-        compose.waitUntil(5_000) { state("preview-layer-overlay") == "Selector box" }
-        // Blur: a property field of the animator (no selector) brings the layer box back; so does no focus.
-        focus.value = AnimatorTrackAddress(1, property = AnimatorProperty.TRACKING); settle()
-        assertEquals("Layer box", state("preview-layer-overlay"))
-        focus.value = AnimatorTrackAddress(1, selectorId = 2); compose.waitUntil(5_000) { state("preview-layer-overlay") == "Selector box" }
-        focus.value = null; settle()
-        assertEquals("Layer box", state("preview-layer-overlay"))
     }
 }
