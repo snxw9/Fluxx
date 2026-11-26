@@ -52,8 +52,8 @@ internal val SelectionBarHeight = 48.dp
  * padding), the top bar's height and width, accent-filled.
  */
 @Composable internal fun SelectionBottomBar(modifier: Modifier = Modifier, testTag: String = "selection-bottom-bar", content: @Composable RowScope.() -> Unit) {
-    Row(modifier.fillMaxWidth().height(SelectionBarHeight).background(MaterialTheme.colorScheme.primary).padding(horizontal = 4.dp)
-        .testTag(testTag), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly, content = content)
+    Row(modifier.fillMaxWidth().height(SelectionBarHeight).testTag(testTag).background(MaterialTheme.colorScheme.primary)
+        .padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly, content = content)
 }
 
 /** One icon of a selection bar, in `onPrimary` (disabled: `onPrimary` at 38%), 48dp target. */

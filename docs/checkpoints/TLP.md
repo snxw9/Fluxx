@@ -6,7 +6,7 @@ Local branch `tlp`, created from `master` at `2377a83` (after the graph merge). 
 
 **Status:** T0–T5 implemented in source. T6: the eyedropper is done; the coverage highlight was skipped (questions in §T6).
 - **JVM:** 621 / 621 in one full run (46 s).
-- **A16:** `TlpUiTest` **not run to a result**. The phone's screen was off, so the preview surface never appeared and all three tests timed out in setup (`host()`), before any TLP code ran (§Tests).
+- **A16:** `TlpUiTest` 2 / 3 on the first run with the screen on (19 s); the failure was a misplaced test tag on the bottom bar, fixed, and the failed method re-ran green (14 s). An earlier run with the screen off timed out in setup (§Tests).
 - **Phone acceptance:** pending.
 
 ## T0. Selection architecture (written before the code)
@@ -176,10 +176,10 @@ Local branch `tlp`, created from `master` at `2377a83` (after the graph merge). 
 
 - **JVM** (Gradle 9.7.1): **621 / 621**, one full run, 46 s wall. That is the 600 of Stage 1 plus 21 new: `TlpSelectionTest` 5, `TlpMultiLayerTest` 6, `HiddenLayerTest` 4, `TlpKeyTest` 6.
 - **A16, `TlpUiTest`** (new; the real `EditorScreen` with a fixture composition):
-  - **Run:** one invocation, 48 s wall, 3 / 3 failed in setup: `ComposeTimeoutException` in `host()` waiting for the preview surface.
-  - **Cause:** a screencap showed the screen off (all black). It is environmental, not a TLP failure: no TLP assertion ran.
-  - **Not re-run:** waking the phone needs an input event, which is outside the allowed adb use, so re-running would only repeat the timeout.
-  - **To run it with the screen on:** `adb shell am instrument -w -r -e class com.fluxx.android.ui.TlpUiTest com.fluxx.android.debug.test/androidx.test.runner.AndroidJUnitRunner`. The debug and test APKs with this branch are already installed (`install -r`).
+  - **Run 1 (screen off):** 48 s wall, 3 / 3 timed out in setup (`host()` waiting for the preview surface). Environmental; no TLP assertion ran.
+  - **Run 2 (screen on):** 19 s wall, 2 / 3 passed. `selectionModeEntryTapRulesAndExit` failed at the width check: bottom bar 376.2dp vs top bar 384dp.
+  - **Cause:** `SelectionBottomBar` applied its `testTag` after `padding(horizontal = 4.dp)`, so the tagged node was the padded inner area (384 − 2 × 11 px). The bar itself already drew full width. Fix: the tag moved before the padding (as in the top bar).
+  - **Re-run of the failed method only:** passed, 14 s wall. No flaky items.
 - **What `TlpUiTest` covers:**
   - D-button geometry (56 × 28dp on the left edge), states and fade stops; outside the mode the eye toggles one layer.
   - Long-press entry; add by D-button and by body; bulk eye (one undo); remove by body and by long-press; the empty-space exit without a seek; selection not in history.
@@ -189,7 +189,7 @@ Local branch `tlp`, created from `master` at `2377a83` (after the graph merge). 
 
 ## Not verified
 
-- Every TLP device behaviour (`TlpUiTest` did not run; see above).
+- TLP device behaviour beyond what `TlpUiTest` covers (T4 stagger / sequence UI, T5 key bars and copy / paste, T6 eyedropper) was not run on the phone.
 - Haptics, TalkBack, and real-finger feel: D-button long-press, double tap on keys, the single-tap seek delay that the double-tap detector adds.
 - Device memory and decoder / texture release timing for hidden layers.
 - The key bottom bar overlaying the inspector's bottom 48dp (layout to check on the phone).
