@@ -1,6 +1,12 @@
 package com.fluxx.android.ui.timeline
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.scale
+import com.fluxx.android.model.AnimatableColour
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -74,8 +80,18 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
     val latestPopover by rememberUpdatedState(onPopover)
     val halfHit = with(density) { (LayerKeyMarkers.HIT_WIDTH_DP / 2f).dp.toPx() }
     val selectedTimes = selection?.timesOf(row.layerId, row.target).orEmpty()
+    // TL3 B4: a colour row draws the real colour transition between its keys (cached per segment, never per scroll frame).
+    val colourTrack = if (row.kind == TwirlValueKind.COLOUR) remember(layer, row.target) { TwirlColour.track(layer, row.target) } else null
+    val barCache = remember(row.key) { ColourBar.Cache<Pair<androidx.compose.ui.graphics.Brush, Boolean>>() }
+    LaunchedEffect(colourTrack) { colourTrack?.let { barCache.retain(it) } }
+    val barHeightPx = with(density) { TwirlStyle.COLOUR_BAR_DP.dp.toPx() }
+    val checkerPx = with(density) { 4.dp.toPx() }
+    val underlay: (androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit)? = colourTrack?.let { track -> {
+        drawColourBar(track, layer, pxPerUs, visible, barCache, barHeightPx, checkerPx)
+    } }
     TwirlTrackRow(layer, row, pxPerUs, playheadUs, selectedTimes, visible, modifier.pointerInput(row.key, pxPerUs) {
         var hit: Long? = null
+        var barTime: Long? = null
         var base: Pair<ProjectDocument, KeySelectionSet>? = null
         var clip: LongRange? = null
         var last: MultiKeyEdits.Moved? = null
@@ -84,8 +100,19 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
         fun keyMode() = latest.third != null
         fun selected(t: Long) = latest.third?.contains(row.layerId, row.target, t) == true
         detectKeyGestures(
-            onDown = { p -> val (_, l, _) = latest; hit = nearestKey(TwirlRows.keyTimes(l, row.target), l, pxPerUs, p.x, halfHit); hit != null },
-            onTap = { val t = hit ?: return@detectKeyGestures
+            onDown = { p -> val (_, l, _) = latest; hit = nearestKey(TwirlRows.keyTimes(l, row.target), l, pxPerUs, p.x, halfHit)
+                barTime = null
+                if (hit == null && row.kind == TwirlValueKind.COLOUR) {
+                    // B4: a tap on the bar between keys (not on a diamond) opens the bar popover.
+                    val keys = TwirlRows.keyTimes(l, row.target); val anchor = l.resolvedKeyframeAnchorUs
+                    val comp = (p.x / pxPerUs).roundToLong()
+                    val inBar = kotlin.math.abs(p.y - size.height / 2f) <= barHeightPx / 2f
+                    if (keys.size >= 2 && inBar && comp > anchor + keys.first() && comp < anchor + keys.last() &&
+                        comp in l.timing.startUs..(l.timing.endUs ?: l.timing.startUs)) barTime = comp
+                }
+                hit != null || barTime != null },
+            onTap = { barTime?.let { latestPopover(TwirlPopover.Bar(row.layerId, row.target, it)); return@detectKeyGestures }
+                val t = hit ?: return@detectKeyGestures
                 when (KeyGestureRules.tap(KeyPlace.TWIRL, keyMode())) {
                     KeyGestureEffect.OPEN_POPOVER -> latestPopover(TwirlPopover.Value(row.layerId, row.target, t, single = false))
                     KeyGestureEffect.TOGGLE -> latestHost.onEffect(row.layerId, row.target, t, KeyGestureEffect.TOGGLE)
@@ -99,7 +126,7 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
                     KeyGestureEffect.OPEN_POPOVER_SINGLE -> latestPopover(TwirlPopover.Value(row.layerId, row.target, t, single = true))
                     else -> {}
                 } },
-            onDragStart = { val t = hit ?: return@detectKeyGestures
+            onDragStart = { val t = hit ?: return@detectKeyGestures // the colour bar is not draggable
                 val (p0, l0, sel) = latest
                 // A selected key in key mode carries the whole selection; any other key moves alone, inside its clip.
                 val group = sel != null && sel.contains(row.layerId, row.target, t)
@@ -138,7 +165,11 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
                 moved != null
             },
             onDragCancel = { latestGestures.cancel(); base = null; last = null; locked = null; latestDragInfo(null) })
-    }) {
+    }, underlay = underlay) {
+        (popover as? TwirlPopover.Bar)?.takeIf { it.layerId == row.layerId && it.target == row.target }?.let { bar ->
+            val x = with(density) { (bar.compositionUs * pxPerUs).toFloat().toDp() }
+            Box(Modifier.offset(x = x).size(1.dp, row.heightDp.dp)) { ColourBarPopover(project, layer, row, bar, host, onDismiss = { onPopover(null) }) }
+        }
         val open = popover as? TwirlPopover.Value
         if (open != null && open.layerId == row.layerId && open.target == row.target) {
             // The key went away (moved, deleted, undone): the popover closes.
@@ -191,5 +222,68 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
             }
         }
         else -> LaunchedEffect(Unit) { onDismiss() }
+    }
+}
+
+
+/** TL3 B4: draws [track]'s bar (visible segments only) from the cached gradients; alpha over a faint checkerboard. */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawColourBar(track: AnimatableColour, layer: CompositionLayer, pxPerUs: Double,
+    visible: VisibleRange, cache: ColourBar.Cache<Pair<androidx.compose.ui.graphics.Brush, Boolean>>, barHeightPx: Float, checkerPx: Float) {
+    val k = track.keyframes
+    if (!track.isAnimated || k.size < 2) return
+    val range = visible.px()
+    val anchor = layer.resolvedKeyframeAnchorUs
+    val clipL = (layer.timing.startUs * pxPerUs).toFloat(); val clipR = ((layer.timing.endUs ?: layer.timing.startUs) * pxPerUs).toFloat()
+    val top = (size.height - barHeightPx) / 2f
+    val faint = androidx.compose.ui.graphics.Color.White.copy(alpha = .12f)
+    clipRect(left = maxOf(clipL, range.start), right = minOf(clipR, range.endInclusive)) {
+        for (i in 0 until k.size - 1) {
+            val x0 = ((anchor + k[i].timeUs) * pxPerUs).toFloat(); val x1 = ((anchor + k[i + 1].timeUs) * pxPerUs).toFloat()
+            if (x1 < range.start || x0 > range.endInclusive || x1 <= x0) continue
+            val w = x1 - x0
+            val entry = cache.get(track, i, ColourBar.stops(w)) { seg ->
+                androidx.compose.ui.graphics.Brush.horizontalGradient(*seg.positions.indices.map { seg.positions[it] to androidx.compose.ui.graphics.Color(seg.colours[it]) }.toTypedArray(),
+                    startX = 0f, endX = 1f) to seg.colours.any { (it ushr 24) < 255 }
+            }
+            if (entry.extra.second) {
+                // Alpha < 1: a faint checkerboard under the bar (visible part only).
+                val from = maxOf(x0, range.start); val to = minOf(x1, range.endInclusive)
+                val cx = from - ((from - x0) % (2 * checkerPx)); var r = 0
+                while (r * checkerPx < barHeightPx) {
+                    var x = cx + (r % 2) * checkerPx
+                    while (x < to) { drawRect(faint, androidx.compose.ui.geometry.Offset(x, top + r * checkerPx),
+                        androidx.compose.ui.geometry.Size(checkerPx, minOf(checkerPx, barHeightPx - r * checkerPx))); x += 2 * checkerPx }
+                    r++
+                }
+            }
+            translate(x0, top) { scale(w, 1f, androidx.compose.ui.geometry.Offset.Zero) {
+                drawRect(entry.extra.first, size = androidx.compose.ui.geometry.Size(1f, barHeightPx)) } }
+        }
+    }
+}
+
+/**
+ * TL3 B4: the colour bar popover (the ONE twirl popover): a swatch of the colour at that time, its hex and "add keyframe
+ * here". It never moves the playhead. The add keeps the bar's look (an exact easing split); Bounce / Elastic segments
+ * cannot be split, so the add is disabled there with a note.
+ */
+@Composable internal fun ColourBarPopover(project: ProjectDocument, layer: CompositionLayer, row: TwirlRow.Property, bar: TwirlPopover.Bar,
+    host: TwirlKeyHost, onDismiss: () -> Unit) {
+    val track = TwirlColour.track(layer, row.target) ?: return
+    val local = ColourKeyAdd.localFrame(layer, project.composition.frameRate, bar.compositionUs)
+    val argb = track.evaluate(local)
+    val why = ColourKeyAdd.check(track, local)
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+    AnchoredPopover(true, onDismiss, "twirl-bar-popover", modal = false) {
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, modifier = Modifier.padding(4.dp)) {
+            Box(Modifier.size(24.dp).background(androidx.compose.ui.graphics.Color(argb), shape)
+                .border(1.dp, com.fluxx.android.ui.theme.Border, shape).testTag("twirl-bar-swatch"))
+            Text("#%08X".format(argb), Modifier.padding(horizontal = 8.dp).testTag("twirl-bar-hex"), color = com.fluxx.android.ui.theme.TextPrimary,
+                style = MaterialTheme.typography.bodySmall)
+            com.fluxx.android.ui.inspector.InspectorIconButton(com.fluxx.android.ui.inspector.InspectorIcons.icon("KEY_ADD"), "Add keyframe here",
+                Modifier.testTag("twirl-bar-add"), enabled = why == ColourKeyAdd.Why.OK) { host.onAddColourKey(row.layerId, row.target, local); onDismiss() }
+        }
+        if (why == ColourKeyAdd.Why.BOUNCE_ELASTIC) Text("Not available for Bounce / Elastic segments", color = TextSecondary,
+            style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(4.dp).testTag("twirl-bar-note"))
     }
 }

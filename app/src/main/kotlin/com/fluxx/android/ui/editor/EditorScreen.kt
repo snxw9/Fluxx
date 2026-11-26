@@ -734,7 +734,10 @@ fun EditorScreen(
                             else -> {}
                         } },
                         onMoved = { pendingKeyFollow = it },
-                        onValue = { scope, axis, v -> MultiKeyEdits.setValue(editor.state.project, scope, axis, v)?.let { applyLayerAction(it) } }),
+                        onValue = { scope, axis, v -> MultiKeyEdits.setValue(editor.state.project, scope, axis, v)?.let { applyLayerAction(it) } },
+                        // TL3 B4: add a colour key on the bar, keeping its look (exact easing split; one undo).
+                        onAddColourKey = { id, target, local -> editor.state.project.composition.layers.firstOrNull { it.id == id }
+                            ?.let { ColourKeyAdd.action(it, target, local) }?.let { applyLayerAction(it) } }),
                     onTwirlNameTap = { id, target -> editor.state.project.composition.layers.firstOrNull { it.id == id }?.let { l ->
                         // TL3 B1: select every key of the property (all selected already: deselect them; none left exits).
                         val all = KeyEdits.selectAll(l, target)
