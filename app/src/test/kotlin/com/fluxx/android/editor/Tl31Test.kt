@@ -86,4 +86,22 @@ class Tl31Test {
         assertEquals(174f, KeyCurvePopover.WIDTH, 1e-3f)
         assertEquals("about 4 compact rows", 124f, KeyCurvePopover.maxHeight(1f), .01f)
     }
+
+    @Test fun edgeScrollRampsWithDepthAndTheDragFollowsInContentCoordinates() {
+        val w = 1000f; val zone = 100f; val max = 20f
+        assertEquals(0f, EdgeScroll.speed(500f, w, zone, max), 0f)            // the middle: no scroll
+        assertEquals(0f, EdgeScroll.speed(100f, w, zone, max), 0f)            // the zone's inner edge
+        assertEquals(-10f, EdgeScroll.speed(50f, w, zone, max), 1e-4f)        // halfway in: half speed, toward 0
+        assertEquals(-20f, EdgeScroll.speed(0f, w, zone, max), 1e-4f)         // the very edge: full speed
+        assertEquals(-20f, EdgeScroll.speed(-30f, w, zone, max), 1e-4f)       // past the edge: still full
+        assertEquals(15f, EdgeScroll.speed(975f, w, zone, max), 1e-4f)        // the right edge scrolls forward
+        // A still finger (screen move 30px) while the content scrolled 120px further: the key is 150px along the content.
+        assertEquals(150f, EdgeScroll.contentDx(30f, scrollAtDown = 400, scrollNow = 520), 0f)
+        assertEquals(-90f, EdgeScroll.contentDx(-30f, 400, 340), 0f)
+        // The earliest-key >= 0 clamp still holds when the content scroll carries the drag far left.
+        val l = layer(EasingCurve.LINEAR); val p = project(l)
+        val sel = KeySelectionSet.of(KeyframeSelection(1, rot, listOf(f(10), f(70))))!!
+        val dxUs = (EdgeScroll.contentDx(-30f, 400, 0) / 4f * f(1)).toLong() // 4px per frame
+        assertEquals(listOf(0L, f(60)), MultiKeyEdits.moveTogether(p, sel, dxUs)!!.selection!!.tracks.single().times)
+    }
 }

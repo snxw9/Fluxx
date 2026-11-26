@@ -17,6 +17,7 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -401,7 +402,23 @@ fun TimelineView(
             val setDragInfo = remember { { d: com.fluxx.android.editor.TimelineDragInfo? -> dragInfo = d; reportDrag(d) } }
             val latestBegin by rememberUpdatedState(beginEdit); val latestPreviewG by rememberUpdatedState(onPreviewGesture)
             val latestCommit by rememberUpdatedState(commitEdit); val latestCancel by rememberUpdatedState(cancelEdit)
-            val twirlGestures = remember { TwirlGestures({ latestBegin() }, { latestPreviewG(it) }, { latestCommit() }, { latestCancel() }) }
+            // TL3.1 B1: key drags auto-scroll near the edges (ramped); their commit / cancel never seek: the view eases back to
+            // the (unchanged) playhead afterwards.
+            val viewportW by rememberUpdatedState(totalViewportWidthPx)
+            val edgeZonePx = with(density) { com.fluxx.android.editor.EdgeScroll.ZONE_DP.dp.toPx() }
+            val edgeMaxPx = with(density) { com.fluxx.android.editor.EdgeScroll.MAX_DP_PER_FRAME.dp.toPx() }
+            val keyEdgeFn = remember { { x: Float? -> edgeScroll = if (x == null) 0f else com.fluxx.android.editor.EdgeScroll.speed(x - viewportLeft, viewportW, edgeZonePx, edgeMaxPx) } }
+            val keyScope = androidx.compose.runtime.rememberCoroutineScope()
+            val latestCommitG by rememberUpdatedState(onCommitGesture); val latestCancelG by rememberUpdatedState(onCancelGesture)
+            val keyFinish = remember { { commitIt: Boolean ->
+                if (commitIt) latestCommitG() else latestCancelG()
+                edgeScroll = 0f; editing = false
+                keyScope.launch { horizontalScrollState.animateScrollTo(scale.timeX(playheadState.value.coerceIn(0L, durationUs)).toInt()) }
+                Unit
+            } }
+            val keyCommitFn = remember { { keyFinish(true) } }
+            val keyCancelFn = remember { { keyFinish(false) } }
+            val twirlGestures = remember { TwirlGestures({ latestBegin() }, { latestPreviewG(it) }, keyCommitFn, keyCancelFn) }
             val hostState = rememberUpdatedState(twirlHost)
             val stableTwirlHost = remember { TwirlKeyHost(
                 onEffect = { a, b, c, d -> hostState.value?.onEffect?.invoke(a, b, c, d) },
@@ -543,7 +560,7 @@ fun TimelineView(
                                         val owner = project.layer(r.layerId) ?: return@items
                                         val m = Modifier.animateItem(fadeInSpec = TL3Motion.spec(), placementSpec = TL3Motion.spec(), fadeOutSpec = TL3Motion.spec())
                                         when (r) {
-                                            is com.fluxx.android.editor.TwirlRow.Property -> if (twirlHost != null) TwirlKeyRow(project, owner, r, pxPerUs, playheadReader,
+                                            is com.fluxx.android.editor.TwirlRow.Property -> if (twirlHost != null) TwirlKeyRow(project, owner, r, pxPerUs, playheadReader, scrollOffsetReader, keyEdgeFn,
                                                 keySelection, visibleRange, twirlPopover, setTwirlPopover, stableTwirlHost,
                                                 twirlGestures, snapLevel, snapStartFrame, setDragInfo, m)
                                                 else TwirlTrackRow(owner, r, pxPerUs, playheadReader, keySelection?.timesOf(r.layerId, r.target).orEmpty(), visibleRange, m)
@@ -606,7 +623,8 @@ fun TimelineView(
                                         selectedKeys = selectedKeys?.takeIf { layer.id == selectedLayerId },
                                         onKeyToggle = onKeyToggle, onKeyDoubleTap = onKeyDoubleTap, onKeysMoved = onKeysMoved,
                                         snapLevel = snapLevel, snapStartFrame = snapStartFrame,
-                                        onDragInfo = { dragInfo = it; reportDrag(it) }
+                                        onDragInfo = { dragInfo = it; reportDrag(it) },
+                                        onKeyEdge = keyEdgeFn, onKeyCommit = keyCommitFn, onKeyCancel = keyCancelFn
                                     )
                                 }
 
@@ -895,9 +913,16 @@ private fun TimelineClipRow(
     snapStartFrame: Long = 0,
     /** TLP.2: the live hold-drag state (readouts, ruler highlights); null when the drag ends. */
     onDragInfo: (com.fluxx.android.editor.TimelineDragInfo?) -> Unit = {},
+    /** TL3.1 B1: a key drag's finger (root x, null at the end) for the edge auto-scroll, and its commit / cancel (no seek). */
+    onKeyEdge: (Float?) -> Unit = {},
+    onKeyCommit: () -> Unit = onCommitGesture,
+    onKeyCancel: () -> Unit = onCancelGesture,
     modifier: Modifier = Modifier
 ) {
     val currentLayer by rememberUpdatedState(layer)
+    val keyEdge by rememberUpdatedState(onKeyEdge)
+    val keyCommit by rememberUpdatedState(onKeyCommit)
+    val keyCancel by rememberUpdatedState(onKeyCancel)
     val begin by rememberUpdatedState(onBeginGesture)
     val preview by rememberUpdatedState(onPreviewGesture)
     val commit by rememberUpdatedState(onCommitGesture)
@@ -1176,12 +1201,14 @@ private fun TimelineClipRow(
                         val span = if (editable) editableSpans.getOrNull(editableTimes.indexOf(displayTime)) else null
                         val hitLeft = span?.start?.dp ?: (kfOffsetDp - (LayerKeyMarkers.HIT_WIDTH_DP / 2).dp)
                         val hitWidth = span?.let { (it.endInclusive - it.start).dp } ?: LayerKeyMarkers.HIT_WIDTH_DP.dp
+                        val keyRoot = remember(kfTimeUs) { floatArrayOf(0f) }
 
                         Box(
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
                                 .offset(x = hitLeft)
                                 .size(width = hitWidth, height = TRACK_ROW_HEIGHT_DP.dp)
+                                .onGloballyPositioned { keyRoot[0] = it.positionInRoot().x }
                                 .then(if (editable) Modifier.testTag("timeline-key-${layer.id}-${kfTimeUs - anchorOffsetUs}").pointerInput(kfTimeUs, startUs, durationUs, pxPerUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
                                     var initialKfTime = kfTimeUs
                                     var accumulatedUs = kfTimeUs
@@ -1195,42 +1222,10 @@ private fun TimelineClipRow(
                                         com.fluxx.android.editor.KeyGestureEffect.TOGGLE, com.fluxx.android.editor.KeyGestureEffect.ADD -> keyToggle(local)
                                         else -> Unit
                                     }
-                                    detectKeyGestures(
-                                        onDown = { true },
-                                        onTap = { apply(com.fluxx.android.editor.KeyGestureRules.tap(com.fluxx.android.editor.KeyPlace.SHEET, keyMode)) },
-                                        onLongPress = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) },
-                                        onHoldRelease = { apply(com.fluxx.android.editor.KeyGestureRules.holdRelease(com.fluxx.android.editor.KeyPlace.SHEET, keyMode,
-                                            latestSelectedKeys?.contains(local) == true)) },
-                                        onDragStart = {
-                                            val sel = latestSelectedKeys
-                                            val local = kfTimeUs - anchorOffsetUs
-                                            if (keyMode && sel != null && local in sel) {
-                                                // TLP.1: a selected key carries the whole selection (KeyEdits.moveTogether), previewed
-                                                // from the drag's base project, committed once. Unselected keys still move alone.
-                                                val target = if (activeProperty == null && activeAnimatorTrack != null) com.fluxx.android.editor.GraphTarget(animator = activeAnimatorTrack)
-                                                    else com.fluxx.android.editor.GraphTarget(property = activeProperty)
-                                                groupBase = currentProject to com.fluxx.android.editor.KeyframeSelection(layer.id, target, sel.toList())
-                                                groupMap = emptyMap()
-                                            }
-                                            initialKfTime = kfTimeUs
-                                            accumulatedUs = kfTimeUs
-                                            dragTimes = latestTimes
-                                            movingFrom = kfTimeUs
-                                            movingTo = kfTimeUs
-                                            begin()
-                                        },
-                                        onDragEnd = {
-                                            // Zero frames moved: no edit (the release is a hold release).
-                                            val moved = groupMap?.any { (from, to) -> from != to } ?: (movingTo != null && movingTo != initialKfTime)
-                                            if (moved) {
-                                                groupMap?.let { m -> keysMoved(m.entries.associate { (from, to) -> (from - anchorOffsetUs) to (to - anchorOffsetUs) }) }
-                                                commit()
-                                            } else cancel()
-                                            dragTimes = null; movingFrom = null; movingTo = null; groupMap = null; groupBase = null; endMoveIndicators()
-                                            moved
-                                        },
-                                        onDragCancel = { cancel(); dragTimes = null; movingFrom = null; movingTo = null; groupMap = null; groupBase = null; endMoveIndicators() },
-                                        onDrag = { dx ->
+                                    // TL3.1 B1: the drag in content coordinates (screen move + scroll since the down); while the content
+                                    // auto-scrolls under a still finger the key keeps following.
+                                    var lastDx = 0f; var scrollAtDown = 0; var downRoot = 0f; var dragging = false
+                                    val keyDrag: ((Float) -> Unit)? = keyDrag@{ dx: Float ->
                                             accumulatedUs = kfTimeUs + (dx / pxPerUs).roundToLong()
                                             val raw = accumulatedUs - initialKfTime
                                             val zoneUs = com.fluxx.android.editor.SnapZones.of(pxPerUs / density0.density, frameRate)
@@ -1252,7 +1247,7 @@ private fun TimelineClipRow(
                                                 groupMap = moved?.let { m -> sel0.times.zip(m.times).associate { (from, to) -> (from + anchorOffsetUs) to (to + anchorOffsetUs) } } ?: emptyMap()
                                                 val now = (moved?.times ?: sel0.times).map { Math.addExact(anchor, it) }
                                                 dragInfo(com.fluxx.android.editor.TimelineDragInfo(now.min(), candidates.min(), now.min(), now.max()))
-                                                return@detectKeyGestures
+                                                return@keyDrag
                                             }
                                             // TLP.2: one key against the shared targets plus its existing ones (the other keys of
                                             // the property and its clip's start / end), all inside its clip (keys stay in the clip).
@@ -1277,8 +1272,53 @@ private fun TimelineClipRow(
                                                 EditorAction.EditTextAnimator(layer.id, AnimatorEdit.Key(activeAnimatorTrack, AnimatorKeyOperation.MOVE, fromLocal, toLocal))
                                             else EditorAction.MoveKeyframe(layer.id, activeProperty, fromLocal, toLocal))
                                             dragInfo(com.fluxx.android.editor.TimelineDragInfo(startUs + snappedUs, candidate, startUs + snappedUs, startUs + snappedUs))
-                                        }
+                                    }
+                                    kotlinx.coroutines.coroutineScope {
+                                    launch { androidx.compose.runtime.snapshotFlow { currentScroll() }.collect { sc -> if (dragging) keyDrag?.invoke(com.fluxx.android.editor.EdgeScroll.contentDx(lastDx, scrollAtDown, sc)) } }
+                                    detectKeyGestures(
+                                        onDown = { p -> downRoot = keyRoot[0] + p.x; scrollAtDown = currentScroll(); true },
+                                        onTap = { apply(com.fluxx.android.editor.KeyGestureRules.tap(com.fluxx.android.editor.KeyPlace.SHEET, keyMode)) },
+                                        onLongPress = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) },
+                                        onHoldRelease = { apply(com.fluxx.android.editor.KeyGestureRules.holdRelease(com.fluxx.android.editor.KeyPlace.SHEET, keyMode,
+                                            latestSelectedKeys?.contains(local) == true)) },
+                                        onDragStart = {
+                                            val sel = latestSelectedKeys
+                                            val local = kfTimeUs - anchorOffsetUs
+                                            if (keyMode && sel != null && local in sel) {
+                                                // TLP.1: a selected key carries the whole selection (KeyEdits.moveTogether), previewed
+                                                // from the drag's base project, committed once. Unselected keys still move alone.
+                                                val target = if (activeProperty == null && activeAnimatorTrack != null) com.fluxx.android.editor.GraphTarget(animator = activeAnimatorTrack)
+                                                    else com.fluxx.android.editor.GraphTarget(property = activeProperty)
+                                                groupBase = currentProject to com.fluxx.android.editor.KeyframeSelection(layer.id, target, sel.toList())
+                                                groupMap = emptyMap()
+                                            }
+                                            initialKfTime = kfTimeUs
+                                            accumulatedUs = kfTimeUs
+                                            dragTimes = latestTimes
+                                            movingFrom = kfTimeUs
+                                            movingTo = kfTimeUs
+                                            dragging = true
+                                            begin()
+                                        },
+                                        onDragEnd = {
+                                            dragging = false; keyEdge(null)
+                                            // Zero frames moved: no edit (the release is a hold release).
+                                            val moved = groupMap?.any { (from, to) -> from != to } ?: (movingTo != null && movingTo != initialKfTime)
+                                            if (moved) {
+                                                groupMap?.let { m -> keysMoved(m.entries.associate { (from, to) -> (from - anchorOffsetUs) to (to - anchorOffsetUs) }) }
+                                                keyCommit()
+                                            } else keyCancel()
+                                            dragTimes = null; movingFrom = null; movingTo = null; groupMap = null; groupBase = null; endMoveIndicators()
+                                            moved
+                                        },
+                                        onDragCancel = { dragging = false; keyEdge(null); keyCancel(); dragTimes = null; movingFrom = null; movingTo = null; groupMap = null; groupBase = null; endMoveIndicators() },
+                                        onDrag = { sdx ->
+                                            lastDx = sdx; keyEdge(downRoot + sdx)
+                                            keyDrag?.invoke(com.fluxx.android.editor.EdgeScroll.contentDx(sdx, scrollAtDown, currentScroll()))
+                                        },
+                                        rootX = { keyRoot[0] }
                                     )
+                                    }
                                 } else Modifier),
                             contentAlignment = Alignment.CenterStart
                         ) {

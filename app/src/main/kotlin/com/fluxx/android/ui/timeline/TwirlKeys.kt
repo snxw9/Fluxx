@@ -30,6 +30,9 @@ import com.fluxx.android.ui.inspector.InspectorHaptics
 import com.fluxx.android.ui.inspector.InspectorValueField
 import com.fluxx.android.ui.theme.TextSecondary
 import kotlin.math.roundToLong
+import kotlinx.coroutines.launch
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 
 /** TL3 B3: the editor's side of twirl-row key interactions (selection changes and value edits; one undo each). */
 class TwirlKeyHost(
@@ -65,6 +68,7 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
  * readouts. Nothing seeks.
  */
 @Composable internal fun TwirlKeyRow(project: ProjectDocument, layer: CompositionLayer, row: TwirlRow.Property, pxPerUs: Double, playhead: () -> Long,
+    scrollOffset: () -> Int, onEdge: (Float?) -> Unit,
     selection: KeySelectionSet?, visible: VisibleRange, popover: TwirlPopover?, onPopover: (TwirlPopover?) -> Unit,
     host: TwirlKeyHost, gestures: TwirlGestures, snapLevel: RulerLevel?, snapStartFrame: Long,
     onDragInfo: (TimelineDragInfo?) -> Unit, modifier: Modifier = Modifier) {
@@ -89,7 +93,13 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
     val underlay: (androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit)? = colourTrack?.let { track -> {
         drawColourBar(track, layer, pxPerUs, visible, barCache, barHeightPx, checkerPx)
     } }
-    TwirlTrackRow(layer, row, pxPerUs, playhead, selectedTimes, visible, modifier.pointerInput(row.key, pxPerUs) {
+    // TL3.1 B1: the row's root x (it scrolls with the content), for the finger's position against the timeline's edges.
+    var rowRootX by remember { mutableFloatStateOf(0f) }
+    val latestScroll by rememberUpdatedState(scrollOffset)
+    val latestEdge by rememberUpdatedState(onEdge)
+    TwirlTrackRow(layer, row, pxPerUs, playhead, selectedTimes, visible, modifier
+        .onGloballyPositioned { rowRootX = it.positionInRoot().x }
+        .pointerInput(row.key, pxPerUs) { kotlinx.coroutines.coroutineScope {
         var hit: Long? = null
         var barTime: Long? = null
         var base: Pair<ProjectDocument, KeySelectionSet>? = null
@@ -97,10 +107,31 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
         var last: MultiKeyEdits.Moved? = null
         var locked: SnapTarget? = null
         var groupDrag = false
+        var downRootX = 0f; var lastDx = 0f; var scrollAtDown = 0
+        /** The drag at [dx] content px (snapping, clamps, readouts). */
+        fun dragTo(dx: Float) {
+            val (p0, sel0) = base ?: return
+            val raw = (dx / pxPerUs).roundToLong()
+            val layers = sel0.tracks.associate { it.layerId to p0.layer(it.layerId)!! }
+            val candidates = sel0.tracks.flatMap { t -> t.times.map { Math.addExact(layers.getValue(t.layerId).resolvedKeyframeAnchorUs, it) } }
+            val dragged = p0.composition.layers.map { it.id }.toSet() - sel0.layerIds.toSet()
+            val targets = DragSnap.withTicks(DragSnap.targets(p0, latestPlayhead(), dragged, clipEdges = false), candidates, raw,
+                p0.composition.frameRate, latestLevel, snapStartFrame)
+            val snap = DragSnap.snap(raw, candidates, targets, SnapZones.of(pxPerUs / density.density, p0.composition.frameRate))
+            if (snap.target != null && snap.target != locked) InspectorHaptics.tick(view)
+            locked = snap.target
+            val moved = MultiKeyEdits.moveTogether(p0, sel0, snap.deltaUs, clip)
+            last = moved
+            latestGestures.preview(moved?.action ?: EditorAction.Batch(emptyList()))
+            val now = moved?.selection?.tracks?.flatMap { t -> t.times.map { Math.addExact(layers.getValue(t.layerId).resolvedKeyframeAnchorUs, it) } } ?: candidates
+            latestDragInfo(TimelineDragInfo(now.min(), candidates.min(), now.min(), now.max()))
+        }
+        // TL3.1 B1: while the content auto-scrolls under a still finger, the drag follows in content coordinates.
+        launch { androidx.compose.runtime.snapshotFlow { latestScroll() }.collect { s -> if (base != null) dragTo(EdgeScroll.contentDx(lastDx, scrollAtDown, s)) } }
         fun keyMode() = latest.third != null
         fun selected(t: Long) = latest.third?.contains(row.layerId, row.target, t) == true
         detectKeyGestures(
-            onDown = { p -> val (_, l, _) = latest; hit = nearestKey(TwirlRows.keyTimes(l, row.target), l, pxPerUs, p.x, halfHit)
+            onDown = { p -> downRootX = rowRootX + p.x; scrollAtDown = latestScroll(); val (_, l, _) = latest; hit = nearestKey(TwirlRows.keyTimes(l, row.target), l, pxPerUs, p.x, halfHit)
                 barTime = null
                 if (hit == null && row.kind == TwirlValueKind.COLOUR) {
                     // B4: a tap on the bar between keys (not on a diamond) opens the bar popover.
@@ -138,23 +169,13 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
                 latestGestures.begin()
             },
             onDrag = { dx ->
-                val (p0, sel0) = base ?: return@detectKeyGestures
-                val raw = (dx / pxPerUs).roundToLong()
-                val layers = sel0.tracks.associate { it.layerId to p0.layer(it.layerId)!! }
-                val candidates = sel0.tracks.flatMap { t -> t.times.map { Math.addExact(layers.getValue(t.layerId).resolvedKeyframeAnchorUs, it) } }
-                val dragged = p0.composition.layers.map { it.id }.toSet() - sel0.layerIds.toSet()
-                val targets = DragSnap.withTicks(DragSnap.targets(p0, latestPlayhead(), dragged, clipEdges = false), candidates, raw,
-                    p0.composition.frameRate, latestLevel, snapStartFrame)
-                val snap = DragSnap.snap(raw, candidates, targets, SnapZones.of(pxPerUs / density.density, p0.composition.frameRate))
-                if (snap.target != null && snap.target != locked) InspectorHaptics.tick(view)
-                locked = snap.target
-                val moved = MultiKeyEdits.moveTogether(p0, sel0, snap.deltaUs, clip)
-                last = moved
-                latestGestures.preview(moved?.action ?: EditorAction.Batch(emptyList()))
-                val now = moved?.selection?.tracks?.flatMap { t -> t.times.map { Math.addExact(layers.getValue(t.layerId).resolvedKeyframeAnchorUs, it) } } ?: candidates
-                latestDragInfo(TimelineDragInfo(now.min(), candidates.min(), now.min(), now.max()))
+                if (base == null) return@detectKeyGestures
+                lastDx = dx
+                latestEdge(downRootX + dx)
+                dragTo(EdgeScroll.contentDx(dx, scrollAtDown, latestScroll()))
             },
             onDragEnd = {
+                latestEdge(null)
                 val moved = last
                 if (moved != null) {
                     // The selection follows its keys (a group); a lone key keeps the selection as it is.
@@ -164,8 +185,9 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
                 base = null; last = null; locked = null; latestDragInfo(null)
                 moved != null
             },
-            onDragCancel = { latestGestures.cancel(); base = null; last = null; locked = null; latestDragInfo(null) })
-    }, underlay = underlay) {
+            onDragCancel = { latestEdge(null); latestGestures.cancel(); base = null; last = null; locked = null; latestDragInfo(null) },
+            rootX = { rowRootX })
+    } }, underlay = underlay) {
         (popover as? TwirlPopover.Bar)?.takeIf { it.layerId == row.layerId && it.target == row.target }?.let { bar ->
             val x = with(density) { (bar.compositionUs * pxPerUs).toFloat().toDp() }
             Box(Modifier.offset(x = x).size(1.dp, row.heightDp.dp)) { ColourBarPopover(project, layer, row, bar, host, onDismiss = { onPopover(null) }) }

@@ -235,9 +235,13 @@ internal fun ProjectDocument.layer(id: Long) = composition.layers.firstOrNull { 
  */
 internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectKeyGestures(
     onDown: (Offset) -> Boolean, onTap: (Offset) -> Unit, onLongPress: () -> Unit, onHoldRelease: (Offset) -> Unit,
-    onDragStart: (Offset) -> Unit, onDrag: (Float) -> Unit, onDragEnd: () -> Boolean, onDragCancel: () -> Unit) =
+    onDragStart: (Offset) -> Unit, onDrag: (Float) -> Unit, onDragEnd: () -> Boolean, onDragCancel: () -> Unit,
+    rootX: () -> Float = { 0f }) =
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
+        // TL3.1 A1 / B1: [onDrag]'s x is the finger's SCREEN move: the node's root x plus the touch. A dragged key's own
+        // hit box moves with the key, so a node-local delta shrank back toward zero between frames on a real finger.
+        val downRoot = rootX() + down.position.x
         if (!onDown(down.position)) return@awaitEachGesture
         val slop = viewConfiguration.touchSlop
         var up: androidx.compose.ui.input.pointer.PointerInputChange? = null
@@ -274,7 +278,7 @@ internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectK
                 }
                 travel = maxOf(travel, (c.position - down.position).getDistance())
                 if (!dragging && c.position != c.previousPosition) { dragging = true; onDragStart(down.position) }
-                if (dragging) { c.consume(); onDrag(c.position.x - down.position.x) }
+                if (dragging) { c.consume(); onDrag(rootX() + c.position.x - downRoot) }
             }
         } finally { if (dragging && !finished) onDragCancel() }
     }
