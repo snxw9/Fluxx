@@ -289,9 +289,8 @@ class Tl31MeasureTest {
                 org.junit.Assert.assertEquals("$sr/$ch start vs mixer", m.first, f.first, tol)
                 org.junit.Assert.assertEquals("$sr/$ch end vs mixer", m.second, f.second, tol)
             }
-            // Both sit at the file's time + the AAC encoder priming (2048 samples, not trimmed by either path): reported.
-            val priming = 2048.0 / sr
-            for ((f, t) in found.zip(truth)) org.junit.Assert.assertEquals("$sr/$ch start vs truth + priming", t.first + priming, f.first, tol + 1024.0 / sr)
+            // AUD1 B4: both now trim the AAC priming, so they sit at the file's own times (within a bucket + AAC onset smear).
+            for ((f, t) in found.zip(truth)) org.junit.Assert.assertEquals("$sr/$ch start vs truth", t.first, f.first, tol + 1024.0 / sr)
         }
     }
 

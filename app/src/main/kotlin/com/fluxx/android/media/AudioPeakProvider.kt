@@ -105,6 +105,11 @@ class AudioPeakProvider private constructor(private val context: Context) {
             var rate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             var channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             var encoding = android.media.AudioFormat.ENCODING_PCM_16BIT
+            // AUD1 B4: the SAME priming trim as playback (AudioTiming), so the waveform still matches what plays.
+            val mime = format.getString(MediaFormat.KEY_MIME)
+            val delay = if (format.containsKey(MediaFormat.KEY_ENCODER_DELAY)) format.getInteger(MediaFormat.KEY_ENCODER_DELAY) else null
+            val firstPts = extractor.sampleTime
+            var primingUs = com.fluxx.android.render.AudioTiming.us(com.fluxx.android.render.AudioTiming.primingSamples(mime, delay, firstPts), rate)
             val c = MediaCodec.createDecoderByType(requireNotNull(format.getString(MediaFormat.KEY_MIME)))
             codec = c; c.configure(format, null, null, 0); c.start()
             var builder: PeakBuilder? = null
@@ -126,13 +131,14 @@ class AudioPeakProvider private constructor(private val context: Context) {
                     val out = c.outputFormat
                     rate = out.getInteger(MediaFormat.KEY_SAMPLE_RATE); channels = out.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
                     if (out.containsKey(MediaFormat.KEY_PCM_ENCODING)) encoding = out.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                    primingUs = com.fluxx.android.render.AudioTiming.us(com.fluxx.android.render.AudioTiming.primingSamples(mime, delay, firstPts), rate)
                 } else if (o >= 0) {
                     val b = builder ?: PeakBuilder(rate).also { builder = it }
                     val buffer = requireNotNull(c.getOutputBuffer(o)).order(ByteOrder.LITTLE_ENDIAN)
                     buffer.position(info.offset); buffer.limit(info.offset + info.size)
                     val float = encoding == android.media.AudioFormat.ENCODING_PCM_FLOAT
                     val frames = info.size / (channels * if (float) 4 else 2)
-                    val first = Math.round(info.presentationTimeUs * rate / 1_000_000.0)
+                    val first = Math.round((info.presentationTimeUs - primingUs) * rate / 1_000_000.0)
                     for (f in 0 until frames) {
                         var peak = 0f
                         for (ch in 0 until channels) {

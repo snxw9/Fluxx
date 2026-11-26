@@ -39,13 +39,13 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
     @Volatile private var closed=false
     // Accessed only on dispatcher, including sampling and destruction.
     private var samplingRenderer: CompositionRenderer? = null
-    private var playback: PcmPlayback? = null
+    private var playback: StreamingPlayback? = null
     private var sampledEpoch = -1L
     private val worker=scope.launch {
         val repository=MediaRepository(app)
         var renderer: CompositionRenderer?=null
-        var pcm:File?=null
-        var audioSignature:List<Any?>?=null
+        var waitingSince=0L
+        var preparingShown=false
         var validated:ProjectDocument?=null
         var lastDrawTime=-1L
         var lastGeneration=-1L
@@ -86,18 +86,15 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
                         continue
                     }
                     if(validated!==snapshot) { CompositionSupport.check(app,repository,snapshot);validated=snapshot }
-                    if(playing && playback==null) {
-                        val signature=AudioMixer.signature(snapshot)
-                        if(audioSignature!=signature) {
-                            status(epoch,"Preparing audio")
-                            audioSignature=null
-                            pcm?.delete();pcm=File.createTempFile("preview_audio_",".pcm",app.cacheDir)
-                            AudioMixer.mix(app,snapshot,pcm,cancel)
-                            audioSignature=signature
-                        }
-                        if(cancel()) continue
-                        playback=PcmPlayback(requireNotNull(pcm),requestedUs)
-                    }
+                    // AUD1 B1: streaming playback straight from the per-source PCM cache: no whole-file mix before Play. Sound
+                    // starts once ~0.5 s is decoded; "Preparing audio" shows only when that takes longer than 0.3 s.
+                    if(playing && playback==null) { playback=StreamingPlayback(app,snapshot,requestedUs); waitingSince=System.nanoTime(); preparingShown=false }
+                    playback?.let { pb -> if(playing) {
+                        val waited=(System.nanoTime()-waitingSince)/1_000_000
+                        if(!pb.ready && StreamingWindow.showStatus(waited,false) && !preparingShown) { status(epoch,"Preparing audio"); preparingShown=true }
+                        // The moment audio is ready the indicator goes (not only when the next frame moves).
+                        if(pb.ready && preparingShown) { status(epoch,null); preparingShown=false }
+                    } }
                     playback?.error?.let { throw IllegalStateException("Audio preview failed",it) }
                     val time=if(playing) requireNotNull(playback).positionUs else requestedUs
                     val duration = snapshot.composition.resolvedDurationUs
@@ -130,7 +127,7 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
         } catch(e:Exception) { if(!closed) status(generation.get(),e.message ?: "Preview unavailable") }
         finally {
             samplingRenderer=null
-            playback?.close();renderer?.close();pcm?.delete()
+            playback?.close();renderer?.close()
         }
     }
     fun update(project: ProjectDocument,timeUs: Long,play: Boolean=false) {

@@ -82,8 +82,9 @@ class Aud1BenchTest {
             Thread.sleep(2)
         }
         fun ms(x: Long) = if (x < 0) -1 else (x - t0) / 1_000_000
-        val scratch = context.cacheDir.listFiles().orEmpty().filter { it.name.startsWith("preview_audio_") }.sumOf { it.length() }
-        report("A1 $label: Preparing audio ${if (preparingFrom < 0) "not shown" else "${ms(preparingFrom)}..${ms(preparingTo)}ms"}; track playing ${ms(playingAt)}ms; first sound heard ${ms(heardAt)}ms after Play; scratch %.1f MB".format(scratch / 1e6))
+        val scratch = context.cacheDir.listFiles().orEmpty().filter { it.name.startsWith("preview_audio_") }.sumOf { it.length() } +
+            java.io.File(context.cacheDir, "aud1-pcm").listFiles().orEmpty().sumOf { it.length() }
+        report("A1 $label: Preparing audio ${if (preparingFrom < 0) "not shown" else "${ms(preparingFrom)}..${ms(preparingTo)}ms"}; track playing ${ms(playingAt)}ms; first sound heard ${ms(heardAt)}ms after Play; scratch / PCM cache %.1f MB".format(scratch / 1e6))
         return ms(heardAt)
     }
 

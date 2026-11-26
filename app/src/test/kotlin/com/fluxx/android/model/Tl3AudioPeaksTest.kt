@@ -77,6 +77,6 @@ class Tl3AudioPeaksTest {
         assertEquals(.8f, p.levels[0].second[bucket], 0f)
         assertEquals(0f, p.levels[0].second[0], 0f)                      // before the first output: silent, not the dropped priming
         assertEquals(0f, p.levels[0].second[bucket - 1], 0f)
-        assertEquals(PeakPyramid.FORMAT_VERSION, 2)
+        assertEquals(PeakPyramid.FORMAT_VERSION, 3) // AUD1: the priming trim
     }
 }

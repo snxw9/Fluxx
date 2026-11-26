@@ -36,7 +36,8 @@ class PeakPyramid(val sampleRate: Int, val durationUs: Long, val levels: List<Pa
         const val FACTOR = 4
         /** Bumped whenever the file layout or the analysis changes: it is part of the cache key. */
         /** TL3.1 C: 2 = peaks placed by presentation time from the decoder's real output format (stale v1 peaks rebuild). */
-        const val FORMAT_VERSION = 2
+        /** AUD1: 3 = the priming trimmed like playback (stale peaks rebuild). */
+        const val FORMAT_VERSION = 3
 
         fun read(file: File): PeakPyramid? = runCatching {
             DataInputStream(file.inputStream().buffered()).use { inp ->
