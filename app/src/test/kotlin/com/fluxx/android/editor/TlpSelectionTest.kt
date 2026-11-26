@@ -84,4 +84,20 @@ class TlpSelectionTest {
         // Loading a project exits the mode.
         v.enterSelection(1); v.dispatch(EditorAction.Load(ProjectDocument())); assertFalse(v.selectionMode)
     }
+
+    @Test fun tl31ASelectedDHasThreeTapZonesAndItsBodyDeselects() {
+        // 36% / 28% / 36% of the 56dp D: eye 0..20.16dp, body ..35.84dp, arrow ..56dp; past 56dp (widened D) is body.
+        assertEquals(DZone.EYE, DZones.zone(20f, selectionMode = true, selected = true))
+        assertEquals(DZone.BODY, DZones.zone(20.2f, true, true)); assertEquals(DZone.BODY, DZones.zone(35.8f, true, true))
+        assertEquals(DZone.ARROW, DZones.zone(35.9f, true, true)); assertEquals(DZone.ARROW, DZones.zone(55.9f, true, true))
+        assertEquals(DZone.BODY, DZones.zone(80f, true, true))
+        assertEquals(1f, DZones.EYE_FRACTION + DZones.BODY_FRACTION + DZones.ARROW_FRACTION, 1e-6f)
+        assertEquals(DEffect.REMOVE, DButtonRules.tap(true, true, DZone.BODY))
+        assertEquals(DEffect.BULK_VISIBILITY, DButtonRules.tap(true, true, DZone.EYE))
+        assertEquals(DEffect.EXPAND, DButtonRules.tap(true, true, DZone.ARROW))
+        // Unselected in the mode: any tap adds. Outside the mode: the two halves (eye | arrow), unchanged.
+        for (z in DZone.entries) assertEquals(DEffect.ADD, DButtonRules.tap(true, false, z))
+        assertEquals(DZone.EYE, DZones.zone(27f, false, false)); assertEquals(DZone.ARROW, DZones.zone(29f, false, false))
+        assertEquals(DZone.ARROW, DZones.zone(29f, true, false))
+    }
 }

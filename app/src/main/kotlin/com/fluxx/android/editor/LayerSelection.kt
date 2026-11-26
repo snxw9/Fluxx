@@ -152,7 +152,29 @@ object MultiLayerEdits {
 }
 
 /** TLP T1: the two zones of the D-button (left: the eye; right: the arrow). */
-enum class DZone { EYE, ARROW }
+enum class DZone { EYE, ARROW, BODY }
+
+/**
+ * TL3.1 A2: the D-button's tap zones. On a SELECTED layer in selection mode: the left [EYE_FRACTION] of the 56dp D is the
+ * eye (bulk visibility), the next [BODY_FRACTION] the body (toggle = deselect), the last [ARROW_FRACTION] the arrow (bulk
+ * expand); anything past 56dp (the widened D) and the name column is body too. Elsewhere (outside the mode, or an
+ * unselected layer) the D keeps its two halves: eye | arrow.
+ */
+object DZones {
+    const val WIDTH_DP = 56f
+    const val EYE_FRACTION = .36f
+    const val BODY_FRACTION = .28f
+    const val ARROW_FRACTION = .36f
+    fun zone(xDp: Float, selectionMode: Boolean, selected: Boolean): DZone {
+        if (!(selectionMode && selected)) return if (xDp < WIDTH_DP / 2f) DZone.EYE else DZone.ARROW
+        return when {
+            xDp < WIDTH_DP * EYE_FRACTION -> DZone.EYE
+            xDp < WIDTH_DP * (EYE_FRACTION + BODY_FRACTION) -> DZone.BODY
+            xDp < WIDTH_DP -> DZone.ARROW
+            else -> DZone.BODY
+        }
+    }
+}
 /** What a D-button or layer-body touch does. */
 enum class DEffect { TOGGLE_VISIBILITY, BULK_VISIBILITY, ENTER, ADD, REMOVE, EXIT, NONE, EXPAND }
 
@@ -165,9 +187,10 @@ enum class DEffect { TOGGLE_VISIBILITY, BULK_VISIBILITY, ENTER, ADD, REMOVE, EXI
 object DButtonRules {
     fun tap(selectionMode: Boolean, selected: Boolean, zone: DZone): DEffect = when {
         // TL3 B1: the arrow toggles the twirl-down (on a selected layer in selection mode: every selected layer).
-        !selectionMode -> if (zone == DZone.EYE) DEffect.TOGGLE_VISIBILITY else DEffect.EXPAND
+        !selectionMode -> when (zone) { DZone.EYE -> DEffect.TOGGLE_VISIBILITY; DZone.ARROW -> DEffect.EXPAND; DZone.BODY -> DEffect.NONE }
         !selected -> DEffect.ADD
         zone == DZone.EYE -> DEffect.BULK_VISIBILITY
+        zone == DZone.BODY -> DEffect.REMOVE // TL3.1 A2: a tap on a selected D's body deselects it (however it was selected)
         else -> DEffect.EXPAND
     }
     fun longPress(selectionMode: Boolean, selected: Boolean): DEffect = when {

@@ -91,11 +91,12 @@ internal fun DButton(layer: CompositionLayer, selected: Boolean, selectionMode: 
         .testTag("d-button-${layer.id}")
         .pointerInput(layer.id) {
             detectTapGestures(
-                onTap = { p -> tap(if (p.x < DButtonLayout.ZONE_DP.dp.toPx()) DZone.EYE else DZone.ARROW) },
+                onTap = { p -> tap(com.fluxx.android.editor.DZones.zone(p.x.toDp().value, selectionMode, selected)) },
                 onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); hold() })
         }
         .semantics(mergeDescendants = false) {
             this.selected = selected
+            if (selectionMode && selected) onClick("Remove $name from the selection") { tap(DZone.BODY); true }
             stateDescription = if (selected) "Selected" else "Not selected"
             onLongClick(if (!selectionMode) "Select layers, starting with $name" else if (selected) "Remove $name from the selection" else "Add $name to the selection") { hold(); true }
         }) {

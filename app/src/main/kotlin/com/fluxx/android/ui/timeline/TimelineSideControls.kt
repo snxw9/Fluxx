@@ -133,7 +133,9 @@ internal fun TimelineSideControls(layers: List<CompositionLayer>, selection: com
                     key(k) {
                         val owner = layers.firstOrNull { it.id == row.layerId }
                         TwirlNameCell(row, selected = owner != null && selection?.let { owner.id in it } == true, last = last,
-                            onTap = { (row as? com.fluxx.android.editor.TwirlRow.Property)?.let { onNameTap(it.layerId, it.target) } },
+                            // TL3.1 A2: in layer selection mode the name column is the D's body (select / deselect the layer).
+                            onTap = { if (selection != null) onDTap(row.layerId, com.fluxx.android.editor.DZone.BODY)
+                                else (row as? com.fluxx.android.editor.TwirlRow.Property)?.let { onNameTap(it.layerId, it.target) } },
                             onLongPress = { (row as? com.fluxx.android.editor.TwirlRow.Property)?.let { onNameLongPress(it.layerId, it.target) } },
                             modifier = Modifier.offset { IntOffset(0, item.offset + listState.layoutInfo.beforeContentPadding) })
                     }
