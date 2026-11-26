@@ -154,7 +154,7 @@ object MultiLayerEdits {
 /** TLP T1: the two zones of the D-button (left: the eye; right: the arrow). */
 enum class DZone { EYE, ARROW }
 /** What a D-button or layer-body touch does. */
-enum class DEffect { TOGGLE_VISIBILITY, BULK_VISIBILITY, ENTER, ADD, REMOVE, EXIT, NONE }
+enum class DEffect { TOGGLE_VISIBILITY, BULK_VISIBILITY, ENTER, ADD, REMOVE, EXIT, NONE, EXPAND }
 
 /**
  * TLP T1 rules (pure, JVM tested). Outside selection mode: the eye toggles that layer, the arrow is disabled, a long press
@@ -164,10 +164,11 @@ enum class DEffect { TOGGLE_VISIBILITY, BULK_VISIBILITY, ENTER, ADD, REMOVE, EXI
  */
 object DButtonRules {
     fun tap(selectionMode: Boolean, selected: Boolean, zone: DZone): DEffect = when {
-        !selectionMode -> if (zone == DZone.EYE) DEffect.TOGGLE_VISIBILITY else DEffect.NONE
+        // TL3 B1: the arrow toggles the twirl-down (on a selected layer in selection mode: every selected layer).
+        !selectionMode -> if (zone == DZone.EYE) DEffect.TOGGLE_VISIBILITY else DEffect.EXPAND
         !selected -> DEffect.ADD
         zone == DZone.EYE -> DEffect.BULK_VISIBILITY
-        else -> DEffect.NONE // the arrow: bulk expand arrives with TL3
+        else -> DEffect.EXPAND
     }
     fun longPress(selectionMode: Boolean, selected: Boolean): DEffect = when {
         !selectionMode -> DEffect.ENTER

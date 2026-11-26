@@ -1,6 +1,10 @@
 package com.fluxx.android.ui.timeline
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -23,7 +27,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
@@ -55,23 +58,35 @@ internal object DButtonLayout {
 }
 
 /**
- * TLP T1: the D-button, the layer row's existing eye turned into a one-sided rounded rectangle holding the eye and an
+ * TLP T1 / TL3 B1: the D-button, the layer row's existing eye turned into a one-sided rounded rectangle holding the eye and an
  * arrow. Neutral when the layer is not selected; filled with the theme accent ([MaterialTheme] `primary`, icons in
- * `onPrimary`) when it is. The row itself is not highlighted. The arrow is drawn disabled (TL3 builds the expansion).
+ * `onPrimary`) when it is. The row itself is not highlighted. TL3: the arrow toggles the layer's twirl-down; the chevron
+ * turns from `>` to `v` and the D widens to the name column ([TwirlStyle.D_EXPANDED_DP]), both on [TL3Motion]'s spec and
+ * applied in the layout / graphics-layer phase (no recomposition per animation frame). Expanded, its bottom edge is flat
+ * (the bracket continues down the name cells).
  */
 @Composable
 internal fun DButton(layer: CompositionLayer, selected: Boolean, selectionMode: Boolean,
-    onTap: (DZone) -> Unit, onLongPress: () -> Unit, modifier: Modifier = Modifier) {
+    onTap: (DZone) -> Unit, onLongPress: () -> Unit, modifier: Modifier = Modifier, expanded: Boolean = false) {
     val scheme = MaterialTheme.colorScheme
     val fill = if (selected) scheme.primary else scheme.surfaceVariant
     val ink = if (selected) scheme.onPrimary else scheme.onSurfaceVariant
-    val stops = DButtonLayout.fadeStops()
-    val brush = Brush.horizontalGradient(*stops.map { (at, alpha) -> at to fill.copy(alpha = fill.alpha * alpha) }.toTypedArray())
+    val width = animateFloatAsState(if (expanded) TwirlStyle.D_EXPANDED_DP else DButtonLayout.WIDTH_DP, TL3Motion.spec(), label = "d-width")
+    val turn = animateFloatAsState(if (expanded) 90f else 0f, TL3Motion.spec(), label = "d-chevron")
+    val brush = remember(fill, expanded) {
+        val stops = DButtonLayout.fadeStops(if (expanded) TwirlStyle.D_EXPANDED_DP else DButtonLayout.WIDTH_DP)
+        Brush.horizontalGradient(*stops.map { (at, alpha) -> at to fill.copy(alpha = fill.alpha * alpha) }.toTypedArray())
+    }
     val haptic = LocalHapticFeedback.current
     val tap by rememberUpdatedState(onTap); val hold by rememberUpdatedState(onLongPress)
     val name = layer.name.ifBlank { "layer ${layer.id}" }
-    Box(modifier.width(DButtonLayout.WIDTH_DP.dp).fillMaxHeight()
-        .clip(RoundedCornerShape(topEnd = DButtonLayout.RADIUS_DP.dp, bottomEnd = DButtonLayout.RADIUS_DP.dp))
+    val radius = DButtonLayout.RADIUS_DP.dp
+    Box(modifier.layout { m, c ->
+            val w = width.value.dp.roundToPx()
+            val p = m.measure(c.copy(minWidth = w, maxWidth = w))
+            layout(p.width, p.height) { p.place(0, 0) }
+        }.fillMaxHeight()
+        .clip(RoundedCornerShape(topEnd = radius, bottomEnd = if (expanded) 0.dp else radius))
         .background(brush)
         .testTag("d-button-${layer.id}")
         .pointerInput(layer.id) {
@@ -97,16 +112,20 @@ internal fun DButton(layer: CompositionLayer, selected: Boolean, selectionMode: 
                 Icon(InspectorIcons.icon(if (layer.visible) "EYE" else "EYE_OFF"), null, Modifier.size(DButtonLayout.ICON_DP.dp),
                     tint = if (layer.visible) ink else ink.copy(alpha = .6f))
             }
-            // The arrow: drawn, disabled this pass (bulk expand for TL3). In selection mode an unselected layer's arrow adds it.
+            // TL3: the arrow expands / collapses; in selection mode an unselected layer's arrow adds it (TLP T1).
             val arrowAdds = selectionMode && !selected
             Box(Modifier.size(DButtonLayout.ZONE_DP.dp, TRACK_ROW_HEIGHT_DP.dp).testTag("d-arrow-${layer.id}").semantics {
                 role = Role.Button
-                contentDescription = if (arrowAdds) "Add $name to the selection" else "Expand $name (not available yet)"
-                if (arrowAdds) onClick { tap(DZone.ARROW); true } else disabled()
+                contentDescription = when {
+                    arrowAdds -> "Add $name to the selection"
+                    selectionMode -> if (expanded) "Collapse the selected layers" else "Expand the selected layers"
+                    else -> if (expanded) "Collapse $name" else "Expand $name"
+                }
+                stateDescription = if (expanded) "Expanded" else "Collapsed"
+                onClick { tap(DZone.ARROW); true }
             }, contentAlignment = Alignment.Center) {
-                Icon(InspectorIcons.icon("ARROW"), null, Modifier.size(DButtonLayout.ICON_DP.dp), tint = ink.copy(alpha = .38f))
+                Icon(InspectorIcons.icon("ARROW"), null, Modifier.size(DButtonLayout.ICON_DP.dp).graphicsLayer { rotationZ = turn.value }, tint = ink)
             }
         }
     }
 }
-

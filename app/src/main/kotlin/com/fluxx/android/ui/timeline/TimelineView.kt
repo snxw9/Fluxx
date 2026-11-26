@@ -184,6 +184,14 @@ fun TimelineView(
     onKeysMoved: (Map<Long, Long>) -> Unit = {},
     /** TLP.2: the live hold-drag state for the readout overlay over the action bar; null when no drag runs. */
     onDragInfo: (com.fluxx.android.editor.TimelineDragInfo?) -> Unit = {},
+    /** TL3: the expanded layers, the key selection (all tracks), audio capability and the twirl-down callbacks. */
+    expandedLayers: Set<Long> = emptySet(),
+    keySelection: com.fluxx.android.editor.KeySelectionSet? = null,
+    hasAudio: (CompositionLayer) -> Boolean = { false },
+    onTwirlNameTap: (Long, com.fluxx.android.editor.GraphTarget) -> Unit = { _, _ -> },
+    onTwirlNameLongPress: (Long, com.fluxx.android.editor.GraphTarget) -> Unit = { _, _ -> },
+    /** TL3 B1: scroll (animated) so this layer is at the top; the second value makes repeated requests distinct. */
+    scrollToLayer: Pair<Long, Int>? = null,
     modifier: Modifier = Modifier
 ) {
     val comp = project.composition
@@ -274,13 +282,30 @@ fun TimelineView(
         comp.layers.filter { (it.timing.durationUs ?: 1L) > 0L }
             .sortedWith(compareByDescending<CompositionLayer> { it.zOrder }.thenByDescending { it.id })
     }
+    // TL3 B1: the timeline items: every layer, each expanded layer followed by its rows (recomputed only when the layers,
+    // the expansion or the audio capability change; never per scroll frame).
+    val latestHasAudio by rememberUpdatedState(hasAudio)
+    val items = remember(sortedLayers, expandedLayers) { com.fluxx.android.editor.TwirlRows.items(sortedLayers, expandedLayers) { latestHasAudio(it) } }
+    val latestItems by rememberUpdatedState(items)
+    fun itemIndex(layerId: Long) = latestItems.indexOfFirst { it is com.fluxx.android.editor.TwirlItem.Layer && it.layer.id == layerId }
+    // TL3 B2: while a twirl-down opens or closes, the layer rows below move on the shared spec (else the reorder's 100ms).
+    var settledExpanded by remember { mutableStateOf(expandedLayers) }
+    val twirlMoving = settledExpanded != expandedLayers
+    LaunchedEffect(expandedLayers) { delay(TL3Motion.MS.toLong()); settledExpanded = expandedLayers }
 
     val verticalScrollState = rememberLazyListState()
+    // TL3 B1: on expand, the layer scrolls (animated) to the top, exactly where opening the inspector puts it.
+    LaunchedEffect(scrollToLayer) {
+        val id = scrollToLayer?.first ?: return@LaunchedEffect
+        val index = itemIndex(id)
+        if (index >= 0) verticalScrollState.animateScrollToItem(index)
+    }
     val draggingTimeline by verticalScrollState.interactionSource.collectIsDraggedAsState()
     val horizontalScrollState = rememberScrollState()
     val reorder = remember { TimelineReorderState() }
     var preInspectorViewport by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var skipInspectorRestore by remember { mutableStateOf(false) }
+    var scrollAtOpen by remember { mutableStateOf<Pair<Long, Int>?>(null) }
     var editing by remember { mutableStateOf(false) }
     var pinching by remember { mutableStateOf(false) }
     var edgeScroll by remember { mutableFloatStateOf(0f) }
@@ -345,6 +370,8 @@ fun TimelineView(
             val centerPx = (totalViewportWidthPx / 2f).roundToInt()
             val centerXPx = centerPx.toFloat()
             val centerXDp = with(density) { centerPx.toDp() }
+            // TL3: the visible content range (px), read only by twirl rows in their draw phase.
+            val visibleRange = remember(centerXPx) { VisibleRange { (horizontalScrollState.value - centerXPx)..(horizontalScrollState.value + centerXPx) } }
 
             val contentWidthPx = (durationUs * pxPerUs).toFloat()
             val contentWidthDp = with(density) { contentWidthPx.toDp() }
@@ -379,14 +406,17 @@ fun TimelineView(
                     if (preInspectorViewport == null) {
                         preInspectorViewport = verticalScrollState.firstVisibleItemIndex to verticalScrollState.firstVisibleItemScrollOffset
                         skipInspectorRestore = false
+                        scrollAtOpen = scrollToLayer
                     }
-                    val index = sortedLayers.indexOfFirst { it.id == selectedLayerId }
+                    val index = itemIndex(selectedLayerId)
                     if (index >= 0 && !draggingTimeline && reorder.draggingId == null) verticalScrollState.scrollToItem(index)
                 } else if (!inspectorVisible) {
                     val saved = preInspectorViewport
                     preInspectorViewport = null
-                    if (saved != null && !skipInspectorRestore && !draggingTimeline && reorder.draggingId == null && sortedLayers.isNotEmpty()) {
-                        verticalScrollState.scrollToItem(saved.first.coerceAtMost(sortedLayers.lastIndex), saved.second)
+                    // TL3 B2: closing the sheet BECAUSE a layer is expanding keeps that layer at the top (no restore).
+                    val expanding = scrollToLayer != null && scrollToLayer != scrollAtOpen
+                    if (saved != null && !skipInspectorRestore && !expanding && !draggingTimeline && reorder.draggingId == null && latestItems.isNotEmpty()) {
+                        verticalScrollState.scrollToItem(saved.first.coerceAtMost(latestItems.lastIndex), saved.second)
                     }
                 }
             }
@@ -397,6 +427,8 @@ fun TimelineView(
                 }
             }
 
+            // TL3 B1: the faded area behind expanded rows, the full viewport width (drawn in the draw phase only).
+            TwirlArea(verticalScrollState, with(density) { TimelineTracksOrigin.toPx() }, Modifier.matchParentSize())
             // 1. Horizontally scrollable content (ruler + clip tracks)
             Box(
                 modifier = Modifier
@@ -459,14 +491,28 @@ fun TimelineView(
                                 verticalArrangement = Arrangement.spacedBy(TRACK_GAP_DP.dp),
                                 contentPadding = PaddingValues(bottom = bottomPadding + extraBottomPadding)
                             ) {
-                                items(sortedLayers, key = { it.id }) { layer ->
+                                items(items, key = { when (it) { is com.fluxx.android.editor.TwirlItem.Layer -> it.layer.id; is com.fluxx.android.editor.TwirlItem.Row -> it.row.key } }) { item ->
+                                    if (item is com.fluxx.android.editor.TwirlItem.Row) {
+                                        // TL3 B1: an expanded layer's row, appearing / leaving on the shared motion spec.
+                                        val r = item.row
+                                        val owner = project.layer(r.layerId) ?: return@items
+                                        val m = Modifier.animateItem(fadeInSpec = TL3Motion.spec(), placementSpec = TL3Motion.spec(), fadeOutSpec = TL3Motion.spec())
+                                        when (r) {
+                                            is com.fluxx.android.editor.TwirlRow.Property -> TwirlTrackRow(owner, r, pxPerUs, playheadUs,
+                                                keySelection?.timesOf(r.layerId, r.target).orEmpty(), visibleRange, m)
+                                            is com.fluxx.android.editor.TwirlRow.Empty -> TwirlEmptyRow(r, m)
+                                            is com.fluxx.android.editor.TwirlRow.Audio -> Box(m.fillMaxWidth().height(r.heightDp.dp).testTag("twirl-row-${r.key}"))
+                                        }
+                                        return@items
+                                    }
+                                    val layer = (item as com.fluxx.android.editor.TwirlItem.Layer).layer
                                     val isDragging = layer.id == reorder.draggingId
                                     DisposableEffect(layer.id) {
                                         onDispose { reorder.placedTops.remove(layer.id) }
                                     }
                                     TimelineClipRow(
                                         modifier = (if (isDragging) Modifier else Modifier.animateItem(
-                                            placementSpec = androidx.compose.animation.core.tween(durationMillis = 100)))
+                                            placementSpec = if (twirlMoving) TL3Motion.spec() else androidx.compose.animation.core.tween(durationMillis = 100)))
                                             .zIndex(if (isDragging) 1f else 0f)
                                             .graphicsLayer {
                                                 translationY = if (isDragging) reorder.offsetFor(layer.id, verticalScrollState) else 0f
@@ -550,7 +596,7 @@ fun TimelineView(
                 onScrollStart = {
                     skipInspectorRestore = true
                     if (inspectorVisible) onDismissInspector()
-                })
+                }, items = items, expanded = expandedLayers, onNameTap = onTwirlNameTap, onNameLongPress = onTwirlNameLongPress)
         }
     }
 }

@@ -147,10 +147,13 @@ fun ElementInspectorSheet(
     onExplodeCommit: (TextExplodePlan,(String?)->Unit)->Unit = {_,reply->reply("Explode unavailable")},
     onTextEditVisible: (Boolean)->Unit = {},
     /** GRAPH G1: live preview of a Graph page drag (SetKeyEasing) inside the begin/commit/cancel gesture. */
-    onGesturePreview: (EditorAction) -> Unit = {}
+    onGesturePreview: (EditorAction) -> Unit = {},
+    /** TL3 B1: open the page of this property (a twirl-down name long-press); the second value makes requests distinct. */
+    openPage: Pair<GraphTarget, Int>? = null
 ) {
     key(layer.id) {
-        var section by rememberSaveable { mutableStateOf<InspectorSection?>(null) }
+        var section by rememberSaveable { mutableStateOf<InspectorSection?>(InspectorOpenPage.section(openPage?.first)) }
+        LaunchedEffect(openPage) { InspectorOpenPage.section(openPage?.first)?.let { section = it } }
         // GRAPH G1: the Graph page's property and the page it returns to. The return page's saveable state (tab, focused
         // field, transform mode) is kept by [pages] while the Graph page is open and dropped on any other navigation.
         var graphTarget by remember { mutableStateOf<GraphTarget?>(null) }
@@ -714,7 +717,9 @@ private fun OverhauledTransformSectionContent(
     onAnchorPreview: (EditorAction.SetAnchorPoint) -> Unit
 ) {
     // GRAPH G1: saveable, so returning from the Graph page restores the mode it was opened from.
-    var mode by rememberSaveable { mutableStateOf(TransformSubMode.POSITION) }
+    // TL3 B1: a twirl-down name long-press opens the page on its property (Position, Scale or Rotation).
+    val openMode = LocalTransformOpenMode.current
+    var mode by rememberSaveable { mutableStateOf(openMode ?: TransformSubMode.POSITION) }
     var isAnchorMode by rememberSaveable { mutableStateOf(false) }
     val anchorModeCallback by rememberUpdatedState(onAnchorModeChange)
     SideEffect { anchorModeCallback(isAnchorMode) }
@@ -1273,3 +1278,23 @@ private fun NumericInputDialog(
     )
 }
 
+
+/** TL3 B1: the page a twirl-down name long-press opens for a property, and the Transform page's mode for it. */
+internal object InspectorOpenPage {
+    fun section(target: GraphTarget?): InspectorSection? = when {
+        target == null -> null
+        target.animator != null -> InspectorSection.CONTEXTUAL_EDIT
+        target.property == AnimPropertyType.POSITION || target.property == AnimPropertyType.SCALE || target.property == AnimPropertyType.ROTATION -> InspectorSection.TRANSFORM
+        target.property == AnimPropertyType.OPACITY -> InspectorSection.BLENDING_OPACITY
+        else -> InspectorSection.CONTEXTUAL_EDIT // text properties: Edit Text
+    }
+    fun mode(target: GraphTarget?): TransformSubMode? = when (target?.property) {
+        AnimPropertyType.POSITION -> TransformSubMode.POSITION
+        AnimPropertyType.SCALE -> TransformSubMode.SCALE
+        AnimPropertyType.ROTATION -> TransformSubMode.ROTATION
+        else -> null
+    }
+}
+
+/** TL3 B1: the Transform page's initial mode when it is opened for one property. */
+internal val LocalTransformOpenMode = androidx.compose.runtime.compositionLocalOf<TransformSubMode?> { null }

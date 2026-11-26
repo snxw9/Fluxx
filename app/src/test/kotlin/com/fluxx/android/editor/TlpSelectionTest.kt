@@ -35,14 +35,14 @@ class TlpSelectionTest {
     @Test fun dButtonRules() {
         // Outside selection mode.
         assertEquals(DEffect.TOGGLE_VISIBILITY, DButtonRules.tap(false, false, DZone.EYE))
-        assertEquals(DEffect.NONE, DButtonRules.tap(false, false, DZone.ARROW))          // the arrow is disabled
+        assertEquals(DEffect.EXPAND, DButtonRules.tap(false, false, DZone.ARROW))        // TL3: the arrow expands
         assertEquals(DEffect.ENTER, DButtonRules.longPress(false, false))
         assertNull(DButtonRules.body(false, false)); assertNull(DButtonRules.empty(false)) // existing behaviour
         // In selection mode.
         assertEquals(DEffect.ADD, DButtonRules.tap(true, false, DZone.EYE))
         assertEquals(DEffect.ADD, DButtonRules.tap(true, false, DZone.ARROW))
         assertEquals(DEffect.BULK_VISIBILITY, DButtonRules.tap(true, true, DZone.EYE))
-        assertEquals(DEffect.NONE, DButtonRules.tap(true, true, DZone.ARROW))           // bulk expand: TL3
+        assertEquals(DEffect.EXPAND, DButtonRules.tap(true, true, DZone.ARROW))         // TL3: bulk expand
         assertEquals(DEffect.REMOVE, DButtonRules.longPress(true, true))
         assertEquals(DEffect.ADD, DButtonRules.body(true, false)); assertEquals(DEffect.REMOVE, DButtonRules.body(true, true))
         assertEquals(DEffect.EXIT, DButtonRules.empty(true))

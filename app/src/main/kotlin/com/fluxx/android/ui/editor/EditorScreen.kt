@@ -240,6 +240,24 @@ fun EditorScreen(
             editor.dispatch(EditorAction.Select(null))
         } else onExitClick()
     }
+    /** TL3 B1: scroll requests (layer to the top on expand) and inspector page requests (name long-press). */
+    var scrollToLayer by remember { mutableStateOf<Pair<Long, Int>?>(null) }
+    var openPage by remember { mutableStateOf<Pair<GraphTarget, Int>?>(null) }
+    LaunchedEffect(inspectorSheetVisible) { if (!inspectorSheetVisible) openPage = null }
+    var twirlSerial by remember { mutableIntStateOf(0) }
+    /**
+     * TL3 B1 / B2: the arrow on [id] (in selection mode on a selected layer: every selected layer). Expanding while the
+     * inspector sheet is open closes the sheet WHILE the layer expands (one shared motion spec); the layer scrolls to the top.
+     */
+    fun toggleTwirl(id: Long) {
+        val before = editor.expandedLayers
+        val next = TwirlExpansion.arrow(before, id, editor.layerSelection)
+        val expanding = id in next && id !in before
+        if (expanding) { scrollToLayer = id to ++twirlSerial; if (inspectorSheetVisible) dismissInspector() }
+        editor.setExpanded(next)
+    }
+    /** TL3 B2: opening the inspector always collapses every twirl-down (on the same shared transition). */
+    fun collapseTwirls() { if (editor.expandedLayers.isNotEmpty()) editor.setExpanded(emptySet()) }
     /** TLP T1: one D-button / body / empty-space effect (rules in [DButtonRules]); multi-layer edits are one Batch. */
     fun selectionEffect(effect: DEffect?, id: Long?) {
         when (effect) {
@@ -254,6 +272,7 @@ fun EditorScreen(
             DEffect.REMOVE -> { val sel = editor.layerSelection; if (sel != null && id != null) {
                 DButtonRules.afterRemove(sel, id)?.let { editor.setSelection(it) } ?: editor.exitSelection() } }
             DEffect.EXIT -> editor.exitSelection()
+            DEffect.EXPAND -> id?.let { toggleTwirl(it) }
         }
     }
     BackHandler { focusManager.clearFocus(); textEditor.finish { when {
@@ -261,27 +280,48 @@ fun EditorScreen(
         editor.keySelection != null -> editor.exitKeySelection()
         else -> leaveSelectionOrEditor() } } }
     // TLP.1: the moved selection, set by the timeline just before it commits a group key move; applied after the commit.
-    var pendingKeyFollow by remember { mutableStateOf<KeyframeSelection?>(null) }
+    var pendingKeyFollow by remember { mutableStateOf<KeySelectionSet?>(null) }
     // TLP.2 part 5: the live timeline hold-drag (readouts over the action bar); UI only.
     var timelineDrag by remember { mutableStateOf<com.fluxx.android.editor.TimelineDragInfo?>(null) }
-    // TLP T5: the active property on the open property page, the only scope of key selection. Key selection mode ends
-    // when the page, the property or the layer changes (or the inspector closes).
+    // TLP T5: the active property on the open property page (the sheet's key scope).
     val keyTarget: GraphTarget? = if (!inspectorSheetVisible || selectedLayer == null) null
         else focusedProperty?.let { GraphTarget(property = it) } ?: focusedAnimatorTrack?.let { GraphTarget(animator = it) }
-    LaunchedEffect(keyTarget, selectedLayer?.id) {
+    // TL3 B3 selection invariants (KeySelectionRules): a selected key belongs to an expanded layer or to the inspected
+    // layer; a property page narrows to its track; closing the sheet with no twirl-down open ends key mode.
+    val inspectedLayerId = if (inspectorSheetVisible) selectedLayer?.id else null
+    LaunchedEffect(keyTarget, inspectedLayerId, editor.expandedLayers) {
         val k = editor.keySelection ?: return@LaunchedEffect
-        if (k.target != keyTarget || k.layerId != selectedLayer?.id) editor.exitKeySelection()
+        val next = KeySelectionRules.constrain(k, inspectedLayerId, keyTarget, editor.expandedLayers)
+        if (next != k) { if (next == null) editor.exitKeySelection() else editor.selectKeys(next) }
     }
-    fun applyKeys(moved: KeyEdits.Moved?) {
+    fun applyKeys(moved: KeyEdits.Moved?, target: GraphTarget? = null) {
         if (moved == null) return
         previewController?.pause()
         textEditor.finish {
             val sel = editor.keySelection
+            val layerId = editor.state.selectedLayerId
             editor.dispatch(moved.action)
-            // The selection follows its keys to their new times.
-            if (sel != null) editor.selectKeys(sel.copy(times = moved.times))
+            // The selection follows its keys (a paste selects the pasted keys while key mode is on).
+            if (sel != null && layerId != null && target != null) editor.selectKeys(sel.withTrack(KeyframeSelection(layerId, target, moved.times)))
             previewController?.update(editor.state.project, editor.state.playheadUs, false)
         }
+    }
+    fun applyMultiKeys(moved: MultiKeyEdits.Moved?) {
+        if (moved == null) return
+        previewController?.pause()
+        textEditor.finish {
+            editor.dispatch(moved.action)
+            editor.selectKeys(moved.selection)
+            previewController?.update(editor.state.project, editor.state.playheadUs, false)
+        }
+    }
+    /** TL3 B3: the tracks the key bars act on: the property page's track, or every keyed row of the expanded layers. */
+    fun keyScope(): List<Pair<Long, GraphTarget>> {
+        val layer = editor.state.selectedLayer
+        if (inspectorSheetVisible && layer != null) return keyTarget?.let { listOf(layer.id to it) }.orEmpty()
+        val doc = editor.state.project
+        return editor.expandedLayers.flatMap { id -> doc.composition.layers.firstOrNull { it.id == id }?.let { l ->
+            TwirlRows.rows(l, false).filterIsInstance<TwirlRow.Property>().map { l.id to it.target } }.orEmpty() }
     }
     /**
      * TLP.1: Copy keys / Paste keys, offered by the property page's ⋮ (the shared rail) for that rail's property. Copy
@@ -289,17 +329,17 @@ fun EditorScreen(
      * and works with or without a key selection. T5 semantics (one Batch, one undo).
      */
     val keyClipboardHost = com.fluxx.android.ui.inspector.KeyClipboardHost(
-        canCopy = { target -> editor.state.selectedLayer?.let { KeyEdits.copyScope(it, target, editor.keySelection) } != null },
+        canCopy = { target -> editor.state.selectedLayer?.let { KeyEdits.copyScope(it, target, editor.keySelection?.track(it.id, target)) } != null },
         canPaste = { target -> editor.state.selectedLayer?.let { KeyEdits.canPaste(it, target, editor.keyClipboard) } == true },
         copy = { target ->
             val layer = editor.state.selectedLayer
-            val scope = layer?.let { KeyEdits.copyScope(it, target, editor.keySelection) }
+            val scope = layer?.let { KeyEdits.copyScope(it, target, editor.keySelection?.track(it.id, target)) }
             if (layer != null && scope != null) KeyEdits.copy(layer, scope)?.let { clip -> editor.keyClipboard = clip
                 android.widget.Toast.makeText(context, if (clip.keys.size == 1) "Keyframe copied" else "${clip.keys.size} keyframes copied", android.widget.Toast.LENGTH_SHORT).show() }
         },
         paste = { target ->
             val layer = editor.state.selectedLayer; val clip = editor.keyClipboard
-            if (layer != null && clip != null) applyKeys(KeyEdits.paste(editor.state.project, layer, target, clip, editor.state.playheadUs))
+            if (layer != null && clip != null) applyKeys(KeyEdits.paste(editor.state.project, layer, target, clip, editor.state.playheadUs), target)
         })
     LaunchedEffect(selectedLayer?.id, inspectorSheetVisible, previewState.playing) {
         if (!inspectorSheetVisible || selectedLayer?.id != eyedropperLayerId || previewState.playing) eyedropperLayerId=null
@@ -378,20 +418,17 @@ fun EditorScreen(
                     }
                 }
             } else if (editor.keySelection != null) {
-                // TLP T5: the key selection top bar (time order within the active property).
+                // TLP T5 / TL3 B3: the key selection top bar ("N keyframes selected · M layers"). Select all / Odd / Even act on
+                // the displayed rows (the property page's track, or the expanded layers' keyed rows), counted per track.
                 val keySel = editor.keySelection!!
-                val keyLayer = editor.state.project.composition.layers.firstOrNull { it.id == keySel.layerId }
-                SelectionTopBar(if (keySel.size == 1) "1 keyframe selected" else "${keySel.size} keyframes selected",
-                    onBack = { editor.exitKeySelection() }, testTag = "key-top-bar") {
-                    if (keyLayer != null) {
-                        BarIcon("SELECT_ALL", "Select all keyframes", testTag = "key-select-all") { editor.selectKeys(KeyEdits.selectAll(keyLayer, keySel.target)) }
-                        BarPopoverIcon("ODD_EVEN", "Select odd or even keyframes", "key-odd-even", "key-odd-even") { close ->
-                            PopoverRow("Select Odd", testTag = "key-odd") { editor.selectKeys(KeyEdits.odd(keyLayer, keySel.target)); close() }
-                            PopoverRow("Select Even", testTag = "key-even") { editor.selectKeys(KeyEdits.even(keyLayer, keySel.target)); close() }
-                        }
-                        BarIcon("DELETE", "Delete the selected keyframes", testTag = "key-delete") {
-                            KeyEdits.delete(keyLayer, keySel)?.let { applyLayerAction(it) }
-                        }
+                SelectionTopBar(keySel.title(), onBack = { editor.exitKeySelection() }, testTag = "key-top-bar") {
+                    BarIcon("SELECT_ALL", "Select all keyframes", testTag = "key-select-all") { editor.selectKeys(MultiKeyEdits.selectAll(editor.state.project, keyScope())) }
+                    BarPopoverIcon("ODD_EVEN", "Select odd or even keyframes", "key-odd-even", "key-odd-even") { close ->
+                        PopoverRow("Select Odd", testTag = "key-odd") { editor.selectKeys(MultiKeyEdits.odd(editor.state.project, keyScope())); close() }
+                        PopoverRow("Select Even", testTag = "key-even") { editor.selectKeys(MultiKeyEdits.even(editor.state.project, keyScope())); close() }
+                    }
+                    BarIcon("DELETE", "Delete the selected keyframes", testTag = "key-delete") {
+                        MultiKeyEdits.delete(editor.state.project, keySel)?.let { applyLayerAction(it) }
                     }
                 }
             } else
@@ -646,17 +683,21 @@ fun EditorScreen(
                     selection = editor.layerSelection,
                     // TLP.2: only the layer selection bar overlays the timeline (the key bar is in the sheet header).
                     extraBottomPadding = if (editor.selectionMode) SelectionBarHeight else 0.dp,
-                    selectedKeys = editor.keySelection?.times?.toSet(),
+                    selectedKeys = editor.keySelection?.let { s -> val l = selectedLayer; val t = keyTarget
+                        if (l != null && t != null) s.timesOf(l.id, t) else emptySet() },
                     onDragInfo = { timelineDrag = it },
-                    onKeysMoved = { moved -> pendingKeyFollow = editor.keySelection?.let { s -> s.copy(times = s.times.map { moved[it] ?: it }) } },
+                    onKeysMoved = { moved -> val l = editor.state.selectedLayer; val t = keyTarget
+                        pendingKeyFollow = editor.keySelection?.let { s -> if (l == null || t == null) s else s.track(l.id, t)?.let { tr ->
+                            s.withTrack(tr.copy(times = tr.times.map { moved[it] ?: it })) } ?: s } },
                     onKeyDoubleTap = { t -> val layer = editor.state.selectedLayer; val target = keyTarget
                         if (layer != null && target != null && t in KeyEdits.times(layer, target)) editor.selectKeys(KeyframeSelection(layer.id, target, listOf(t))) },
-                    onKeyToggle = { t -> editor.keySelection?.let { sel -> val next = sel.toggle(t)
-                        if (next.times.isEmpty()) editor.exitKeySelection() else editor.selectKeys(next) } },
+                    onKeyToggle = { t -> val l = editor.state.selectedLayer; val target = keyTarget
+                        if (l != null && target != null) editor.keySelection?.let { sel -> val next = sel.toggle(l.id, target, t)
+                            if (next == null) editor.exitKeySelection() else editor.selectKeys(next) } },
                     onDTap = { id, zone -> selectionEffect(DButtonRules.tap(editor.selectionMode, editor.layerSelection?.contains(id) == true, zone), id) },
                     onDLongPress = { id -> selectionEffect(DButtonRules.longPress(editor.selectionMode, editor.layerSelection?.contains(id) == true), id) },
                     onSelectLayer = { id ->
-                        if (editor.keySelection != null) {
+                        if (editor.keySelection != null && !(id != null && !inspectorSheetVisible && editor.expandedLayers.isNotEmpty())) {
                             // TLP T5: a tap off the keys (body, empty space) deselects all keys and exits key selection mode;
                             // nothing seeks, scrolls or changes the layer selection.
                             editor.exitKeySelection()
@@ -665,13 +706,37 @@ fun EditorScreen(
                             // Neither dispatches a Seek or scrolls, and the inspector stays closed.
                             selectionEffect(if (id == null) DButtonRules.empty(true) else DButtonRules.body(true, editor.layerSelection?.contains(id) == true), id)
                         } else {
-                        // Timeline selection intentionally opens the inspector.
+                        // Timeline selection intentionally opens the inspector. TL3 B2: it collapses every twirl-down WHILE the
+                        // sheet slides up (shared motion); key mode stays on and keeps that layer's keys (KeySelectionRules).
                         editor.dispatch(EditorAction.Select(id))
                         if (id != null) {
+                            collapseTwirls()
                             inspectorSheetVisible = true
                         } else {
                             inspectorSheetVisible = false
                         }
+                        }
+                    },
+                    expandedLayers = editor.expandedLayers,
+                    keySelection = editor.keySelection,
+                    hasAudio = { false },
+                    scrollToLayer = scrollToLayer,
+                    onTwirlNameTap = { id, target -> editor.state.project.composition.layers.firstOrNull { it.id == id }?.let { l ->
+                        // TL3 B1: select every key of the property (all selected already: deselect them; none left exits).
+                        val all = KeyEdits.selectAll(l, target)
+                        val sel = editor.keySelection
+                        val current = sel?.track(id, target)
+                        if (current != null && current.times.toSet() == all.times.toSet()) editor.selectKeys(sel.withTrack(all.copy(times = emptyList())))
+                        else editor.selectKeys(sel?.withTrack(all) ?: KeySelectionSet.of(all))
+                    } },
+                    onTwirlNameLongPress = { id, target ->
+                        // TL3 B1: open that property's inspector page (collapses every twirl-down; the sheet opens on the page).
+                        textEditor.finish {
+                            editor.dispatch(EditorAction.Select(id))
+                            collapseTwirls()
+                            openPage = target to ++twirlSerial
+                            focusedProperty = target.property; focusedAnimatorTrack = target.animator
+                            inspectorSheetVisible = true
                         }
                     },
                     onSeek = { timeUs, snap ->
@@ -723,12 +788,12 @@ fun EditorScreen(
 
             // TLP.2 part 3: the key bar lives in the inspector sheet's HEADER while key selection is active (LocalKeyHeaderBar,
             // provided around the sheet below); it replaces the header's contents at the header's height. Nothing under the sheet.
+            // TL3 B3: over a selection that can span tracks and layers: easing on every selected key's departing segment;
+            // Stagger / Sequence per track (each anchored on its own first selected key). One undo each.
             val keyHeaderBar: (@Composable RowScope.() -> Unit)? = editor.keySelection?.let { keySel ->
-                val keyLayer = editor.state.project.composition.layers.firstOrNull { it.id == keySel.layerId }
-                if (keyLayer == null) return@let null
                 val bar: @Composable RowScope.() -> Unit = {
-                    val easable = !GraphModel.discrete(keySel.target)
-                    fun ease(c: EasingCurve) { KeyEdits.ease(keyLayer, keySel, c)?.let { applyLayerAction(it) } }
+                    val easable = MultiKeyEdits.easable(keySel)
+                    fun ease(c: EasingCurve) { MultiKeyEdits.ease(editor.state.project, keySel, c)?.let { applyLayerAction(it) } }
                     BarIcon("EASE_HOLD", "Hold", enabled = easable, testTag = "key-hold") { ease(EasingCurve.HOLD) }
                     BarIcon("EASE_LINEAR", "Linear", enabled = easable, testTag = "key-linear") { ease(EasingCurve.LINEAR) }
                     BarIcon("EASE_EASY", "Easy Ease", enabled = easable, testTag = "key-easy-ease") { ease(EasingCurve.EASY_EASE) }
@@ -739,10 +804,10 @@ fun EditorScreen(
                     }
                     BarPopoverIcon("STAGGER", "Stagger the selected keyframes", "key-stagger", "key-stagger", enabled = keySel.size > 1) { close ->
                         FramesPopoverContent("Stagger", "frames", 2, false, {}, { n ->
-                            applyKeys(KeyEdits.pack(editor.state.project, keyLayer, keySel, n)) }, close, "key-stagger", showReverse = false, minimum = 1)
+                            applyMultiKeys(MultiKeyEdits.pack(editor.state.project, keySel, n)) }, close, "key-stagger", showReverse = false, minimum = 1)
                     }
                     BarIcon("SEQUENCE", "Sequence the selected keyframes one frame apart", enabled = keySel.size > 1, testTag = "key-sequence") {
-                        applyKeys(KeyEdits.pack(editor.state.project, keyLayer, keySel, 1))
+                        applyMultiKeys(MultiKeyEdits.pack(editor.state.project, keySel, 1))
                     }
                 }
                 bar
@@ -788,7 +853,9 @@ fun EditorScreen(
                     .height(inspectorHeight)
             ) {
                 selectedLayer?.let { layer ->
-                    androidx.compose.runtime.CompositionLocalProvider(com.fluxx.android.ui.inspector.LocalKeyClipboardHost provides keyClipboardHost, LocalKeyHeaderBar provides keyHeaderBar) { ElementInspectorSheet(
+                    androidx.compose.runtime.CompositionLocalProvider(com.fluxx.android.ui.inspector.LocalKeyClipboardHost provides keyClipboardHost, LocalKeyHeaderBar provides keyHeaderBar,
+                        com.fluxx.android.ui.inspector.LocalTransformOpenMode provides com.fluxx.android.ui.inspector.InspectorOpenPage.mode(openPage?.first)) { ElementInspectorSheet(
+                        openPage = openPage,
                         onExplodePrepare={options,reply->
                             focusManager.clearFocus();previewController?.pause()
                             textEditor.finish {

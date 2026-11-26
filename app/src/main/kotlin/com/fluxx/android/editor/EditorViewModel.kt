@@ -120,14 +120,26 @@ class EditorViewModel : ViewModel() {
         val ids = state.project.composition.layers.map { it.id }.toSet()
         layerSelection = next.prune(ids).takeUnless { it.isEmpty }; syncPrimary()
     }
-    private fun syncSelection() { layerSelection?.let { setSelection(it) }; keySelection?.let { selectKeys(it) } }
-    /** TLP T5: key selection mode (null = off), one property's keys on one layer; UI state only, pruned like the layers. */
-    var keySelection by mutableStateOf<KeyframeSelection?>(null)
+    private fun syncSelection() {
+        layerSelection?.let { setSelection(it) }; keySelection?.let { selectKeys(it) }
+        if (expandedLayers.isNotEmpty()) expandedLayers = TwirlExpansion.prune(expandedLayers, state.project)
+    }
+    /**
+     * TLP T5 / TL3 B3: key selection mode (null = off). Since TL3 it can span tracks (layer + property) and layers. UI
+     * state only, pruned like the layers (keys that no longer exist drop out; none left = the mode exits).
+     */
+    var keySelection by mutableStateOf<KeySelectionSet?>(null)
         private set
     /** TLP T5: copied keys (session clipboard, like the layer clipboard; not document state). */
     var keyClipboard by mutableStateOf<KeyClipboard?>(null)
-    fun selectKeys(next: KeyframeSelection?) { keySelection = next?.let { KeyEdits.prune(state.project, it) } }
+    fun selectKeys(next: KeySelectionSet?) { keySelection = next?.let { s -> KeySelectionSet.of(s.tracks.mapNotNull { KeyEdits.prune(state.project, it) }) } }
+    /** One track (T5 call sites). */
+    fun selectKeys(next: KeyframeSelection?) = selectKeys(KeySelectionSet.of(next))
     fun exitKeySelection() { keySelection = null }
+    /** TL3 B1: the expanded (twirled-down) layers. UI state only: never in undo history, never saved; pruned on removal. */
+    var expandedLayers by mutableStateOf<Set<Long>>(emptySet())
+        private set
+    fun setExpanded(next: Set<Long>) { expandedLayers = TwirlExpansion.prune(next, state.project) }
     private fun syncPrimary() {
         val p = layerSelection?.primary ?: return
         if (state.selectedLayerId != p) state = EditorReducer.reduce(state, EditorAction.Select(p))
@@ -173,7 +185,7 @@ class EditorViewModel : ViewModel() {
             redoStack.clear()
         }
         state = next
-        if (action is EditorAction.Load) { layerSelection = null; keySelection = null; keyClipboard = null } else syncSelection()
+        if (action is EditorAction.Load) { layerSelection = null; keySelection = null; keyClipboard = null; expandedLayers = emptySet() } else syncSelection()
     }
 
     /** Resolve and apply transport navigation from one current snapshot, at click time. */

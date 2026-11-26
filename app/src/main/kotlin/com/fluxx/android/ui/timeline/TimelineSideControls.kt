@@ -59,8 +59,16 @@ internal class TimelineReorderState {
 internal fun TimelineSideControls(layers: List<CompositionLayer>, selection: com.fluxx.android.editor.LayerSelection?, listState: LazyListState,
     drag: TimelineReorderState, onDTap: (Long, com.fluxx.android.editor.DZone) -> Unit, onDLongPress: (Long) -> Unit, onDragSelect: (Long) -> Unit,
     onBegin: () -> Unit, onPreview: (EditorAction) -> Unit, onCommit: () -> Unit, onCancel: () -> Unit,
-    onScrollStart: () -> Unit) {
+    onScrollStart: () -> Unit,
+    /** TL3 B1: the timeline items (layers and expanded rows), the expanded layers and the name-column gestures. */
+    items: List<com.fluxx.android.editor.TwirlItem> = emptyList(), expanded: Set<Long> = emptySet(),
+    onNameTap: (Long, com.fluxx.android.editor.GraphTarget) -> Unit = { _, _ -> },
+    onNameLongPress: (Long, com.fluxx.android.editor.GraphTarget) -> Unit = { _, _ -> }) {
     val density = LocalDensity.current
+    val rowsByKey = remember(items) { items.withIndex().filter { it.value is com.fluxx.android.editor.TwirlItem.Row }
+        .associate { (i, it) -> (it as com.fluxx.android.editor.TwirlItem.Row).row.key to (it.row to (items.getOrNull(i + 1) !is com.fluxx.android.editor.TwirlItem.Row)) } }
+    val expandedWithRows = remember(items) { items.filterIsInstance<com.fluxx.android.editor.TwirlItem.Row>().map { it.row.layerId }.toSet() }
+    val twirlOpen by rememberUpdatedState(expanded.isNotEmpty())
     val rowPx = with(density) { (TRACK_ROW_HEIGHT_DP.dp.roundToPx() + TRACK_GAP_DP.dp.roundToPx()).toFloat() }
     val rulerPx = with(density) { TimelineTracksOrigin.roundToPx().toFloat() }
     val currentLayers by rememberUpdatedState(layers)
@@ -120,6 +128,16 @@ internal fun TimelineSideControls(layers: List<CompositionLayer>, selection: com
     Box(Modifier.fillMaxSize().clipToBounds()) {
         Box(Modifier.fillMaxSize().padding(top = TimelineTracksOrigin).clipToBounds()) {
             for (item in listState.layoutInfo.visibleItemsInfo) {
+                // TL3 B1: an expanded row: the D's name-column cell beside it (the bracket continues down).
+                (item.key as? String)?.let { k -> rowsByKey[k]?.let { (row, last) ->
+                    key(k) {
+                        val owner = layers.firstOrNull { it.id == row.layerId }
+                        TwirlNameCell(row, selected = owner != null && selection?.let { owner.id in it } == true, last = last,
+                            onTap = { (row as? com.fluxx.android.editor.TwirlRow.Property)?.let { onNameTap(it.layerId, it.target) } },
+                            onLongPress = { (row as? com.fluxx.android.editor.TwirlRow.Property)?.let { onNameLongPress(it.layerId, it.target) } },
+                            modifier = Modifier.offset { IntOffset(0, item.offset + listState.layoutInfo.beforeContentPadding) })
+                    }
+                } }
                 val layer = layers.firstOrNull { it.id == item.key } ?: continue
                 key(layer.id) {
                     val isDragging = layer.id == drag.draggingId
@@ -129,6 +147,7 @@ internal fun TimelineSideControls(layers: List<CompositionLayer>, selection: com
                     val inSelection = selection?.let { layer.id in it } ?: false
                     DButton(layer, selected = inSelection, selectionMode = selection != null,
                         onTap = { zone -> onDTap(layer.id, zone) }, onLongPress = { onDLongPress(layer.id) },
+                        expanded = layer.id in expandedWithRows,
                         modifier = Modifier.offset { IntOffset(0, y.roundToInt()) }.height(TRACK_ROW_HEIGHT_DP.dp)
                             .zIndex(if (isDragging) 1f else 0f))
                     Box(Modifier.align(Alignment.TopEnd)
@@ -151,6 +170,8 @@ internal fun TimelineSideControls(layers: List<CompositionLayer>, selection: com
             .pointerInput(rowPx) {
                 detectDragGesturesAfterLongPress(
                     onDragStart = { point ->
+                        // TL3: reordering assumes one 28dp row per layer; it is paused while any twirl-down is open.
+                        if (twirlOpen) return@detectDragGesturesAfterLongPress
                         val item = listState.layoutInfo.visibleItemsInfo.firstOrNull {
                             val top = (it.key as? Long)?.let { id -> drag.placedTops[id] }
                                 ?: (it.offset + listState.layoutInfo.beforeContentPadding).toFloat()
