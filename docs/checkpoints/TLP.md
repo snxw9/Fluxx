@@ -7,8 +7,10 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). **Push
 **Status:**
 - **T0–T6:** done. T6's coverage highlight was skipped at first and then built in TLP.1 Part 6 (the selector coverage box).
 - **TLP.1:** done, except Part 3 (key bar placement), which was blocked and is replaced by TLP.2 Part 3.
-- **TLP.2:** done (see the TLP.2 section at the end).
-- **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1 and TLP.2 (phone test lists at the end of each section).
+- **TLP.2:** done (see the TLP.2 section).
+- **TLP.3:** done (A1 curve popover, A2 softer snapping, A3 no guide line; see the TLP.3 section at the end).
+- **TL3 (the twirl-down):** B1–B5 built; its record is `docs/checkpoints/TL3.md`. Device classes for TLP.3 / TL3 have not run yet (the phone was not connected).
+- **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1, TLP.2, TLP.3 and TL3 (phone test lists at the end of each section).
 
 ## T0. Selection architecture (written before the code)
 
@@ -455,3 +457,60 @@ Branch `tlp`, continued from `4b51986` (the tip matched). One commit per part, t
 5. Select several layers → hold-drag one: the group snaps by its nearest member; offsets stay.
 6. Hold-drag a key, and a selected key group: they snap to the playhead / markers / ticks; the earliest never goes below 0.
 7. While dragging anything: the action bar strip shows |← start and ⇄ ±delta; the ruler shows the start / end ticks in white; all of it disappears on release; the playhead does not move.
+
+---
+
+# TLP.3: the key bar's curve popover, softer snapping, no guide line
+
+Branch `tlp`, continued from `73cb31d` (the tip matched after the fetch). One commit per part.
+
+| Part | Status | Commit |
+|---|---|---|
+| A1. Key bar More as a curve popover | Done | `d2b7157` |
+| A2. Softer snapping (per-class zones) | Done | `342d0f1` |
+| A3. Remove the snap guide line | Done | `d592890` |
+
+## A1. More is a curve popover
+- **Shared look:** a non-modal popover reusing the Graph library's grid cells. `CurveCellContent` and `CurveGridCaption` were extracted from `GraphLibraryColumn`, which now uses them too, so the thumbnails and names are the same.
+- **Entries, top to bottom:**
+  - Ease In, Ease Out, Bounce, Elastic. Their default parameters are exactly what the Graph type strip writes when it applies a type to a curve of another type: `EaseChoice.curve(choice, EASY_EASE)`, giving the `.42,0,1,1` / `0,0,.58,1` beziers and the Bounce / Elastic defaults.
+  - Then the library's Pinned, Presets and My curves sections (empty sections are left out).
+- **Size:** bounded at 168 × 232dp (`KeyCurvePopover`) and scrollable. Scrolling the grid never closes the popover (`blocksPopoverSwipe`).
+- **Tap:** sets the easing on every selected key's departing segment, in one `SetKeyEasing` `Batch` (since TL3 B3, every selected track, as one undo). The popover stays open.
+- **Closing:** tapping More again, a preview or empty-sheet tap, swiping down, or Back. These are the existing non-modal popover rules. A timeline tap does not close it (deviation: non-modal popovers never close on timeline touches).
+- **No library actions here:** no long-press menu, drag, save, import or export.
+- **Direction:** it opens downward from the header strip and upward from the bottom overlay. This uses `PopoverPlacer.place(…, preferBelow)` and `LocalBarPopoverBelow`, which `KeyHeaderBar` provides.
+- **Hold-only tracks:** disabled as before.
+
+## A2. Softer snapping
+- **`SnapZones`** (`editor/DragSnap.kt`, one place): `zoneDp = clamp(frames × framePitchDp, FLOOR, cap)`, converted to µs at the current zoom.
+
+  | Class | Frames | Cap |
+  |---|---|---|
+  | Playhead, markers, clip edges, composition bounds, single-key extras (neighbour keys, own clip edges) | 2 | 8dp |
+  | Ruler MAJOR ticks | 1 | **6dp** (the prompt gave no major cap; chosen) |
+  | Ruler MID ticks | 1 | 5dp |
+  | Floor, every class | – | 3dp |
+- **µs rounding:** the µs zone is rounded up, plus 1µs, so N whole frames always fit (30 fps frames are 33333 / 33334µs).
+- **Mid ticks:** they are now their own `SnapKind.MID_TICK`, ranked after major ticks. The other priorities, the grouping, the whole-selection shift, the clamps and the haptic are unchanged.
+
+## A3. No guide line
+- **Removed:** the vertical guide for every drag (track area and inside clips), and `TimelineDragInfo.guideUs`.
+- **Kept:** the haptic tick, the ruler highlights of the dragged span's start and end, and the drag readouts.
+- **Test:** `TlpTwoUiTest` now asserts there is no guide while a snapped drag runs.
+
+## Tests (TLP.3)
+- **JVM:**
+  - `KeyCurvePopoverTest` (2): the type defaults, and downward vs upward placement.
+  - `DragSnapTest` +3:
+    - The zones in frames and their caps.
+    - A major tick captures only within 1 frame (frames 2+ away stay unsnapped) and a marker within 2.
+    - The 3dp floor holds zoomed far out.
+    - Ties and priority still hold.
+  - The full suite result is in TL3.md.
+- **Device:** not run yet (see TL3.md, Tests).
+
+## Phone test list (TLP.3)
+1. Select keys → More: a grid of curve thumbnails opens downward from the header (upward from the bottom bar with no sheet). Ease In / Out, Bounce and Elastic come first, then Pinned / Presets / My curves. Tap two in a row: each applies (one undo each) and the popover stays open; More again closes it.
+2. Drag a clip slowly past a whole-second tick at the default zoom: it lands on the frames beside the tick freely and only clicks onto the tick within one frame. Near the playhead or a marker it captures within two frames.
+3. While dragging anything there is no vertical guide line; the haptic tick, the ruler start / end ticks and the readouts remain.
