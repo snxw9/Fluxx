@@ -244,6 +244,8 @@ fun EditorScreen(
     var scrollToLayer by remember { mutableStateOf<Pair<Long, Int>?>(null) }
     var openPage by remember { mutableStateOf<Pair<GraphTarget, Int>?>(null) }
     LaunchedEffect(inspectorSheetVisible) { if (!inspectorSheetVisible) openPage = null }
+    // TL3 B2: opening the inspector always collapses every twirl-down (the direct paths do it in the same frame).
+    LaunchedEffect(inspectorSheetVisible) { if (inspectorSheetVisible && editor.expandedLayers.isNotEmpty()) editor.setExpanded(emptySet()) }
     var twirlSerial by remember { mutableIntStateOf(0) }
     /**
      * TL3 B1 / B2: the arrow on [id] (in selection mode on a selected layer: every selected layer). Expanding while the
@@ -845,8 +847,9 @@ fun EditorScreen(
             // 4. Layer Inspector Panel (overlay docked at bottom over timeline, preventing workspace resizing)
             AnimatedVisibility(
                 visible = isInspectorOpen,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                // TL3 B2: the sheet slides on the SAME motion spec as the twirl-downs, the D and the timeline viewport.
+                enter = slideInVertically(com.fluxx.android.ui.timeline.TL3Motion.spec(), initialOffsetY = { it }) + fadeIn(com.fluxx.android.ui.timeline.TL3Motion.spec()),
+                exit = slideOutVertically(com.fluxx.android.ui.timeline.TL3Motion.spec(), targetOffsetY = { it }) + fadeOut(com.fluxx.android.ui.timeline.TL3Motion.spec()),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()

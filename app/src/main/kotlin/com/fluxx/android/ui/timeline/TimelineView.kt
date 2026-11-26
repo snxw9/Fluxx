@@ -98,6 +98,8 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.semantics.semantics
@@ -361,8 +363,14 @@ fun TimelineView(
                 viewportTop = it.positionInRoot().y
             }
     ) {
-        BoxWithConstraints(modifier = (if (inspectorVisible) Modifier.fillMaxWidth().height(TimelineTracksBottom)
-            else Modifier.fillMaxSize()).clipToBounds()) {
+        // TL3 B2: the viewport is the full height, shown down to one row while the inspector is open; the visible height
+        // animates on the shared motion spec (read in the draw phase: no recomposition, no relayout per animation frame).
+        val sheetOpen = androidx.compose.animation.core.animateFloatAsState(if (inspectorVisible) 1f else 0f, TL3Motion.spec(), label = "timeline-viewport")
+        val oneRowPx = with(density) { TimelineTracksBottom.toPx() }
+        BoxWithConstraints(modifier = Modifier.fillMaxSize().drawWithContent {
+            val h = size.height + (oneRowPx - size.height) * sheetOpen.value
+            clipRect(bottom = h) { this@drawWithContent.drawContent() }
+        }.clipToBounds()) {
             // Allow even the last layer to align above the inspector.
             val bottomPadding = (maxHeight - TimelineTracksBottom).coerceAtLeast(0.dp)
             val totalViewportWidthPx = constraints.maxWidth.toFloat()
