@@ -10,7 +10,8 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). **Push
 - **TLP.2:** done (see the TLP.2 section).
 - **TLP.3:** done (A1 curve popover, A2 softer snapping, A3 no guide line; see the TLP.3 section at the end).
 - **TL3 (the twirl-down):** B1–B5 built; its record is `docs/checkpoints/TL3.md`. Device classes for TLP.3 / TL3 have passed on the A16 (see TL3.md, Tests).
-- **TL3.1:** phone-test fixes, B1–B8 additions, the waveform fix (C) and the playback diagnosis (D) are done; see the TL3.1 section of TL3.md. AUD1 (the playback audio path) is next.
+- **TL3.1:** phone-test fixes, B1–B8 additions, the waveform fix (C) and the playback diagnosis (D) are done; see the TL3.1 section of TL3.md.
+- **AUD1 (branch `aud1`, not merged):** streaming playback from a decoded-PCM cache, priming trim and a heard-time A/V clock (cold first sound 59.9 s -> 1.18 s; beats within +/-16 ms median); backward scrub stalls traced to the video seek path (reported, not changed). See `docs/checkpoints/AUD1.md`.
 - **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1, TLP.2, TLP.3 and TL3 (phone test lists at the end of each section).
 
 ## T0. Selection architecture (written before the code)
