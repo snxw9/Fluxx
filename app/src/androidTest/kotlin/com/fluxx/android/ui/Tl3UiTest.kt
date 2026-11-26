@@ -107,12 +107,12 @@ class Tl3UiTest {
         host(listOf(keyed(1), keyed(2)))
         node("timeline-clip-hit-2").performTouchInput { click(Offset(200.dp.toPx(), centerY)) }; settle()
         assertTrue("sheet open", exists("inspector-name-row"))
-        arrow(1)
+        arrow(2) // the inspected layer: the only one shown while the sheet is open
         assertFalse("the sheet closed", exists("inspector-name-row"))
-        assertEquals(setOf(1L), editor.expandedLayers); assertEquals("Expanded", state("d-arrow-1"))
+        assertEquals(setOf(2L), editor.expandedLayers); assertEquals("Expanded", state("d-arrow-2"))
         // Tapping a layer: every twirl-down collapses while the sheet opens.
-        node("timeline-clip-hit-1").performTouchInput { click(Offset(200.dp.toPx(), centerY)) }; settle()
-        assertTrue(editor.expandedLayers.isEmpty()); assertEquals("Collapsed", state("d-arrow-1"))
+        node("timeline-clip-hit-2").performTouchInput { click(Offset(200.dp.toPx(), centerY)) }; settle()
+        assertTrue(editor.expandedLayers.isEmpty()); assertEquals("Collapsed", state("d-arrow-2"))
         assertTrue(exists("inspector-name-row"))
     }
 
@@ -142,7 +142,8 @@ class Tl3UiTest {
 
     @Test fun bulkValueEditsChangeTheSamePropertyOnAllSelectedLayersOnly() {
         host(listOf(keyed(1), keyed(2)))
-        arrow(1); arrow(2)
+        // Both expanded without scrolling (the arrow scrolls its layer to the top; covered by the other tests).
+        compose.runOnIdle { editor.setExpanded(setOf(1L, 2L)) }; settle()
         val r1 = rowTag(1, AnimPropertyType.POSITION); val r2 = rowTag(2, AnimPropertyType.POSITION)
         holdKey(r1, f(48)); tapKey(r2, f(48)); tapKey(rowTag(1, AnimPropertyType.OPACITY), f(40))
         assertEquals(3, editor.keySelection!!.size)
@@ -150,7 +151,9 @@ class Tl3UiTest {
         // In key mode a hold release on a selected key opens its popover: 2 Position keys on 2 layers.
         holdKey(r1, f(48))
         compose.onNodeWithTag("twirl-value-count", useUnmergedTree = true).assertTextEquals("Changes 2 keyframes on 2 layers")
-        node("twirl-value-0").performTextReplacement("100"); node("twirl-value-0").performImeAction(); settle()
+        // The tag is on the field row; type into its editable node (a non-modal popover takes focus while it types).
+        val input = compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("twirl-value-0")), useUnmergedTree = true)
+        input.performClick(); settle(); input.performTextReplacement("100"); input.performImeAction(); settle()
         val x1 = layer(1).animTransform.position.keyframes.first { it.timeUs == f(48) }.x
         val x2 = layer(2).animTransform.position.keyframes.first { it.timeUs == f(48) }.x
         assertEquals(x1, x2); assertNotEquals(.2f, x1)

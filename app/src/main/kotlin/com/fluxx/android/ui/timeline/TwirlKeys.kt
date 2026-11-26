@@ -202,7 +202,10 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
             Text(note, color = TextSecondary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(4.dp).testTag("twirl-value-count"))
             if (key != null) Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 for ((ch, axis) in axes.withIndex()) key("${open.time}-$ch-${key.value(ch)}") {
-                    InspectorValueField(axis.text(axis.toDisplay(key.value(ch))), axis.name, axis.unit, onCommit = { text ->
+                    // The field is re-keyed when the value changes (an edit, an undo); a field leaving commits its text, so an
+                    // unchanged text is ignored: otherwise an old field and its replacement would keep writing each other back.
+                    val shown = axis.text(axis.toDisplay(key.value(ch)))
+                    InspectorValueField(shown, axis.name, axis.unit, onCommit = { text -> if (text.trim() == shown.trim()) return@InspectorValueField
                         text.trim().replace(',', '.').toFloatOrNull()?.let { d -> host.onValue(scope, ch, GraphValues.clampValue(open.target, axis, axis.typed(d))) }
                     }, onCancel = {}, modifier = Modifier.padding(2.dp).testTag("twirl-value-$ch"), autoFocus = false)
                 }
