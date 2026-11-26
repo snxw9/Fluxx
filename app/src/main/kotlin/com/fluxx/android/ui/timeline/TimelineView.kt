@@ -201,6 +201,12 @@ fun TimelineView(
     scrollToLayer: Pair<Long, Int>? = null,
     /** TL3 B3: twirl-row key interactions (null: rows display only). */
     twirlHost: TwirlKeyHost? = null,
+    /**
+     * AUD2 B1: playback is running, and the HEARD composition time at a System.nanoTime (null when not playing). While
+     * playing, the view follows the sound instead of the start of the last presented video frame.
+     */
+    playing: Boolean = false,
+    playbackClock: ((Long) -> Long?)? = null,
     modifier: Modifier = Modifier
 ) {
     val comp = project.composition
@@ -435,8 +441,19 @@ fun TimelineView(
 
             // Synchronize playheadUs -> horizontalScrollState when not user-scrolling
             // TL1: keyed on the scroll ending too, so a released scrub settles exactly on its snapped frame's x.
-            LaunchedEffect(playheadUs, pxPerUs, durationUs, pinching, horizontalScrollState.maxValue, horizontalScrollState.isScrollInProgress) {
+            // AUD2 B1: while playing, the view goes to the time HEARD when this frame reaches the screen (the playback clock
+            // extrapolated), not to the start of the last presented video frame one UI frame late (33-85 ms behind the sound).
+            // A raw delta, not scrollTo: it is not a scroll "in progress", so the scrub path below never sees it as a drag.
+            // When playback stops ([playing] changes) the view settles back on the playhead's frame x.
+            val latestClock by rememberUpdatedState(playbackClock)
+            LaunchedEffect(playheadUs, pxPerUs, durationUs, pinching, horizontalScrollState.maxValue, horizontalScrollState.isScrollInProgress, playing) {
                 if (!editing && (pinching || !horizontalScrollState.isScrollInProgress)) {
+                    val heard = if (playing && !pinching && !returning) latestClock?.invoke(System.nanoTime() + TimelineFollow.LEAD_NS) else null
+                    if (heard != null) {
+                        val delta = TimelineFollow.scrollFor(heard, durationUs, pxPerUs) - horizontalScrollState.value
+                        if (delta != 0) horizontalScrollState.dispatchRawDelta(delta.toFloat())
+                        return@LaunchedEffect
+                    }
                     val targetScroll = scale.timeX(playheadUs.coerceIn(0L, durationUs)).toInt()
                     if (horizontalScrollState.value != targetScroll) {
                         horizontalScrollState.scrollTo(targetScroll)

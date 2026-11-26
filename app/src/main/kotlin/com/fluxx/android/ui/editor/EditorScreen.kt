@@ -655,6 +655,9 @@ fun EditorScreen(
                     project = project,
                     mediaRepository = mediaRepository,
                     playheadUs = playheadUs,
+                    // AUD2 B1: the timeline follows the heard playback clock while playing.
+                    playing = previewState.playing,
+                    playbackClock = remember(previewController) { previewController?.let { pc -> { ns: Long -> pc.playbackPositionAt(ns) } } },
                     selectedLayerId = displayedState.selectedLayerId,
                     inspectorVisible = isInspectorOpen,
                     activeProperty = focusedProperty.takeIf { isInspectorOpen },

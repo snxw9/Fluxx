@@ -37,6 +37,8 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
     private data class SurfaceSize(val width: Int, val height: Int)
     @Volatile private var viewSize=SurfaceSize(width,height)
     @Volatile private var closed=false
+    /** AUD2 B1: (read ns, heard us, duration us) of the running playback's last clock read; null when not playing. */
+    @Volatile private var clockAnchor: LongArray?=null
     // Accessed only on dispatcher, including sampling and destruction.
     private var samplingRenderer: CompositionRenderer? = null
     private var playback: StreamingPlayback? = null
@@ -96,9 +98,13 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
                         if(pb.ready && preparingShown) { status(epoch,null); preparingShown=false }
                     } }
                     playback?.error?.let { throw IllegalStateException("Audio preview failed",it) }
+                    val readNs=System.nanoTime()
                     val time=if(playing) requireNotNull(playback).positionUs else requestedUs
                     val duration = snapshot.composition.resolvedDurationUs
+                    // AUD2 B1: publish the heard clock for the timeline (only once the track really runs).
+                    clockAnchor=if(playing && playback?.started==true && time<duration) longArrayOf(readNs,time,duration) else null
                     if(time>=duration && playing) {
+                        clockAnchor=null
                         requestedUs=duration;playing=false;playback?.close();playback=null
                         renderer.renderPreview(snapshot,duration,quality,cancel)
                         position(epoch,duration);status(epoch,null)
@@ -120,6 +126,7 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
                     // Render work is synchronous and cancellation-aware. A failed request is discarded.
                     if(closed) break
                 } catch(e:Exception) {
+                    clockAnchor=null
                     playing=false;playback?.close();playback=null
                     status(epoch,e.message ?: "Preview failed")
                 }
@@ -130,7 +137,16 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
             playback?.close();renderer?.close()
         }
     }
+    /**
+     * AUD2 B1: the composition time HEARD at [nanoTime] (System.nanoTime), extrapolated from the worker's last clock read;
+     * null unless playback is running. Read by the timeline so it follows the sound, not the start of the shown frame.
+     */
+    fun playbackPositionAt(nanoTime: Long): Long? {
+        val a = clockAnchor ?: return null
+        return (a[1] + (nanoTime - a[0]) / 1000).coerceIn(a[1], a[2])
+    }
     fun update(project: ProjectDocument,timeUs: Long,play: Boolean=false) {
+        if(!play) clockAnchor=null
         this.project=project;requestedUs=timeUs.coerceIn(0L, project.composition.resolvedDurationUs);playing=play && project.composition.resolvedDurationUs > 0
         mutableState.update { it.copy(playing=playing) }
         requestGeneration.incrementAndGet()

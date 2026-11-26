@@ -154,6 +154,17 @@ internal object TwirlStyle {
 internal fun interface VisibleRange { fun px(): ClosedFloatingPointRange<Float> }
 
 /**
+ * AUD2 B1: the timeline while playback runs (pure, JVM tested). The view follows the HEARD time [LEAD_NS] ahead (the
+ * frame being laid out reaches the screen about one display frame later); content x of a time is `time × pxPerUs`, and a
+ * time shows on screen at `lineX + time × pxPerUs − scroll` (the waveform row draws through the same mapping).
+ */
+object TimelineFollow {
+    const val LEAD_NS = 16_000_000L
+    fun scrollFor(heardUs: Long, durationUs: Long, pxPerUs: Double): Int = Math.round(heardUs.coerceIn(0L, durationUs) * pxPerUs).toInt()
+    fun screenX(timeUs: Long, scrollPx: Int, pxPerUs: Double, lineX: Float): Float = (lineX + timeUs * pxPerUs - scrollPx).toFloat()
+}
+
+/**
  * AUD2: TEST-ONLY probes of the audio row. [draw]: (ns, the visible range's centre in content px as read in this draw,
  * pxPerUs). [placed]: (ns, the row's left edge in root px after layout). Null in the app (no modifier, no call).
  */

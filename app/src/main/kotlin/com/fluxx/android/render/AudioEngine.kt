@@ -379,6 +379,8 @@ internal class StreamingPlayback(context: Context, project: ProjectDocument, sta
         return us
     }
     val underruns get() = track.underrunCount
+    /** AUD2 B1: the track runs (the gate opened): [positionUs] now moves with what is heard. Preview worker only. */
+    val started get() = playing
 
     init { PreviewFrames.testPlayback?.invoke("playback-create start=$startUs") }
 
