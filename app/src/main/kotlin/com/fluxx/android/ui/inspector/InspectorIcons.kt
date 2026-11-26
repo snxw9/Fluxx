@@ -298,6 +298,9 @@ internal object InspectorIcons {
         put("ODD_EVEN", p().rect(4f, 4f, 16f, 4.5f, 2f).line(6f, 12f, 18f, 12f).rect(4f, 15.5f, 16f, 4.5f, 2f).build())
         put("STAGGER", p().line(4f, 6f, 10f, 6f).line(9f, 12f, 15f, 12f).line(14f, 18f, 20f, 18f).build())
         put("SEQUENCE", p().rect(2.5f, 9f, 6f, 6f, 2f).rect(9f, 9f, 6f, 6f, 2f).rect(15.5f, 9f, 6f, 6f, 2f).build())
+        // TLP.2 drag readouts: |<- (the dragged item's start) and the shift arrows (the delta since the drag began).
+        put("TO_START", p().line(5f, 6f, 5f, 18f).line(19f, 12f, 9f, 12f).line(13f, 8f, 9f, 12f, 13f, 16f).build())
+        put("SHIFT", p().line(5f, 8f, 19f, 8f).line(15f, 4f, 19f, 8f, 15f, 12f).line(19f, 16f, 5f, 16f).line(9f, 12f, 5f, 16f, 9f, 20f).build())
         // TEXT F3.2: axis glyphs at the start of each two-axis slider row (Position, Anchor point, Scale X/Y).
         put("AXIS_X", p().line(7f, 7f, 17f, 17f).line(17f, 7f, 7f, 17f).build())
         put("AXIS_Y", p().line(7f, 6f, 12f, 12f).line(17f, 6f, 12f, 12f).line(12f, 12f, 12f, 18f).build())
