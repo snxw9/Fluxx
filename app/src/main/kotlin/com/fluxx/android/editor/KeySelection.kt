@@ -131,3 +131,16 @@ object KeyEdits {
         return Moved(EditorAction.Batch(sets + curves), times)
     }
 }
+
+/** TLP.1 what a tap on an editable timeline key does. */
+enum class KeyTapEffect { NONE, SELECT, TOGGLE }
+
+/**
+ * TLP.1 key tap rules (timeline). Outside key selection mode a single tap does NOTHING (no seek, no selection; the tap is
+ * still consumed so it never reaches the clip) and a double tap selects the key and enters key selection mode, without a
+ * seek. In key selection mode a tap or a double tap toggles the key (one toggle per gesture). No rule ever seeks.
+ */
+object KeyTapRules {
+    fun tap(keyMode: Boolean) = if (keyMode) KeyTapEffect.TOGGLE else KeyTapEffect.NONE
+    fun doubleTap(keyMode: Boolean) = if (keyMode) KeyTapEffect.TOGGLE else KeyTapEffect.SELECT
+}

@@ -106,3 +106,18 @@ class TlpKeyTest {
         v.undo(); assertEquals(6, v.layer().animTransform.rotation.keyframes.size)
     }
 }
+
+/** TLP.1 part 2: key tap rules on the timeline (no rule seeks). */
+class TlpKeyTapTest {
+    @Test fun outsideKeyModeATapDoesNothingAndADoubleTapSelects() {
+        assertEquals(KeyTapEffect.NONE, KeyTapRules.tap(keyMode = false))
+        assertEquals(KeyTapEffect.SELECT, KeyTapRules.doubleTap(keyMode = false))
+    }
+    @Test fun inKeyModeTapsAndDoubleTapsToggle() {
+        assertEquals(KeyTapEffect.TOGGLE, KeyTapRules.tap(keyMode = true))
+        assertEquals(KeyTapEffect.TOGGLE, KeyTapRules.doubleTap(keyMode = true))
+        // A toggle of the last selected key leaves nothing: the host exits key selection mode.
+        val sel = KeyframeSelection(1, GraphTarget(AnimPropertyType.ROTATION), listOf(10L))
+        assertTrue(sel.toggle(10L).times.isEmpty()); assertEquals(listOf(10L, 20L), sel.toggle(20L).times)
+    }
+}

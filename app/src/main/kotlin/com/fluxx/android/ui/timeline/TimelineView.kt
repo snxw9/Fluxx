@@ -1004,14 +1004,19 @@ private fun TimelineClipRow(
                                 .align(Alignment.CenterStart)
                                 .offset(x = hitLeft)
                                 .size(width = hitWidth, height = TRACK_ROW_HEIGHT_DP.dp)
-                                .then(if (editable) Modifier.pointerInput(kfTimeUs, startUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
-                                    // TLP T5: a double tap selects the key; in key selection mode taps toggle keys (no seek).
+                                .then(if (editable) Modifier.testTag("timeline-key-${layer.id}-${kfTimeUs - anchorOffsetUs}").pointerInput(kfTimeUs, startUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
+                                    // TLP.1 (KeyTapRules): outside key selection mode a single tap does nothing (consumed
+                                    // here, so it never falls through to the clip) and a double tap selects the key; in the
+                                    // mode a tap or double tap toggles it. Nothing seeks.
                                     val local = kfTimeUs - anchorOffsetUs
+                                    fun apply(effect: com.fluxx.android.editor.KeyTapEffect) = when (effect) {
+                                        com.fluxx.android.editor.KeyTapEffect.NONE -> Unit
+                                        com.fluxx.android.editor.KeyTapEffect.SELECT -> keyDoubleTap(local)
+                                        com.fluxx.android.editor.KeyTapEffect.TOGGLE -> keyToggle(local)
+                                    }
                                     detectTapGestures(
-                                        onTap = {
-                                            if (keyMode) keyToggle(local) else onSeek(startUs + kfTimeUs, false)
-                                        },
-                                        onDoubleTap = { if (keyMode) keyToggle(local) else keyDoubleTap(local) }
+                                        onTap = { apply(com.fluxx.android.editor.KeyTapRules.tap(keyMode)) },
+                                        onDoubleTap = { apply(com.fluxx.android.editor.KeyTapRules.doubleTap(keyMode)) }
                                     )
                                 }
                                 .pointerInput(kfTimeUs, startUs, durationUs, pxPerUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
