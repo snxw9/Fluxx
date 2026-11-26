@@ -279,20 +279,24 @@ fun EditorScreen(
             previewController?.update(editor.state.project, editor.state.playheadUs, false)
         }
     }
-    /** TLP T5: the 6th icon's menu on an open property page. */
-    val keyMenuContent: @Composable ColumnScope.(() -> Unit) -> Unit = { close ->
-        val target = keyTarget
-        val layer = editor.state.selectedLayer
-        val sel = editor.keySelection
-        DropdownMenuItem(text = { Text("Copy keys") }, enabled = target != null && layer != null && sel != null && KeyEdits.copyable(layer, sel.target),
-            onClick = { close(); if (layer != null && sel != null) KeyEdits.copy(layer, sel)?.let { clip -> editor.keyClipboard = clip
-                android.widget.Toast.makeText(context, if (clip.keys.size == 1) "Keyframe copied" else "${clip.keys.size} keyframes copied", android.widget.Toast.LENGTH_SHORT).show() } },
-            modifier = Modifier.testTag("key-menu-copy"))
-        DropdownMenuItem(text = { Text("Paste keys") }, enabled = target != null && layer != null && KeyEdits.canPaste(layer, target, editor.keyClipboard),
-            onClick = { close(); val clip = editor.keyClipboard
-                if (target != null && layer != null && clip != null) applyKeys(KeyEdits.paste(editor.state.project, layer, target, clip, editor.state.playheadUs)) },
-            modifier = Modifier.testTag("key-menu-paste"))
-    }
+    /**
+     * TLP.1: Copy keys / Paste keys, offered by the property page's ⋮ (the shared rail) for that rail's property. Copy
+     * takes the selected keys, or every key of the property when none are selected; Paste needs a same-kind clipboard
+     * and works with or without a key selection. T5 semantics (one Batch, one undo).
+     */
+    val keyClipboardHost = com.fluxx.android.ui.inspector.KeyClipboardHost(
+        canCopy = { target -> editor.state.selectedLayer?.let { KeyEdits.copyScope(it, target, editor.keySelection) } != null },
+        canPaste = { target -> editor.state.selectedLayer?.let { KeyEdits.canPaste(it, target, editor.keyClipboard) } == true },
+        copy = { target ->
+            val layer = editor.state.selectedLayer
+            val scope = layer?.let { KeyEdits.copyScope(it, target, editor.keySelection) }
+            if (layer != null && scope != null) KeyEdits.copy(layer, scope)?.let { clip -> editor.keyClipboard = clip
+                android.widget.Toast.makeText(context, if (clip.keys.size == 1) "Keyframe copied" else "${clip.keys.size} keyframes copied", android.widget.Toast.LENGTH_SHORT).show() }
+        },
+        paste = { target ->
+            val layer = editor.state.selectedLayer; val clip = editor.keyClipboard
+            if (layer != null && clip != null) applyKeys(KeyEdits.paste(editor.state.project, layer, target, clip, editor.state.playheadUs))
+        })
     LaunchedEffect(selectedLayer?.id, inspectorSheetVisible, previewState.playing) {
         if (!inspectorSheetVisible || selectedLayer?.id != eyedropperLayerId || previewState.playing) eyedropperLayerId=null
     }
@@ -579,8 +583,6 @@ fun EditorScreen(
                         previewController?.update(editor.state.project, editor.state.playheadUs, false) } },
                     onCopySelection = { editor.layerSelection?.let { sel -> if (editor.copyLayers(sel.ids))
                         android.widget.Toast.makeText(context, if (sel.size == 1) "Layer copied" else "${sel.size} layers copied", android.widget.Toast.LENGTH_SHORT).show() } },
-                    // TLP T5: with a property page open, the 6th icon offers Copy keys / Paste keys (same property kind only).
-                    keyMenu = if (keyTarget != null) keyMenuContent else null,
                     viewSettings = viewSettings,
                     onViewSettingsChange = { viewSettings = it },
                     previewResolution = previewResolution,
@@ -769,7 +771,7 @@ fun EditorScreen(
                     .height(inspectorHeight)
             ) {
                 selectedLayer?.let { layer ->
-                    ElementInspectorSheet(
+                    androidx.compose.runtime.CompositionLocalProvider(com.fluxx.android.ui.inspector.LocalKeyClipboardHost provides keyClipboardHost) { ElementInspectorSheet(
                         onExplodePrepare={options,reply->
                             focusManager.clearFocus();previewController?.pause()
                             textEditor.finish {
@@ -968,7 +970,7 @@ fun EditorScreen(
                             }
                         },
                         modifier = Modifier.fillMaxSize()
-                    )
+                    ) }
                 }
             }
 

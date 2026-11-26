@@ -121,3 +121,38 @@ class TlpKeyTapTest {
         assertTrue(sel.toggle(10L).times.isEmpty()); assertEquals(listOf(10L, 20L), sel.toggle(20L).times)
     }
 }
+
+/** TLP.1 part 4: the ⋮ Copy keys scope (selected keys, else every key of the property) and Paste with or without a selection. */
+class TlpKeyMenuTest {
+    private val rate = FrameRate(30, 1)
+    private fun f(n: Long) = rate.frameTimeUs(n)
+    private val rot = GraphTarget(AnimPropertyType.ROTATION)
+    private val opacity = GraphTarget(AnimPropertyType.OPACITY)
+    private val layer = CompositionLayer(1, LayerType.SOLID, timing = ClipTiming(0, 0, f(120)), animTransform = AnimatableTransform(
+        rotation = AnimatableProperty1D(true, 0f, FrozenList.of((0..2).map { Keyframe1D(f(10L * it), 10f * it) }))))
+
+    @Test fun copyTakesTheSelectionElseEveryKeyOfTheProperty() {
+        assertEquals(listOf(0L, f(10), f(20)), KeyEdits.copyScope(layer, rot, null)!!.times)
+        val sel = KeyframeSelection(1, rot, listOf(f(20)))
+        assertEquals(listOf(f(20)), KeyEdits.copyScope(layer, rot, sel)!!.times)
+        // A selection on another layer or property does not narrow this property's copy.
+        assertEquals(3, KeyEdits.copyScope(layer, rot, sel.copy(layerId = 9))!!.size)
+        assertEquals(3, KeyEdits.copyScope(layer, rot, KeyframeSelection(1, opacity, listOf(0L)))!!.size)
+        // No keys / not copyable: nothing to copy.
+        assertNull(KeyEdits.copyScope(layer, opacity, null))
+        assertNull(KeyEdits.copyScope(layer, GraphTarget(AnimPropertyType.FILL_COLOUR), null))
+        assertEquals(listOf(0L, f(10), f(20)), KeyEdits.copy(layer, KeyEdits.copyScope(layer, rot, null)!!)!!.keys.map { it.relativeUs })
+    }
+
+    @Test fun pasteNeedsOnlyASameKindClipboardAndIsOneUndo() {
+        val v = EditorViewModel()
+        v.dispatch(EditorAction.Load(ProjectDocument(Composition(durationUs = 20_000_000, frameRate = rate, layers = FrozenList.of(listOf(layer))))))
+        val clip = KeyEdits.copy(layer, KeyEdits.copyScope(layer, rot, null)!!)!!
+        assertTrue(KeyEdits.canPaste(layer, rot, clip)); assertFalse(KeyEdits.canPaste(layer, opacity, clip)); assertFalse(KeyEdits.canPaste(layer, rot, null))
+        v.dispatch(EditorAction.Seek(f(60)))
+        assertNull(v.keySelection) // no selection needed
+        v.dispatch(KeyEdits.paste(v.state.project, v.state.project.composition.layers.single(), rot, clip, v.state.playheadUs)!!.action)
+        assertEquals(listOf(0L, f(10), f(20), f(60), f(70), f(80)), v.state.project.composition.layers.single().animTransform.rotation.keyframes.map { it.timeUs })
+        v.undo(); assertEquals(3, v.state.project.composition.layers.single().animTransform.rotation.keyframes.size)
+    }
+}

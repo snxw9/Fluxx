@@ -101,6 +101,16 @@ object KeyEdits {
         })
     }
 
+    /**
+     * TLP.1 the ⋮ Copy keys scope: the selected keys when the key selection is on this layer's [target], otherwise ALL
+     * keys of that property. Null when nothing can be copied (colour / text source, or no keys).
+     */
+    fun copyScope(layer: CompositionLayer, target: GraphTarget, sel: KeyframeSelection?): KeyframeSelection? {
+        if (!copyable(layer, target)) return null
+        val scoped = sel?.takeIf { it.layerId == layer.id && it.target == target && it.times.isNotEmpty() }
+        return scoped ?: selectAll(layer, target).takeIf { it.times.isNotEmpty() }
+    }
+
     fun canPaste(layer: CompositionLayer, target: GraphTarget, clip: KeyClipboard?) =
         clip != null && clip.keys.isNotEmpty() && copyable(layer, target) && clip.kind == kind(target)
 

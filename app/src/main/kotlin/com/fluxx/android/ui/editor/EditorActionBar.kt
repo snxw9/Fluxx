@@ -74,13 +74,12 @@ fun EditorActionBar(
     onPlayPauseToggle: () -> Unit,
     onNextBoundary: () -> Unit,
     onPasteLayer: () -> Unit = {},
-    /** TLP T4: the 6th icon is context-aware (selection mode, multi-layer copy / duplicate; T5 keys via [keyMenu]). */
+    /** TLP T4: the 6th icon is context-aware (selection mode, multi-layer copy / duplicate; TLP.1: Copy / Paste keys are in the property page ⋮). */
     selectionMode: Boolean = false,
     onSelectAll: () -> Unit = {},
     onInvertSelection: () -> Unit = {},
     onDuplicateSelection: (Int) -> Unit = {},
     onCopySelection: () -> Unit = {},
-    keyMenu: (@Composable ColumnScope.(close: () -> Unit) -> Unit)? = null,
     viewSettings: ViewSettings = ViewSettings(),
     onViewSettingsChange: (ViewSettings) -> Unit = {},
     previewResolution: PreviewResolution = PreviewResolution.FULL,
@@ -156,7 +155,7 @@ fun EditorActionBar(
                 textCanFit = textCanFit,
                 onPasteLayer = onPasteLayer,
                 selectionMode = selectionMode, onSelectAll = onSelectAll, onInvertSelection = onInvertSelection,
-                onDuplicateSelection = onDuplicateSelection, onCopySelection = onCopySelection, keyMenu = keyMenu
+                onDuplicateSelection = onDuplicateSelection, onCopySelection = onCopySelection
             )
 
             // 7. View / Preview. Resolution stays inside this menu to retain seven targets.
@@ -170,7 +169,6 @@ fun EditorActionBar(
  * - No selection: Select all, Paste.
  * - One layer selected (outside selection mode): its transforms / media info and deferred placeholders, then Paste, Select all.
  * - Layers selected (selection mode): Duplicate, Duplicate ×N (typed count), Copy, Paste, Select all, Invert selection.
- * - Keyframes selected (T5): [keyMenu] replaces the layer items.
  */
 @Composable
 private fun LayerMenuButton(
@@ -189,7 +187,6 @@ private fun LayerMenuButton(
     onInvertSelection: () -> Unit = {},
     onDuplicateSelection: (Int) -> Unit = {},
     onCopySelection: () -> Unit = {},
-    keyMenu: (@Composable ColumnScope.(close: () -> Unit) -> Unit)? = null
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var duplicateCount by remember { mutableStateOf(false) }
@@ -207,7 +204,6 @@ private fun LayerMenuButton(
             onDismissRequest = { menuExpanded = false; duplicateCount = false }
         ) {
             val close = { menuExpanded = false; duplicateCount = false }
-            if (keyMenu != null) { keyMenu(close); return@DropdownMenu }
             if (selectionMode) {
                 DropdownMenuItem(text = { Text("Duplicate") }, onClick = { close(); onDuplicateSelection(1) },
                     modifier = Modifier.testTag("layer-menu-duplicate"))

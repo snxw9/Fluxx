@@ -682,6 +682,10 @@ internal fun InspectorUtilityRail(resetLabel: String, onReset: () -> Unit,
                     DropdownMenuItem(text = { Text(resetLabel) }, onClick = { menu = false; onReset() })
                     if (onResetAll != null) DropdownMenuItem(text = { Text("Reset all transforms") }, onClick = { menu = false; onResetAll() })
                     extraItems.forEach { item -> DropdownMenuItem(text = { Text(item.label) }, enabled = item.enabled, onClick = { menu = false; item.action() }) }
+                    // TLP.1: Copy keys / Paste keys for this rail's property (the editor's key clipboard).
+                    keyClipboardItems(LocalKeyClipboardHost.current, graphTarget).forEach { item ->
+                        DropdownMenuItem(text = { Text(item.label) }, enabled = item.enabled, onClick = { menu = false; item.action() },
+                            modifier = Modifier.testTag(if (item.label == "Copy keys") "rail-menu-copy-keys" else "rail-menu-paste-keys")) }
                 }
                 AnchoredPopover(confirm != null, onConfirmDismiss, "inspector-rail-confirm") {
                     Text(confirm?.first.orEmpty(), Modifier.widthIn(max = 240.dp).padding(8.dp), color = TextPrimary, style = MaterialTheme.typography.labelMedium)
