@@ -4,16 +4,16 @@
 
 ## What the phase built
 
-| Stage | What | Evidence |
-|---|---|---|
-| E1–E3 | Native shaping, CPU SDF, Vulkan glyph rendering, the text layer, schema v9 and the first Edit Text | user-confirmed on the A16 |
-| F1 | Tracking, leading, baseline shift, stroke and paint order (v10) | user-accepted |
-| F2 | The selector / animator engine (v11) and per-glyph prepared rendering | JVM / host; later device suites in FIX 9 and PERF 10/11 |
-| T1–T4 | Rich styled text (v12), font import and variations, paragraph / box text, Wiggly selector, all 25 animator properties | user-tested on the phone |
-| FIX, EXPLODE | Case / script / selection fixes; Explode Text | committed; T1–T4 user-tested |
-| Edit Text UI, TEXT UI 5–8 | The fixed, non-scrolling Character / Paragraph faces, popovers, colour picker family, marker popover | A16 user reviews through TEXT UI 6, then F3.x |
-| TEXT FIX 9, PERF 10/11 | Import regression, overlap-safe SDF and sharp tiers; measured frame-time fixes, one GPU submit per frame for text, resume / rotation fixes | device-assisted A16 passes |
-| F3 … F3.4 | The Animate tab, its rework, AE parity fixes, popover / navigation / swipe polish, the Tracking cap | JVM + A16 instrumented; phone acceptance done for F3.1–F3.3 |
+| Stage                     | What                                                                                                                                       | Evidence                                                    |
+|---------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------|
+| E1–E3                     | Native shaping, CPU SDF, Vulkan glyph rendering, the text layer, schema v9 and the first Edit Text                                         | user-confirmed on the A16                                   |
+| F1                        | Tracking, leading, baseline shift, stroke and paint order (v10)                                                                            | user-accepted                                               |
+| F2                        | The selector / animator engine (v11) and per-glyph prepared rendering                                                                      | JVM / host; later device suites in FIX 9 and PERF 10/11     |
+| T1–T4                     | Rich styled text (v12), font import and variations, paragraph / box text, Wiggly selector, all 25 animator properties                      | user-tested on the phone                                    |
+| FIX, EXPLODE              | Case / script / selection fixes; Explode Text                                                                                              | committed; T1–T4 user-tested                                |
+| Edit Text UI, TEXT UI 5–8 | The fixed, non-scrolling Character / Paragraph faces, popovers, colour picker family, marker popover                                       | A16 user reviews through TEXT UI 6, then F3.x               |
+| TEXT FIX 9, PERF 10/11    | Import regression, overlap-safe SDF and sharp tiers; measured frame-time fixes, one GPU submit per frame for text, resume / rotation fixes | device-assisted A16 passes                                  |
+| F3 … F3.4                 | The Animate tab, its rework, AE parity fixes, popover / navigation / swipe polish, the Tracking cap                                        | JVM + A16 instrumented; phone acceptance done for F3.1–F3.3 |
 
 ## Carried forward (open, not text-phase blockers)
 
@@ -63,17 +63,17 @@ E1 proves native text rendering and resource ownership. It adds no persisted tex
 
 **Confirmed in the current source:**
 
-| Finding | Consequence |
-| --- | --- |
-| `CompositionRenderer` flushes after four staged layers. Native code separately limits pending entries and resident hardware-buffer imports to four. | Glyphs must not become individual layer entries or hardware buffers. |
-| `flushBatch()` currently issues one six-vertex draw per imported layer. | Add a dedicated text draw type within the existing ordered batch. |
-| `submitWork()` waits for `mWorkFence` before returning. | E1 can safely use one fence-protected staging/mesh slot; there is currently no asynchronous multi-frame compositing ring. |
-| Preview, export and thumbnails create independent renderer sessions. | GPU atlases remain per renderer/device. |
-| `samplingRenderer` aliases the preview renderer. | Eyedropper sampling does not require another atlas or ownership domain. |
-| `LayerGeometry` always applies aspect-fit sizing. | Text needs an explicit natural-pixel geometry path. |
-| `LayerType.TEXT` is ordinal 3; the schema stores `type` as an integer. No text payload fields exist. | E2 adds fields without changing existing type ordinals. |
-| Text currently reaches an asset-required raster branch; export validation explicitly rejects it. | Existing Text labels/icons are not evidence of rendering support. |
-| `ClipGold = SurfaceElevated`, `ClipGoldText = TextPrimary`. | The existing text clip tokens already satisfy the monochrome design. |
+| Finding                                                                                                                                             | Consequence                                                                                                               |
+|-----------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------|
+| `CompositionRenderer` flushes after four staged layers. Native code separately limits pending entries and resident hardware-buffer imports to four. | Glyphs must not become individual layer entries or hardware buffers.                                                      |
+| `flushBatch()` currently issues one six-vertex draw per imported layer.                                                                             | Add a dedicated text draw type within the existing ordered batch.                                                         |
+| `submitWork()` waits for `mWorkFence` before returning.                                                                                             | E1 can safely use one fence-protected staging/mesh slot; there is currently no asynchronous multi-frame compositing ring. |
+| Preview, export and thumbnails create independent renderer sessions.                                                                                | GPU atlases remain per renderer/device.                                                                                   |
+| `samplingRenderer` aliases the preview renderer.                                                                                                    | Eyedropper sampling does not require another atlas or ownership domain.                                                   |
+| `LayerGeometry` always applies aspect-fit sizing.                                                                                                   | Text needs an explicit natural-pixel geometry path.                                                                       |
+| `LayerType.TEXT` is ordinal 3; the schema stores `type` as an integer. No text payload fields exist.                                                | E2 adds fields without changing existing type ordinals.                                                                   |
+| Text currently reaches an asset-required raster branch; export validation explicitly rejects it.                                                    | Existing Text labels/icons are not evidence of rendering support.                                                         |
+| `ClipGold = SurfaceElevated`, `ClipGoldText = TextPrimary`.                                                                                         | The existing text clip tokens already satisfy the monochrome design.                                                      |
 
 **Selected decisions:** single-channel SDF; per-renderer GPU resources; native font ownership; shared native shaping/measurement; debug-only injection through the real composition path; NDK r28 upgrade, as selected.
 
@@ -83,13 +83,13 @@ E1 proves native text rendering and resource ownership. It adds no persisted tex
 
 Each gate requires the user's explicit verification before implementation of the next gate begins. Implementation completion, source inspection, or an unrun test is not gate acceptance. Builds and phone testing remain user-run unless explicitly requested.
 
-| Gate | Scope | Evidence required before proceeding |
-| --- | --- | --- |
-| **E1a** | NDK r28c upgrade and 16 KB compatibility; no text code or new native dependencies | Packaged-library alignment report, APK alignment, 4 KB/16 KB runtime checks, and existing Video/Image/Solid/audio regression results |
-| **E1b** | Vendored FreeType/HarfBuzz and static fonts; CPU-only JNI shaping | Checksummed inputs and glyph IDs, clusters, offsets and advances matching `hb-shape` from the same HarfBuzz release/font binaries |
-| **E1c** | CPU-only 48ppem SDF generation and PNG/contact-sheet dumps | Visual inspection of overlapping contours, 8/12/14/16px reconstructions, actual atlas packing capacity, and approved 1024/2048 allocation policy |
-| **E1d** | Atlas upload and text pipeline render one string through the real composition path | Correct visible output with validation enabled; atlas repack performs zero rerasterization of retained glyphs |
-| **E1e** | Scale/quality matrix, mixed batches, lifecycle and teardown stress | Visual matrix plus passing native-heap and live GPU-resource criteria below |
+| Gate    | Scope                                                                              | Evidence required before proceeding                                                                                                              |
+|---------|------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| **E1a** | NDK r28c upgrade and 16 KB compatibility; no text code or new native dependencies  | Packaged-library alignment report, APK alignment, 4 KB/16 KB runtime checks, and existing Video/Image/Solid/audio regression results             |
+| **E1b** | Vendored FreeType/HarfBuzz and static fonts; CPU-only JNI shaping                  | Checksummed inputs and glyph IDs, clusters, offsets and advances matching `hb-shape` from the same HarfBuzz release/font binaries                |
+| **E1c** | CPU-only 48ppem SDF generation and PNG/contact-sheet dumps                         | Visual inspection of overlapping contours, 8/12/14/16px reconstructions, actual atlas packing capacity, and approved 1024/2048 allocation policy |
+| **E1d** | Atlas upload and text pipeline render one string through the real composition path | Correct visible output with validation enabled; atlas repack performs zero rerasterization of retained glyphs                                    |
+| **E1e** | Scale/quality matrix, mixed batches, lifecycle and teardown stress                 | Visual matrix plus passing native-heap and live GPU-resource criteria below                                                                      |
 
 #### E1a — Toolchain and compatibility plan
 
@@ -122,11 +122,11 @@ Retain an explicit `-Wl,-z,max-page-size=16384` on Fluxx-owned shared targets. V
 
 Bundle unmodified **static Regular TTFs**, not variable font builds. E1b verifies the actual binaries have no variation axes; do not rely on filenames alone:
 
-| ID | Face pin | License |
-| --- | --- | --- |
-| `fluxx.sans` | Inter 4.1 | OFL 1.1 |
-| `fluxx.serif` | Noto Serif 2.014 | OFL 1.1 |
-| `fluxx.mono` | JetBrains Mono 2.304 | OFL 1.1 |
+| ID            | Face pin             | License |
+|---------------|----------------------|---------|
+| `fluxx.sans`  | Inter 4.1            | OFL 1.1 |
+| `fluxx.serif` | Noto Serif 2.014     | OFL 1.1 |
+| `fluxx.mono`  | JetBrains Mono 2.304 | OFL 1.1 |
 
 Ship each font’s original license and record the exact binary checksum. E1’s primary fixture uses Inter; additional fixtures verify the other faces. JetBrains Mono’s license is **OFL**, correcting the supplied draft. [Inter license](https://github.com/rsms/inter/blob/v4.1/LICENSE.txt), [Noto license](https://github.com/notofonts/noto-fonts/blob/main/LICENSE), [JetBrains Mono licensing](https://www.jetbrains.com/lp/mono/).
 
@@ -134,10 +134,10 @@ Documentation includes the required FreeType FTL attribution and HarfBuzz Old MI
 
 #### B. Deliberate rendering choice
 
-| Approach | Advantages | Costs |
-| --- | --- | --- |
+| Approach           | Advantages                                                                       | Costs                                                                                                                                                      |
+|--------------------|----------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Android bitmap run | Faster initial integration; platform layout support; existing raster upload path | Whole-run regeneration for content changes; scale-quality/memory tradeoff; future per-glyph animation requires replacing or subdividing the representation |
-| Native glyph atlas | Shared glyph storage, native shaping, independently positioned glyph quads | New native dependencies, layout integration, upload synchronization and cache management |
+| Native glyph atlas | Shared glyph storage, native shaping, independently positioned glyph quads       | New native dependencies, layout integration, upload synchronization and cache management                                                                   |
 
 **Choose the native atlas.** Bitmap runs are viable for static titles, but provide the wrong long-term representation for Text Animators. Position-only animation would not require bitmap regeneration, and GPU transforms are inexpensive rather than “zero-cost.”
 
@@ -179,12 +179,12 @@ Missing characters use the resolved face’s `.notdef`; if that glyph has no vis
 
 Use a **native `FontManager`**, not Kotlin-owned FreeType pointers.
 
-| Resource | Owner and access |
-| --- | --- |
-| Immutable font bytes | Native font catalog, reference-counted |
-| `FT_Library`, `FT_Face`, HarfBuzz font/face handles | Native `FontManager`; all mutable face operations under its mutex |
-| Shaped layouts and metrics | Immutable native records; bounded CPU cache; no Vulkan handles |
-| Atlas image, descriptors, pipeline, staging and mesh buffers | Owning `VulkanRenderer` session only |
+| Resource                                                     | Owner and access                                                  |
+|--------------------------------------------------------------|-------------------------------------------------------------------|
+| Immutable font bytes                                         | Native font catalog, reference-counted                            |
+| `FT_Library`, `FT_Face`, HarfBuzz font/face handles          | Native `FontManager`; all mutable face operations under its mutex |
+| Shaped layouts and metrics                                   | Immutable native records; bounded CPU cache; no Vulkan handles    |
+| Atlas image, descriptors, pipeline, staging and mesh buffers | Owning `VulkanRenderer` session only                              |
 
 `FT_New_Memory_Face` receives stable native storage. Font bytes must outlive the FreeType face and any HarfBuzz blob referring to them. Copy assets into owned storage; do not retain temporary JNI arrays or pointers into closed Android assets.
 
@@ -5805,12 +5805,12 @@ The F3.3 state test runs the real playhead rule. It adds the marker, selects it,
 - **JVM:** 478 tests, 0 failures.
 - **A16 instrumented** (Galaxy A16, installed with `adb install -r`, run with `am instrument`):
 
-| Suite | Result |
-|---|---|
-| `TextAnimateLayoutTest` | 7 of 7 (now includes the add bar hide/return without a jump, and the same-tile, empty-space, swipe and short-drag popover checks) |
-| `InspectorSwipeLayoutTest` | 2 of 2 (the first run failed on a test fixture: a video layer needs an asset reference; fixed with a URI-less reference) |
-| `TextInspectorLayoutTest` | 3 of 3 |
-| `AnimatorPropertyRenderTest` | 2 of 2 |
+| Suite                        | Result                                                                                                                            |
+|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `TextAnimateLayoutTest`      | 7 of 7 (now includes the add bar hide/return without a jump, and the same-tile, empty-space, swipe and short-drag popover checks) |
+| `InspectorSwipeLayoutTest`   | 2 of 2 (the first run failed on a test fixture: a video layer needs an asset reference; fixed with a URI-less reference)          |
+| `TextInspectorLayoutTest`    | 3 of 3                                                                                                                            |
+| `AnimatorPropertyRenderTest` | 2 of 2                                                                                                                            |
 
 - `adb logcat -b crash -d` (read-only): no new app crashes. The only Fluxx entries are the 17:47 "Unsupported transient edit" crashes F3.2 fixed.
 - **Not verified on the device by script:** Back closing the popover before the sheet (covered by `BackHandler` order and the state rule; the instrumented harness has no system Back) and the Fonts sub-page swipe (the same header row as the Edit Text tabs, which are tested). §10 items 1 and 7 cover them.
@@ -5844,11 +5844,11 @@ Hard rules kept: no PreviewController, gesture-protocol, EditorAction, batch/dra
 
 `PropertyLimits.TRACKING` (the Character tab):
 
-| | Before | Now |
-|---|---|---|
+|        | Before                     | Now                               |
+|--------|----------------------------|-----------------------------------|
 | Slider | −100…100, detents every 10 | **−1000…1000, detents every 100** |
-| Typed | −500…500 | **−1000…1000** |
-| Hard | ±1000 | ±1000 (unchanged) |
+| Typed  | −500…500                   | **−1000…1000**                    |
+| Hard   | ±1000                      | ±1000 (unchanged)                 |
 
 It now matches the Animate Tracking slider (F3.3); `ANIM_TRACKING` is a copy of it. **Manual spacing** used to share Tracking's ranges by copy; it now keeps the old ranges explicitly (slider ±100, typed ±500, hard ±1000), because no other cap changes. Every other cap is unchanged.
 
