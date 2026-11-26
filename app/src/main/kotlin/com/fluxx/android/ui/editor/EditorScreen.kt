@@ -732,12 +732,10 @@ fun EditorScreen(
                     BarIcon("EASE_HOLD", "Hold", enabled = easable, testTag = "key-hold") { ease(EasingCurve.HOLD) }
                     BarIcon("EASE_LINEAR", "Linear", enabled = easable, testTag = "key-linear") { ease(EasingCurve.LINEAR) }
                     BarIcon("EASE_EASY", "Easy Ease", enabled = easable, testTag = "key-easy-ease") { ease(EasingCurve.EASY_EASE) }
-                    BarPopoverIcon("OVERFLOW", "More easings", "key-more", "key-more", enabled = easable) { close ->
-                        for (choice in listOf(EaseChoice.EASE_IN, EaseChoice.EASE_OUT, EaseChoice.BOUNCE, EaseChoice.ELASTIC))
-                            PopoverRow(choice.label, testTag = "key-more-${choice.name}") { ease(EaseChoice.curve(choice, EasingCurve.EASY_EASE)); close() }
+                    // TLP.3 A1: a non-modal curve popover (the library's grid cells); it stays open after a tap, like the library.
+                    BarPopoverIcon("OVERFLOW", "More easings", "key-more", "key-more", enabled = easable) { _ ->
                         val library by remember(context) { CurveLibraryStore.get(context) }.state.collectAsState()
-                        for (entry in CurveLibrary.sections(library).pinned)
-                            PopoverRow(entry.name, testTag = "key-more-pinned-${entry.id}") { ease(entry.curve); close() }
+                        com.fluxx.android.ui.inspector.KeyCurveGrid(library) { ease(it) }
                     }
                     BarPopoverIcon("STAGGER", "Stagger the selected keyframes", "key-stagger", "key-stagger", enabled = keySel.size > 1) { close ->
                         FramesPopoverContent("Stagger", "frames", 2, false, {}, { n ->

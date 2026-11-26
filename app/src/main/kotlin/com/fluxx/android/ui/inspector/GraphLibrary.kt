@@ -478,23 +478,12 @@ internal const val DRAG_HYSTERESIS = 8f
             .semantics(mergeDescendants = true) { contentDescription = e.name + if (e.user) ", user curve" else ""
                 if (selected) stateDescription = "Selected"; if (dim) stateDescription = "Returns to the library" }
             .testTag("graph-lib-${e.id}").padding(top = 1.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.fillMaxWidth().height(GraphLayout.GRID_THUMB_H.dp)) {
-                CurveThumbnail(e.curve, selected, Modifier.fillMaxSize(), insetDp = 3f)
-                if (e.user) StarBadge(Modifier.align(Alignment.TopEnd).padding(1.dp))
-                if (ui.menuFor == e.id) CurveMenuPopover(state, e, store, ui)
-            }
-            Text(e.name, color = if (selected) TextPrimary else TextSecondary, fontSize = 7.sp, lineHeight = GraphLayout.GRID_NAME_LINE.sp, maxLines = 2,
-                overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 1.dp, start = 1.dp, end = 1.dp).height(nameHeight.dp).testTag("graph-lib-name"))
+            CurveCellContent(e.curve, e.name, selected, e.user, nameHeight) { if (ui.menuFor == e.id) CurveMenuPopover(state, e, store, ui) }
         }
     }
     @Composable fun Caption(text: String, key: String) {
         DisposableEffect(key) { onDispose { drag.bounds.remove(key) } }
-        Column(Modifier.fillMaxWidth().height(GraphLayout.gridCaption(fontScale).dp).onGloballyPositioned { drag.bounds[key] = it.boundsInRoot() }
-            .testTag("graph-lib-$key"), verticalArrangement = Arrangement.Bottom) {
-            Text(text, color = TextSecondary, fontSize = 7.sp, lineHeight = 8.sp, maxLines = 1, modifier = Modifier.padding(start = 2.dp))
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Border))
-        }
+        CurveGridCaption(text, Modifier.onGloballyPositioned { drag.bounds[key] = it.boundsInRoot() }.testTag("graph-lib-$key"))
     }
     val span: (androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope.() -> GridItemSpan) = { GridItemSpan(maxLineSpan) }
     Box(modifier.onGloballyPositioned { drag.listBounds = it.boundsInRoot() }.dragContainer(drag, ::drop).testTag("graph-library-column")) {
@@ -519,6 +508,62 @@ internal const val DRAG_HYSTERESIS = 8f
             }
         }
     }
+}
+
+/** One library cell's look (shared by the library grid and the key bar's curve popover): thumbnail over up to two name lines. */
+@Composable internal fun ColumnScope.CurveCellContent(curve: EasingCurve, name: String, selected: Boolean, user: Boolean, nameHeight: Float,
+    overlay: @Composable BoxScope.() -> Unit = {}) {
+    Box(Modifier.fillMaxWidth().height(GraphLayout.GRID_THUMB_H.dp)) {
+        CurveThumbnail(curve, selected, Modifier.fillMaxSize(), insetDp = 3f)
+        if (user) StarBadge(Modifier.align(Alignment.TopEnd).padding(1.dp))
+        overlay()
+    }
+    Text(name, color = if (selected) TextPrimary else TextSecondary, fontSize = 7.sp, lineHeight = GraphLayout.GRID_NAME_LINE.sp, maxLines = 2,
+        overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+        modifier = Modifier.padding(top = 1.dp, start = 1.dp, end = 1.dp).height(nameHeight.dp).testTag("graph-lib-name"))
+}
+
+/** A section caption of the curve grid (spans both columns). */
+@Composable internal fun CurveGridCaption(text: String, modifier: Modifier = Modifier) {
+    val fontScale = LocalDensity.current.fontScale
+    Column(modifier.fillMaxWidth().height(GraphLayout.gridCaption(fontScale).dp), verticalArrangement = Arrangement.Bottom) {
+        Text(text, color = TextSecondary, fontSize = 7.sp, lineHeight = 8.sp, maxLines = 1, modifier = Modifier.padding(start = 2.dp))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Border))
+    }
+}
+
+/**
+ * TLP.3 A1: the key bar's More popover body. The library's 2-column grid cells (same thumbnails and names), with the types
+ * Ease In, Ease Out, Bounce and Elastic first (default parameters, exactly as the Graph type strip applies them to a curve
+ * of another type: `EaseChoice.curve(choice, EASY_EASE)`), then the library's Pinned, Presets and My curves sections.
+ * Tap only: no long-press menu, no drag, no save / import / export. Bounded ([KeyCurvePopover]) and scrollable.
+ */
+@Composable internal fun KeyCurveGrid(state: CurveLibraryState, onApply: (EasingCurve) -> Unit) {
+    val sections = CurveLibrary.sections(state)
+    val nameHeight = 2 * GraphLayout.GRID_NAME_LINE * LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val span: (androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope.() -> GridItemSpan) = { GridItemSpan(maxLineSpan) }
+    @Composable fun Cell(curve: EasingCurve, name: String, user: Boolean, tag: String) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable(role = Role.Button) { onApply(curve) }
+            .semantics(mergeDescendants = true) { contentDescription = name }.testTag(tag).padding(top = 1.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) { CurveCellContent(curve, name, false, user, nameHeight) }
+    }
+    LazyVerticalGrid(GridCells.Fixed(2), Modifier.width(KeyCurvePopover.WIDTH.dp).heightIn(max = KeyCurvePopover.MAX_HEIGHT.dp).blocksPopoverSwipe().testTag("key-more-grid"),
+        horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        items(KeyCurvePopover.TYPES, key = { "type|${it.name}" }) { c -> Cell(EaseChoice.curve(c, EasingCurve.EASY_EASE), c.label, false, "key-more-${c.name}") }
+        if (sections.pinned.isNotEmpty()) item(key = "cap|pinned", span = span) { CurveGridCaption("Pinned") }
+        items(sections.pinned, key = { "pin|${it.id}" }) { Cell(it.curve, it.name, it.user, "key-more-pinned-${it.id}") }
+        if (sections.presets.isNotEmpty()) item(key = "cap|presets", span = span) { CurveGridCaption("Presets") }
+        items(sections.presets, key = { "preset|${it.id}" }) { Cell(it.curve, it.name, it.user, "key-more-preset-${it.id}") }
+        if (sections.mine.isNotEmpty()) item(key = "cap|mine", span = span) { CurveGridCaption("My curves") }
+        items(sections.mine, key = { "mine|${it.id}" }) { Cell(it.curve, it.name, it.user, "key-more-mine-${it.id}") }
+    }
+}
+
+/** TLP.3 A1: the key curve popover's entries and bounds (dp). */
+internal object KeyCurvePopover {
+    val TYPES = listOf(EaseChoice.EASE_IN, EaseChoice.EASE_OUT, EaseChoice.BOUNCE, EaseChoice.ELASTIC)
+    const val WIDTH = 168f
+    const val MAX_HEIGHT = 232f
 }
 
 /** The header row: no title; import/export and save icons at the right, over a fade so thumbnails scroll under it. */

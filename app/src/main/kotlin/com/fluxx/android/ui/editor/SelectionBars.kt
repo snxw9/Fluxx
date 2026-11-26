@@ -32,6 +32,9 @@ internal val SelectionBarHeight = 48.dp
 /** The target size of a [BarIcon]: 48dp in the selection bars; the header height when the key bar sits in the sheet header. */
 internal val LocalBarIconSize = compositionLocalOf { 48.dp }
 
+/** TLP.3 A1: bar popovers open DOWNWARD from a bar at the top of the sheet (the key header bar), upward elsewhere. */
+internal val LocalBarPopoverBelow = compositionLocalOf { false }
+
 /**
  * TLP.2 part 3: the key bar's icons (Hold, Linear, Easy Ease, More, Stagger, Sequence) while KEY selection is active, else
  * null. Provided by the editor around the inspector sheet; the sheet's header row (section pages, Graph, Edit Text) shows
@@ -41,7 +44,7 @@ internal val LocalKeyHeaderBar = compositionLocalOf<(@Composable RowScope.() -> 
 
 /** The key bar in the sheet header: accent-filled like the selection bars, exactly [height] tall (the header's height). */
 @Composable internal fun KeyHeaderBar(height: androidx.compose.ui.unit.Dp, content: @Composable RowScope.() -> Unit) {
-    CompositionLocalProvider(LocalBarIconSize provides height) {
+    CompositionLocalProvider(LocalBarIconSize provides height, LocalBarPopoverBelow provides true) {
         Row(Modifier.fillMaxWidth().height(height).testTag("key-header-bar").clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.primary), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceEvenly, content = content)
@@ -97,7 +100,7 @@ internal val LocalKeyHeaderBar = compositionLocalOf<(@Composable RowScope.() -> 
             val next = PopoverToggle.next(if (open) key else null, key) != null
             if (next) { PopoverDismissal.request(); open = true } else open = false
         }
-        AnchoredPopover(open, { open = false }, "$testTag-popover", modal = false) { content { open = false } }
+        AnchoredPopover(open, { open = false }, "$testTag-popover", modal = false, preferBelow = LocalBarPopoverBelow.current) { content { open = false } }
     }
 }
 

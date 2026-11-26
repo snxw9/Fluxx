@@ -71,7 +71,7 @@ internal object PopoverPlacer {
      * (the top of the keyboard when one is showing), so only the popover lifts above the IME.
      */
     fun place(anchorLeft: Int, anchorTop: Int, anchorRight: Int, anchorBottom: Int, width: Int, height: Int,
-        windowWidth: Int, windowHeight: Int, visibleBottom: Int, margin: Int, gap: Int = 0): PopoverPlacement {
+        windowWidth: Int, windowHeight: Int, visibleBottom: Int, margin: Int, gap: Int = 0, preferBelow: Boolean = false): PopoverPlacement {
         val bottomLimit = minOf(windowHeight, visibleBottom.coerceAtLeast(0))
         val centre = (anchorLeft + anchorRight) / 2
         val maxX = (windowWidth - width - margin).coerceAtLeast(margin)
@@ -79,6 +79,8 @@ internal object PopoverPlacer {
         val aboveY = anchorTop - gap - height
         val belowY = anchorBottom + gap
         val (y, above) = when {
+            // TLP.3 A1: an anchor at the top of the sheet (the key header bar) opens downward when it fits.
+            preferBelow && belowY + height <= bottomLimit - margin -> belowY to false
             aboveY >= margin && aboveY + height <= bottomLimit - margin -> aboveY to true
             belowY + height <= bottomLimit - margin -> belowY to false
             else -> (bottomLimit - margin - height).coerceAtLeast(margin).coerceAtMost(maxOf(margin, windowHeight - height)) to true
@@ -108,7 +110,7 @@ internal object InspectorHaptics {
  * sheet. Scales out from the anchor; tap outside or Back closes it. Focusable so its value field can take the IME.
  */
 @Composable internal fun AnchoredPopover(visible: Boolean, onDismiss: () -> Unit, testTag: String = "inspector-popover",
-    modal: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
+    modal: Boolean = true, preferBelow: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
     val state = remember { MutableTransitionState(false) }
     state.targetState = visible
     // TEXT F3.2 non-modal (slider) popovers: the popup window is not focusable, so touches outside it reach the
@@ -133,12 +135,12 @@ internal object InspectorHaptics {
     val margin = with(density) { 8.dp.roundToPx() }
     val gap = with(density) { 4.dp.roundToPx() }
     var origin by remember { mutableStateOf(TransformOrigin(.5f, 1f)) }
-    val provider = remember(visibleBottom, margin, gap) {
+    val provider = remember(visibleBottom, margin, gap, preferBelow) {
         object : PopupPositionProvider {
             override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
                 val p = PopoverPlacer.place(anchorBounds.left, anchorBounds.top, anchorBounds.right, anchorBounds.bottom,
                     popupContentSize.width, popupContentSize.height, windowSize.width, windowSize.height,
-                    minOf(windowSize.height, visibleBottom), margin, gap)
+                    minOf(windowSize.height, visibleBottom), margin, gap, preferBelow)
                 origin = TransformOrigin(p.originX, if (p.above) 1f else 0f)
                 return IntOffset(p.x, p.y)
             }
