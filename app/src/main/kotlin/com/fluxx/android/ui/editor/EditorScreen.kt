@@ -479,6 +479,8 @@ fun EditorScreen(
                     previewMessage = previewMessage ?: previewState.message,
                     playheadUs = playheadUs,
                     selectedLayerId = displayedState.selectedLayerId,
+                    // TLP.1: a focused animator selector (or one of its Range fields) shows its coverage box.
+                    focusedSelector = focusedAnimatorTrack?.takeIf { it.selectorId != null && isInspectorOpen },
                     onSelectLayer = { id ->
                         // TLP T0: the on-preview selector is inert in selection mode (it must not fork the set).
                         if (editor.selectionMode) return@CompositionPreview

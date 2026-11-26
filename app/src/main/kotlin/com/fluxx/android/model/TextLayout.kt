@@ -105,6 +105,17 @@ class TextLayoutMetrics private constructor(private val data: DoubleArray, val s
         val prepared=evaluated(text,time) ?: return null
         return prepared.geometrySnapshot()
     }
+    /**
+     * TLP.1: the focused selector's coverage box in layout space ([SelectorCoverageBox] over the selector's own
+     * per-cluster coverage at [time]), or null when the selector is gone or covers nothing. Same space as [bounds].
+     */
+    @Synchronized fun selectorBox(text: TextProperties,time: Long,animatorId: Long,selectorId: Long): TextBounds? {
+        val animator=text.animators.firstOrNull { it.id==animatorId } ?: return null
+        val prepared=evaluated(text,time) ?: return null
+        val coverage=prepared.selectorCoverage(animator,selectorId,time) ?: return null
+        val b=SelectorCoverageBox.box(coverage,prepared.clusterBoxes()) ?: return null
+        return TextBounds(b[0],b[1],b[2]-b[0],b[3]-b[1])
+    }
     companion object {
         fun fromNative(values: DoubleArray, sourceEmpty: Boolean,document: TextSourceDocument?=null): TextLayoutMetrics {
             require(values.size >= 6 && values.all { it.isFinite() } && values[0] > 0)

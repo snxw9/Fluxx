@@ -46,6 +46,8 @@ fun CompositionPreview(
     previewMessage: String?,
     playheadUs: Long = 0L,
     selectedLayerId: Long? = null,
+    /** TLP.1: the focused Animate-tab address (a selector in it shows the selector coverage box). */
+    focusedSelector: com.fluxx.android.editor.AnimatorTrackAddress? = null,
     onSelectLayer: ((Long?) -> Unit)? = null,
     onSurfaceAvailable: (android.view.Surface, Int, Int) -> Unit,
     onSurfaceDestroyed: () -> Unit,
@@ -278,7 +280,7 @@ fun CompositionPreview(
                 ) {
                     if (!eyedropperActive) PreviewLayerOverlay(project,
                         comp.layers.firstOrNull { it.id == selectedLayerId }, playheadUs,
-                        mediaRepository, viewSettings, anchorMode)
+                        mediaRepository, viewSettings, anchorMode, focusedSelector)
                     val selectedText=comp.layers.firstOrNull { it.id==selectedLayerId && it.type==LayerType.TEXT }
                     val selectedMetrics=selectedText?.let { textHitMetrics[it.id] }
                     if(!eyedropperActive && selectedText!=null && selectedMetrics!=null && textSelection!=null && !textSelection.collapsed)

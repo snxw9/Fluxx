@@ -11,12 +11,17 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.fluxx.android.media.MediaRepository
 import com.fluxx.android.model.*
 import com.fluxx.android.render.LayerGeometry
 import com.fluxx.android.render.TextMetricsRepository
 import com.fluxx.android.ui.theme.Border
 import com.fluxx.android.ui.theme.Highlight
+import com.fluxx.android.ui.theme.SelectorCoverageColour
+import com.fluxx.android.editor.AnimatorTrackAddress
 import com.fluxx.android.ui.theme.TextSecondary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +31,9 @@ private data class OverlaySource(val width: Int, val height: Int, val rotation: 
 
 @Composable
 internal fun PreviewLayerOverlay(project: ProjectDocument, selected: CompositionLayer?, playheadUs: Long,
-    repository: MediaRepository?, settings: ViewSettings, anchorMode: Boolean) {
+    repository: MediaRepository?, settings: ViewSettings, anchorMode: Boolean,
+    /** TLP.1: the focused Animate-tab address; with a selector in it the layer box becomes the selector box. */
+    focusedSelector: AnimatorTrackAddress? = null) {
     val comp = project.composition
     val context = LocalContext.current
     val textSource = selected?.text?.source?.evaluateDocument(playheadUs - selected.resolvedKeyframeAnchorUs) ?: TextSourceDocument("")
@@ -54,8 +61,25 @@ internal fun PreviewLayerOverlay(project: ProjectDocument, selected: Composition
             }
         }
     }
+    // TLP.1: the focused selector's coverage box (layout space), computed off the UI thread with the same text metrics.
+    // The last box stays while a new one is computed (no flicker to the layer box while scrubbing); it is drawn only
+    // while it belongs to the current layer and focused selector.
+    val selectorKey = focusedSelector?.takeIf { it.selectorId != null && selected?.type == LayerType.TEXT }?.let { selected!!.id to it }
+    var selectorBox by remember { mutableStateOf<Pair<Pair<Long, AnimatorTrackAddress>, TextBounds>?>(null) }
+    val selectorLocal = selected?.let { playheadUs - it.resolvedKeyframeAnchorUs }
+    LaunchedEffect(selectorKey, textMetrics, selected?.text, selectorLocal) {
+        val key = selectorKey; val metrics = textMetrics; val layer = selected
+        if (key == null || metrics == null || layer == null || selectorLocal == null) { selectorBox = null; return@LaunchedEffect }
+        val box = withContext(Dispatchers.Default) {
+            try { metrics.selectorBox(layer.text, selectorLocal, key.second.animatorId, requireNotNull(key.second.selectorId)) }
+            catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
+        }
+        selectorBox = box?.let { key to it }
+    }
+    val shownSelectorBox = selectorBox?.takeIf { it.first == selectorKey && selected?.visible == true && selected.timing.isActive(playheadUs) }?.second?.takeIf { !it.empty }
     val matrix = remember { FloatArray(16) }
-    Canvas(Modifier.fillMaxSize()) {
+    Canvas(Modifier.fillMaxSize().testTag("preview-layer-overlay").semantics {
+        stateDescription = if (shownSelectorBox != null) "Selector box" else "Layer box" }) {
         if (settings.showGrid) {
             val gridColor = Border.copy(alpha = .35f)
             for (i in 1..7) {
@@ -87,9 +111,10 @@ internal fun PreviewLayerOverlay(project: ProjectDocument, selected: Composition
             fun corner(x: Float, y: Float) = Offset(
                 (matrix[0] * x + matrix[4] * y + matrix[12] + 1f) * size.width / 2f,
                 (matrix[1] * x + matrix[5] * y + matrix[13] + 1f) * size.height / 2f)
-            val corners = if (layer.type == LayerType.TEXT) requireNotNull(textBounds).let { b ->
-                listOf(corner(b.left, b.top), corner(b.left + b.width, b.top), corner(b.left + b.width, b.top + b.height), corner(b.left, b.top + b.height))
-            } else listOf(corner(-1f, -1f), corner(1f, -1f), corner(1f, 1f), corner(-1f, 1f))
+            // TLP.1: while a selector is focused and covers something, its box replaces the layer box (same matrix).
+            fun box(b: TextBounds) = listOf(corner(b.left, b.top), corner(b.left + b.width, b.top), corner(b.left + b.width, b.top + b.height), corner(b.left, b.top + b.height))
+            val layerCorners = if (layer.type == LayerType.TEXT) box(requireNotNull(textBounds)) else listOf(corner(-1f, -1f), corner(1f, -1f), corner(1f, 1f), corner(-1f, 1f))
+            val corners = if (layer.type == LayerType.TEXT && shownSelectorBox != null) box(shownSelectorBox) else layerCorners
             if (settings.showBoundingBoxes) {
                 val outline = Path().apply {
                     moveTo(corners[0].x, corners[0].y)
@@ -97,10 +122,11 @@ internal fun PreviewLayerOverlay(project: ProjectDocument, selected: Composition
                     close()
                 }
                 drawPath(outline, Color.Black, style = Stroke(2.5.dp.toPx()))
-                drawPath(outline, Highlight, style = Stroke(1.dp.toPx()))
+                drawPath(outline, if (shownSelectorBox != null && layer.type == LayerType.TEXT) SelectorCoverageColour else Highlight, style = Stroke(1.dp.toPx()))
             }
             if (settings.showSelectionHandles) {
-                val handles = corners + corners.indices.map { (corners[it] + corners[(it + 1) % 4]) / 2f }
+                // The handles stay on the layer box (the selector box is display only; gestures are unchanged).
+                val handles = layerCorners + layerCorners.indices.map { (layerCorners[it] + layerCorners[(it + 1) % 4]) / 2f }
                 handles.forEach { p ->
                     drawCircle(Color.Black, 4.dp.toPx(), p)
                     drawCircle(Highlight, 2.5.dp.toPx(), p)

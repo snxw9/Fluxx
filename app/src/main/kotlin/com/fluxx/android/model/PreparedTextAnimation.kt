@@ -418,6 +418,20 @@ class PreparedTextAnimation(private val text: TextProperties,private val data: D
         inkScratch[0]=left;inkScratch[1]=top;inkScratch[2]=right;inkScratch[3]=bottom
         return inkScratch
     }
+    /**
+     * TLP.1 selector coverage box (UI only; the renderer never calls this). The per-cluster coverage of ONE selector of
+     * [animator] on its own, from the same [PreparedSelectorEngine] the animator evaluation uses, over this layout's
+     * membership as of the last [evaluate] (wrapped lines included). The selector runs alone in Add mode so its own
+     * amount is read, not its combination with the other selectors. Read only: it builds a separate engine and changes
+     * nothing in preparation or evaluation. Allocates. Null when the selector is not in [animator].
+     */
+    fun selectorCoverage(animator: TextAnimator,selectorId: Long,time: Long): DoubleArray? {
+        val selector=animator.selectors.firstOrNull { it.id==selectorId } ?: return null
+        val alone=animator.copy(selectors=FrozenList.of(listOf(selector.copy(mode=AnimatableProperty1D(staticValue=0f)))))
+        return DoubleArray(clusters).also { PreparedSelectorEngine(alone,membership,SelectorEaseTable.shared,linePool,lines,lineCapacity).evaluate(time,it) }
+    }
+    /** TLP.1: the evaluated per-cluster visual boxes (left, top, right, bottom per cluster; layout space), a copy. */
+    fun clusterBoxes(): FloatArray=visualBounds.copyOf()
     /** UI-only summary; renderer evaluation never calls this allocating formatter. */
     fun geometrySnapshot(): TextPreparedGeometry {
         val source=requireNotNull(document)

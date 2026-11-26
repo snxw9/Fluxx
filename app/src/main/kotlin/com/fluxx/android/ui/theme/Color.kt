@@ -25,6 +25,10 @@ val TextDisabled = Color(0xFF4D4D4D)        // Inactive actions
 // Missing media warning glyph: deliberate muted amber exception
 val MissingMediaWarning = Color(0xFFD9A441)
 
+// TLP.1 selector coverage box on the preview (the one place to re-theme it). Deliberate red exception, like the
+// warning above: the scheme's error token is off-white (monochrome), so a box from it would match the white layer box.
+val SelectorCoverageColour = Color(0xFFFF453A)
+
 // Subtle vertical gradients to add depth across the application
 val BackgroundGradient = androidx.compose.ui.graphics.Brush.verticalGradient(
     0f to Color(0xFF161616),
