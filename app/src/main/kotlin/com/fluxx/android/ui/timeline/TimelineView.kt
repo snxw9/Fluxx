@@ -263,7 +263,7 @@ fun TimelineView(
     val pxPerUs = (pxPerSecond * density.density) / 1_000_000.0
     // TL1: the one time <-> x mapping (frame x = round(frame x pxPerFrame)); ticks and the playhead's scroll both use it.
     val scale = remember(comp.frameRate, pxPerUs) { com.fluxx.android.editor.TimelineScale(comp.frameRate, pxPerUs) }
-    // TLP.2: one live hold-drag state (snap guide, ruler highlights, readouts); UI only, never in history.
+    // TLP.2: one live hold-drag state (ruler highlights, readouts); UI only, never in history.
     var dragInfo by remember { mutableStateOf<com.fluxx.android.editor.TimelineDragInfo?>(null) }
     val reportDrag by rememberUpdatedState(onDragInfo)
     val snapLevel = remember(comp.frameRate, scale, density) { com.fluxx.android.editor.RulerTiers.level(comp.frameRate, scale.pxPerFrame, density.density) }
@@ -453,9 +453,6 @@ fun TimelineView(
                                     detectTapGestures { onSelectLayer(null) }
                                 }
                         ) {
-                            // TLP.2: the snap guide through the empty track space, behind the rows (clips draw it under their labels).
-                            dragInfo?.guideUs?.let { g -> val accent = MaterialTheme.colorScheme.primary
-                                Canvas(Modifier.matchParentSize().testTag("timeline-snap-guide")) { val x = scale.timeX(g).toFloat(); drawLine(accent, Offset(x, 0f), Offset(x, size.height), 1.dp.toPx()) } }
                             LazyColumn(
                                 state = verticalScrollState,
                                 modifier = Modifier.fillMaxSize(),
@@ -512,7 +509,7 @@ fun TimelineView(
                                         groupSelection = selection?.takeIf { layer.id in it },
                                         selectedKeys = selectedKeys?.takeIf { layer.id == selectedLayerId },
                                         onKeyToggle = onKeyToggle, onKeyDoubleTap = onKeyDoubleTap, onKeysMoved = onKeysMoved,
-                                        snapLevel = snapLevel, snapStartFrame = snapStartFrame, snapGuideUs = dragInfo?.guideUs,
+                                        snapLevel = snapLevel, snapStartFrame = snapStartFrame,
                                         onDragInfo = { dragInfo = it; reportDrag(it) }
                                     )
                                 }
@@ -793,11 +790,10 @@ private fun TimelineClipRow(
     onKeyToggle: (Long) -> Unit = {},
     onKeyDoubleTap: (Long) -> Unit = {},
     onKeysMoved: (Map<Long, Long>) -> Unit = {},
-    /** TLP.2: the ruler's zoom level and start frame (major / mid tick snapping); the active snap guide, if any. */
+    /** TLP.2: the ruler's zoom level and start frame (major / mid tick snapping). */
     snapLevel: com.fluxx.android.editor.RulerLevel? = null,
     snapStartFrame: Long = 0,
-    snapGuideUs: Long? = null,
-    /** TLP.2: the live hold-drag state (readouts, ruler highlights, snap guide); null when the drag ends. */
+    /** TLP.2: the live hold-drag state (readouts, ruler highlights); null when the drag ends. */
     onDragInfo: (com.fluxx.android.editor.TimelineDragInfo?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -856,7 +852,7 @@ private fun TimelineClipRow(
         val origin = members.minOf { it.timing.startUs }
         val start = moved.minOfOrNull { it.startUs } ?: origin
         val span = members.maxOf { it.timing.endUs ?: it.timing.startUs } - origin
-        dragInfo(com.fluxx.android.editor.TimelineDragInfo(start, origin, start, start + span, snap.target?.timeUs))
+        dragInfo(com.fluxx.android.editor.TimelineDragInfo(start, origin, start, start + span))
     }
     fun endMoveIndicators() { locked(null); dragInfo(null) }
     LaunchedEffect(scrollOffsetPx) { if (moveBase != null) previewMove() }
@@ -883,7 +879,6 @@ private fun TimelineClipRow(
     }
 
     // Clip background styling matching screenshot's visual distinction
-    val guideColour = MaterialTheme.colorScheme.primary
     val clipBgColor = when (layer.type) {
         LayerType.VIDEO -> ClipVideoDark
         LayerType.IMAGE -> SurfaceElevated
@@ -914,8 +909,6 @@ private fun TimelineClipRow(
                 .height(26.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .background(clipBgColor)
-                // TLP.2: the snap guide over the clip's background, under its label and thumbnails' text.
-                .drawBehind { snapGuideUs?.let { g -> val x = ((g - startUs) * pxPerUs).toFloat(); if (x in 0f..size.width) drawLine(guideColour, Offset(x, 0f), Offset(x, size.height), 1.dp.toPx()) } }
                 .then(if (layer.type == LayerType.SOLID) Modifier.border(.5.dp,
                     clipTextColor.copy(alpha = .35f), RoundedCornerShape(6.dp)) else Modifier)
                 .then(
@@ -1127,7 +1120,7 @@ private fun TimelineClipRow(
                                                 preview(moved?.action ?: EditorAction.Batch(emptyList()))
                                                 groupMap = moved?.let { m -> sel0.times.zip(m.times).associate { (from, to) -> (from + anchorOffsetUs) to (to + anchorOffsetUs) } } ?: emptyMap()
                                                 val now = (moved?.times ?: sel0.times).map { Math.addExact(anchor, it) }
-                                                dragInfo(com.fluxx.android.editor.TimelineDragInfo(now.min(), candidates.min(), now.min(), now.max(), snap.target?.timeUs))
+                                                dragInfo(com.fluxx.android.editor.TimelineDragInfo(now.min(), candidates.min(), now.min(), now.max()))
                                                 return@detectDragGesturesAfterLongPress
                                             }
                                             // TLP.2: one key against the shared targets plus its existing ones (the other keys of
@@ -1152,7 +1145,7 @@ private fun TimelineClipRow(
                                             preview(if (activeProperty == null && activeAnimatorTrack != null)
                                                 EditorAction.EditTextAnimator(layer.id, AnimatorEdit.Key(activeAnimatorTrack, AnimatorKeyOperation.MOVE, fromLocal, toLocal))
                                             else EditorAction.MoveKeyframe(layer.id, activeProperty, fromLocal, toLocal))
-                                            dragInfo(com.fluxx.android.editor.TimelineDragInfo(startUs + snappedUs, candidate, startUs + snappedUs, startUs + snappedUs, snap.target?.timeUs))
+                                            dragInfo(com.fluxx.android.editor.TimelineDragInfo(startUs + snappedUs, candidate, startUs + snappedUs, startUs + snappedUs))
                                         }
                                     )
                                 } else Modifier),

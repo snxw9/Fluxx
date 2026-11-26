@@ -138,8 +138,8 @@ object DragReadout {
 }
 
 /**
- * TLP.2 parts 4 / 5: the live state of a timeline hold-drag (UI only, never in history), shared by the snap guide, the
+ * TLP.2 parts 4 / 5: the live state of a timeline hold-drag (UI only, never in history), shared by the
  * ruler highlights and the readout overlay. Composition times: [startUs] is the dragged item's start now and [originUs]
- * where it began; [spanStartUs] / [spanEndUs] the ticks the ruler highlights; [guideUs] the snap target, null when free.
+ * where it began; [spanStartUs] / [spanEndUs] the ticks the ruler highlights; (TLP.3 A3: no snap guide line; the haptic and these highlights remain).
  */
-data class TimelineDragInfo(val startUs: Long, val originUs: Long, val spanStartUs: Long, val spanEndUs: Long, val guideUs: Long?)
+data class TimelineDragInfo(val startUs: Long, val originUs: Long, val spanStartUs: Long, val spanEndUs: Long)

@@ -154,13 +154,13 @@ class TlpTwoUiTest {
         node("drag-readout").assertDoesNotExist()
         // Raw start 42.6 frames: 0.6 frame from the playhead (42), 2.4 from the mid tick (45): the playhead wins.
         dragB(42.6) {
-            node("drag-readout").assertExists(); node("timeline-snap-guide").assertExists()
+            node("drag-readout").assertExists(); node("timeline-snap-guide").assertDoesNotExist() // TLP.3 A3: no guide line
             assertEquals("00:01:12", text("drag-readout-start"))
             assertEquals("-00:00:24", text("drag-readout-delta"))
             assertEquals("the overlay changes no layout", strip, bounds("editor-action-bar-strip"))
         }
         assertEquals(f(42), layer(2).timing.startUs)
-        node("drag-readout").assertDoesNotExist(); node("timeline-snap-guide").assertDoesNotExist()
+        node("drag-readout").assertDoesNotExist()
         assertEquals(strip, bounds("editor-action-bar-strip"))
         assertEquals("no seek", f(42), editor.state.playheadUs)
         editor.undo(); settle(); assertEquals(f(66), layer(2).timing.startUs)
