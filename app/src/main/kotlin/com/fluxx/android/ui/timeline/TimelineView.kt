@@ -603,7 +603,7 @@ fun TimelineView(
                                         popover = markerPopover,
                                         onDragSelect = { onDragSelect(layer.id) },
                                         pxPerUs = pxPerUs,
-                                        playheadUs = playheadUs,
+                                        playhead = playheadReader,
                                         frameRate = comp.frameRate,
                                         onSelect = { onSelectLayer(layer.id) },
                                         onEmptyTap = { onSelectLayer(null) },
@@ -894,7 +894,8 @@ private fun TimelineClipRow(
     scrollOffset: () -> Int,
     onMoveEdge: (Float?) -> Unit,
     pxPerUs: Double,
-    playheadUs: Long,
+    /** AUD1 C: the playhead, read where it is drawn (and as derived state for the text label), not as a parameter. */
+    playhead: () -> Long,
     frameRate: FrameRate,
     onSelect: () -> Unit,
     onEmptyTap: () -> Unit,
@@ -948,7 +949,7 @@ private fun TimelineClipRow(
     var moveScrollOrigin by remember { mutableStateOf(0) }
     var labelRootX by remember { mutableFloatStateOf(0f) }
     val density0 = LocalDensity.current
-    val dragPlayhead by rememberUpdatedState(playheadUs)
+    fun dragPlayhead() = playhead()
     val dragInfo by rememberUpdatedState(onDragInfo)
     val dragLevel by rememberUpdatedState(snapLevel)
     val view = androidx.compose.ui.platform.LocalView.current
@@ -968,7 +969,7 @@ private fun TimelineClipRow(
         val g = group
         val members = if (g != null) g.ids.mapNotNull { id -> p0.composition.layers.firstOrNull { it.id == id } }.filter { it.timing.durationUs != 0L } else listOf(base)
         val candidates = members.flatMap { listOfNotNull(it.timing.startUs, it.timing.endUs) }
-        val targets = com.fluxx.android.editor.DragSnap.withTicks(com.fluxx.android.editor.DragSnap.targets(p0, dragPlayhead, members.map { it.id }.toSet(), clipEdges = true),
+        val targets = com.fluxx.android.editor.DragSnap.withTicks(com.fluxx.android.editor.DragSnap.targets(p0, dragPlayhead(), members.map { it.id }.toSet(), clipEdges = true),
             candidates, raw, frameRate, dragLevel, snapStartFrame)
         val zoneUs = com.fluxx.android.editor.SnapZones.of(pxPerUs / density0.density, frameRate)
         val snap = com.fluxx.android.editor.DragSnap.snap(raw, candidates, targets, zoneUs)
@@ -1080,7 +1081,10 @@ private fun TimelineClipRow(
                     .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
-                val label = if (layer.type == LayerType.TEXT) layer.text.source.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs)
+                // AUD1 C: the label only changes when the text at the playhead does (a Source Text key): derived state.
+                val textAtPlayhead by remember(layer) { androidx.compose.runtime.derivedStateOf {
+                    if (layer.type == LayerType.TEXT) layer.text.source.evaluate(playhead() - layer.resolvedKeyframeAnchorUs) else "" } }
+                val label = if (layer.type == LayerType.TEXT) textAtPlayhead
                     .replace('\n', ' ').ifBlank { "Text" } else layer.name.ifBlank {
                     when (layer.type) {
                         LayerType.VIDEO -> "Video ${layer.id}"
@@ -1156,7 +1160,7 @@ private fun TimelineClipRow(
         var groupMap by remember(layer.id) { mutableStateOf<Map<Long, Long>?>(null) }
         var groupBase by remember(layer.id) { mutableStateOf<Pair<ProjectDocument, com.fluxx.android.editor.KeyframeSelection>?>(null) }
         val keyframeTimes = dragTimes ?: observedTimes
-        val latestPlayhead by rememberUpdatedState(playheadUs)
+        fun latestPlayhead() = playhead()
         val latestTimes by rememberUpdatedState(observedTimes)
         val cancelDrag by rememberUpdatedState(onCancelGesture)
         DisposableEffect(layer.id) { onDispose { if (dragTimes != null) cancelDrag() } }
@@ -1183,7 +1187,7 @@ private fun TimelineClipRow(
                             translate(x - sz / 2f, (size.height - sz) / 2f) {
                                 drawPath(p, clipBgColor, alpha = a, style = knockoutStroke)
                                 if (selectedKeys?.contains(t - anchorOffsetUs) == true) drawPath(p, Highlight, alpha = a, style = selectedStroke)
-                                if (playheadUs == startUs + t) { drawPath(p, Highlight, alpha = a); drawPath(p, Color(0xFF1C1C1C), alpha = a, style = markerStroke) }
+                                if (playhead() == startUs + t) { drawPath(p, Highlight, alpha = a); drawPath(p, Color(0xFF1C1C1C), alpha = a, style = markerStroke) }
                                 else { drawPath(p, Color(0xFF1C1C1C), alpha = a); drawPath(p, Highlight.copy(alpha = 0.9f), alpha = a, style = markerStroke) }
                             }
                         }
@@ -1200,7 +1204,6 @@ private fun TimelineClipRow(
                     if (kfTimeUs in 0L..durationUs && editable) {
                         val displayTime = groupMap?.get(kfTimeUs) ?: if (movingFrom == kfTimeUs) movingTo ?: kfTimeUs else kfTimeUs
                         val kfOffsetDp = with(density) { (displayTime * pxPerUs).toFloat().toDp() }
-                        val isAtPlayhead = playheadUs == startUs + displayTime
                         val span = if (editable) editableSpans.getOrNull(editableTimes.indexOf(displayTime)) else null
                         val hitLeft = span?.start?.dp ?: (kfOffsetDp - (LayerKeyMarkers.HIT_WIDTH_DP / 2).dp)
                         val hitWidth = span?.let { (it.endInclusive - it.start).dp } ?: LayerKeyMarkers.HIT_WIDTH_DP.dp
@@ -1241,7 +1244,7 @@ private fun TimelineClipRow(
                                                 val layer0 = project0.composition.layers.first { it.id == layer.id }
                                                 val anchor = layer0.resolvedKeyframeAnchorUs
                                                 val candidates = sel0.times.map { Math.addExact(anchor, it) }
-                                                val targets = com.fluxx.android.editor.DragSnap.withTicks(com.fluxx.android.editor.DragSnap.targets(project0, latestPlayhead, project0.composition.layers.map { it.id }.toSet() - layer.id, clipEdges = false),
+                                                val targets = com.fluxx.android.editor.DragSnap.withTicks(com.fluxx.android.editor.DragSnap.targets(project0, latestPlayhead(), project0.composition.layers.map { it.id }.toSet() - layer.id, clipEdges = false),
                                                     candidates, raw, frameRate, dragLevel, snapStartFrame)
                                                 val snap = com.fluxx.android.editor.DragSnap.snap(raw, candidates, targets, zoneUs)
                                                 locked(snap.target)
@@ -1260,7 +1263,7 @@ private fun TimelineClipRow(
                                                 add(com.fluxx.android.editor.SnapTarget(startUs, com.fluxx.android.editor.SnapKind.NEIGHBOUR))
                                                 add(com.fluxx.android.editor.SnapTarget(startUs + durationUs, com.fluxx.android.editor.SnapKind.NEIGHBOUR))
                                             }
-                                            val targets = com.fluxx.android.editor.DragSnap.withTicks(com.fluxx.android.editor.DragSnap.targets(currentProject, latestPlayhead, currentProject.composition.layers.map { it.id }.toSet() - layer.id, clipEdges = false) + own,
+                                            val targets = com.fluxx.android.editor.DragSnap.withTicks(com.fluxx.android.editor.DragSnap.targets(currentProject, latestPlayhead(), currentProject.composition.layers.map { it.id }.toSet() - layer.id, clipEdges = false) + own,
                                                 listOf(candidate), raw, frameRate, dragLevel, snapStartFrame).filter { it.timeUs in startUs..(startUs + durationUs) }
                                             val snap = com.fluxx.android.editor.DragSnap.snap(raw, listOf(candidate), targets, zoneUs)
                                             locked(snap.target)
@@ -1336,7 +1339,7 @@ private fun TimelineClipRow(
                                 drawPath(path = diamondPath, color = clipBgColor, style = knockoutStroke)
                                 // TLP T5: a selected key gets an outer accent outline (beside the playhead fill rule).
                                 if (selectedKeys?.contains(kfTimeUs - anchorOffsetUs) == true) drawPath(path = diamondPath, color = Highlight, style = Stroke(width = 2.5.dp.toPx()))
-                                if (isAtPlayhead) {
+                                if (playhead() == startUs + displayTime) {
                                     drawPath(
                                         path = diamondPath,
                                         color = Highlight
