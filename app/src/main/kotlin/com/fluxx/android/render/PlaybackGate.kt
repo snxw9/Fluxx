@@ -10,6 +10,11 @@ object PreviewFrames {
     private val presented = AtomicLong()
     val count: Long get() = presented.get()
     internal fun presented() { presented.incrementAndGet() }
+    /**
+     * AUD1: a TEST-ONLY observer of presented preview frames: (frame time us, render start ns, presented ns). Null in the
+     * app; the benchmark sets it to time video against audio. No behaviour change.
+     */
+    @Volatile var testObserver: ((Long, Long, Long) -> Unit)? = null
 }
 
 /**

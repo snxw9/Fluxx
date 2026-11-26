@@ -410,6 +410,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         try { renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled) } finally { android.os.Trace.endSection() }
         stageNs[STAGE_FRAME] += System.nanoTime() - framing
         PreviewFrames.presented()
+        PreviewFrames.testObserver?.invoke(timeUs, framing, System.nanoTime())
         // Sharper SDF tiers are generated off-thread; this frame used the previous tier. Unless frames are already
         // streaming (playback), wait (cancellably) for the glyphs and redraw once so a settled frame becomes sharp.
         val now = System.nanoTime()
