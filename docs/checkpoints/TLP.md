@@ -12,6 +12,13 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). **Push
 - **TL3 (the twirl-down):** B1–B5 built; its record is `docs/checkpoints/TL3.md`. Device classes for TLP.3 / TL3 have passed on the A16 (see TL3.md, Tests).
 - **TL3.1:** phone-test fixes, B1–B8 additions, the waveform fix (C) and the playback diagnosis (D) are done; see the TL3.1 section of TL3.md.
 - **AUD1 (branch `aud1`, not merged):** streaming playback from a decoded-PCM cache, priming trim and a heard-time A/V clock (cold first sound 59.9 s -> 1.18 s; beats within +/-16 ms median); backward scrub stalls traced to the video seek path (reported, not changed). See `docs/checkpoints/AUD1.md`.
+- **AUD2 (branch `aud1`, not merged):**
+  - The timeline follows the heard clock: it was 33–85 ms behind the sound, now ~0. The waveform row itself was never stale.
+  - Pause / resume no longer triggers the decoder re-seek spiral: the VP9 mid-file jump went from 600–750 ms to 50 ms.
+  - Backward scrub: the first frame went from 1.8–3.8 s to 60–120 ms. Gaps on H.264 are still up to 0.8 s.
+  - Gain no longer crashes above 100 % (the slider is held to the model's 0–100 %) and plays live as one gesture.
+  - Beyond 4 layers the decoder pool no longer thrashes: the cap is 4, and the lowest layers are left out.
+  - See `docs/checkpoints/AUD2.md`.
 - **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1, TLP.2, TLP.3 and TL3 (phone test lists at the end of each section).
 
 ## T0. Selection architecture (written before the code)
