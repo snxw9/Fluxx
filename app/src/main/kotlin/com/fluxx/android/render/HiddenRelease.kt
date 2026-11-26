@@ -45,3 +45,33 @@ class DelayedRelease<K>(private val delayMs: Long = DEFAULT_DELAY_MS, private va
     val pending: Set<K> get() = unwantedSince.keys.toSet()
     companion object { const val DEFAULT_DELAY_MS = 3_000L }
 }
+
+/**
+ * AUD2 B4: which decoder each video layer of one frame uses (pure, JVM tested). Assigned from the TOP layer down, so
+ * when there are more distinct sources than [MAX_DECODERS]-style slots the layers left out are the lowest ones.
+ * - Layers of the same URI whose source times are within [SHARE_US] share one decoder (it serves both from its cache).
+ * - The same URI at different source times (one clip on several layers, other in-points) gets one decoder per time:
+ *   a shared decoder seeked on every layer request (89 flushes in 20 s for 3 layers, AUD2 A5).
+ * - Keys are "uri" for the first decoder of a URI and "uri#k" for the k-th; a null key = no decoder (not drawn).
+ */
+object DecoderKeys {
+    const val SHARE_US = 50_000L
+    /** Simultaneous preview / export decoders (A5: 1 1080p layer is smooth, 2 at ~21 fps, 4 at ~4 fps on the A16). */
+    const val MAX_DECODERS = 4
+    const val MAX_DECODERS_LOW_RAM = 2
+    /** [layers] in draw order (bottom first): (layer id, uri, source time us). */
+    fun assign(layers: List<Triple<Long, String, Long>>, slots: Int): Map<Long, String?> {
+        val out = LinkedHashMap<Long, String?>()
+        val given = ArrayList<Triple<String, String, Long>>()   // (key, uri, source time)
+        for ((id, uri, src) in layers.asReversed()) {
+            val shared = given.firstOrNull { it.second == uri && kotlin.math.abs(it.third - src) <= SHARE_US }
+            out[id] = when {
+                shared != null -> shared.first
+                given.size >= slots -> null
+                else -> { val k = given.count { it.second == uri }; val key = if (k == 0) uri else "$uri#$k"; given += Triple(key, uri, src); key }
+            }
+        }
+        return out
+    }
+    fun uri(key: String): String = key.substringBefore('#')
+}

@@ -20,7 +20,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private val interactive = surface != null
     val session = RenderBridge.create(surface,width,height,context.assets).also { check(it != 0L) { "Vulkan rendering is unavailable" } }
     private val lowRam = context.getSystemService(android.app.ActivityManager::class.java).isLowRamDevice
-    private val decoderSlots = if (lowRam) 2 else 4
+    // AUD2 B4: the cap on simultaneous video decoders (code constants; beyond it the lowest layers are left out).
+    private val decoderSlots = if (lowRam) DecoderKeys.MAX_DECODERS_LOW_RAM else DecoderKeys.MAX_DECODERS
     private val frameBudget = if (lowRam) 48L*1024*1024 else 96L*1024*1024
     private val imageBudget = if (lowRam) 16L*1024*1024 else 32L*1024*1024
     private data class DecoderEntry(val decoder: VideoDecoder, val info: MediaRepository.VideoInfo) {
@@ -37,7 +38,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private var wantedDecoders = emptySet<String>()
     private var wantedRasters = emptySet<String>()
     private fun releaseHidden() {
-        for (uri in decoderRelease.due(decoders.keys.toList(), wantedDecoders)) { flush(); decoders.remove(uri)?.decoder?.close() }
+        // AUD2 B4: decoders are keyed per URI and per distinct source time ("uri#k"); release those of hidden URIs.
+        val wantedKeys = decoders.keys.filter { DecoderKeys.uri(it) in wantedDecoders }.toSet()
+        for (key in decoderRelease.due(decoders.keys.toList(), wantedKeys)) { flush(); decoders.remove(key)?.decoder?.close() }
         for (key in rasterRelease.due(images.keys.toList(), wantedRasters)) { flush(); images.remove(key)?.buffer?.close() }
     }
     private var prepared: ProjectDocument? = null
@@ -358,27 +361,41 @@ class CompositionRenderer(private val context: Context, private val repository: 
         stageNs[STAGE_FLUSHES]++
         staged = 0
     }
-    private fun evictDecoder() {
+    /** Evicts the least recently used decoder the current frame does not use; false when every one is in use. */
+    private fun evictDecoder(): Boolean {
+        val key = decoders.keys.firstOrNull { it !in frameKeys } ?: return false
         flush() // A codec image cannot be released while a pending batch can still sample it.
-        val iterator = decoders.entries.iterator()
-        if (iterator.hasNext()) { iterator.next().value.decoder.close(); iterator.remove() }
+        decoders.remove(key)?.decoder?.close()
+        return true
     }
-    private fun decoder(uri: String): VideoDecoder {
-        decoders[uri]?.let { return it.decoder }
+    /**
+     * AUD2 B4: the decoder for [key] (a source URI, plus "#k" for the k-th distinct source time of that URI in one frame).
+     * Never evicts a decoder the current frame already uses (that froze every layer at once: each eviction re-opened
+     * another layer's decoder, every frame). Null when none can be had: the layer is left out of this frame.
+     */
+    private fun decoder(key: String, uri: String): VideoDecoder? {
+        decoders[key]?.let { return it.decoder }
         val info = repository.video(uri)
         while (decoders.isNotEmpty() && (decoders.size >= decoderSlots ||
             decoders.values.sumOf { it.bytes } + info.width.toLong()*info.height*8 > frameBudget ||
-            decoders.values.count { it.info.mime == info.mime } >= info.maxInstances)) evictDecoder()
+            decoders.values.count { it.info.mime == info.mime } >= info.maxInstances)) if (!evictDecoder()) break
+        if (decoders.size >= decoderSlots) return null
         var opened: VideoDecoder? = null
         try { opened = VideoDecoder(context,Uri.parse(uri)) }
         catch (e: Exception) {
-            // Advertised instance counts are advisory. Retry with the smallest working set.
+            // Advertised instance counts are advisory. Retry with the smallest working set this frame allows.
             if (decoders.isEmpty()) throw e
-            while (decoders.isNotEmpty()) evictDecoder()
-            opened = VideoDecoder(context,Uri.parse(uri))
+            while (evictDecoder()) Unit
+            opened = try { VideoDecoder(context,Uri.parse(uri)) } catch (again: Exception) { if (decoders.isEmpty()) throw again; null }
         }
-        return requireNotNull(opened).also { decoders[uri] = DecoderEntry(it,info) }
+        return opened?.also { decoders[key] = DecoderEntry(it,info) }
     }
+    /** AUD2 B4: the decoder keys this frame uses, and each video layer's key (null: over [decoderSlots], not drawn). */
+    private val frameKeys = HashSet<String>()
+    private val layerKeys = HashMap<Long, String?>()
+    private val frameVideo = ArrayList<Triple<Long, String, Long>>()
+    /** AUD2 B4: video layers left out of the last frame (more distinct sources than decoders). */
+    var layersWithoutDecoder = 0; private set
     private fun raster(layer: CompositionLayer): Raster {
         val key = if(layer.type == LayerType.SOLID) "solid:${layer.solidColorArgb}" else requireNotNull(layer.asset?.uri)
         images[key]?.let { return it }
@@ -393,6 +410,11 @@ class CompositionRenderer(private val context: Context, private val repository: 
         images[key]=result
         return result
     }
+
+    /** AUD2 B2: preview frames may use the decoders' bounded scrub decode (set by the preview while seeks stream in). */
+    @Volatile var approximateFrames = false
+    /** AUD2 B2: the last rendered frame showed at least one approximate video frame (the preview renders it exactly next). */
+    var lastFrameApproximate = false; private set
 
     fun render(project: ProjectDocument, timeUs: Long, cancelled: () -> Boolean = NEVER_CANCELLED) =
         renderTarget(project, timeUs, project.composition.width, project.composition.height, cancelled)
@@ -411,11 +433,6 @@ class CompositionRenderer(private val context: Context, private val repository: 
         stageNs[STAGE_FRAME] += System.nanoTime() - framing
         PreviewFrames.presented()
         PreviewFrames.testObserver?.invoke(timeUs, framing, System.nanoTime())
-    /** AUD2 B2: preview frames may use the decoders' bounded scrub decode (set by the preview while seeks stream in). */
-    @Volatile var approximateFrames = false
-    /** AUD2 B2: the last rendered frame showed at least one approximate video frame (the preview renders it exactly next). */
-    var lastFrameApproximate = false; private set
-
         // Sharper SDF tiers are generated off-thread; this frame used the previous tier. Unless frames are already
         // streaming (playback), wait (cancellably) for the glyphs and redraw once so a settled frame becomes sharp.
         val now = System.nanoTime()
@@ -452,6 +469,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
 
     private fun renderTarget(project: ProjectDocument, timeUs: Long, targetWidth: Int, targetHeight: Int,
         cancelled: () -> Boolean) {
+        lastFrameApproximate = false
         TextIdlePrewarm.frameRendered(System.nanoTime()) // TEXT PERF 10: idle prewarm stays paused while frames render.
         // Export pins the prepared resource snapshot; interactive previews refresh library edits.
         if((interactive || prepared!==project) && preparedFontRevision!=fontLibrary.revision) {
@@ -469,7 +487,6 @@ class CompositionRenderer(private val context: Context, private val repository: 
             prepareTextProject(project)
             plan=nextPlan
             prepared=project
-        lastFrameApproximate = false
             wantedDecoders=RenderLayers.wantedDecoders(project); wantedRasters=RenderLayers.wantedRasters(project)
         }
         // Between frames: nothing is staged and the previous frame's GPU work has completed (submitWork waits on its fence).
@@ -536,6 +553,17 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 staged++
             }
         }
+        // AUD2 B4: this frame's decoders, assigned from the top layer down (at most decoderSlots distinct ones).
+        frameVideo.clear()
+        requireNotNull(plan).forEachActive(timeUs) { layer,_,sourceTimeUs,_ ->
+            if (layer.type == LayerType.VIDEO) {
+                val visibleNow = (if (layer.animTransform.isAnyAnimated()) layer.evaluatedTransform(timeUs).opacity else layer.transform.opacity) != 0f
+                if (visibleNow) layer.asset?.uri?.let { frameVideo += Triple(layer.id, it, sourceTimeUs) }
+            }
+        }
+        layerKeys.clear(); layerKeys.putAll(DecoderKeys.assign(frameVideo, decoderSlots))
+        frameKeys.clear(); layerKeys.values.filterNotNullTo(frameKeys)
+        layersWithoutDecoder = layerKeys.values.count { it == null }
         requireNotNull(plan).forEachActive(timeUs) { layer,localTimeUs,sourceTimeUs,_ ->
             if (cancelled()) throw CancellationException("Superseded frame")
             val isAnim = layer.animTransform.isAnyAnimated()
@@ -580,7 +608,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
                     layer.text.baselineShift.evaluate(local), layer.text.strokeColour.evaluate(local), layer.text.strokeWidthAt(local), layer.text.paintOrder(local),modifiers=animation.modifiers)) { "Could not composite text" }
             } else if(layer.type == LayerType.VIDEO) {
                 val uri=requireNotNull(layer.asset?.uri)
-                val decoder=decoder(uri)
+                // AUD2 B4: over the decoder cap the layer is left out of this frame; the others keep playing.
+                val key=layerKeys[layer.id] ?: return@forEachActive
+                val decoder=decoder(key,uri) ?: run { layersWithoutDecoder++; return@forEachActive }
                 // A source reused by several clips may need a seek; finish earlier uses before advancing it.
                 flush()
                 // AUD2 B2: while scrubbing, a bounded decode (the nearest cached / sync frame); the exact frame follows.
