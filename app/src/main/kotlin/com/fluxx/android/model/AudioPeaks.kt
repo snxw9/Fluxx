@@ -35,7 +35,8 @@ class PeakPyramid(val sampleRate: Int, val durationUs: Long, val levels: List<Pa
         const val BASE = 256
         const val FACTOR = 4
         /** Bumped whenever the file layout or the analysis changes: it is part of the cache key. */
-        const val FORMAT_VERSION = 1
+        /** TL3.1 C: 2 = peaks placed by presentation time from the decoder's real output format (stale v1 peaks rebuild). */
+        const val FORMAT_VERSION = 2
 
         fun read(file: File): PeakPyramid? = runCatching {
             DataInputStream(file.inputStream().buffered()).use { inp ->
@@ -51,15 +52,26 @@ class PeakPyramid(val sampleRate: Int, val durationUs: Long, val levels: List<Pa
 /** TL3 B5: builds a [PeakPyramid] while samples stream in (no whole-file PCM in memory); cancellation is the caller's. */
 class PeakBuilder(private val sampleRate: Int) {
     private val mins = ArrayList<Float>(); private val maxs = ArrayList<Float>()
-    private var count = 0; private var lo = Float.MAX_VALUE; private var hi = -Float.MAX_VALUE
+    /** One past the last sample index written. */
     var samples = 0L; private set
 
-    fun add(sample: Float) {
-        if (sample < lo) lo = sample; if (sample > hi) hi = sample
-        samples++
-        if (++count == PeakPyramid.BASE) flush()
+    /** The next sample (sample index = the count so far). */
+    fun add(sample: Float) = addAt(samples, sample)
+
+    /**
+     * TL3.1 C: a sample at its ABSOLUTE index (presentation time x the true output rate), so the peaks sit at the same
+     * source times as the mixer's samples (it places decoded samples by presentation time too). Before 0: dropped (AAC
+     * priming before the stream's start). Gaps stay silent.
+     */
+    fun addAt(index: Long, sample: Float) {
+        if (index < 0) return
+        val b = (index / PeakPyramid.BASE).toInt()
+        while (mins.size <= b) { mins += Float.MAX_VALUE; maxs += -Float.MAX_VALUE }
+        if (sample < mins[b]) mins[b] = sample
+        if (sample > maxs[b]) maxs[b] = sample
+        if (index + 1 > samples) samples = index + 1
     }
-    private fun flush() { if (count == 0) return; mins += lo; maxs += hi; count = 0; lo = Float.MAX_VALUE; hi = -Float.MAX_VALUE }
+    private fun flush() { for (i in mins.indices) if (mins[i] == Float.MAX_VALUE) { mins[i] = 0f; maxs[i] = 0f } }
 
     fun build(): PeakPyramid {
         flush()

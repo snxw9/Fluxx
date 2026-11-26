@@ -230,4 +230,119 @@ class Tl31MeasureTest {
         Thread.sleep(600); compose.waitForIdle()
         play("D3 playback, 3 layers expanded")
     }
+
+    // ---- Part C: waveform correctness ---------------------------------------------------------------------------------
+    /** Runs of [n] steps whose level exceeds [threshold], as (start, end) step indices (end exclusive). */
+    private fun runs(n: Int, threshold: Float, level: (Int) -> Float): List<Pair<Int, Int>> {
+        val out = ArrayList<Pair<Int, Int>>(); var start = -1
+        for (i in 0 until n) { val on = level(i) > threshold
+            if (on && start < 0) start = i; if (!on && start >= 0) { out += start to i; start = -1 } }
+        if (start >= 0) out += start to n
+        return out
+    }
+
+    private fun peaksOf(uri: String): PeakPyramid {
+        val provider = com.fluxx.android.media.AudioPeakProvider.get(context)
+        compose.runOnIdle { provider.states.remove(uri); provider.request(uri) }
+        compose.waitUntil(60_000) { compose.runOnIdle { provider.states[uri] !is com.fluxx.android.media.AudioPeakProvider.Peaks.Loading && provider.states[uri] != null } }
+        return (compose.runOnIdle { provider.states[uri] } as com.fluxx.android.media.AudioPeakProvider.Peaks.Ready).pyramid
+    }
+
+    /** The mixer's own PCM for one VIDEO layer of [uri] (AudioMixer is called, not changed): left channel, 48 kHz. */
+    private fun mixerLeft(uri: String, durationUs: Long): Pair<ShortArray, Long> {
+        val layer = CompositionLayer(1, LayerType.VIDEO, timing = ClipTiming(0, 0, durationUs), asset = AssetReference("tl31", uri, durationUs = durationUs))
+        val project = ProjectDocument(Composition(durationUs = durationUs, frameRate = rate, layers = FrozenList.of(listOf(layer))))
+        val out = java.io.File(context.cacheDir, "tl31-mix.pcm")
+        val t0 = System.nanoTime()
+        com.fluxx.android.render.AudioMixer.mix(context, project, out, { false })
+        val ms = (System.nanoTime() - t0) / 1_000_000
+        val bytes = out.readBytes(); val bb = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        val left = ShortArray(bytes.size / 4) { bb.getShort(it * 4) }
+        out.delete()
+        return left to ms
+    }
+
+    @Test fun cWaveformBurstsMatchTheTruthAndTheMixer() {
+        val truth = listOf(.25 to .35, .6 to .65, 1.2 to 1.5)
+        for ((sr, ch) in listOf(44_100 to 1, 48_000 to 2, 44_100 to 2, 48_000 to 1)) {
+            val file = Tl31Fixtures.aacBursts(context, "tl31-c-$sr-$ch.m4a", sr, ch, 2.0, truth, amp = .5)
+            val uri = android.net.Uri.fromFile(file).toString()
+            val p = peaksOf(uri)
+            val bucket = p.bucketUs(0)
+            val (mn, mx) = p.levels[0]
+            val found = runs(mx.size, .1f) { maxOf(kotlin.math.abs(mn[it]), kotlin.math.abs(mx[it])) }.map { (a, b) -> a * bucket / 1e6 to b * bucket / 1e6 }
+            val peak = mx.maxOrNull() ?: 0f
+            val (left, mixMs) = mixerLeft(uri, 2_000_000)
+            // The mixer's PCM in 256-sample envelope buckets at 48 kHz (raw samples cross zero inside a tone).
+            val mixBuckets = (left.size + 255) / 256
+            val env = FloatArray(mixBuckets) { b -> var m = 0; for (i in b * 256 until minOf(left.size, b * 256 + 256)) m = maxOf(m, kotlin.math.abs(left[i].toInt())); m / 32767f }
+            val mixRuns = runs(mixBuckets, .1f) { env[it] }.map { (a, b) -> a * 256 / 48_000.0 to b * 256 / 48_000.0 }
+            val mixPeak = (left.maxOrNull() ?: 0).toFloat() / 32767f
+            fun err(r: List<Pair<Double, Double>>) = r.zip(truth).joinToString(" ") { (f, t) -> "%+.1f/%+.1fms".format((f.first - t.first) * 1000, (f.second - t.second) * 1000) }
+            report("C ${sr}Hz ${ch}ch: peaks runs=${found.size} bucket=%.2fms start/end vs truth: ${err(found)}; peak=%.3f".format(bucket / 1000, peak), emptyList())
+            report("C ${sr}Hz ${ch}ch: mixer runs=${mixRuns.size} (${mixMs}ms) start/end vs truth: ${err(mixRuns)}; peak=%.3f (mixer gain x headroom)".format(mixPeak), emptyList())
+            org.junit.Assert.assertEquals("$sr/$ch: the three bursts", 3, found.size)
+            org.junit.Assert.assertEquals("$sr/$ch: the mixer's three bursts", 3, mixRuns.size)
+            // The waveform matches what PLAYS (the mixer) within one bucket at both ends (+ the mixer's own 256-sample buckets).
+            val tol = bucket / 1e6 + 256.0 / 48_000
+            for ((f, m) in found.zip(mixRuns)) {
+                org.junit.Assert.assertEquals("$sr/$ch start vs mixer", m.first, f.first, tol)
+                org.junit.Assert.assertEquals("$sr/$ch end vs mixer", m.second, f.second, tol)
+            }
+            // Both sit at the file's time + the AAC encoder priming (2048 samples, not trimmed by either path): reported.
+            val priming = 2048.0 / sr
+            for ((f, t) in found.zip(truth)) org.junit.Assert.assertEquals("$sr/$ch start vs truth + priming", t.first + priming, f.first, tol + 1024.0 / sr)
+        }
+    }
+
+    // ---- Part D: playback diagnosis (measure only; AudioMixer / playback are not changed) ------------------------------
+    @Test fun d1PreparingAudioCostByLength() {
+        for (secs in listOf(10.0, 60.0, 120.0)) {
+            val t0 = System.nanoTime()
+            val file = Tl31Fixtures.videoWithAudio(context, "tl31-d-${secs.toInt()}.mp4", secs)
+            val genMs = (System.nanoTime() - t0) / 1_000_000
+            val uri = android.net.Uri.fromFile(file).toString()
+            // Extractor + decode (the peak decoder: same extractor / codec work as the mixer's per-layer decode).
+            val d0 = System.nanoTime(); peaksOf(uri); val decodeMs = (System.nanoTime() - d0) / 1_000_000
+            // The mixer's whole preparation (what "Preparing audio" waits for): decode + resample + scratch file + 16-bit convert.
+            val (_, mixMs) = mixerLeft(uri, (secs * 1_000_000).toLong())
+            val scratchMb = secs * 48_000 * 8 / 1e6
+            report("D1 ${secs.toInt()}s source: mix (Preparing audio) ${mixMs}ms; decode-only ${decodeMs}ms; mix minus decode ${mixMs - decodeMs}ms (resample, %.1f MB float scratch read-modify-write, 16-bit convert); fixture made in ${genMs}ms; file %.1f KB"
+                .format(scratchMb, file.length() / 1024.0), emptyList())
+        }
+    }
+
+    @Test fun d2PlaybackStartAndUnderruns() {
+        val file = Tl31Fixtures.videoWithAudio(context, "tl31-d2-60.mp4", 60.0)
+        val uri = android.net.Uri.fromFile(file).toString()
+        val video = CompositionLayer(1, LayerType.VIDEO, name = "fixture", timing = ClipTiming(0, 0, 60_000_000),
+            asset = AssetReference("tl31-d2", uri, durationUs = 60_000_000))
+        editor = EditorViewModel()
+        editor.dispatch(EditorAction.Load(ProjectDocument(Composition(durationUs = 60_000_000, frameRate = rate, layers = FrozenList.of(listOf(video))))))
+        compose.setContent { FluxxTheme { EditorScreen(editor, MediaRepository(context), controller.value, null, true, false,
+            onSurfaceAvailable = { s, w, h ->
+                if (controller.value == null) controller.value = PreviewController(context, s, w, h, onPosition = { editor.reportPosition(it) })
+                controller.value!!.update(editor.displayedState.project, editor.displayedState.playheadUs, false)
+            }, onSurfaceDestroyed = {}, onSurfaceResized = { _, _ -> }, onRequestMediaPermission = {}, onOpenDocumentPicker = {},
+            onSaveProject = {}, onLoadProject = {}, onExportStart = {}, onExportCancel = {}, onOpenExportedVideo = {}) } }
+        compose.waitUntil(10_000) { controller.value != null }
+        Thread.sleep(1000)
+        val c = controller.value!!
+        val playbackField = PreviewController::class.java.getDeclaredField("playback").apply { isAccessible = true }
+        fun track(): android.media.AudioTrack? = playbackField.get(c)?.let { pb -> pb.javaClass.getDeclaredField("track").apply { isAccessible = true }.get(pb) as android.media.AudioTrack }
+        val window = compose.activity.window
+        for (round in 1..2) {
+            val t0 = System.nanoTime()
+            compose.runOnIdle { c.play() }
+            var readyMs = -1L
+            while (System.nanoTime() - t0 < 120_000_000_000L) { val t = track(); if (t != null && t.playState == android.media.AudioTrack.PLAYSTATE_PLAYING) { readyMs = (System.nanoTime() - t0) / 1_000_000; break }; Thread.sleep(10) }
+            val frames = frames(window) { Thread.sleep(8000) }
+            val t = track()
+            val underruns = t?.underrunCount ?: -1
+            val bufferFrames = t?.bufferSizeInFrames ?: -1
+            compose.runOnIdle { c.pause() }
+            report("D2 round $round (60s fixture): play -> audio playing ${readyMs}ms; underruns in 8s: $underruns; AudioTrack buffer $bufferFrames frames (%.0fms) during playback".format(bufferFrames / 48.0), frames)
+            Thread.sleep(800); compose.runOnIdle { c.seek(0) }; Thread.sleep(500)
+        }
+    }
 }

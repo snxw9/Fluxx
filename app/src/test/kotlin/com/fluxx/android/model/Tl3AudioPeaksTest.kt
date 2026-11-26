@@ -64,4 +64,19 @@ class Tl3AudioPeaksTest {
         assertEquals(.5f, WaveformMapping.envelope(-.5f, .25f)); assertEquals(.75f, WaveformMapping.envelope(-.1f, .75f)); assertEquals(1f, WaveformMapping.envelope(-3f, 0f))
         assertTrue(WaveformMapping.dimmed(layer.copy(muted = true))); assertTrue(WaveformMapping.dimmed(layer.copy(audioGain = 0f)))
     }
+
+    @Test fun tl31SamplesArePlacedByPresentationTimeNotByCount() {
+        val b = PeakBuilder(48_000)
+        // A decoder whose first output starts 20 ms in (pts 20 000 us = sample 960): a burst at 100 ms of SOURCE time
+        // must land in the bucket of 100 ms, not 80 ms.
+        for (i in 0 until 4800) b.addAt(960L + i, 0f)                   // 20..120 ms silence
+        for (i in 0 until 256) b.addAt(4800L + i, if (i % 2 == 0) .8f else -.8f) // the burst at 100 ms
+        b.addAt(-5, 1f)                                                   // priming before 0: dropped
+        val p = b.build()
+        val bucket = (100_000.0 / p.bucketUs(0)).toInt()
+        assertEquals(.8f, p.levels[0].second[bucket], 0f)
+        assertEquals(0f, p.levels[0].second[0], 0f)                      // before the first output: silent, not the dropped priming
+        assertEquals(0f, p.levels[0].second[bucket - 1], 0f)
+        assertEquals(PeakPyramid.FORMAT_VERSION, 2)
+    }
 }

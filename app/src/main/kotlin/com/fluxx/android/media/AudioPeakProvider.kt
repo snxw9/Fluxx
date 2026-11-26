@@ -86,7 +86,14 @@ class AudioPeakProvider private constructor(private val context: Context) {
         return Peaks.Ready(pyramid)
     }
 
-    /** Mono (channel average) peaks of the first audio track; null when the source has none. */
+    /**
+     * Peaks of the first audio track; null when the source has none. TL3.1 C:
+     * - the decoder's ACTUAL output format (after INFO_OUTPUT_FORMAT_CHANGED: rate, channels, 16-bit or float PCM), not the
+     *   container's (HE-AAC SBR / PS can double the rate or change the channel count);
+     * - each sample placed by its PRESENTATION TIME (buffer pts + i / rate), as the mixer places them, so AAC priming and
+     *   any start offset land where the mixer puts them; samples before 0 are dropped;
+     * - channels downmixed to the channel of largest magnitude (a signed peak: out-of-phase stereo cannot cancel out).
+     */
     private suspend fun decode(uri: Uri): PeakPyramid? {
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
@@ -95,12 +102,12 @@ class AudioPeakProvider private constructor(private val context: Context) {
             val track = (0 until extractor.trackCount).firstOrNull { extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true } ?: return null
             extractor.selectTrack(track)
             val format = extractor.getTrackFormat(track)
-            format.setInteger(MediaFormat.KEY_PCM_ENCODING, android.media.AudioFormat.ENCODING_PCM_16BIT)
             var rate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             var channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            var encoding = android.media.AudioFormat.ENCODING_PCM_16BIT
             val c = MediaCodec.createDecoderByType(requireNotNull(format.getString(MediaFormat.KEY_MIME)))
             codec = c; c.configure(format, null, null, 0); c.start()
-            var builder = PeakBuilder(rate)
+            var builder: PeakBuilder? = null
             val info = MediaCodec.BufferInfo()
             var inputEnded = false; var ended = false
             while (!ended) {
@@ -115,22 +122,29 @@ class AudioPeakProvider private constructor(private val context: Context) {
                 }
                 val o = c.dequeueOutputBuffer(info, 2000)
                 if (o == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                    rate = c.outputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE); channels = c.outputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-                    if (builder.samples == 0L) builder = PeakBuilder(rate)
+                    val out = c.outputFormat
+                    rate = out.getInteger(MediaFormat.KEY_SAMPLE_RATE); channels = out.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                    if (out.containsKey(MediaFormat.KEY_PCM_ENCODING)) encoding = out.getInteger(MediaFormat.KEY_PCM_ENCODING)
                 } else if (o >= 0) {
+                    val b = builder ?: PeakBuilder(rate).also { builder = it }
                     val buffer = requireNotNull(c.getOutputBuffer(o)).order(ByteOrder.LITTLE_ENDIAN)
                     buffer.position(info.offset); buffer.limit(info.offset + info.size)
-                    val frames = info.size / (channels * 2)
+                    val float = encoding == android.media.AudioFormat.ENCODING_PCM_FLOAT
+                    val frames = info.size / (channels * if (float) 4 else 2)
+                    val first = Math.round(info.presentationTimeUs * rate / 1_000_000.0)
                     for (f in 0 until frames) {
-                        var sum = 0f
-                        for (ch in 0 until channels) sum += buffer.short / 32768f
-                        builder.add(sum / channels)
+                        var peak = 0f
+                        for (ch in 0 until channels) {
+                            val v = if (float) buffer.float else buffer.short / 32768f
+                            if (kotlin.math.abs(v) > kotlin.math.abs(peak)) peak = v
+                        }
+                        b.addAt(first + f, peak)
                     }
                     ended = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
                     c.releaseOutputBuffer(o, false)
                 }
             }
-            return builder.build()
+            return (builder ?: PeakBuilder(rate)).build()
         } finally {
             try { codec?.stop() } catch (_: Exception) {}
             codec?.release(); extractor.release()
