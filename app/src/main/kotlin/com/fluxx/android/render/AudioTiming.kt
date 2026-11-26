@@ -106,6 +106,23 @@ object AvClock {
         return startFrame + heard.coerceIn(0L, headFrames.coerceAtLeast(0L))
     }
     fun us(frames: Long): Long = frames * 1_000_000L / AudioTiming.RATE
+    /**
+     * AUD2 B2: the lag used before the first AudioTimestamp. getLatency() includes the track buffer, which lies AHEAD of the
+     * head (not behind it): head - getLatency sat at the start for ~340 ms and then jumped +80 ms. What remains after the
+     * buffer is the output path behind the head.
+     */
+    fun fallbackLagFrames(latencyFrames: Long, bufferFrames: Long): Long = (latencyFrames - bufferFrames).coerceAtLeast(0L)
+    /** AUD2 B2: the clock never steps back (a backward step made the video decoder seek); it holds until time catches up. */
+    fun monotonic(lastUs: Long, nextUs: Long): Long = maxOf(lastUs, nextUs)
+    /**
+     * AUD2 B2: a forward correction is caught up at up to [SLEW] x real time instead of in one step. The head does not
+     * move until about the first AudioTimestamp, which then reports ~80 ms already heard: a jump of 1.6 frames at 20 fps
+     * and 2.4 at 30 fps. Monotonic too (never a step back).
+     */
+    fun slew(lastUs: Long, lastNs: Long, targetUs: Long, nowNs: Long): Long =
+        if (targetUs <= lastUs) lastUs else minOf(targetUs, lastUs + ((nowNs - lastNs).coerceAtLeast(0) / 1000) * SLEW_NUM / SLEW_DEN)
+    const val SLEW_NUM = 3L
+    const val SLEW_DEN = 2L
 }
 
 /**

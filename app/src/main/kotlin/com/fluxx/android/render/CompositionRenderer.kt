@@ -411,6 +411,11 @@ class CompositionRenderer(private val context: Context, private val repository: 
         stageNs[STAGE_FRAME] += System.nanoTime() - framing
         PreviewFrames.presented()
         PreviewFrames.testObserver?.invoke(timeUs, framing, System.nanoTime())
+    /** AUD2 B2: preview frames may use the decoders' bounded scrub decode (set by the preview while seeks stream in). */
+    @Volatile var approximateFrames = false
+    /** AUD2 B2: the last rendered frame showed at least one approximate video frame (the preview renders it exactly next). */
+    var lastFrameApproximate = false; private set
+
         // Sharper SDF tiers are generated off-thread; this frame used the previous tier. Unless frames are already
         // streaming (playback), wait (cancellably) for the glyphs and redraw once so a settled frame becomes sharp.
         val now = System.nanoTime()
@@ -464,6 +469,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
             prepareTextProject(project)
             plan=nextPlan
             prepared=project
+        lastFrameApproximate = false
             wantedDecoders=RenderLayers.wantedDecoders(project); wantedRasters=RenderLayers.wantedRasters(project)
         }
         // Between frames: nothing is staged and the previous frame's GPU work has completed (submitWork waits on its fence).
@@ -577,7 +583,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 val decoder=decoder(uri)
                 // A source reused by several clips may need a seek; finish earlier uses before advancing it.
                 flush()
-                val image=decoder.frameAt(sourceTimeUs,cancelled)
+                // AUD2 B2: while scrubbing, a bounded decode (the nearest cached / sync frame); the exact frame follows.
+                val image=decoder.frameAt(sourceTimeUs,cancelled,interactive && approximateFrames)
+                if(decoder.lastApproximate) lastFrameApproximate=true
                 val crop=image.cropRect
                 LayerGeometry.matrix(matrix,posX,posY,scaleX,scaleY,rot,comp.width,comp.height,crop.width(),crop.height(),decoder.rotation,decoder.pixelAspect,
                     referenceWidth=referenceWidth,referenceHeight=referenceHeight,anchorX=layer.anchorX,anchorY=layer.anchorY)

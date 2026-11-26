@@ -39,6 +39,9 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
     @Volatile private var closed=false
     /** AUD2 B1: (read ns, heard us, duration us) of the running playback's last clock read; null when not playing. */
     @Volatile private var clockAnchor: LongArray?=null
+    /** AUD2 B2: seeks are streaming in (scrubbing), and when the last one arrived. */
+    @Volatile private var scrubbing=false
+    @Volatile private var lastSeekNs=Long.MIN_VALUE / 2
     // Accessed only on dispatcher, including sampling and destruction.
     private var samplingRenderer: CompositionRenderer? = null
     private var playback: StreamingPlayback? = null
@@ -57,8 +60,13 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
             renderer=CompositionRenderer(app,repository,surface,width,height)
             samplingRenderer=renderer
             while(isActive && !closed) {
-                if(!playing) changes.receive()
-                else changes.tryReceive()
+            var approximateShown=false
+                // AUD2 B2: after an approximate scrub frame, the exact frame follows once no request came for SETTLE_MS.
+                var settle=false
+                if(!playing) {
+                    if(approximateShown) settle=withTimeoutOrNull(ScrubPolicy.SETTLE_MS) { changes.receive() } == null
+                    else changes.receive()
+                } else changes.tryReceive()
                 val epoch=generation.get()
                 val snapshot=project
                 val quality=resolution
@@ -117,8 +125,11 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
                     if(lastDrawTime!=frameTime) {
                         renderer.renderPreview(snapshot,frameTime,quality,cancel)
                         if(!cancel()) {
+                    if(settle) lastDrawTime=-1
                             lastDrawTime=frameTime
+                        renderer.approximateFrames=!playing && !settle && scrubbing
                             position(epoch,if (playing) frameTime else requestedUs);status(epoch,null)
+                        approximateShown=!playing && renderer.lastFrameApproximate
                         }
                     }
                     if(playing) delay(4)
@@ -161,6 +172,10 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
         changes.trySend(Unit)
     }
     fun seek(timeUs: Long) = update(project,timeUs,false)
+        // AUD2 B2: seeks arriving back to back (a finger scrubbing) allow the decoders' bounded scrub decode.
+        val now=System.nanoTime(); val target=timeUs.coerceIn(0L, project.composition.resolvedDurationUs)
+        if(play) scrubbing=false
+        else if(target!=requestedUs) { scrubbing=ScrubPolicy.scrubbing(now-lastSeekNs); lastSeekNs=now }
     fun play() = update(project, requestedUs.takeIf { it < (project.composition.resolvedDurationUs) } ?: 0, true)
     fun pause() = update(project,requestedUs,false)
     /** Normalized workspace coordinates; native maps through its recorded blit rectangle. */

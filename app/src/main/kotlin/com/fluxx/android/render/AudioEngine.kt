@@ -369,12 +369,16 @@ internal class StreamingPlayback(context: Context, project: ProjectDocument, sta
 
     /** Read on the preview worker only (it also starts the track once audio is ready and the gate opens). */
     val positionUs: Long get() {
-        if (!playing && ready && written > 0 && gate.poll()) { track.play(); playing = true; PreviewFrames.testPlayback?.invoke("track-play") }
+        if (!playing && ready && written > 0 && gate.poll()) { track.play(); playing = true; lastNs = System.nanoTime(); PreviewFrames.testPlayback?.invoke("track-play") }
         if (!playing) return AvClock.us(startFrame)
         val head = track.playbackHeadPosition.toLong() and 0xffffffffL
         val ts = if (track.getTimestamp(stamp)) stamp else null
         val now = System.nanoTime()
-        val us = AvClock.us(AvClock.positionFrames(startFrame, head, now, ts?.framePosition, ts?.nanoTime, latencyFrames))
+        // AUD2 B2: before the first timestamp, the output path behind the head (not the whole latency, which includes
+        // the buffer ahead of it); never a step back (a backward step re-seeked the video decoder); a forward correction
+        // (the first timestamp) is slewed in, not jumped.
+        val us = AvClock.slew(lastUs, lastNs, AvClock.us(AvClock.positionFrames(startFrame, head, now, ts?.framePosition, ts?.nanoTime, fallbackLagFrames)), now)
+        lastUs = us; lastNs = now
         PreviewFrames.testClock?.invoke(now, head, ts != null && ts.nanoTime > 0, us)
         return us
     }
@@ -392,3 +396,6 @@ internal class StreamingPlayback(context: Context, project: ProjectDocument, sta
         runCatching { track.release() }
     }
 }
+    private val fallbackLagFrames = AvClock.fallbackLagFrames(latencyFrames, track.bufferSizeInFrames.toLong())
+    private var lastUs = AvClock.us(startFrame)
+    private var lastNs = 0L

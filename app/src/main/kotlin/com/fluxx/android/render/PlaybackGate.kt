@@ -41,3 +41,12 @@ internal class PlaybackGate(private val presented: () -> Long, private val nowNs
     }
     companion object { const val HOLD_NS = 2_000_000_000L }
 }
+
+/** AUD2 B2: when preview seeks count as a scrub (pure, JVM tested). */
+object ScrubPolicy {
+    /** A seek within this long after the previous one is part of a scrub (bounded decodes allowed). */
+    const val GAP_NS = 250_000_000L
+    /** After an approximate scrub frame, the exact frame is rendered once no request came for this long. */
+    const val SETTLE_MS = 120L
+    fun scrubbing(sinceLastSeekNs: Long) = sinceLastSeekNs in 0 until GAP_NS
+}
