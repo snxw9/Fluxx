@@ -7,7 +7,7 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). **Push
 **Status:**
 - **T0–T6:** done. T6's coverage highlight was skipped at first and then built in TLP.1 Part 6 (the selector coverage box).
 - **TLP.1:** done, except Part 3 (key bar placement), which was blocked and is replaced by TLP.2 Part 3.
-- **TLP.2:** in progress (see the TLP.2 section at the end).
+- **TLP.2:** done (see the TLP.2 section at the end).
 - **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1 and TLP.2 (phone test lists at the end of each section).
 
 ## T0. Selection architecture (written before the code)
@@ -332,3 +332,126 @@ Nothing was changed: the key bar is still where T5 put it (under the sheet). Opt
 4. Select two keys, hold one and drag: both move together by whole frames; drag left past 0: the earliest stops at 0; one Undo puts them back. Drag an unselected key: it moves alone, the selection stays.
 5. Property ⋮: Copy keys with no selection copies all keys; move the playhead, Paste keys. The 6th icon no longer lists key items.
 6. Text layer → Animate → focus a selector (or its Start / End): the red box wraps the covered characters and follows Start / End / Offset / Shape; focus a property field or leave the tab: the white layer box returns.
+
+---
+
+# TLP.2: one red selector box, key bar in the sheet header, drag snapping, drag indicators, housekeeping
+
+Branch `tlp`, continued from `4b51986` (the tip matched). One commit per part, then the device test and this record.
+
+**Status:** all five parts done; no blockers.
+
+| Part | Status | Commit |
+|---|---|---|
+| 1. Housekeeping (stray commits, this header) | Done | reverts `8808f54`, `d5a5fe1`; header `01ff4fa` |
+| 2. ONE red selector box | Done | `036c2bb` |
+| 3. Key bar in the sheet header | Done | `a1686de` |
+| 4. Drag snapping | Done | `ee274e4` |
+| 5. Drag indicators | Done | `1db4096` (ruler highlights in `ee274e4`) |
+
+## Part 1: Housekeeping
+- **What was found:**
+  - `text` (`02c5b5f`) was fully merged into `master` (no unmerged `text` work).
+  - Neither `text` nor `master` had either stray change: the three `tools/text` files were absent, and their `docs/checkpoints/TEXT.md` equalled the version before `1f1f907`. So it was not ambiguous.
+- **Done:**
+  1. Cherry-picked `1f1f907` and `4b51986` onto `text` (in a separate worktree, so `tlp`'s working tree was untouched) and pushed `text` normally: `02c5b5f..861644a`.
+  2. On `tlp`, reverted both commits with `git revert`, a visible revert pair: `8808f54`, `d5a5fe1`. The tree is now identical to `8f12345`. No force push.
+  3. `master` was not touched.
+- **Branch heads after this part:** `text` `861644a`, `master` `2377a83` (unchanged).
+- **Header:** the stale header of this file now describes the real state (pushed, T0–T6 and TLP.1 done, TLP.2 status).
+
+## Part 2: ONE red selector box
+- **Why there were two boxes:** the TLP.1 overlay already replaced the white outline with the red one, but it kept the resize / rotate handles at the layer's corners, which read as a second box.
+- **Now (`PreviewBoxRule`):** while the focused selector covers something, only the red box is drawn: no white outline and no handles. Blur (or nothing covered) restores the white layer box and its handles.
+- The stroke, style and matrix are unchanged. It is display only; there are no editable box edges, and preview gestures are unchanged.
+- The overlay's `stateDescription` is "Selector box" / "Layer box with handles" / "Layer box".
+
+## Part 3: Key bar in the inspector sheet header
+- **Header audit:**
+  - **Section pages** (Transform, Opacity, Timing, Audio) have ONE header row, `SectionHeader` (`inspector-section-header`): ← (back to the layer tools) and the page tabs.
+  - **The Graph page** has its own header row, `GraphPageHeader` (`graph-header`): ←, the value / speed tiles and the curve tabs.
+  - **Edit Text** draws its own header row (`text-inspector-header`): ←, Character / Paragraph / Animate, and ⚠ on an error.
+  - **Height:** all three are `TextInspectorBudget.HEADER` = **40dp × font scale** (`InspectorChromeBudget.header`): a usable tap height, so no shortfall.
+  - **Landing grid only:** layer name, duplicate (tap; hold = copy), delete and video Audio sit on the landing grid's name row (48dp; 40dp when the sheet is under 320dp), under a 20dp drag handle. They are never on a property page, so key selection (which needs a property page) never covers them.
+- **Now:**
+  - While key selection is active, `LocalKeyHeaderBar` (provided by EditorScreen around the sheet) makes each of those three header rows draw the key bar INSTEAD of its contents, in a row of exactly the header's height: Hold, Linear, Easy Ease, More, Stagger, Sequence.
+  - The bar is accent-filled like the selection bars, and its icon targets take the header height (`LocalBarIconSize`).
+  - The page below the header, the sheet height (268 / 328dp), the timeline and the preview do not move; the device test checks the rail, the key, the ruler and the action bar strip to the pixel.
+- **Exits** (unchanged): the key top bar's Back, an empty-space tap, or closing the sheet; the header returns exactly as before.
+- **Removed:** the old key bar under the sheet. The timeline's extra bottom padding now applies only to the layer selection bar.
+- The action bar is untouched.
+
+## Part 4: Drag snapping (layers, layer groups, keys, key groups)
+- **`DragSnap`** (pure, `editor/DragSnap.kt`):
+  - **Candidates:** a layer's start and end; every selected layer's start and end; a key's time; every selected key's time.
+  - **Targets:**
+    1. the playhead;
+    2. markers;
+    3. the ruler's MAJOR and MID ticks at the current zoom (`RulerTiers.level`, classified by the displayed timecode frame like the ruler; never minor ticks);
+    4. for layer drags only, the start and end of every layer not being dragged;
+    5. the composition start (0) and end.
+  - The closest pair inside the zone wins, and the whole selection shifts by `target − candidate`, so offsets are kept exactly.
+  - **Ties:** playhead > marker > clip edge > composition bound > (single-key) neighbour > tick.
+  - The existing builders then apply whole-frame quantisation and the clamps (`MultiLayerEdits.moveTogether`, `KeyEdits.moveTogether`, `TimelineEdits.move`), so **a clamp always wins**.
+- **Markers:**
+  - Key drags use the existing key-drag set: composition markers and the dragged layer's own markers.
+  - Layer drags use composition markers and the markers of layers that are not dragged (a dragged layer's own markers move with it).
+- **Single-key drag (deviation, kept on purpose):**
+  - It keeps its existing extra targets (the property's other keys and its own clip's start / end) as the lowest-but-one priority, so nothing it did before is lost.
+  - It stays inside its clip, as before. `TimelineEdits.snapKeyframeTime` is no longer called by the timeline (still in the code base).
+- **Zone:** the existing key-drag zone of **12dp** (it was an inline `12.dp` in `TimelineClipRow`), now the named `DragSnap.ZONE_DP`, used by all four drags.
+- **Haptic:** `Magnet` (`ui/inspector/Detents.kt`) is Float-based. Composition times in µs lose frame exactness in a Float: about 64µs steps at 10 minutes. So the class itself is not reused for time; its rule (lock inside the zone, release outside) and its haptic (`InspectorHaptics.tick`, once per new lock) are reused.
+- **Snap toggle:** no timeline snap on / off setting exists, so none was created; snapping is always on.
+- **Guide:** while locked, a 1dp vertical line in `primary` at the target.
+  - It is drawn in the track area behind the rows, and inside each clip over its background but under its label.
+  - It disappears on release, on cancel, or when the drag leaves the zone.
+
+## Part 5: Drag indicators
+- **Readouts** (`DragReadout`, pure; `DragReadoutOverlay`): LEFT `TO_START` (|←) + the dragged item's start in the playhead readout's own format (`CompositionTimecode.formatPlayhead`: MM:SS:FF, floor to the shown frame, start timecode included, rational rates honoured); RIGHT `SHIFT` (⇄) + the signed frame delta since the drag began (`+00:00:06`, `-00:00:06`, zero `+00:00:00`). For groups: the earliest selected layer's start / the earliest selected key. They update live, snapped or not.
+- **Placement:** drawn over the action bar's own strip (a `Box` around the unchanged action bar; the overlay uses `matchParentSize`), only while the finger is down. It has no pointer input, so it eats no gestures, and it changes no layout. It is gone on release or cancel.
+- **Icons:** `TO_START` and `SHIFT` were added to `InspectorIcons` (single round-stroke paths; `InspectorIconFamilyTest` green).
+- **Ruler highlights:**
+  - The dragged item's START and END ticks, in `primary`, at twice the major tick width and 1.6× its height, on `TimelineScale.frameX` of the nearest frame.
+  - What counts as start / end:
+    - a layer: its start and end;
+    - a group: the earliest start and the latest end;
+    - keys: the earliest and latest selected key (one tick for a single key).
+  - They are gone on release.
+- All of this is UI state (`TimelineDragInfo`): nothing in undo history, no `playheadUs` or scroll change, and the readouts do not seek.
+
+## Tests (TLP.2)
+- **JVM:** **646 / 646**, one full run, 42 s wall: TLP.1's 637 plus 9 new (`PreviewBoxRuleTest` 2, `DragSnapTest` 7: single, group, ties and priority, zone edge, no targets, clamp, targets, ticks, readouts at 24 / 25 / 30 / 29.97 fps). `InspectorIconFamilyTest` green with the two new icons.
+- **Keep-awake:**
+
+  | Setting | Before | During | After |
+  |---|---|---|---|
+  | `stay_on_while_plugged_in` | 0 | 15 (`svc power stayon true`) | 0 |
+  | `screen_off_timeout` | 600000 (already at the long value) | 600000 | 600000 |
+
+  Both restored and confirmed.
+- **Screen checks:** before every class, `mWakefulness=Awake` and `isKeyguardShowing=false`; no class skipped.
+- **Crash buffer:** cleared once before the first run; empty after all runs.
+- **A16, `TlpTwoUiTest`** (new; the selector-box test moved here from `TlpOneUiTest` with the new handle expectations):
+  - **Run 1:** 24 s, 2 / 4 passed (one red box; key bar in the header).
+    - The 2 drag tests failed (B snapped to the mid tick / the playhead instead of the expected target).
+    - Cause, a test bug: the test took dp-per-frame from B's clip bounds, which are clipped where B runs past the viewport (≈96dp instead of 120), so the drag fell short. Fixed in the test: the zoom is read from the ruler's `TimelineZoomKey` semantics.
+  - **Re-run of the 2 failed methods:** passed, 14 s. **All 4 methods have passed.** No product code changed between the runs.
+- **A16, `TlpUiTest`** (regression; header and gestures touched): 3 / 3, 24 s.
+- **A16, `TlpOneUiTest`** (regression; key taps, key drag, ⋮ copy / paste): 4 / 4, 38 s.
+- **Flaky:** none.
+
+## Not verified (TLP.2)
+- Real-finger feel of the snapping (12dp zone, lock / release), the haptic tick on the phone, the guide line under labels, the drag readouts' legibility, the ruler highlights.
+- TalkBack for the key header bar, the readouts and the overlay state.
+- The red box on the phone (colour, stroke; wrapped / character-animated text).
+- The key bar in the Graph page header and the Edit Text header (built; the device test covers the section header only).
+- Key-group and single-key snapping on the device (JVM-tested maths; the device tests cover layer drags).
+
+## Phone test list (TLP.2)
+1. Text layer → Animate → focus a selector (or its Start / End): ONE red box around the covered characters, no white box, no handles; focus a property field or leave the tab: the white box with handles returns.
+2. Transform page → double-tap a key: the sheet header turns into the key bar (Hold, Linear, Easy Ease, More, Stagger, Sequence) at the same height; nothing below moves; tap Hold / Linear; Back: the header returns.
+3. Same on the Graph page and in Edit Text → Animate (an animator field with keys).
+4. Hold-drag a clip near the playhead, a marker, another clip's start or end, a whole-second tick, 0 and the end: it locks with a tick and a guide line; drag on: it releases. Undo is one step.
+5. Select several layers → hold-drag one: the group snaps by its nearest member; offsets stay.
+6. Hold-drag a key, and a selected key group: they snap to the playhead / markers / ticks; the earliest never goes below 0.
+7. While dragging anything: the action bar strip shows |← start and ⇄ ±delta; the ruler shows the start / end ticks in white; all of it disappears on release; the playhead does not move.
