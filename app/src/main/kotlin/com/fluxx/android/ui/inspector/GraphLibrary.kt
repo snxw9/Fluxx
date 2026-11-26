@@ -540,30 +540,47 @@ internal const val DRAG_HYSTERESIS = 8f
  */
 @Composable internal fun KeyCurveGrid(state: CurveLibraryState, onApply: (EasingCurve) -> Unit) {
     val sections = CurveLibrary.sections(state)
-    val nameHeight = 2 * GraphLayout.GRID_NAME_LINE * LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
     val span: (androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope.() -> GridItemSpan) = { GridItemSpan(maxLineSpan) }
+    // TL3.1 B5: compact cells (a small thumbnail over ONE ellipsised name line), 4 columns, about 4 rows visible.
     @Composable fun Cell(curve: EasingCurve, name: String, user: Boolean, tag: String) {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable(role = Role.Button) { onApply(curve) }
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(5.dp)).clickable(role = Role.Button) { onApply(curve) }
             .semantics(mergeDescendants = true) { contentDescription = name }.testTag(tag).padding(top = 1.dp),
-            horizontalAlignment = Alignment.CenterHorizontally) { CurveCellContent(curve, name, false, user, nameHeight) }
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.fillMaxWidth().height(KeyCurvePopover.THUMB_DP.dp)) {
+                CurveThumbnail(curve, false, Modifier.fillMaxSize(), insetDp = 2f)
+                if (user) StarBadge(Modifier.align(Alignment.TopEnd))
+            }
+            Text(name, color = TextSecondary, fontSize = 7.sp, lineHeight = GraphLayout.GRID_NAME_LINE.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 1.dp).height((GraphLayout.GRID_NAME_LINE * fontScale).dp).testTag("key-more-name"))
+        }
     }
-    LazyVerticalGrid(GridCells.Fixed(2), Modifier.width(KeyCurvePopover.WIDTH.dp).heightIn(max = KeyCurvePopover.MAX_HEIGHT.dp).blocksPopoverSwipe().testTag("key-more-grid"),
-        horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    @Composable fun Label(text: String) = Text(text, color = TextSecondary, fontSize = 7.sp, lineHeight = 8.sp, maxLines = 1,
+        modifier = Modifier.padding(start = 2.dp, top = 2.dp).testTag("key-more-label"))
+    LazyVerticalGrid(GridCells.Fixed(KeyCurvePopover.COLUMNS), Modifier.width(KeyCurvePopover.WIDTH.dp).heightIn(max = KeyCurvePopover.maxHeight(fontScale).dp)
+        .blocksPopoverSwipe().testTag("key-more-grid"),
+        horizontalArrangement = Arrangement.spacedBy(KeyCurvePopover.GAP_DP.dp), verticalArrangement = Arrangement.spacedBy(KeyCurvePopover.GAP_DP.dp)) {
         items(KeyCurvePopover.TYPES, key = { "type|${it.name}" }) { c -> Cell(EaseChoice.curve(c, EasingCurve.EASY_EASE), c.label, false, "key-more-${c.name}") }
-        if (sections.pinned.isNotEmpty()) item(key = "cap|pinned", span = span) { CurveGridCaption("Pinned") }
+        if (sections.pinned.isNotEmpty()) item(key = "cap|pinned", span = span) { Label("Pinned") }
         items(sections.pinned, key = { "pin|${it.id}" }) { Cell(it.curve, it.name, it.user, "key-more-pinned-${it.id}") }
-        if (sections.presets.isNotEmpty()) item(key = "cap|presets", span = span) { CurveGridCaption("Presets") }
+        if (sections.presets.isNotEmpty()) item(key = "cap|presets", span = span) { Label("Presets") }
         items(sections.presets, key = { "preset|${it.id}" }) { Cell(it.curve, it.name, it.user, "key-more-preset-${it.id}") }
-        if (sections.mine.isNotEmpty()) item(key = "cap|mine", span = span) { CurveGridCaption("My curves") }
+        if (sections.mine.isNotEmpty()) item(key = "cap|mine", span = span) { Label("My curves") }
         items(sections.mine, key = { "mine|${it.id}" }) { Cell(it.curve, it.name, it.user, "key-more-mine-${it.id}") }
     }
 }
 
-/** TLP.3 A1: the key curve popover's entries and bounds (dp). */
+/** TLP.3 A1 / TL3.1 B5: the key curve popover's entries and bounds (dp): 4 columns, about 4 rows visible, then scroll. */
 internal object KeyCurvePopover {
     val TYPES = listOf(EaseChoice.EASE_IN, EaseChoice.EASE_OUT, EaseChoice.BOUNCE, EaseChoice.ELASTIC)
-    const val WIDTH = 168f
-    const val MAX_HEIGHT = 232f
+    const val COLUMNS = 4
+    const val VISIBLE_ROWS = 4
+    const val CELL_DP = 42f
+    const val GAP_DP = 2f
+    const val THUMB_DP = 18f
+    const val WIDTH = COLUMNS * CELL_DP + (COLUMNS - 1) * GAP_DP
+    /** About [VISIBLE_ROWS] rows of cells (thumbnail, a gap and one name line) with one slim label. */
+    fun maxHeight(fontScale: Float) = VISIBLE_ROWS * (THUMB_DP + 1f + GraphLayout.GRID_NAME_LINE * fontScale + GAP_DP) + 10f
 }
 
 /** The header row: no title; import/export and save icons at the right, over a fade so thumbnails scroll under it. */

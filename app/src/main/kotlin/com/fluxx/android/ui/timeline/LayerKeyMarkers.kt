@@ -62,6 +62,34 @@ internal object LayerKeyMarkers {
     fun markers(all: List<Long>, focused: Set<Long>): List<Marker> =
         (all + focused).distinct().sorted().map { Marker(it, it in focused) }
 
+    /**
+     * TL3.1 B3: THE key shape, everywhere keys are drawn (layer bars, twirl rows, sheet-open keys, drags). A diamond, or a
+     * SQUARE for a hold key (departing easing Hold, or a hold-only track). The square has the diamond's optical size (its
+     * side is [SQUARE_FRACTION] of the box); hit targets are unchanged.
+     */
+    fun keyShape(into: Path, size: Size, hold: Boolean): Path {
+        if (!hold) return diamond(into, size)
+        into.reset()
+        val side = size.width * SQUARE_FRACTION; val l = (size.width - side) / 2f; val t = (size.height - side) / 2f
+        into.addRect(androidx.compose.ui.geometry.Rect(l, t, l + side, t + side))
+        return into
+    }
+    const val SQUARE_FRACTION = .72f
+
+    /** A hold key: a hold-only track, or a key whose departing easing is Hold. */
+    fun holdAt(layer: CompositionLayer, target: com.fluxx.android.editor.GraphTarget, local: Long): Boolean =
+        com.fluxx.android.editor.GraphModel.discrete(target) || com.fluxx.android.editor.GraphModel.curveAt(layer, target, local)?.type == com.fluxx.android.model.EasingPreset.HOLD
+
+    /** Clip-relative times where EVERY key of the layer is a hold key (the bar's aggregated marker is then a square). */
+    fun holdClipTimes(layer: CompositionLayer, anchorOffsetUs: Long): Set<Long> {
+        val all = HashMap<Long, Boolean>()
+        for ((target, _, _) in com.fluxx.android.editor.TwirlRows.targets(layer)) for (t in com.fluxx.android.editor.TwirlRows.keyTimes(layer, target)) {
+            val c = Math.addExact(t, anchorOffsetUs)
+            all[c] = (all[c] ?: true) && holdAt(layer, target, t)
+        }
+        return all.filterValues { it }.keys
+    }
+
     /** Rebuilds [into] as a diamond filling [size]; reuses the caller's Path so drawing allocates nothing per frame. */
     fun diamond(into: Path, size: Size): Path {
         into.reset()

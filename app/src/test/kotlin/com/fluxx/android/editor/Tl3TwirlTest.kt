@@ -63,8 +63,8 @@ class Tl3TwirlTest {
         val withAudio = TwirlRows.items(listOf(solid, other), setOf(1L, 2L)) { it.id == 2L }
         assertEquals(TwirlRow.Audio(2), (withAudio.last() as TwirlItem.Row).row)
         val offsets = TwirlRows.offsets(withAudio)
-        assertEquals(floatArrayOf(0f, 28f, 56f, 84f, 112f, 168f).toList(), offsets.toList())
+        assertEquals(floatArrayOf(0f, 28f, 56f, 84f, 112f, 144f).toList(), offsets.toList()) // TL3.1 B6: 32dp audio row
         assertEquals(0, TwirlRows.indexAt(offsets, 0f)); assertEquals(1, TwirlRows.indexAt(offsets, 28f))
-        assertEquals(4, TwirlRows.indexAt(offsets, 150f)); assertEquals(4, TwirlRows.indexAt(offsets, 999f))
+        assertEquals(4, TwirlRows.indexAt(offsets, 130f)); assertEquals(4, TwirlRows.indexAt(offsets, 999f))
     }
 }

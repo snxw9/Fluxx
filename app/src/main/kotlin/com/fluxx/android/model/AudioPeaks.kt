@@ -108,6 +108,8 @@ object WaveformMapping {
         if (compositionUs < t.startUs || compositionUs >= end) return null
         return t.sourceInUs + (compositionUs - t.startUs)
     }
+    /** TL3.1 B6: the rectified envelope of one column (0..1, fixed scale): max(|min|, |max|). */
+    fun envelope(min: Float, max: Float): Float = maxOf(kotlin.math.abs(min), kotlin.math.abs(max)).coerceIn(0f, 1f)
     /** Dimmed when the layer cannot be heard (muted or volume 0). */
     fun dimmed(layer: CompositionLayer) = layer.muted || layer.audioGain <= 0f
 }

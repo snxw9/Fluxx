@@ -63,6 +63,8 @@ internal object TwirlStyle {
     const val D_EXPANDED_DP = 104f
     const val NAME_SP = 10f
     const val NAME_ICON_DP = 14f
+    /** TL3.1 B8: the name cell's graph icon target (inside the D's width). */
+    const val GRAPH_HIT_DP = 22f
     /** The colour bar's height inside a colour row (B4). */
     const val COLOUR_BAR_DP = 16f
 }
@@ -100,7 +102,7 @@ internal object TwirlStyle {
  * long-press: open its inspector page. The last cell rounds toward the timeline.
  */
 @Composable internal fun TwirlNameCell(row: TwirlRow, selected: Boolean, last: Boolean, onTap: () -> Unit, onLongPress: () -> Unit,
-    modifier: Modifier = Modifier) {
+    modifier: Modifier = Modifier, onGraph: (() -> Unit)? = null) {
     val scheme = MaterialTheme.colorScheme
     val fill = if (selected) scheme.primary else scheme.surfaceVariant
     val ink = if (selected) scheme.onPrimary else scheme.onSurfaceVariant
@@ -131,11 +133,17 @@ internal object TwirlStyle {
             onClick("Select every keyframe of $name") { tap(); true }
             onLongClick("Open $name in the inspector") { hold(); true }
         } else Modifier.semantics { contentDescription = name })) {
-        Row(Modifier.fillMaxSize().padding(start = 6.dp, end = 10.dp), verticalAlignment = if (row is TwirlRow.Audio) Alignment.Top else Alignment.CenterVertically) {
+        Row(Modifier.fillMaxSize().padding(start = 6.dp, end = if (onGraph != null) 2.dp else 10.dp), verticalAlignment = if (row is TwirlRow.Audio) Alignment.Top else Alignment.CenterVertically) {
             if (icon != null) Icon(InspectorIcons.icon(icon), null, Modifier.padding(top = if (row is TwirlRow.Audio) 7.dp else 0.dp).size(TwirlStyle.NAME_ICON_DP.dp), tint = ink)
             Text(name, Modifier.padding(start = 4.dp, top = if (row is TwirlRow.Audio) 6.dp else 0.dp).weight(1f),
                 color = if (row is TwirlRow.Empty) ink.copy(alpha = .55f) else ink, fontSize = TwirlStyle.NAME_SP.sp, lineHeight = 12.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // TL3.1 B8: the property's Graph page, its own tap target (only for properties that have one).
+            if (onGraph != null) Box(Modifier.size(TwirlStyle.GRAPH_HIT_DP.dp, row.heightDp.dp).testTag("twirl-graph-${row.key}")
+                .pointerInput(row.key) { detectTapGestures { onGraph() } }
+                .semantics { contentDescription = "Open the Graph page of $name"; onClick { onGraph(); true } }, contentAlignment = Alignment.Center) {
+                Icon(InspectorIcons.icon("GRAPH"), null, Modifier.size(TwirlStyle.NAME_ICON_DP.dp), tint = ink)
+            }
         }
     }
 }
@@ -148,13 +156,15 @@ internal fun interface VisibleRange { fun px(): ClosedFloatingPointRange<Float> 
  * drawn in ONE Canvas for the visible horizontal range only (sorted keys, binary-searched); paths are reused, so a scroll
  * frame allocates nothing and recomposes nothing. Gestures and popovers are attached by the caller ([gestures]).
  */
-@Composable internal fun TwirlTrackRow(layer: CompositionLayer, row: TwirlRow.Property, pxPerUs: Double, playheadUs: Long,
+@Composable internal fun TwirlTrackRow(layer: CompositionLayer, row: TwirlRow.Property, pxPerUs: Double, playhead: () -> Long,
     selectedTimes: Set<Long>, visible: VisibleRange, modifier: Modifier = Modifier, underlay: (DrawScope.() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit = {}) {
     val times = remember(layer, row.target) { TwirlRows.keyTimes(layer, row.target) }
     val anchor = layer.resolvedKeyframeAnchorUs
     val start = layer.timing.startUs; val end = layer.timing.endUs ?: start
     val diamond = remember { Path() }
+    val square = remember { Path() }
+    val holds = remember(layer, row.target) { times.map { LayerKeyMarkers.holdAt(layer, row.target, it) }.toBooleanArray() }
     val density = LocalDensity.current
     val knockout = remember(density) { Stroke(with(density) { LayerKeyMarkers.KNOCKOUT_STROKE_DP.dp.toPx() }) }
     val ring = remember(density) { Stroke(with(density) { 1.5.dp.toPx() }) }
@@ -164,19 +174,23 @@ internal fun interface VisibleRange { fun px(): ClosedFloatingPointRange<Float> 
         .drawBehind {
             underlay?.invoke(this)
             val range = visible.px()
+            val playheadUs = playhead()
             val sizePx = LayerKeyMarkers.FOCUSED_DP.dp.toPx()
             LayerKeyMarkers.diamond(diamond, Size(sizePx, sizePx))
+            LayerKeyMarkers.keyShape(square, Size(sizePx, sizePx), hold = true)
             val pad = sizePx
             var i = firstVisible(times, anchor, pxPerUs, range.start - pad)
             while (i < times.size) {
                 val comp = anchor + times[i]
                 val x = (comp * pxPerUs).toFloat()
                 if (x > range.endInclusive + pad) break
+                // TL3.1 B3: hold keys are squares.
+                val shape = if (holds[i]) square else diamond
                 if (comp in start..end) translate(x - sizePx / 2f, (size.height - sizePx) / 2f) {
-                    drawPath(diamond, back, style = knockout)
-                    if (times[i] in selectedTimes) drawPath(diamond, Highlight, style = outline)
-                    if (comp == playheadUs) { drawPath(diamond, Highlight); drawPath(diamond, Color(0xFF1C1C1C), style = ring) }
-                    else { drawPath(diamond, Color(0xFF1C1C1C)); drawPath(diamond, Highlight.copy(alpha = .9f), style = ring) }
+                    drawPath(shape, back, style = knockout)
+                    if (times[i] in selectedTimes) drawPath(shape, Highlight, style = outline)
+                    if (comp == playheadUs) { drawPath(shape, Highlight); drawPath(shape, Color(0xFF1C1C1C), style = ring) }
+                    else { drawPath(shape, Color(0xFF1C1C1C)); drawPath(shape, Highlight.copy(alpha = .9f), style = ring) }
                 }
                 i++
             }
@@ -286,12 +300,13 @@ internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectK
             val clipL = (layer.timing.startUs * pxPerUs).toFloat(); val clipR = ((layer.timing.endUs ?: layer.timing.startUs) * pxPerUs).toFloat()
             val x0 = maxOf(range.start, clipL); val x1 = minOf(range.endInclusive, clipR)
             if (x1 <= x0) return@drawBehind
-            val mid = size.height / 2f; val half = size.height / 2f - 2.dp.toPx()
+            // TL3.1 B6: the upper half only: the rectified peak envelope max(|min|, |max|) rises from the bottom baseline.
+            val base = size.height - 1.dp.toPx(); val amp = size.height - 3.dp.toPx()
             val pyramid = peaks?.pyramid
             if (pyramid == null) {
                 // Static placeholder: a faint band and the centre line.
-                drawRect(ink.copy(alpha = .06f), Offset(x0, mid - half / 3f), Size(x1 - x0, half * 2f / 3f))
-                drawLine(ink.copy(alpha = .2f), Offset(x0, mid), Offset(x1, mid), 1f)
+                drawRect(ink.copy(alpha = .06f), Offset(x0, base - amp / 3f), Size(x1 - x0, amp / 3f))
+                drawLine(ink.copy(alpha = .2f), Offset(x0, base), Offset(x1, base), 1f)
                 return@drawBehind
             }
             val colour = ink.copy(alpha = if (dim) .3f else .8f)
@@ -306,7 +321,8 @@ internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectK
                     if (b0 >= 0) {
                         var lo = mins[b0]; var hi = maxs[b0]
                         for (b in b0 + 1..b1) { if (mins[b] < lo) lo = mins[b]; if (maxs[b] > hi) hi = maxs[b] }
-                        drawLine(colour, Offset(x, mid - hi.coerceIn(-1f, 1f) * half), Offset(x, mid - lo.coerceIn(-1f, 1f) * half + 1f), 1f)
+                        val env = com.fluxx.android.model.WaveformMapping.envelope(lo, hi)
+                        drawLine(colour, Offset(x, base), Offset(x, base - env * amp - 1f), 1f)
                     }
                 }
                 x += 1f

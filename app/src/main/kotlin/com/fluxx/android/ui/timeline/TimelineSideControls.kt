@@ -21,6 +21,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.fluxx.android.editor.EditorAction
@@ -63,7 +65,13 @@ internal fun TimelineSideControls(layers: List<CompositionLayer>, selection: com
     /** TL3 B1: the timeline items (layers and expanded rows), the expanded layers and the name-column gestures. */
     items: List<com.fluxx.android.editor.TwirlItem> = emptyList(), expanded: Set<Long> = emptySet(),
     onNameTap: (Long, com.fluxx.android.editor.GraphTarget) -> Unit = { _, _ -> },
-    onNameLongPress: (Long, com.fluxx.android.editor.GraphTarget) -> Unit = { _, _ -> }) {
+    onNameLongPress: (Long, com.fluxx.android.editor.GraphTarget) -> Unit = { _, _ -> },
+    onNameGraph: (Long, com.fluxx.android.editor.GraphTarget) -> Unit = { _, _ -> },
+    /** TL3.1 B7: whether a property row's add-key button is available at the playhead, and its action. */
+    addKeyState: ((com.fluxx.android.editor.TwirlRow.Property) -> com.fluxx.android.editor.KeyAdd.Why)? = null,
+    onAddKey: (com.fluxx.android.editor.TwirlRow.Property) -> Unit = {},
+    /** TL3.1 A3: rows are animating (twirl open / close): follow their animated (recorded) tops; otherwise the list's offsets. */
+    animating: Boolean = false) {
     val density = LocalDensity.current
     val rowsByKey = remember(items) { items.withIndex().filter { it.value is com.fluxx.android.editor.TwirlItem.Row }
         .associate { (i, it) -> (it as com.fluxx.android.editor.TwirlItem.Row).row.key to (it.row to (items.getOrNull(i + 1) !is com.fluxx.android.editor.TwirlItem.Row)) } }
@@ -137,13 +145,23 @@ internal fun TimelineSideControls(layers: List<CompositionLayer>, selection: com
                             onTap = { if (selection != null) onDTap(row.layerId, com.fluxx.android.editor.DZone.BODY)
                                 else (row as? com.fluxx.android.editor.TwirlRow.Property)?.let { onNameTap(it.layerId, it.target) } },
                             onLongPress = { (row as? com.fluxx.android.editor.TwirlRow.Property)?.let { onNameLongPress(it.layerId, it.target) } },
-                            modifier = Modifier.offset { IntOffset(0, item.offset + listState.layoutInfo.beforeContentPadding) })
+                            modifier = Modifier.offset { IntOffset(0, item.offset + listState.layoutInfo.beforeContentPadding) },
+                            onGraph = (row as? com.fluxx.android.editor.TwirlRow.Property)?.takeIf { p -> selection == null && owner != null &&
+                                p.kind != com.fluxx.android.editor.TwirlValueKind.COLOUR && com.fluxx.android.editor.GraphModel.enabled(owner, p.target) }
+                                ?.let { p -> { onNameGraph(p.layerId, p.target) } })
+                        // TL3.1 B7: under the reorder grip, an add-keyframe button on every property row (not the audio row).
+                        val prop = row as? com.fluxx.android.editor.TwirlRow.Property
+                        if (prop != null && addKeyState != null) {
+                            val why = addKeyState(prop)
+                            AddKeyButton(prop, why, { onAddKey(prop) }, Modifier.align(Alignment.TopEnd)
+                                .offset { IntOffset(0, item.offset + listState.layoutInfo.beforeContentPadding) })
+                        }
                     }
                 } }
                 val layer = layers.firstOrNull { it.id == item.key } ?: continue
                 key(layer.id) {
                     val isDragging = layer.id == drag.draggingId
-                    val y = if (isDragging) drag.viewportTop else drag.placedTops[layer.id]
+                    val y = if (isDragging) drag.viewportTop else drag.placedTops[layer.id]?.takeIf { animating || drag.draggingId != null }
                         ?: (item.offset + listState.layoutInfo.beforeContentPadding).toFloat()
                     // TLP T1: the row's eye is the D-button (eye + arrow), always there; no extra column.
                     val inSelection = selection?.let { layer.id in it } ?: false
@@ -214,5 +232,34 @@ internal fun TimelineSideControls(layers: List<CompositionLayer>, selection: com
                     }
                 )
             })
+    }
+}
+
+
+/**
+ * TL3.1 B7: the add-keyframe button of a twirl property row (the family's KEY_ADD: a diamond with a plus). Available: a
+ * key at the playhead frame that keeps the motion (KeyAdd). Otherwise dimmed; a tap then says why (a key is already on
+ * this frame, the playhead is outside the clip, or a Bounce / Elastic segment).
+ */
+@Composable internal fun AddKeyButton(row: com.fluxx.android.editor.TwirlRow.Property, why: com.fluxx.android.editor.KeyAdd.Why, onAdd: () -> Unit,
+    modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val ok = why == com.fluxx.android.editor.KeyAdd.Why.OK
+    val note = when (why) {
+        com.fluxx.android.editor.KeyAdd.Why.OK -> null
+        com.fluxx.android.editor.KeyAdd.Why.ON_KEY -> "A keyframe is already on this frame"
+        com.fluxx.android.editor.KeyAdd.Why.OUTSIDE_CLIP -> "The playhead is outside this layer"
+        com.fluxx.android.editor.KeyAdd.Why.BOUNCE_ELASTIC -> "Not available for Bounce / Elastic segments"
+        com.fluxx.android.editor.KeyAdd.Why.UNSUPPORTED -> "Not available for this property"
+    }
+    val ink = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+    Box(modifier.size(48.dp, row.heightDp.dp).testTag("twirl-add-key-${row.key}")
+        .clickable(role = androidx.compose.ui.semantics.Role.Button) {
+            if (ok) onAdd() else note?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show() } }
+        .semantics { contentDescription = "Add a keyframe at the playhead to ${row.name}"
+            if (!ok) stateDescription = note ?: "Unavailable" },
+        contentAlignment = Alignment.Center) {
+        androidx.compose.material3.Icon(com.fluxx.android.ui.inspector.InspectorIcons.icon("KEY_ADD"), null, Modifier.size(16.dp),
+            tint = if (ok) ink else ink.copy(alpha = .3f))
     }
 }

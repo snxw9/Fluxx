@@ -60,6 +60,8 @@ class Tl3AudioPeaksTest {
         assertEquals(1_250_000L, WaveformMapping.sourceUs(layer, 2_750_000))
         assertNull(WaveformMapping.sourceUs(layer, 3_000_000)) // end exclusive, like the mixer
         assertFalse(WaveformMapping.dimmed(layer))
+        // TL3.1 B6: the upper-half envelope.
+        assertEquals(.5f, WaveformMapping.envelope(-.5f, .25f)); assertEquals(.75f, WaveformMapping.envelope(-.1f, .75f)); assertEquals(1f, WaveformMapping.envelope(-3f, 0f))
         assertTrue(WaveformMapping.dimmed(layer.copy(muted = true))); assertTrue(WaveformMapping.dimmed(layer.copy(audioGain = 0f)))
     }
 }

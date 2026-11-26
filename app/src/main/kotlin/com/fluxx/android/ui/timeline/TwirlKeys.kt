@@ -64,7 +64,7 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
  * Drags snap ([DragSnap], per-class [SnapZones]; every moving key is a candidate, in composition time) and report the
  * readouts. Nothing seeks.
  */
-@Composable internal fun TwirlKeyRow(project: ProjectDocument, layer: CompositionLayer, row: TwirlRow.Property, pxPerUs: Double, playheadUs: Long,
+@Composable internal fun TwirlKeyRow(project: ProjectDocument, layer: CompositionLayer, row: TwirlRow.Property, pxPerUs: Double, playhead: () -> Long,
     selection: KeySelectionSet?, visible: VisibleRange, popover: TwirlPopover?, onPopover: (TwirlPopover?) -> Unit,
     host: TwirlKeyHost, gestures: TwirlGestures, snapLevel: RulerLevel?, snapStartFrame: Long,
     onDragInfo: (TimelineDragInfo?) -> Unit, modifier: Modifier = Modifier) {
@@ -72,7 +72,7 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
     val view = LocalView.current
     val haptic = LocalHapticFeedback.current
     val latest by rememberUpdatedState(Triple(project, layer, selection))
-    val latestPlayhead by rememberUpdatedState(playheadUs)
+    fun latestPlayhead() = playhead()
     val latestLevel by rememberUpdatedState(snapLevel)
     val latestHost by rememberUpdatedState(host)
     val latestGestures by rememberUpdatedState(gestures)
@@ -89,7 +89,7 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
     val underlay: (androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit)? = colourTrack?.let { track -> {
         drawColourBar(track, layer, pxPerUs, visible, barCache, barHeightPx, checkerPx)
     } }
-    TwirlTrackRow(layer, row, pxPerUs, playheadUs, selectedTimes, visible, modifier.pointerInput(row.key, pxPerUs) {
+    TwirlTrackRow(layer, row, pxPerUs, playhead, selectedTimes, visible, modifier.pointerInput(row.key, pxPerUs) {
         var hit: Long? = null
         var barTime: Long? = null
         var base: Pair<ProjectDocument, KeySelectionSet>? = null
@@ -143,7 +143,7 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
                 val layers = sel0.tracks.associate { it.layerId to p0.layer(it.layerId)!! }
                 val candidates = sel0.tracks.flatMap { t -> t.times.map { Math.addExact(layers.getValue(t.layerId).resolvedKeyframeAnchorUs, it) } }
                 val dragged = p0.composition.layers.map { it.id }.toSet() - sel0.layerIds.toSet()
-                val targets = DragSnap.withTicks(DragSnap.targets(p0, latestPlayhead, dragged, clipEdges = false), candidates, raw,
+                val targets = DragSnap.withTicks(DragSnap.targets(p0, latestPlayhead(), dragged, clipEdges = false), candidates, raw,
                     p0.composition.frameRate, latestLevel, snapStartFrame)
                 val snap = DragSnap.snap(raw, candidates, targets, SnapZones.of(pxPerUs / density.density, p0.composition.frameRate))
                 if (snap.target != null && snap.target != locked) InspectorHaptics.tick(view)

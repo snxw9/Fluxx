@@ -243,7 +243,8 @@ fun EditorScreen(
     /** TL3 B1: scroll requests (layer to the top on expand) and inspector page requests (name long-press). */
     var scrollToLayer by remember { mutableStateOf<Pair<Long, Int>?>(null) }
     var openPage by remember { mutableStateOf<Pair<GraphTarget, Int>?>(null) }
-    LaunchedEffect(inspectorSheetVisible) { if (!inspectorSheetVisible) openPage = null }
+    var openGraph by remember { mutableStateOf<Pair<GraphTarget, Int>?>(null) }
+    LaunchedEffect(inspectorSheetVisible) { if (!inspectorSheetVisible) { openPage = null; openGraph = null } }
     // TL3 B2: opening the inspector always collapses every twirl-down (the direct paths do it in the same frame).
     LaunchedEffect(inspectorSheetVisible) { if (inspectorSheetVisible && editor.expandedLayers.isNotEmpty()) editor.setExpanded(emptySet()) }
     var twirlSerial by remember { mutableIntStateOf(0) }
@@ -748,6 +749,20 @@ fun EditorScreen(
                         if (current != null && current.times.toSet() == all.times.toSet()) editor.selectKeys(sel.withTrack(all.copy(times = emptyList())))
                         else editor.selectKeys(sel?.withTrack(all) ?: KeySelectionSet.of(all))
                     } },
+                    // TL3.1 B7: a key at the playhead that keeps the motion (exact easing split); one undo; no seek.
+                    onTwirlAddKey = { id, target -> editor.state.project.composition.layers.firstOrNull { it.id == id }
+                        ?.let { KeyAdd.action(editor.state.project, it, target, editor.state.playheadUs) }?.let { applyLayerAction(it) } },
+                    onTwirlGraph = { id, target ->
+                        // TL3.1 B8: the name cell's graph icon: the sheet opens on that property's Graph page (collapsing every
+                        // twirl-down on the shared transition; the key selection narrows to the property, as on any page).
+                        textEditor.finish {
+                            editor.dispatch(EditorAction.Select(id))
+                            collapseTwirls()
+                            openGraph = target to ++twirlSerial
+                            focusedProperty = target.property; focusedAnimatorTrack = target.animator
+                            inspectorSheetVisible = true
+                        }
+                    },
                     onTwirlNameLongPress = { id, target ->
                         // TL3 B1: open that property's inspector page (collapses every twirl-down; the sheet opens on the page).
                         textEditor.finish {
@@ -817,7 +832,7 @@ fun EditorScreen(
                     BarIcon("EASE_LINEAR", "Linear", enabled = easable, testTag = "key-linear") { ease(EasingCurve.LINEAR) }
                     BarIcon("EASE_EASY", "Easy Ease", enabled = easable, testTag = "key-easy-ease") { ease(EasingCurve.EASY_EASE) }
                     // TLP.3 A1: a non-modal curve popover (the library's grid cells); it stays open after a tap, like the library.
-                    BarPopoverIcon("OVERFLOW", "More easings", "key-more", "key-more", enabled = easable) { _ ->
+                    BarPopoverIcon("GRAPH_LIBRARY", "Curves", "key-more", "key-more", enabled = easable) { _ ->
                         val library by remember(context) { CurveLibraryStore.get(context) }.state.collectAsState()
                         com.fluxx.android.ui.inspector.KeyCurveGrid(library) { ease(it) }
                     }
@@ -887,7 +902,7 @@ fun EditorScreen(
                 selectedLayer?.let { layer ->
                     androidx.compose.runtime.CompositionLocalProvider(com.fluxx.android.ui.inspector.LocalKeyClipboardHost provides keyClipboardHost, LocalKeyHeaderBar provides keyHeaderBar,
                         com.fluxx.android.ui.inspector.LocalTransformOpenMode provides com.fluxx.android.ui.inspector.InspectorOpenPage.mode(openPage?.first)) { ElementInspectorSheet(
-                        openPage = openPage,
+                        openPage = openPage, openGraph = openGraph,
                         onExplodePrepare={options,reply->
                             focusManager.clearFocus();previewController?.pause()
                             textEditor.finish {

@@ -149,7 +149,9 @@ fun ElementInspectorSheet(
     /** GRAPH G1: live preview of a Graph page drag (SetKeyEasing) inside the begin/commit/cancel gesture. */
     onGesturePreview: (EditorAction) -> Unit = {},
     /** TL3 B1: open the page of this property (a twirl-down name long-press); the second value makes requests distinct. */
-    openPage: Pair<GraphTarget, Int>? = null
+    openPage: Pair<GraphTarget, Int>? = null,
+    /** TL3.1 B8: open this property's Graph page (the name cell's graph icon); it returns to the property's own page. */
+    openGraph: Pair<GraphTarget, Int>? = null
 ) {
     key(layer.id) {
         var section by rememberSaveable { mutableStateOf<InspectorSection?>(InspectorOpenPage.section(openPage?.first)) }
@@ -170,6 +172,7 @@ fun ElementInspectorSheet(
                     if (section != InspectorSection.GRAPH) graphReturn = section; graphTarget = target; section = InspectorSection.GRAPH },
                 close = { host?.session?.reset(); section = graphReturn; graphTarget = null }).also { host = it }
         }
+        LaunchedEffect(openGraph) { openGraph?.first?.let { t -> InspectorOpenPage.section(t)?.let { section = it }; graphHost.open(t) } }
         // A restored GRAPH page without its target (process death) returns to the page it came from.
         if (section == InspectorSection.GRAPH && graphTarget == null) LaunchedEffect(Unit) { section = graphReturn }
         val textEditVisible by rememberUpdatedState(onTextEditVisible)

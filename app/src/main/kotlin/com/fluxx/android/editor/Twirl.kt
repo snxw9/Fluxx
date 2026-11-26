@@ -36,7 +36,8 @@ sealed interface TwirlRow {
  */
 object TwirlRows {
     const val ROW_DP = 28f
-    const val AUDIO_DP = 56f
+    /** TL3.1 B6: the audio row shows only the upper half (a rectified envelope), so it is about half as tall. */
+    const val AUDIO_DP = 32f
     const val EMPTY_TEXT = "No animated properties"
 
     private val TRANSFORM = listOf(
