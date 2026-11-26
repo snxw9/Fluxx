@@ -51,7 +51,7 @@ object Aud1Bench {
                 val fmt = ex.getTrackFormat(i); val mime = fmt.getString(MediaFormat.KEY_MIME) ?: continue
                 if (fmt.containsKey(MediaFormat.KEY_DURATION)) dur = maxOf(dur, fmt.getLong(MediaFormat.KEY_DURATION))
                 if (mime.startsWith("video/")) { w = fmt.getInteger(MediaFormat.KEY_WIDTH); h = fmt.getInteger(MediaFormat.KEY_HEIGHT)
-                    if (fmt.containsKey(MediaFormat.KEY_FRAME_RATE)) fps = runCatching { fmt.getInteger(MediaFormat.KEY_FRAME_RATE) }.getOrDefault(20) }
+                    if (fmt.containsKey(MediaFormat.KEY_FRAME_RATE)) fps = runCatching { Math.round(fmt.getNumber(MediaFormat.KEY_FRAME_RATE)!!.toFloat()) }.getOrDefault(20) }
                 if (mime.startsWith("audio/")) audio = fmt
             }
             return Media(dur, w, h, fps, requireNotNull(audio))

@@ -15,6 +15,10 @@ object PreviewFrames {
      * app; the benchmark sets it to time video against audio. No behaviour change.
      */
     @Volatile var testObserver: ((Long, Long, Long) -> Unit)? = null
+    /** AUD2: TEST-ONLY playback lifecycle events ("playback-create", "track-play", "playback-close", "gain-live"). Null in the app. */
+    @Volatile var testPlayback: ((String) -> Unit)? = null
+    /** AUD2: TEST-ONLY clock reads: (now ns, head frames, timestamp valid, position us). Null in the app. */
+    @Volatile var testClock: ((Long, Long, Boolean, Long) -> Unit)? = null
 }
 
 /**

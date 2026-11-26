@@ -26,6 +26,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -150,6 +152,17 @@ internal object TwirlStyle {
 
 /** TL3: the visible horizontal range of the content (px), read in the draw phase only. */
 internal fun interface VisibleRange { fun px(): ClosedFloatingPointRange<Float> }
+
+/**
+ * AUD2: TEST-ONLY probes of the audio row. [draw]: (ns, the visible range's centre in content px as read in this draw,
+ * pxPerUs). [placed]: (ns, the row's left edge in root px after layout). Null in the app (no modifier, no call).
+ */
+object WaveformProbe {
+    @Volatile var draw: ((Long, Float, Double) -> Unit)? = null
+    @Volatile var placed: ((Long, Float) -> Unit)? = null
+    /** (ns, the scrolled timeline content's left edge in root px after layout (the position that frame is drawn at), pxPerUs). */
+    @Volatile var scroll: ((Long, Int, Double) -> Unit)? = null
+}
 
 /**
  * TL3 B1 / B3: one keyed property's track row. Key diamonds as on the layer bars (selected keys with the accent outline),
@@ -297,10 +310,13 @@ internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectK
     val peaks = uri?.let { provider.states[it] } as? com.fluxx.android.media.AudioPeakProvider.Peaks.Ready
     val ink = MaterialTheme.colorScheme.onSurfaceVariant
     val dim = com.fluxx.android.model.WaveformMapping.dimmed(layer)
+    val placedProbe = WaveformProbe.placed
     Box(modifier.fillMaxWidth().height(row.heightDp.dp).testTag("twirl-row-${row.key}")
+        .then(if (placedProbe != null) Modifier.onGloballyPositioned { placedProbe(System.nanoTime(), it.positionInRoot().x) } else Modifier)
         .semantics { contentDescription = if (peaks != null) "Audio waveform" else "Audio waveform loading" }
         .drawBehind {
             val range = visible.px()
+            WaveformProbe.draw?.invoke(System.nanoTime(), (range.start + range.endInclusive) / 2f, pxPerUs)
             val clipL = (layer.timing.startUs * pxPerUs).toFloat(); val clipR = ((layer.timing.endUs ?: layer.timing.startUs) * pxPerUs).toFloat()
             val x0 = maxOf(range.start, clipL); val x1 = minOf(range.endInclusive, clipR)
             if (x1 <= x0) return@drawBehind

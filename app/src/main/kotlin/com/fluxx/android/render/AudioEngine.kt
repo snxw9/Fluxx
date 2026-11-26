@@ -369,15 +369,21 @@ internal class StreamingPlayback(context: Context, project: ProjectDocument, sta
 
     /** Read on the preview worker only (it also starts the track once audio is ready and the gate opens). */
     val positionUs: Long get() {
-        if (!playing && ready && written > 0 && gate.poll()) { track.play(); playing = true }
+        if (!playing && ready && written > 0 && gate.poll()) { track.play(); playing = true; PreviewFrames.testPlayback?.invoke("track-play") }
         if (!playing) return AvClock.us(startFrame)
         val head = track.playbackHeadPosition.toLong() and 0xffffffffL
         val ts = if (track.getTimestamp(stamp)) stamp else null
-        return AvClock.us(AvClock.positionFrames(startFrame, head, System.nanoTime(), ts?.framePosition, ts?.nanoTime, latencyFrames))
+        val now = System.nanoTime()
+        val us = AvClock.us(AvClock.positionFrames(startFrame, head, now, ts?.framePosition, ts?.nanoTime, latencyFrames))
+        PreviewFrames.testClock?.invoke(now, head, ts != null && ts.nanoTime > 0, us)
+        return us
     }
     val underruns get() = track.underrunCount
 
+    init { PreviewFrames.testPlayback?.invoke("playback-create start=$startUs") }
+
     override fun close() {
+        PreviewFrames.testPlayback?.invoke("playback-close")
         running.set(false)
         runCatching { track.pause(); track.flush() }
         thread.join(500)

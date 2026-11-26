@@ -24,6 +24,7 @@ class VideoDecoder(context: Context, uri: Uri) : Closeable {
     val pixelAspect: Float
     val width: Int
     val height: Int
+    private val probeKey = uri.toString().hashCode().toUInt().toString(16)
 
     init {
         try {
@@ -45,23 +46,36 @@ class VideoDecoder(context: Context, uri: Uri) : Closeable {
                 codec = it
                 it.configure(format, reader!!.surface, null, 0); it.start()
             }
-        } catch (e: Exception) { close(); throw e }
+            testEvents?.invoke("open $probeKey ${width}x$height")
+        } catch (e: Exception) { testEvents?.invoke("open-failed $probeKey ${e.javaClass.simpleName}: ${e.message}"); close(); throw e }
     }
 
     fun frameAt(timeUs: Long, cancelled: () -> Boolean): Image {
+        val probe = testEvents
+        val probeStart = if (probe != null) SystemClock.elapsedRealtimeNanos() else 0L
+        val probeFrom = lastRequest
+        var probeSeek = -1L
+        var probeDecoded = 0
+        try {
         if (timeUs < lastRequest || (lastRequest >= 0 && timeUs - lastRequest > 500_000)) {
             // Every rendered output was acquired synchronously before this flush; no pending callbacks.
             previous?.close(); previous = null; next?.close(); next = null
             codec!!.flush()
             extractor.seekTo(timeUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+            if (probe != null) probeSeek = extractor.sampleTime
             inputEnded = false; outputEnded = false
-        } else if (lastRequest < 0 && timeUs > 0) extractor.seekTo(timeUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+        } else if (lastRequest < 0 && timeUs > 0) { extractor.seekTo(timeUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC); if (probe != null) probeSeek = extractor.sampleTime }
         lastRequest = timeUs
-        if (next == null && !outputEnded) next = decodeImage(cancelled)
+        if (next == null && !outputEnded) { next = decodeImage(cancelled); probeDecoded++ }
         while (next != null && next!!.timestamp / 1000 <= timeUs) {
             previous?.close(); previous = next; next = null
-            next = decodeImage(cancelled)
+            next = decodeImage(cancelled); probeDecoded++
         }
+        } catch (e: CancellationException) {
+            probe?.invoke("cancelled $probeKey t=$timeUs from=$probeFrom seek=$probeSeek decoded=$probeDecoded us=${(SystemClock.elapsedRealtimeNanos() - probeStart) / 1000}")
+            throw e
+        }
+        probe?.invoke("frame $probeKey t=$timeUs from=$probeFrom seek=$probeSeek decoded=$probeDecoded us=${(SystemClock.elapsedRealtimeNanos() - probeStart) / 1000}")
         val before = previous
         val after = next
         // Match Media3's nearest-frame resampling, choosing the earlier timestamp on a tie.
@@ -112,10 +126,19 @@ class VideoDecoder(context: Context, uri: Uri) : Closeable {
     }
 
     override fun close() {
+        testEvents?.invoke("close $probeKey")
         previous?.close(); previous = null; next?.close(); next = null
         try { codec?.stop() } catch (_: Exception) { }
         codec?.release(); codec = null
         reader?.close(); reader = null
         extractor.release()
+    }
+
+    companion object {
+        /**
+         * AUD2: a TEST-ONLY observer of decoder lifecycle and seeks ("open", "frame ... seek= decoded= us=", "cancelled",
+         * "close"). Null in the app (nothing is built then); the benchmarks log flushes and re-creations. No behaviour change.
+         */
+        @Volatile @JvmStatic var testEvents: ((String) -> Unit)? = null
     }
 }

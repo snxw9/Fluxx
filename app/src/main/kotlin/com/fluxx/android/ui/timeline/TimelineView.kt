@@ -505,6 +505,7 @@ fun TimelineView(
                     modifier = Modifier
                         .width(contentWidthDp + centerXDp * 2)
                         .fillMaxHeight()
+                        .then(WaveformProbe.scroll?.let { probe -> Modifier.onGloballyPositioned { probe(System.nanoTime(), it.positionInRoot().x.toInt(), pxPerUs) } } ?: Modifier)
                 ) {
                     // Leading spacer equal to half screen width: keeps time 0 aligned under 50% center playhead
                     Spacer(
