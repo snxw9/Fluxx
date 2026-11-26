@@ -625,6 +625,12 @@ fun EditorScreen(
                         }
                     },
                     onInvertSelection = { editor.layerSelection?.let { editor.setSelection(LayerOrder.invert(editor.state.project.composition.layers, it)) } },
+                    // TL3.1 B4: keys are displayed (twirl-down rows, or the open property page's keys): Select all asks.
+                    keysDisplayed = keyScope().any { (id, t) -> editor.state.project.composition.layers.firstOrNull { it.id == id }
+                        ?.let { KeyEdits.times(it, t).isNotEmpty() } == true },
+                    onSelectAllKeys = { textEditor.finish {
+                        if (editor.selectionMode) editor.exitSelection()
+                        editor.selectKeys(MultiKeyEdits.selectAll(editor.state.project, keyScope())) } },
                     onDuplicateSelection = { n -> editor.layerSelection?.let { sel ->
                         previewController?.pause(); editor.duplicateLayers(sel.ids, n)
                         previewController?.update(editor.state.project, editor.state.playheadUs, false) } },

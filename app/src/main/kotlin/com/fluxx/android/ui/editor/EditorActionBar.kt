@@ -77,6 +77,9 @@ fun EditorActionBar(
     /** TLP T4: the 6th icon is context-aware (selection mode, multi-layer copy / duplicate; TLP.1: Copy / Paste keys are in the property page ⋮). */
     selectionMode: Boolean = false,
     onSelectAll: () -> Unit = {},
+    /** TL3.1 B4: keys are displayed (a twirl-down is open, or a property page shows its keys): Select all asks Layers / Keyframes. */
+    keysDisplayed: Boolean = false,
+    onSelectAllKeys: () -> Unit = {},
     onInvertSelection: () -> Unit = {},
     onDuplicateSelection: (Int) -> Unit = {},
     onCopySelection: () -> Unit = {},
@@ -155,6 +158,7 @@ fun EditorActionBar(
                 textCanFit = textCanFit,
                 onPasteLayer = onPasteLayer,
                 selectionMode = selectionMode, onSelectAll = onSelectAll, onInvertSelection = onInvertSelection,
+                keysDisplayed = keysDisplayed, onSelectAllKeys = onSelectAllKeys,
                 onDuplicateSelection = onDuplicateSelection, onCopySelection = onCopySelection
             )
 
@@ -184,14 +188,27 @@ private fun LayerMenuButton(
     textCanFit: Boolean = false,
     selectionMode: Boolean = false,
     onSelectAll: () -> Unit = {},
+    /** TL3.1 B4: keys are displayed (a twirl-down is open, or a property page shows its keys): Select all asks Layers / Keyframes. */
+    keysDisplayed: Boolean = false,
+    onSelectAllKeys: () -> Unit = {},
     onInvertSelection: () -> Unit = {},
     onDuplicateSelection: (Int) -> Unit = {},
     onCopySelection: () -> Unit = {},
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    // TL3.1 B4: with keys displayed, Select all opens a small non-modal popover: Layers | Keyframes.
+    var selectAllChoice by remember { mutableStateOf(false) }
     var duplicateCount by remember { mutableStateOf(false) }
 
     Box(Modifier.semantics { contentDescription = "Layer actions" }) {
+        com.fluxx.android.ui.inspector.AnchoredPopover(selectAllChoice, { selectAllChoice = false }, "select-all-popover", modal = false) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                com.fluxx.android.ui.inspector.InspectorIconButton(com.fluxx.android.ui.inspector.InspectorIcons.icon("LAYER"), "Select all layers",
+                    Modifier.testTag("select-all-layers")) { selectAllChoice = false; onSelectAll() }
+                com.fluxx.android.ui.inspector.InspectorIconButton(com.fluxx.android.ui.inspector.InspectorIcons.icon("KEY"), "Select all keyframes",
+                    Modifier.testTag("select-all-keyframes")) { selectAllChoice = false; onSelectAllKeys() }
+            }
+        }
         ToolbarButton(
             enabled = true,
             onClick = { duplicateCount = false; menuExpanded = true }
@@ -240,7 +257,7 @@ private fun LayerMenuButton(
             )
             DropdownMenuItem(
                 text = { Text("Select all layers", color = TextPrimary) },
-                onClick = { close(); onSelectAll() },
+                onClick = { close(); if (keysDisplayed) { com.fluxx.android.ui.inspector.PopoverDismissal.request(); selectAllChoice = true } else onSelectAll() },
                 leadingIcon = { SelectAllVectorIcon(color = TextPrimary) },
                 modifier = Modifier.testTag("layer-menu-select-all")
             )
