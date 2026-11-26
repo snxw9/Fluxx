@@ -9,7 +9,7 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). **Push
 - **TLP.1:** done, except Part 3 (key bar placement), which was blocked and is replaced by TLP.2 Part 3.
 - **TLP.2:** done (see the TLP.2 section).
 - **TLP.3:** done (A1 curve popover, A2 softer snapping, A3 no guide line; see the TLP.3 section at the end).
-- **TL3 (the twirl-down):** B1–B5 built; its record is `docs/checkpoints/TL3.md`. Device classes for TLP.3 / TL3 have not run yet (the phone was not connected).
+- **TL3 (the twirl-down):** B1–B5 built; its record is `docs/checkpoints/TL3.md`. Device classes for TLP.3 / TL3 have passed on the A16 (see TL3.md, Tests).
 - **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1, TLP.2, TLP.3 and TL3 (phone test lists at the end of each section).
 
 ## T0. Selection architecture (written before the code)
@@ -508,7 +508,7 @@ Branch `tlp`, continued from `73cb31d` (the tip matched after the fetch). One co
     - The 3dp floor holds zoomed far out.
     - Ties and priority still hold.
   - The full suite result is in TL3.md.
-- **Device:** not run yet (see TL3.md, Tests).
+- **Device:** `TlpTwoUiTest` 4 / 4 (no guide line during a snapped drag), `TlpOneUiTest` 4 / 4, `TlpUiTest` 3 / 3; details in TL3.md, Tests.
 
 ## Phone test list (TLP.3)
 1. Select keys → More: a grid of curve thumbnails opens downward from the header (upward from the bottom bar with no sheet). Ease In / Out, Bounce and Elastic come first, then Pinned / Presets / My curves. Tap two in a row: each applies (one undo each) and the popover stays open; More again closes it.

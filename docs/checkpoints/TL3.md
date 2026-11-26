@@ -199,10 +199,28 @@ Branch `tlp`, after TLP.3 (A1 `d2b7157`, A2 `342d0f1`, A3 `d592890`). The audit 
   - **New:** `KeyCurvePopoverTest` 2, `DragSnapTest` +3, `Tl3TwirlTest` 4, `Tl3KeysTest` 5, `Tl3ColourBarTest` 4, `Tl3AudioPeaksTest` 3.
   - **Updated:** `TlpSelectionTest` (the arrow expands), `TlpKeyTapTest` (KeyGestureRules replace the double-tap rules).
   - `InspectorIconFamilyTest` is green with `KEY_ADD`.
-- **Device (A16):** NOT RUN. `adb devices` listed nothing: the phone (wireless debugging) was not connected.
-  - The keep-awake settings were not read or changed (nothing to restore).
-  - Pending, each once, one class per invocation: `Tl3UiTest` (new, 7 tests: expand / D growth / rows, sheet transitions, twirl gestures with one popover and key mode surviving the transition, bulk edit, name tap, colour bar add, audio row from a generated 1 s WAV fixture in the app cache) and the regressions `TlpUiTest`, `TlpOneUiTest`, `TlpTwoUiTest`.
-  - All compile.
+- **Device (A16):** run after the phone was reconnected.
+  - **Keep-awake:**
+
+    | Setting | Before | During | After |
+    |---|---|---|---|
+    | `stay_on_while_plugged_in` | 0 | 15 (`svc power stayon true`) | 0 |
+    | `screen_off_timeout` | 600000 (already at the long value) | 600000 | 600000 |
+
+    Both restored and confirmed.
+  - **Screen checks:** before every class, `mWakefulness=Awake` and `isKeyguardShowing=false`; no class skipped. The crash buffer was cleared once before the first run and was empty after all runs.
+  - **`Tl3UiTest`** (new, 7 tests). Run 1: 43 s, 5 / 7 passed.
+    - The 2 failures were "Failed to inject touch input". Both were test bugs: each touched a row the test itself had scrolled out of view, because expanding a layer scrolls it to the top and the sheet shows one row.
+      - The sheet test now taps the inspected layer's own arrow.
+      - The bulk test expands both layers through the view model instead of the arrow.
+    - Re-run of the sheet test: passed (14 s).
+    - The bulk test then found a **real bug** (fixed, `45b0803`). An undo re-keyed the value popover's field; the leaving field committed its stale text, so the two fields kept writing each other back (endless recomposition). An unchanged commit is now ignored.
+      - Its intermediate runs were 13 s and 17 s (typing needed the field's editable node) and 58 s (the loop).
+      - After the fix: passed (16 s).
+    - **All 7 methods have passed.** The 5 from run 1 ran before the fix, which only changes the popover's commit.
+  - **Regressions, once each after the fix:** `TlpUiTest` 3 / 3 (24 s), `TlpOneUiTest` 4 / 4 (36 s), `TlpTwoUiTest` 4 / 4 (22 s).
+  - **Flaky (device):** none.
+  - **JVM after the fix:** not re-run. The fix is a UI guard that no JVM test covers.
 
 ## Not verified
 - Scroll smoothness and the transition animation's feel (280ms).
@@ -213,7 +231,7 @@ Branch `tlp`, after TLP.3 (A1 `d2b7157`, A2 `342d0f1`, A3 `d592890`). The audit 
 - The colour bar on the phone (banding, checkerboard).
 - The waveform on real media (AAC / video sources, long files, decode time, cache growth).
 - Edit Text long-press landing (opens Edit Text, not the exact field).
-- All device classes above.
+- The real-finger feel of everything the device tests drive with Compose test input.
 
 ## Phone test list (TL3)
 1. Layer with Position and Opacity keys → tap the D's arrow:
