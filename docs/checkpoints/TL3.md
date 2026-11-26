@@ -246,3 +246,174 @@ Branch `tlp`, after TLP.3 (A1 `d2b7157`, A2 `342d0f1`, A3 `d592890`). The audit 
 8. Text layer with Fill colour keys → expand: a gradient bar between the keys. Tap the bar between keys: a swatch, a hex and the add icon. Add: a key appears and the bar looks the same. On a Bounce segment the add is greyed with a note.
 9. Video with sound → expand: an Audio row first, a static placeholder, then the waveform aligned to the clip. Trim the in-point: it shifts. Mute: it dims. Eye off: nothing is computed.
 10. Scroll the timeline quickly with several layers expanded: it stays smooth.
+
+---
+
+# TL3.1: phone-test fixes, additions, waveform fix, playback diagnosis
+
+Branch `tlp`, continued from `9f1d040` (the tip matched after the fetch). Device: A16, **debug (debuggable) build**, so some first-frame jank is expected.
+
+## Audits (before the parts)
+- **Key gestures:**
+  - Toggling the LAST selected twirl key re-selected it: the host fell back to `KeySelectionSet.of(key)` when `toggle` returned null.
+  - A hold that moved and came back to its frame counted as a hold release.
+  - **Layer-bar keys:** the dragged key's own hit box moves with the key, and the drag was measured inside that box. On a real finger (a frame between events) the delta shrank back toward zero, the drag "moved 0 frames", and the release opened the popover. Compose test input sends events between frames, so earlier tests could not see it.
+- **D-button:** its tap handler captured `selectionMode` / `selected` when it was created (the gesture is keyed on the layer only), so the zones never switched to the selected-layer rules.
+- **Text inspector addressing:** `TextTab` (Character / Paragraph / Animate) plus `controlName` (the last-touched control); the Animate tab's `AnimatePageState.focus` (an `AnimatorTrackAddress`), `bars` (expanded animator / selectors) and a scroll-to-animator ("reveal").
+- **Waveform:** the peaks were numbered from the first decoded sample at the CONTAINER's rate. A rate change (HE-AAC) stretched the waveform, a presentation-time offset shifted it, and float PCM was read as 16-bit.
+- **Playback (read only):**
+  - "Preparing audio" is `AudioMixer.mix`: the whole file, on the preview worker, before any sound.
+  - It is cached by `AudioMixer.signature` (duration; visible, unmuted video layers' uri, timing and gain), so any timing, gain, visibility, mute or duration edit re-prepares. Seeks do not.
+  - `PcmPlayback` streams the scratch PCM from a default-priority thread with non-blocking writes (2 ms sleeps when full) into a 6144-frame (128 ms) AudioTrack; the AudioTrack head is the clock.
+
+| Part | Status | Commit |
+|---|---|---|
+| A1 key gesture bugs | Done | `743b7c2`; the drag-measurement root cause in `6847fb6` |
+| A2 D-button zones | Done | `fd67fc4`; stale-state fix in `fe2e626` |
+| A3 first-scroll jolt / never-idle | Done | `4a079f7` |
+| B1 edge auto-scroll | Done | `6847fb6`; no-seek fix in `fe2e626` |
+| B2 exact field | Done (scrolls to the animator, not the field row) | `92b2005` |
+| B3 square hold keys | Done | `4a079f7` |
+| B4 context-aware Select all | Done | `d3f6ddc` |
+| B5 4-column curves popover | Done | `4a079f7` |
+| B6 half-height waveform | Done | `4a079f7` |
+| B7 add-key buttons | Done | `4a079f7`; tap fix in `fe2e626` |
+| B8 graph icon in the name cell | Done | `4a079f7` |
+| C waveform correctness | Done | `c467fe6` |
+| D playback diagnosis | Measured (no playback changes) | `28676a2` |
+
+- **Deviation (commits):** A3, B3, B5, B6, B7 and B8 share one commit (`4a079f7`). The A3 investigation on the phone ran while those parts were being edited in the same files, and they could not be split cleanly.
+
+## A1 key gestures
+- **Hold release:** only when the finger stayed inside the touch slop AND zero frames moved. A drag beyond the slop never opens the popover, even back on its frame.
+- **Deselecting:** a tap on the last selected key deselects it and exits key mode.
+- **Twirl rows in key mode:** a hold release on an unselected key opens ITS popover without selecting it; on a selected key, the popover for the selected keys of that property.
+- **Sheet open, key mode:** a hold release does nothing; a tap toggles.
+- **Drag measurement:** drags are measured on SCREEN: the node's root x plus the touch (`detectKeyGestures(rootX)`).
+
+## A2 D-button zones
+- **On a SELECTED layer in selection mode:** **eye 36% (0–20.2dp) / body 28% (20.2–35.8dp) / arrow 36% (35.8–56dp)** of the 56dp D (`DZones`).
+  - Eye: bulk visibility. Body: deselect. Arrow: bulk expand.
+  - The widened D and the name column count as body.
+- **Unselected layer in the mode:** any tap adds it. Outside the mode: eye | arrow halves, unchanged.
+- **Stale state:** the zones now read the current state.
+
+## A3 the jolt (root causes and before / after)
+- **Your clarification:** the jolt is on a VERTICAL scroll, near the start of the timeline, with a twirl-down open.
+- **Root cause 1, never idle at 00:00:**
+  - The overscroll **stretch** effect on the timeline's horizontal scroll (and on the layer list) kept requesting frames forever after a scroll against 00:00 or the list's end. The UI never went idle: Espresso reported "Looped for 7200 iterations over 60 s".
+  - Present before TL3.1: the `9f1d040` build hung even sooner in the same test.
+  - **Fix:** no stretch on either (a timeline cannot go before 00:00).
+  - **After:** after a scrub past 00:00, and after vertical scrolls at 00:00 (collapsed, last layer expanded), the UI is idle (0 frames over 3 s).
+- **Root cause 2, per-frame recomposition:**
+  - The twirl rows recomposed on every scroll and playhead frame.
+  - The scrub→seek sync and the ruler's visible range read the scroll in composition.
+  - The D-buttons read row positions written on the PREVIOUS layout (a one-frame lag behind their rows and their own name cells).
+  - Quiet keys were one composable each.
+- **Fixes:** the playhead is read in the draw phase; callbacks are stable; `snapshotFlow` for the scrub sync; the ruler reads its range in the draw phase; quiet keys are drawn in one pass; the D uses the list's current offsets except while rows animate.
+- **Frame durations** (FrameMetrics TOTAL_DURATION, Compose-test-driven scrubs and scrolls; absolute values include test-input overhead in a debug build):
+
+  | Scenario | Before | After |
+  |---|---|---|
+  | First horizontal scrub after expanding 3 layers | max 97.7, p50 34.8, p95 76.6 ms | max 58.0, p50 27.7, p95 43.8 ms |
+  | Later scrubs | max 64–71, p95 55–62 ms | max 49–59, p95 44–49 ms |
+  | Collapsed baseline scrub | max 132.2, p50 29.2 ms | max 44.2, p50 22.1 ms |
+  | Vertical scrolls, last layer expanded | max 210 → 142 ms over 4 scrolls (JIT warm-up) | no longer hangs at 00:00 |
+- **Not verified:** the vertical-scroll spikes on a release build and with a real finger.
+
+## B parts
+- **B1 edge auto-scroll:**
+  - `EdgeScroll`: a **48dp zone** at each edge; speed ramps to **14dp per frame** at the very edge.
+  - The drag is in content coordinates (screen move + scroll since the down), so the key follows a still finger; snapping, readouts and the >= 0 clamp work on content time.
+  - Key drags never seek; afterwards the view eases back to the unchanged playhead (and that return is not a scrub).
+- **B2 exact field:**
+  - Transform properties open the Transform page in their mode; Opacity its page.
+  - Text properties open Edit Text on the control's tab with that control focused.
+  - Animator fields open the Animate tab focused on the field, with the animator (and selector) expanded and scrolled into view.
+  - **Short of exact:** the Animate list scrolls to the animator's bar, not to the field row inside it.
+- **B3:** hold keys (departing Hold, or hold-only tracks) draw as squares (side 72% of the box) everywhere, through one `LayerKeyMarkers.keyShape`. An aggregated bar marker is a square only when every key at that time is a hold key.
+- **B4:** with keys displayed, Select all opens a non-modal popover with LAYER / KEY icons; otherwise it selects all layers directly. The top bars are unchanged.
+- **B5:** **4 columns, ~4 rows visible (174 × 124dp)**, 18dp thumbnails with one ellipsised name line and slim labels. The key bar icon is the Graph library icon.
+- **B6:** the upper half only (rectified envelope); the audio row is **32dp**.
+- **B7:** an add-key button per twirl property row in the right column (KEY_ADD).
+  - It adds a key at the playhead frame with the current value, splitting the easing exactly; outside the keys it adds the held end value.
+  - **Measured max difference:** Linear 7.6e-6 / 3.1e-5, Easy Ease 7.6e-5 / 2.4e-4 (LUT), Custom 7.6e-6 / 3.1e-5, Hold 0 (Rotation / Position).
+  - **Disabled (with a toast):** on a key, outside the clip, and on Bounce / Elastic segments.
+- **B8:** a graph icon at the right end of each name cell (properties with a Graph page; not colour or hold-only fields) opens that property's Graph page. The D stays 104dp.
+
+## C waveform
+- **Root cause:** see the audits.
+- **Fix:**
+  - The decoder's real output format.
+  - Samples placed at pts × rate (as the mixer places them; before 0 dropped).
+  - A signed largest-magnitude channel downmix.
+  - Cache format version 2.
+- **Proof (generated AAC / MP4 tone bursts at 0.25–0.35, 0.60–0.65 and 1.20–1.50 s; 44.1 / 48 kHz × mono / stereo):**
+  - The peaks match the mixer's own PCM within one bucket (identical at 48 kHz, within ~3 ms at 44.1 kHz) at the same scale (0.50 vs 0.50).
+  - **Offset vs the file:** both are +38–50 ms. That is the AAC encoder priming (2048 samples), which the playback path does not trim. **Reported for AUD1; the mixer is unchanged.** So the waveform now matches what plays.
+
+## D playback diagnosis (no AudioMixer / playback changes)
+
+| Source (generated video + AAC) | "Preparing audio" (mix) | Decode only |
+|---|---|---|
+| 10 s | 5.5–7.1 s | 8.0 s |
+| 60 s | 9.8–12.7 s | 14.1–16.1 s |
+| 120 s | 23.5–27.4 s | 26.2–26.3 s |
+
+- **Breakdown (60 s):**
+  - Extractor 0.14 s.
+  - Platform AAC decoder 5.0 s (~1.8 ms per 1024-sample frame; the 2 ms output wait makes no difference).
+  - Reading every sample in Kotlin +2.3 s.
+  - The mixer adds a per-sample resample loop and a 23 MB float scratch read-modify-write (46 MB for 120 s).
+  - It runs on every play after an audio-signature change.
+- **Real playback (60 s fixture):** first play → audio 28.6 s; second play 0.22 s (cached); **0 underruns** in 2 × 8 s; buffer 128 ms. The choppiness did not reproduce as underruns with this fixture on an idle UI.
+- **UI pacing during playback** (3 solid layers; p50 / p95 / p99):
+  - Collapsed: 56 / 106 / 144 ms before → 48 / 83 / 113 ms after.
+  - Expanded: 52 / 71 / 80 ms → 45 / 64 / 76 ms.
+  - Playback is UI-heavy in this debug build. The timeline still recomposes per playhead frame (only the twirl rows now skip).
+- **Options for AUD1** (effort / risk):
+  1. Streaming decode into a ring buffer, playing as soon as ~0.5 s is ready (M / M).
+  2. A persistent decoded-PCM cache per source (decode once; edits only re-mix) (M / L).
+  3. Incremental invalidation: re-mix only the changed layer and time range (M / M).
+  4. Bulk sample processing (ShortBuffer / FloatBuffer, no per-sample Kotlin) and a release build (S / L).
+  5. Trim the AAC priming / honour the encoder delay so audio is not ~40 ms late (S / L).
+  6. An audio thread at audio priority and a single A/V clock (S / M).
+  7. Mix on a worker separate from the preview frames (M / M).
+
+## Tests (TL3.1)
+- **JVM: 676 tests, one full run, 45 s.**
+  - 675 passed. `LayerKeyMarkersTest.markersDrawAboveTheNameWithAKnockOutRing` checked the OLD source text (`diamond(...)`); it was updated to the shared `keyShape(...)` and re-run (8 / 8, 17 s).
+  - **New:** `Tl31Test` (7: B7 split / ends / disabled / hold, B3 hold keys, B5 layout, B1 ramp and content maths, B2 open targets), `TlpSelectionTest` +1 (zones), `Tl3AudioPeaksTest` +2 (envelope, pts placement), `DragSnap` unchanged.
+- **Device (A16):**
+  - **Keep-awake:** stay_on 0 → 15 → 0 and screen_off_timeout 600000 (unchanged), restored after each device session.
+  - **Screen:** awake and unlocked before every class; no class skipped.
+  - **Crash buffer:** empty.
+  - **Interruptions:** the phone dropped wireless debugging once (one run lost), and two long runs were touched to keep the screen on before the phone was put on a charger; their numbers were discarded.
+- **Results:**
+  - **`Tl31UiTest` (10):** 7 / 10 on run 1 (62 s). The 3 failures were real bugs (stale D state, the gutter over the add-key buttons, the return scroll seeking), fixed in `fe2e626`; the re-run of the 3 passed (31 s). All 10 have passed.
+  - **Regressions, once each after the fixes:** `Tl3UiTest` 7 / 7 (47 s), `TlpUiTest` 3 / 3 (23 s), `TlpOneUiTest` 4 / 4 (37 s), `TlpTwoUiTest` 4 / 4 (20 s).
+  - **`Tl31MeasureTest`:** C passes (36 s); D1 (~200 s, three runs while testing hypotheses), D1 breakdown (56 s), D2 (96 s), A3 / D3 runs as listed above.
+- **Flaky:** none.
+
+## Not verified (TL3.1)
+- Scroll and scrub feel with a real finger (vertical spikes in a release build).
+- Real-finger key gestures (the screen-space drag fix especially) and haptics.
+- TalkBack on the D zones, add-key buttons, graph icons and the Select all popover.
+- The square keys and the 4-column popover by eye.
+- The waveform on real camera media (HE-AAC, long files).
+- B3 has no device test (shapes are not exposed in semantics; JVM-tested).
+- The choppiness: not reproduced as underruns.
+
+## Phone test list (TL3.1)
+1. Twirl row: hold a key, drag it away and back, release: no popover. Hold-release a key (selected), then tap it once: deselected, key mode exits.
+2. In key mode, hold an unselected key: its own popover ("Changes 1 keyframe"), not selected. With the sheet open, a hold on a key in key mode does nothing.
+3. Select layers by hold, then by Select all, then by Even. Tap the MIDDLE of a selected D: deselected. The eye side hides / shows, the arrow side expands.
+4. Drag a key to the right edge and hold: the timeline scrolls, faster the closer to the edge, and the key follows; release: the playhead did not move.
+5. Long-press a Tracking name: Edit Text opens on Tracking. Long-press an animator field: the Animate tab opens on that animator.
+6. Set a key's easing to Hold: it draws as a square (bars, twirl rows, sheet keys).
+7. Expand a layer, then the 6th icon → Select all: Layers | Keyframes.
+8. Key bar Curves: 4 columns of small curves.
+9. Video with sound → expand: a thin waveform growing upward from the bottom, lined up with what you hear.
+10. Place the playhead between two keys, then tap the add-key button under the grip: a key appears and the motion does not change.
+11. Tap the graph icon in a name cell: that property's Graph page.
+12. Scroll the layer list up and down at 00:00 with the last layer expanded: no hang, no jolt.
