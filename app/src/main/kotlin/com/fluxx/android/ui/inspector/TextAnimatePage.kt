@@ -53,6 +53,8 @@ internal class AnimatePageState(bars: MutableState<AnimateBars>, focus: MutableS
     /** Position / Rotation / Scale pad, dial or rulers shown in place of the list (Controls: Pad, dial, rulers). */
     var subPage by subPage
     var linkScale by linkScale
+    /** TL3.1 B2: scroll this animator into view (a twirl-down name long-press); consumed by the page. */
+    var reveal by mutableStateOf<Long?>(null)
 }
 
 @Composable internal fun rememberAnimatePageState(layerId: Long): AnimatePageState {
@@ -361,6 +363,7 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
         val keys = rows.map { it.key }
         // TEXT F3.2: the add bar moves below the new animator, and the list keeps its scroll anchored to the add bar's key;
         // without this the list would jump to the end. Show the new (expanded) animator from its bar instead.
+        LaunchedEffect(state.reveal) { state.reveal?.let { revealAnimator = it; state.reveal = null } }
         LaunchedEffect(revealAnimator, keys) {
             val id = revealAnimator ?: return@LaunchedEffect
             val index = keys.indexOf("a:$id")

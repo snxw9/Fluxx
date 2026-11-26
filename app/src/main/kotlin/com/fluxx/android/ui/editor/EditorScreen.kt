@@ -907,7 +907,8 @@ fun EditorScreen(
             ) {
                 selectedLayer?.let { layer ->
                     androidx.compose.runtime.CompositionLocalProvider(com.fluxx.android.ui.inspector.LocalKeyClipboardHost provides keyClipboardHost, LocalKeyHeaderBar provides keyHeaderBar,
-                        com.fluxx.android.ui.inspector.LocalTransformOpenMode provides com.fluxx.android.ui.inspector.InspectorOpenPage.mode(openPage?.first)) { ElementInspectorSheet(
+                        com.fluxx.android.ui.inspector.LocalTransformOpenMode provides com.fluxx.android.ui.inspector.InspectorOpenPage.mode(openPage?.first),
+                        com.fluxx.android.ui.inspector.LocalTextOpenTarget provides openPage) { ElementInspectorSheet(
                         openPage = openPage, openGraph = openGraph,
                         onExplodePrepare={options,reply->
                             focusManager.clearFocus();previewController?.pause()

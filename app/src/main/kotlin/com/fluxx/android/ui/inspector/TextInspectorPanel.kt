@@ -102,6 +102,20 @@ import kotlinx.coroutines.delay
     // Animate tab (TEXT F3): the focused animator field owns the rail diamond, timeline focus and Prev/Next.
     val animateState=rememberAnimatePageState(layer.id)
     val animOwner=if(tab==TextTab.ANIMATE) AnimateSelection.focus(layer.text,animateState.focus) else null
+    // TL3.1 B2: a twirl-down name long-press opens the exact place: the control's tab with that control focused, or the
+    // Animate tab on that animator field (its animator / selector expanded and scrolled into view).
+    val openTarget=LocalTextOpenTarget.current
+    LaunchedEffect(openTarget) {
+        val t=openTarget?.first ?: return@LaunchedEffect
+        t.animator?.let {a->
+            tabIndex=TextTab.ANIMATE.ordinal;animateState.focus=a
+            var bars=animateState.bars.expandAnimator(a.animatorId)
+            a.selectorId?.let {bars=bars.expandSelector(it)}
+            animateState.bars=bars;animateState.reveal=a.animatorId
+            return@LaunchedEffect
+        }
+        TextOpenTarget.control(requireNotNull(t.property))?.let {c->tabIndex=TextOpenTarget.tab(c).ordinal;controlName=c.name}
+    }
     // TEXT F3.1: Position / Rotation / Scale control style, an app preference switched from the rail menu.
     val controlsPreference=AnimateControlsPreference.get(androidx.compose.ui.platform.LocalContext.current)
     val animateControls by controlsPreference.value.collectAsState()

@@ -104,4 +104,20 @@ class Tl31Test {
         val dxUs = (EdgeScroll.contentDx(-30f, 400, 0) / 4f * f(1)).toLong() // 4px per frame
         assertEquals(listOf(0L, f(60)), MultiKeyEdits.moveTogether(p, sel, dxUs)!!.selection!!.tracks.single().times)
     }
+
+    @Test fun aNameLongPressOpensTheExactPlace() {
+        // Transform properties open the Transform page in their own mode; Opacity its page; text properties Edit Text.
+        assertEquals(com.fluxx.android.ui.inspector.InspectorSection.TRANSFORM, com.fluxx.android.ui.inspector.InspectorOpenPage.section(GraphTarget(AnimPropertyType.SCALE)))
+        assertEquals(com.fluxx.android.ui.inspector.TransformSubMode.SCALE, com.fluxx.android.ui.inspector.InspectorOpenPage.mode(GraphTarget(AnimPropertyType.SCALE)))
+        assertEquals(com.fluxx.android.ui.inspector.InspectorSection.BLENDING_OPACITY, com.fluxx.android.ui.inspector.InspectorOpenPage.section(GraphTarget(AnimPropertyType.OPACITY)))
+        assertEquals(com.fluxx.android.ui.inspector.InspectorSection.CONTEXTUAL_EDIT, com.fluxx.android.ui.inspector.InspectorOpenPage.section(GraphTarget(AnimPropertyType.TRACKING)))
+        // Inside Edit Text: the property's own control, on its tab.
+        val c = com.fluxx.android.ui.inspector.TextOpenTarget.control(AnimPropertyType.TRACKING)!!
+        assertEquals(com.fluxx.android.ui.inspector.TextControl.TRACKING, c)
+        assertEquals(com.fluxx.android.ui.inspector.TextTab.CHARACTER, com.fluxx.android.ui.inspector.TextOpenTarget.tab(c))
+        for (p in listOf(AnimPropertyType.FONT_SIZE, AnimPropertyType.FILL_COLOUR, AnimPropertyType.STROKE_COLOUR, AnimPropertyType.STROKE_WIDTH,
+            AnimPropertyType.LEADING, AnimPropertyType.BASELINE_SHIFT, AnimPropertyType.STROKE_OVER_FILL, AnimPropertyType.LIGATURES, AnimPropertyType.SOURCE_TEXT))
+            assertNotNull("$p", com.fluxx.android.ui.inspector.TextOpenTarget.control(p))
+        assertEquals(com.fluxx.android.ui.inspector.TextTab.PARAGRAPH, com.fluxx.android.ui.inspector.TextOpenTarget.tab(com.fluxx.android.ui.inspector.TextControl.INDENT_LEFT))
+    }
 }
