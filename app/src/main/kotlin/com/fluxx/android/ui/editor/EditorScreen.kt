@@ -721,7 +721,7 @@ fun EditorScreen(
                     },
                     expandedLayers = editor.expandedLayers,
                     keySelection = editor.keySelection,
-                    hasAudio = { false },
+
                     scrollToLayer = scrollToLayer,
                     // TL3 B3: twirl-row keys: tap / hold / drag, the value popover and bulk value edits (one undo each).
                     twirlHost = com.fluxx.android.ui.timeline.TwirlKeyHost(

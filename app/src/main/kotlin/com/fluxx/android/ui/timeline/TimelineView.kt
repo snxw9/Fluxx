@@ -189,7 +189,7 @@ fun TimelineView(
     /** TL3: the expanded layers, the key selection (all tracks), audio capability and the twirl-down callbacks. */
     expandedLayers: Set<Long> = emptySet(),
     keySelection: com.fluxx.android.editor.KeySelectionSet? = null,
-    hasAudio: (CompositionLayer) -> Boolean = { false },
+    hasAudio: (CompositionLayer) -> Boolean = { true },
     onTwirlNameTap: (Long, com.fluxx.android.editor.GraphTarget) -> Unit = { _, _ -> },
     onTwirlNameLongPress: (Long, com.fluxx.android.editor.GraphTarget) -> Unit = { _, _ -> },
     /** TL3 B1: scroll (animated) so this layer is at the top; the second value makes repeated requests distinct. */
@@ -288,8 +288,10 @@ fun TimelineView(
     }
     // TL3 B1: the timeline items: every layer, each expanded layer followed by its rows (recomputed only when the layers,
     // the expansion or the audio capability change; never per scroll frame).
-    val latestHasAudio by rememberUpdatedState(hasAudio)
-    val items = remember(sortedLayers, expandedLayers) { com.fluxx.android.editor.TwirlRows.items(sortedLayers, expandedLayers) { latestHasAudio(it) } }
+    // TL3 B5: audio capability (a video with an audio track; a source found without one drops its row).
+    val peaks = remember(context) { com.fluxx.android.media.AudioPeakProvider.get(context) }
+    val noAudio = peaks.states.count { it.value is com.fluxx.android.media.AudioPeakProvider.Peaks.NoAudio }
+    val items = remember(sortedLayers, expandedLayers, noAudio) { com.fluxx.android.editor.TwirlRows.items(sortedLayers, expandedLayers) { peaks.hasAudio(it) && hasAudio(it) } }
     val latestItems by rememberUpdatedState(items)
     fun itemIndex(layerId: Long) = latestItems.indexOfFirst { it is com.fluxx.android.editor.TwirlItem.Layer && it.layer.id == layerId }
     // TL3 B2: while a twirl-down opens or closes, the layer rows below move on the shared spec (else the reorder's 100ms).
@@ -517,7 +519,7 @@ fun TimelineView(
                                                 { dragInfo = it; reportDrag(it) }, m)
                                                 else TwirlTrackRow(owner, r, pxPerUs, playheadUs, keySelection?.timesOf(r.layerId, r.target).orEmpty(), visibleRange, m)
                                             is com.fluxx.android.editor.TwirlRow.Empty -> TwirlEmptyRow(r, m)
-                                            is com.fluxx.android.editor.TwirlRow.Audio -> Box(m.fillMaxWidth().height(r.heightDp.dp).testTag("twirl-row-${r.key}"))
+                                            is com.fluxx.android.editor.TwirlRow.Audio -> TwirlAudioRow(owner, r, pxPerUs, visibleRange, peaks, m)
                                         }
                                         return@items
                                     }

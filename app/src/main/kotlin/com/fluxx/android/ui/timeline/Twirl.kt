@@ -260,3 +260,52 @@ internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectK
             }
         } finally { if (dragging && !finished) onDragCancel() }
     }
+
+/**
+ * TL3 B5: the audio row (56dp, first in a layer's twirl-down): the waveform aligned to the clip, through the mixer's own
+ * time mapping ([com.fluxx.android.model.WaveformMapping]: start, in-point, 1x), drawn for the visible range only, at a
+ * FIXED amplitude scale (no auto-gain), dimmed when the layer is muted or at volume 0. Peaks are requested only while the
+ * row is shown and the layer is visible (eye on); a row leaving mid-decode cancels it. While they compute, a static faint
+ * placeholder (no animation).
+ */
+@Composable internal fun TwirlAudioRow(layer: CompositionLayer, row: TwirlRow.Audio, pxPerUs: Double, visible: VisibleRange,
+    provider: com.fluxx.android.media.AudioPeakProvider, modifier: Modifier = Modifier) {
+    val uri = layer.asset?.uri
+    if (uri != null && layer.visible) DisposableEffect(uri) { provider.request(uri); onDispose { provider.cancel(uri) } }
+    val peaks = uri?.let { provider.states[it] } as? com.fluxx.android.media.AudioPeakProvider.Peaks.Ready
+    val ink = MaterialTheme.colorScheme.onSurfaceVariant
+    val dim = com.fluxx.android.model.WaveformMapping.dimmed(layer)
+    Box(modifier.fillMaxWidth().height(row.heightDp.dp).testTag("twirl-row-${row.key}")
+        .semantics { contentDescription = if (peaks != null) "Audio waveform" else "Audio waveform loading" }
+        .drawBehind {
+            val range = visible.px()
+            val clipL = (layer.timing.startUs * pxPerUs).toFloat(); val clipR = ((layer.timing.endUs ?: layer.timing.startUs) * pxPerUs).toFloat()
+            val x0 = maxOf(range.start, clipL); val x1 = minOf(range.endInclusive, clipR)
+            if (x1 <= x0) return@drawBehind
+            val mid = size.height / 2f; val half = size.height / 2f - 2.dp.toPx()
+            val pyramid = peaks?.pyramid
+            if (pyramid == null) {
+                // Static placeholder: a faint band and the centre line.
+                drawRect(ink.copy(alpha = .06f), Offset(x0, mid - half / 3f), Size(x1 - x0, half * 2f / 3f))
+                drawLine(ink.copy(alpha = .2f), Offset(x0, mid), Offset(x1, mid), 1f)
+                return@drawBehind
+            }
+            val colour = ink.copy(alpha = if (dim) .3f else .8f)
+            val usPerPx = 1.0 / pxPerUs
+            val level = pyramid.levelFor(usPerPx)
+            val (mins, maxs) = pyramid.levels[level]
+            var x = kotlin.math.floor(x0)
+            while (x < x1) {
+                val src = com.fluxx.android.model.WaveformMapping.sourceUs(layer, (x / pxPerUs).toLong())
+                if (src != null) {
+                    val b0 = pyramid.bucketAt(level, src); val b1 = pyramid.bucketAt(level, src + usPerPx.toLong()).let { if (it < 0) b0 else it }
+                    if (b0 >= 0) {
+                        var lo = mins[b0]; var hi = maxs[b0]
+                        for (b in b0 + 1..b1) { if (mins[b] < lo) lo = mins[b]; if (maxs[b] > hi) hi = maxs[b] }
+                        drawLine(colour, Offset(x, mid - hi.coerceIn(-1f, 1f) * half), Offset(x, mid - lo.coerceIn(-1f, 1f) * half + 1f), 1f)
+                    }
+                }
+                x += 1f
+            }
+        })
+}
