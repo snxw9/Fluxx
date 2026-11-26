@@ -61,7 +61,7 @@ class TlpMultiLayerTest {
     @Test fun staggerUsesSelectionOrderInFramesAndKeepsDurations() {
         val v = vm(); v.enterSelection(3); v.setSelection(v.layerSelection!!.add(1).add(4)) // order 3, 1, 4
         val before = v.state.project
-        v.dispatch(MultiLayerEdits.stagger(v.state.project, v.layerSelection!!, 5)!!)
+        v.dispatch(MultiLayerEdits.stagger(v.state.project, v.layerSelection!!, 5, reverse = false)!!)
         assertEquals(f(90), v.start(3))          // layer 1 of the order stays
         assertEquals(f(95), v.start(1)); assertEquals(f(100), v.start(4))
         listOf(1L, 3L, 4L).forEach { assertEquals(f(60), v.dur(it)) }
@@ -70,8 +70,16 @@ class TlpMultiLayerTest {
         v.dispatch(MultiLayerEdits.stagger(v.state.project, v.layerSelection!!, 5, reverse = true)!!)
         assertEquals(f(120), v.start(4)); assertEquals(f(125), v.start(1)); assertEquals(f(130), v.start(3))
         // N = 0 stacks them on the first start.
-        v.undo(); v.dispatch(MultiLayerEdits.stagger(v.state.project, v.layerSelection!!, 0)!!)
+        v.undo(); v.dispatch(MultiLayerEdits.stagger(v.state.project, v.layerSelection!!, 0, reverse = false)!!)
         assertEquals(f(90), v.start(1)); assertEquals(f(90), v.start(4))
+    }
+
+    @Test fun staggerDefaultsToReverseAndSequenceToForward() {
+        assertTrue(MultiLayerEdits.STAGGER_REVERSE_DEFAULT); assertFalse(MultiLayerEdits.SEQUENCE_REVERSE_DEFAULT)
+        // Order 3, 1, 4 with the default: reversed (4 stays at 120).
+        val v = vm(); v.enterSelection(3); v.setSelection(v.layerSelection!!.add(1).add(4))
+        v.dispatch(MultiLayerEdits.stagger(v.state.project, v.layerSelection!!, 5)!!)
+        assertEquals(f(120), v.start(4)); assertEquals(f(125), v.start(1)); assertEquals(f(130), v.start(3))
     }
 
     @Test fun sequencePlacesClipsEndToEndWithAGapOrOverlap() {

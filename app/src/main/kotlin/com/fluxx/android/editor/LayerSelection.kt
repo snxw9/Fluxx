@@ -44,6 +44,9 @@ object LayerOrder {
 
 /** TLP: multi-layer edits, each ONE [EditorAction.Batch] of existing actions (one undo). */
 object MultiLayerEdits {
+    /** TLP.1: the layer Stagger popover opens with Reverse ON, Sequence with Reverse OFF (every open; never persisted). */
+    const val STAGGER_REVERSE_DEFAULT = true
+    const val SEQUENCE_REVERSE_DEFAULT = false
     private fun layers(project: ProjectDocument, selection: LayerSelection) =
         selection.ids.mapNotNull { id -> project.composition.layers.firstOrNull { it.id == id } }
 
@@ -111,7 +114,7 @@ object MultiLayerEdits {
      * T4 Stagger, in SELECTION order (or reversed): layer 1 stays; layer k starts [frames] after layer k−1's start. Whole
      * clips move (duration and in-point kept) with existing [EditorAction.Move]s, one Batch. Null when nothing moves.
      */
-    fun stagger(project: ProjectDocument, selection: LayerSelection, frames: Int, reverse: Boolean = false): EditorAction? {
+    fun stagger(project: ProjectDocument, selection: LayerSelection, frames: Int, reverse: Boolean = STAGGER_REVERSE_DEFAULT): EditorAction? {
         require(frames >= 0) { "Stagger by zero or more frames" }
         val rate = project.composition.frameRate
         val list = ordered(project, selection, reverse)
@@ -129,7 +132,7 @@ object MultiLayerEdits {
      * T4 Sequence, end to end in SELECTION order (or reversed): each layer starts at the previous one's end plus [gapFrames]
      * (negative = overlap; never before 0). Layer 1 stays. An unresolved duration counts as zero. One Batch of Moves.
      */
-    fun sequence(project: ProjectDocument, selection: LayerSelection, gapFrames: Int = 0, reverse: Boolean = false): EditorAction? {
+    fun sequence(project: ProjectDocument, selection: LayerSelection, gapFrames: Int = 0, reverse: Boolean = SEQUENCE_REVERSE_DEFAULT): EditorAction? {
         val rate = project.composition.frameRate
         val list = ordered(project, selection, reverse)
         if (list.size < 2) return null

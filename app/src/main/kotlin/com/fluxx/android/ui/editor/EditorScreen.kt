@@ -743,12 +743,15 @@ fun EditorScreen(
                                 android.widget.Toast.LENGTH_SHORT).show()
                         }
                     }
-                    var reverse by remember { mutableStateOf(false) }
+                    // TLP.1: each popover's Reverse is remembered inside its content, which leaves composition when the
+                    // popover closes, so every open starts from the default (Stagger ON, Sequence OFF); never persisted.
                     BarPopoverIcon("STAGGER", "Stagger the selected layers", "sel-stagger", "selection-stagger", enabled = layerSel.size > 1) { close ->
+                        var reverse by remember { mutableStateOf(MultiLayerEdits.STAGGER_REVERSE_DEFAULT) }
                         FramesPopoverContent("Stagger", "frames", 2, reverse, { reverse = !reverse }, { n ->
                             MultiLayerEdits.stagger(editor.state.project, layerSel, n, reverse)?.let { applyLayerAction(it) } }, close, "selection-stagger")
                     }
                     BarPopoverIcon("SEQUENCE", "Sequence the selected layers end to end", "sel-sequence", "selection-sequence", enabled = layerSel.size > 1) { close ->
+                        var reverse by remember { mutableStateOf(MultiLayerEdits.SEQUENCE_REVERSE_DEFAULT) }
                         FramesPopoverContent("Gap", "frames", 0, reverse, { reverse = !reverse }, { n ->
                             MultiLayerEdits.sequence(editor.state.project, layerSel, n, reverse)?.let { applyLayerAction(it) } }, close, "selection-sequence", allowNegative = true)
                     }
