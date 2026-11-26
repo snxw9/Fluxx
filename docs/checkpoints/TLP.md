@@ -2,12 +2,13 @@
 
 # TLP: timeline productivity (selection, the D-button, the eye as a real off switch, multi-layer and key actions)
 
-Local branch `tlp`, created from `master` at `2377a83` (after the graph merge). **Not pushed, not merged.**
+Branch `tlp`, created from `master` at `2377a83` (after the graph merge). **Pushed to `origin/tlp`; not merged into `master`.**
 
-**Status:** T0–T5 implemented in source. T6: the eyedropper is done; the coverage highlight was skipped (questions in §T6).
-- **JVM:** 621 / 621 in one full run (46 s).
-- **A16:** `TlpUiTest` 2 / 3 on the first run with the screen on (19 s); the failure was a misplaced test tag on the bottom bar, fixed, and the failed method re-ran green (14 s). An earlier run with the screen off timed out in setup (§Tests).
-- **Phone acceptance:** pending.
+**Status:**
+- **T0–T6:** done. T6's coverage highlight was skipped at first and then built in TLP.1 Part 6 (the selector coverage box).
+- **TLP.1:** done, except Part 3 (key bar placement), which was blocked and is replaced by TLP.2 Part 3.
+- **TLP.2:** in progress (see the TLP.2 section at the end).
+- **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1 and TLP.2 (phone test lists at the end of each section).
 
 ## T0. Selection architecture (written before the code)
 
