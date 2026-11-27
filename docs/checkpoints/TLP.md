@@ -35,6 +35,13 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). **Push
   - Every media test now records Battery Saver and charging state.
   - Two low-memory kills on the phone were not reproduced.
   - See `docs/checkpoints/MP1_1.md`.
+- **MP1.2 (branch `aud1`, not merged): playback death in long mixed-source sequences.**
+  - The deaths were lmkd low-memory kills, not crashes. Decoders of clips that had ended stayed open (four at about 250 MB of codec buffers each at 1440p).
+  - They now close at the cut, against a memory budget, and on onTrimMemory. Project 1 went from 1 GB of codec buffers (118 MB of system memory left) to 350 MB.
+  - Two file-specific stops were fixed: a codec that takes input but gives no picture now holds the last one; a cut before a file's first frame now gets that frame.
+  - Project 1 now plays all 30 clips in-process.
+  - Open: the mid-clip and cut lag (MP2), and choppy HE-AAC 24 kHz audio on six clips (cause not found).
+  - See `docs/checkpoints/MP1_2.md`.
 - **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1, TLP.2, TLP.3 and TL3 (phone test lists at the end of each section).
 
 ## T0. Selection architecture (written before the code)

@@ -1,0 +1,60 @@
+Project 1: cut to clip 2 (x-vnd.on2.vp9 1920x1440 20.00 fps): worst gap 793 ms; at entry PSS 245 MB, dmabuf 301 MB, decoders 1 (1920x1440)
+Project 1: cut to clip 3 (x-vnd.on2.vp9 2560x1440 20.00 fps): worst gap 351 ms; at entry PSS 270 MB, dmabuf 341 MB, decoders 1 (2560x1440)
+Project 1: cut to clip 4 (x-vnd.on2.vp9 1920x1080 20.00 fps): worst gap 338 ms; at entry PSS 210 MB, dmabuf 191 MB, decoders 1 (1920x1080)
+Project 1: cut to clip 5 (x-vnd.on2.vp9 1920x1440 20.00 fps): worst gap 454 ms; at entry PSS 255 MB, dmabuf 306 MB, decoders 1 (1920x1440)
+Project 1: cut to clip 6 (x-vnd.on2.vp9 2560x1440 20.00 fps): worst gap 406 ms; at entry PSS 278 MB, dmabuf 350 MB, decoders 1 (2560x1440)
+Project 1: cut to clip 7 (x-vnd.on2.vp9 1920x1440 20.00 fps): worst gap 449 ms; at entry PSS 267 MB, dmabuf 310 MB, decoders 1 (1920x1440)
+Project 1: cut to clip 8 (x-vnd.on2.vp9 1920x1440 20.00 fps): worst gap 458 ms; at entry PSS 262 MB, dmabuf 307 MB, decoders 1 (1920x1440)
+Project 1: cut to clip 9 (x-vnd.on2.vp9 1920x1440 20.00 fps): worst gap 496 ms; at entry PSS 257 MB, dmabuf 303 MB, decoders 1 (1920x1440)
+Project 1: cut to clip 10 (x-vnd.on2.vp9 1920x1440 20.00 fps): worst gap 424 ms; at entry PSS 259 MB, dmabuf 305 MB, decoders 1 (1920x1440)
+Project 1: cut to clip 11 (x-vnd.on2.vp9 1920x1440 20.00 fps): worst gap 504 ms; at entry PSS 256 MB, dmabuf 305 MB, decoders 1 (1920x1440)
+Project 1: cut to clip 12 (x-vnd.on2.vp9 1920x1440 20.00 fps): worst gap 559 ms; at entry PSS 252 MB, dmabuf 301 MB, decoders 1 (1920x1440)
+Project 1: cut to clip 13 (avc 1440x1080 20.00 fps): worst gap 363 ms; at entry PSS 170 MB, dmabuf 141 MB, decoders 1 (1440x1080)
+Project 1: cut to clip 14 (hevc 960x720 20.00 fps): worst gap 621 ms; at entry PSS 160 MB, dmabuf 120 MB, decoders 1 (960x720)
+Project 1: cut to clip 15 (av01 1440x1080 20.00 fps): worst gap 440 ms; at entry PSS 155 MB, dmabuf 109 MB, decoders 1 (1440x1080)
+Project 1: cut to clip 16 (x-vnd.on2.vp9 2560x1440 20.00 fps): worst gap 445 ms; at entry PSS 260 MB, dmabuf 328 MB, decoders 1 (2560x1440)
+Project 1: cut to clip 17 (x-vnd.on2.vp9 1080x1080 20.00 fps): worst gap 533 ms; at entry PSS 173 MB, dmabuf 146 MB, decoders 1 (1080x1080)
+Project 1: cut to clip 18 (av01 1920x1080 20.00 fps): worst gap 569 ms; at entry PSS 155 MB, dmabuf 110 MB, decoders 1 (1920x1080)
+Project 1: cut to clip 19 (hevc 1430x1080 20.00 fps): worst gap 481 ms; at entry PSS 174 MB, dmabuf 149 MB, decoders 1 (1430x1080)
+Project 1: cut to clip 20 (x-vnd.on2.vp9 1600x1080 20.00 fps): worst gap 400 ms; at entry PSS 187 MB, dmabuf 167 MB, decoders 1 (1600x1080)
+Project 1: cut to clip 21 (x-vnd.on2.vp9 1440x1080 20.00 fps): worst gap 391 ms; at entry PSS 183 MB, dmabuf 160 MB, decoders 1 (1440x1080)
+Project 1: cut to clip 22 (x-vnd.on2.vp9 1920x1080 20.00 fps): worst gap 394 ms; at entry PSS 200 MB, dmabuf 182 MB, decoders 1 (1920x1080)
+Project 1: cut to clip 23 (x-vnd.on2.vp9 1916x1078 20.00 fps): worst gap 286 ms; at entry PSS 195 MB, dmabuf 183 MB, decoders 1 (1916x1078)
+Project 1: cut to clip 24 (hevc 1440x1080 20.00 fps): worst gap 369 ms; at entry PSS 173 MB, dmabuf 143 MB, decoders 1 (1440x1080)
+Project 1: cut to clip 25 (x-vnd.on2.vp9 1920x1440 20.00 fps): worst gap 406 ms; at entry PSS 252 MB, dmabuf 304 MB, decoders 1 (1920x1440)
+Project 1: cut to clip 26 (x-vnd.on2.vp9 1440x1080 20.00 fps): worst gap 359 ms; at entry PSS 188 MB, dmabuf 161 MB, decoders 1 (1440x1080)
+Project 1: cut to clip 27 (x-vnd.on2.vp9 1440x1080 20.00 fps): worst gap 429 ms; at entry PSS 182 MB, dmabuf 161 MB, decoders 1 (1440x1080)
+Project 1: cut to clip 28 (x-vnd.on2.vp9 1440x1080 20.00 fps): worst gap 389 ms; at entry PSS 183 MB, dmabuf 161 MB, decoders 1 (1440x1080)
+Project 1: cut to clip 29 (x-vnd.on2.vp9 2560x1072 20.00 fps): worst gap 524 ms; at entry PSS 247 MB, dmabuf 297 MB, decoders 1 (2560x1072)
+Project 1: cut to clip 30 (x-vnd.on2.vp9 2560x1440 20.00 fps): worst gap 482 ms; at entry PSS 259 MB, dmabuf 327 MB, decoders 1 (2560x1440)
+Project 1: mid-clip 1 (x-vnd.on2.vp9 1920x1440 20.00 fps): 2433 frames, 20.0 fps shown (composition 20), interval p50 50 p95 62 max 132 ms, late (> 2 frames) 5
+Project 1: mid-clip 2 (x-vnd.on2.vp9 1920x1440 20.00 fps): 322 frames, 20.1 fps shown (composition 20), interval p50 49 p95 62 max 77 ms, late (> 2 frames) 0
+Project 1: mid-clip 3 (x-vnd.on2.vp9 2560x1440 20.00 fps): 589 frames, 20.0 fps shown (composition 20), interval p50 50 p95 62 max 70 ms, late (> 2 frames) 0
+Project 1: mid-clip 4 (x-vnd.on2.vp9 1920x1080 20.00 fps): 329 frames, 20.0 fps shown (composition 20), interval p50 50 p95 59 max 66 ms, late (> 2 frames) 0
+Project 1: mid-clip 5 (x-vnd.on2.vp9 1920x1440 20.00 fps): 413 frames, 20.0 fps shown (composition 20), interval p50 50 p95 61 max 72 ms, late (> 2 frames) 0
+Project 1: mid-clip 6 (x-vnd.on2.vp9 2560x1440 20.00 fps): 695 frames, 20.0 fps shown (composition 20), interval p50 50 p95 62 max 72 ms, late (> 2 frames) 0
+Project 1: mid-clip 7 (x-vnd.on2.vp9 1920x1440 20.00 fps): 396 frames, 20.0 fps shown (composition 20), interval p50 50 p95 59 max 68 ms, late (> 2 frames) 0
+Project 1: mid-clip 8 (x-vnd.on2.vp9 1920x1440 20.00 fps): 464 frames, 20.0 fps shown (composition 20), interval p50 51 p95 60 max 70 ms, late (> 2 frames) 0
+Project 1: mid-clip 9 (x-vnd.on2.vp9 1920x1440 20.00 fps): 1053 frames, 20.0 fps shown (composition 20), interval p50 50 p95 62 max 73 ms, late (> 2 frames) 0
+Project 1: mid-clip 10 (x-vnd.on2.vp9 1920x1440 20.00 fps): 574 frames, 20.0 fps shown (composition 20), interval p50 50 p95 61 max 72 ms, late (> 2 frames) 0
+Project 1: mid-clip 11 (x-vnd.on2.vp9 1920x1440 20.00 fps): 335 frames, 20.1 fps shown (composition 20), interval p50 50 p95 62 max 70 ms, late (> 2 frames) 0
+Project 1: mid-clip 12 (x-vnd.on2.vp9 1920x1440 20.00 fps): 622 frames, 20.0 fps shown (composition 20), interval p50 50 p95 62 max 79 ms, late (> 2 frames) 0
+Project 1: mid-clip 13 (avc 1440x1080 20.00 fps): 3370 frames, 20.0 fps shown (composition 20), interval p50 50 p95 58 max 434 ms, late (> 2 frames) 2
+Project 1: mid-clip 14 (hevc 960x720 20.00 fps): 426 frames, 20.0 fps shown (composition 20), interval p50 50 p95 60 max 107 ms, late (> 2 frames) 1
+Project 1: mid-clip 15 (av01 1440x1080 20.00 fps): 585 frames, 20.0 fps shown (composition 20), interval p50 50 p95 60 max 71 ms, late (> 2 frames) 0
+Project 1: mid-clip 16 (x-vnd.on2.vp9 2560x1440 20.00 fps): 467 frames, 19.8 fps shown (composition 20), interval p50 50 p95 63 max 225 ms, late (> 2 frames) 3
+Project 1: mid-clip 17 (x-vnd.on2.vp9 1080x1080 20.00 fps): 155 frames, 20.1 fps shown (composition 20), interval p50 49 p95 61 max 69 ms, late (> 2 frames) 0
+Project 1: mid-clip 18 (av01 1920x1080 20.00 fps): 1038 frames, 20.0 fps shown (composition 20), interval p50 50 p95 61 max 75 ms, late (> 2 frames) 0
+Project 1: mid-clip 19 (hevc 1430x1080 20.00 fps): 608 frames, 20.0 fps shown (composition 20), interval p50 50 p95 60 max 69 ms, late (> 2 frames) 0
+Project 1: mid-clip 20 (x-vnd.on2.vp9 1600x1080 20.00 fps): 652 frames, 20.0 fps shown (composition 20), interval p50 51 p95 61 max 68 ms, late (> 2 frames) 0
+Project 1: mid-clip 21 (x-vnd.on2.vp9 1440x1080 20.00 fps): 496 frames, 20.0 fps shown (composition 20), interval p50 50 p95 60 max 81 ms, late (> 2 frames) 0
+Project 1: mid-clip 22 (x-vnd.on2.vp9 1920x1080 20.00 fps): 668 frames, 20.0 fps shown (composition 20), interval p50 50 p95 61 max 74 ms, late (> 2 frames) 0
+Project 1: mid-clip 23 (x-vnd.on2.vp9 1916x1078 20.00 fps): 247 frames, 20.0 fps shown (composition 20), interval p50 50 p95 60 max 73 ms, late (> 2 frames) 0
+Project 1: mid-clip 24 (hevc 1440x1080 20.00 fps): 507 frames, 20.0 fps shown (composition 20), interval p50 51 p95 60 max 74 ms, late (> 2 frames) 0
+Project 1: mid-clip 25 (x-vnd.on2.vp9 1920x1440 20.00 fps): 520 frames, 20.0 fps shown (composition 20), interval p50 50 p95 61 max 69 ms, late (> 2 frames) 0
+Project 1: mid-clip 26 (x-vnd.on2.vp9 1440x1080 20.00 fps): 779 frames, 20.0 fps shown (composition 20), interval p50 50 p95 60 max 70 ms, late (> 2 frames) 0
+Project 1: mid-clip 27 (x-vnd.on2.vp9 1440x1080 20.00 fps): 462 frames, 20.0 fps shown (composition 20), interval p50 51 p95 59 max 75 ms, late (> 2 frames) 0
+Project 1: mid-clip 28 (x-vnd.on2.vp9 1440x1080 20.00 fps): 460 frames, 20.0 fps shown (composition 20), interval p50 50 p95 60 max 68 ms, late (> 2 frames) 0
+Project 1: mid-clip 29 (x-vnd.on2.vp9 2560x1072 20.00 fps): 583 frames, 19.5 fps shown (composition 20), interval p50 50 p95 71 max 234 ms, late (> 2 frames) 11
+Project 1: mid-clip 30 (x-vnd.on2.vp9 2560x1440 20.00 fps): 670 frames, 19.9 fps shown (composition 20), interval p50 49 p95 75 max 292 ms, late (> 2 frames) 7
+Project 1: mid-clip overall: 20918 frames, interval p50 50 p95 61 p99 68 max 434 ms, late (> 2 frames) 29
