@@ -279,7 +279,14 @@ internal class Resampler(private val rate: Int) {
     private var phase = 0.0     // the next output frame's position, in source frames relative to the current buffer
     private var nextOut = Long.MIN_VALUE
     fun run(src: FloatArray, n: Int, firstOut: Long, emit: (Long, FloatArray, Int) -> Unit): Int {
-        if (rate == AudioTiming.RATE) { emit(firstOut, src, n); return n }
+        if (rate == AudioTiming.RATE) {
+            // AUD3: contiguous, as the resampling path below. A buffer that follows the previous one within 100 ms is written
+            // right after it: container timestamps in whole milliseconds (MKV) put 2048-frame HE-AAC buffers (42.667 ms)
+            // at 42 / 43 ms steps, and placing each at its own timestamp left a 16-32 frame gap or overlap every buffer.
+            val first = if (nextOut != Long.MIN_VALUE && kotlin.math.abs(firstOut - nextOut) <= AudioTiming.RATE / 10) nextOut else firstOut
+            nextOut = first + n
+            emit(first, src, n); return n
+        }
         val step = rate.toDouble() / AudioTiming.RATE
         if (nextOut == Long.MIN_VALUE || kotlin.math.abs(firstOut - nextOut) > AudioTiming.RATE / 10) { nextOut = firstOut; phase = 0.0; havePrev = false }
         val cap = (n / step).toInt() + 2
@@ -394,7 +401,8 @@ class BlockMixer(context: Context, project: ProjectDocument) {
             val a = maxOf(frame, v.startFrame); val b = minOf(frame + count, v.endFrame)
             if (b <= a || v.pcm.noAudio) continue
             val n = (b - a).toInt()
-            v.pcm.read(v.inFrame + (a - v.startFrame), n, tmp, scratch)
+            // AUD3: a block not decoded yet plays as silence; the test observer counts those (null in the app).
+            if (!v.pcm.read(v.inFrame + (a - v.startFrame), n, tmp, scratch)) PreviewFrames.testPlayback?.invoke("miss frame=$a n=$n")
             val off = ((a - frame) * 2).toInt(); val g = v.gain / 32768f
             for (i in 0 until n * 2) acc[off + i] += tmp[i] * g
         }

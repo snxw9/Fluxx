@@ -42,6 +42,12 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). The wo
   - Project 1 now plays all 30 clips in-process.
   - Open: the mid-clip and cut lag (MP2), and choppy HE-AAC 24 kHz audio on six clips (cause not found).
   - See `docs/checkpoints/MP1_2.md`.
+- **AUD3 (branch `timeline`, NOT yet merged into `master`): choppy HE-AAC audio.**
+  - The cause: 48 kHz decoder output was written at each buffer's millisecond-rounded MKV timestamp. Clips 17, 20, 21, 22, 27 and 28 (HE-AAC declared at 24 kHz) had a 16–32 frame gap or overlap every 43 ms.
+  - Now written contiguously, with the PCM cache at version 2. The error against a reference decode went from 50–97 % to 0.000.
+  - B3: MP4 edit-list AAC (two Seal files; Project 1 clips 14, 19, 24) was trimmed twice and played 57–81 ms early; fixed, with the cache at version 3.
+  - Snxw's ear is the final check.
+  - See `docs/checkpoints/AUD3.md`.
 - **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1, TLP.2, TLP.3 and TL3 (phone test lists at the end of each section).
 
 ## T0. Selection architecture (written before the code)
