@@ -228,11 +228,13 @@ abstract class Aud2Base {
     protected fun warmPcm(uri: String, durationUs: Long, timeoutMs: Long = 180_000) {
         val pcm = com.fluxx.android.render.SourcePcmCache.get(context).get(uri, durationUs)
         val t0 = System.nanoTime()
+        // MP1 B2: the cache decodes only a source's used range; for this warm-up the whole source is that range.
+        pcm.setScope(listOf(0L..durationUs))
         while (!pcm.complete && (System.nanoTime() - t0) / 1_000_000 < timeoutMs) {
-            pcm.ensure(0); Thread.sleep(100)
-            // Keep the worker moving through the file: ask for the first gap each round.
-            var f = 0L; while (f < pcm.frames && pcm.covers(f, minOf(pcm.frames, f + 48_000))) f += 48_000
-            if (f < pcm.frames) pcm.ensure(f)
+            Thread.sleep(100)
+            // If the worker stopped, ask for the first gap (a reader's demand).
+            if (!pcm.decoding) { var f = 0L; while (f < pcm.frames && pcm.covers(f, minOf(pcm.frames, f + 48_000))) f += 48_000
+                if (f < pcm.frames) pcm.ensure(f) }
         }
         report("PCM cache ${if (pcm.complete) "warm" else "NOT complete"} after ${(System.nanoTime() - t0) / 1_000_000}ms (${uri.takeLast(24)})")
     }

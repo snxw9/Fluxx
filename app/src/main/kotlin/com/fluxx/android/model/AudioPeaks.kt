@@ -9,7 +9,9 @@ import java.io.File
  * source samples (mono downmix); each next level merges [FACTOR] buckets of the one below. Values are raw sample
  * amplitude (-1..1): the waveform has a FIXED scale, no auto-gain.
  */
-class PeakPyramid(val sampleRate: Int, val durationUs: Long, val levels: List<Pair<FloatArray, FloatArray>>) {
+class PeakPyramid(val sampleRate: Int, val durationUs: Long, val levels: List<Pair<FloatArray, FloatArray>>,
+    /** MP1 B2: the source µs ranges actually decoded (the used range plus margin); buckets elsewhere are silent. */
+    val coveredUs: List<LongRange> = listOf(0L..durationUs)) {
     /** Source microseconds covered by one bucket of [level]. */
     fun bucketUs(level: Int): Double = BASE.toDouble() * Math.pow(FACTOR.toDouble(), level.toDouble()) * 1_000_000.0 / sampleRate
 
@@ -26,9 +28,24 @@ class PeakPyramid(val sampleRate: Int, val durationUs: Long, val levels: List<Pa
         return if (sourceUs < 0 || i >= levels[level].first.size) -1 else i
     }
 
+    /** MP1 B2: the level-0 bucket span of source range [r] (clamped to what exists). */
+    private fun buckets(r: LongRange): IntRange {
+        val n = levels[0].first.size
+        val b0 = (r.first / bucketUs(0)).toInt().coerceIn(0, n)
+        val b1 = if (r.last >= durationUs) n - 1 else kotlin.math.ceil(r.last / bucketUs(0)).toInt().coerceAtMost(n - 1)
+        return b0..b1
+    }
+
+    /** v4 (MP1 B2): the covered ranges and only their level-0 buckets; the coarser levels are rebuilt on read. */
     fun write(file: File) = DataOutputStream(file.outputStream().buffered()).use { out ->
-        out.writeInt(FORMAT_VERSION); out.writeInt(sampleRate); out.writeLong(durationUs); out.writeInt(levels.size)
-        for ((mn, mx) in levels) { out.writeInt(mn.size); for (i in mn.indices) { out.writeFloat(mn[i]); out.writeFloat(mx[i]) } }
+        out.writeInt(FORMAT_VERSION); out.writeInt(sampleRate); out.writeLong(durationUs)
+        val (mn, mx) = levels[0]
+        out.writeInt(mn.size); out.writeInt(coveredUs.size)
+        for (r in coveredUs) {
+            out.writeLong(r.first); out.writeLong(r.last)
+            val b = buckets(r); out.writeInt(b.first); out.writeInt(if (b.isEmpty()) 0 else b.last - b.first + 1)
+            for (i in b) { out.writeFloat(mn[i]); out.writeFloat(mx[i]) }
+        }
     }
 
     companion object {
@@ -37,14 +54,20 @@ class PeakPyramid(val sampleRate: Int, val durationUs: Long, val levels: List<Pa
         /** Bumped whenever the file layout or the analysis changes: it is part of the cache key. */
         /** TL3.1 C: 2 = peaks placed by presentation time from the decoder's real output format (stale v1 peaks rebuild). */
         /** AUD1: 3 = the priming trimmed like playback (stale peaks rebuild). */
-        const val FORMAT_VERSION = 3
+        /** MP1 B2: 4 = partial coverage (the used range plus margin), only covered buckets stored. */
+        const val FORMAT_VERSION = 4
 
         fun read(file: File): PeakPyramid? = runCatching {
             DataInputStream(file.inputStream().buffered()).use { inp ->
                 if (inp.readInt() != FORMAT_VERSION) return null
-                val rate = inp.readInt(); val dur = inp.readLong(); val n = inp.readInt()
-                PeakPyramid(rate, dur, (0 until n).map { val size = inp.readInt(); val mn = FloatArray(size); val mx = FloatArray(size)
-                    for (i in 0 until size) { mn[i] = inp.readFloat(); mx[i] = inp.readFloat() }; mn to mx })
+                val rate = inp.readInt(); val dur = inp.readLong(); val size = inp.readInt(); val ranges = inp.readInt()
+                val mn = FloatArray(size); val mx = FloatArray(size); val covered = ArrayList<LongRange>(ranges)
+                repeat(ranges) {
+                    covered += inp.readLong()..inp.readLong()
+                    val from = inp.readInt(); val count = inp.readInt()
+                    for (i in from until from + count) { mn[i] = inp.readFloat(); mx[i] = inp.readFloat() }
+                }
+                PeakPyramid(rate, dur, PeakBuilder.levels(mn, mx), covered)
             }
         }.getOrNull()
     }
@@ -81,18 +104,35 @@ class PeakBuilder(private val sampleRate: Int) {
     }
     private fun flush() { for (i in 0 until used) if (mins[i] == Float.MAX_VALUE) { mins[i] = 0f; maxs[i] = 0f } }
 
-    fun build(): PeakPyramid {
+    /** MP1 B2: starts from an earlier pyramid's level 0 (a widened used range decodes only what is missing). */
+    fun seed(previous: PeakPyramid) {
+        val (mn, mx) = previous.levels[0]
+        if (mn.isEmpty()) return
+        addAt(mn.size.toLong() * PeakPyramid.BASE - 1, 0f)
+        for (i in mn.indices) { mins[i] = mn[i]; maxs[i] = mx[i] }
+        samples = maxOf(samples, previous.durationUs * sampleRate / 1_000_000L)
+    }
+
+    fun build(covered: List<LongRange>? = null): PeakPyramid {
         flush()
-        val levels = ArrayList<Pair<FloatArray, FloatArray>>()
-        var mn = mins.copyOf(used); var mx = maxs.copyOf(used)
-        levels += mn to mx
-        while (mn.size > 1) {
-            val n = (mn.size + PeakPyramid.FACTOR - 1) / PeakPyramid.FACTOR
-            val nmn = FloatArray(n) { Float.MAX_VALUE }; val nmx = FloatArray(n) { -Float.MAX_VALUE }
-            for (i in mn.indices) { val j = i / PeakPyramid.FACTOR; nmn[j] = minOf(nmn[j], mn[i]); nmx[j] = maxOf(nmx[j], mx[i]) }
-            mn = nmn; mx = nmx; levels += mn to mx
+        val duration = samples * 1_000_000L / sampleRate
+        return PeakPyramid(sampleRate, duration, levels(mins.copyOf(used), maxs.copyOf(used)), covered ?: listOf(0L..duration))
+    }
+
+    companion object {
+        /** Level 0 and each coarser level (FACTOR buckets merged), as stored and as rebuilt on read. */
+        fun levels(level0Min: FloatArray, level0Max: FloatArray): List<Pair<FloatArray, FloatArray>> {
+            val levels = ArrayList<Pair<FloatArray, FloatArray>>()
+            var mn = level0Min; var mx = level0Max
+            levels += mn to mx
+            while (mn.size > 1) {
+                val n = (mn.size + PeakPyramid.FACTOR - 1) / PeakPyramid.FACTOR
+                val nmn = FloatArray(n) { Float.MAX_VALUE }; val nmx = FloatArray(n) { -Float.MAX_VALUE }
+                for (i in mn.indices) { val j = i / PeakPyramid.FACTOR; nmn[j] = minOf(nmn[j], mn[i]); nmx[j] = maxOf(nmx[j], mx[i]) }
+                mn = nmn; mx = nmx; levels += mn to mx
+            }
+            return levels
         }
-        return PeakPyramid(sampleRate, samples * 1_000_000L / sampleRate, levels)
     }
 }
 

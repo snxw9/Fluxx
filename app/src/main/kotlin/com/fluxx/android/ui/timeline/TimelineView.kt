@@ -1018,12 +1018,14 @@ private fun TimelineClipRow(
     val startDp = with(density) { startX.toDp() }
     val widthDp = with(density) { widthPx.toDp() }
 
-    // Fetch real decoded thumbnail where available
+    // Fetch real decoded thumbnail where available. MP1 B2: a video clip shows a frame from its used range (low priority,
+    // waits while playing / scrubbing; the previous frame stays until the new one is ready).
     var thumbnail by remember(layer.asset?.uri) { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(layer.asset?.uri) {
+    val thumbAtUs = layer.timing.sourceInUs + minOf(1_000_000L, (layer.timing.durationUs ?: 0L) / 2)
+    LaunchedEffect(layer.asset?.uri, thumbAtUs / 1_000_000) {
         val uri = layer.asset?.uri
         if (uri != null) {
-            thumbnail = mediaRepository.thumbnail(uri)
+            thumbnail = (if (layer.type == LayerType.VIDEO) mediaRepository.timelineThumbnail(uri, thumbAtUs) else mediaRepository.thumbnail(uri)) ?: thumbnail
         }
     }
 

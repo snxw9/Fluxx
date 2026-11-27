@@ -317,7 +317,9 @@ internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectK
 @Composable internal fun TwirlAudioRow(layer: CompositionLayer, row: TwirlRow.Audio, pxPerUs: Double, visible: VisibleRange,
     provider: com.fluxx.android.media.AudioPeakProvider, modifier: Modifier = Modifier) {
     val uri = layer.asset?.uri
-    if (uri != null && layer.visible) DisposableEffect(uri) { provider.request(uri); onDispose { provider.cancel(uri) } }
+    // MP1 B2: the peaks of the clip's used range (plus a margin), extended when the trim widens or the clip moves.
+    val sourceIn = layer.timing.sourceInUs; val clipUs = layer.timing.durationUs ?: Long.MAX_VALUE / 4
+    if (uri != null && layer.visible) DisposableEffect(uri, sourceIn, clipUs) { provider.request(uri, sourceIn, clipUs); onDispose { provider.cancel(uri) } }
     val peaks = uri?.let { provider.states[it] } as? com.fluxx.android.media.AudioPeakProvider.Peaks.Ready
     val ink = MaterialTheme.colorScheme.onSurfaceVariant
     val dim = com.fluxx.android.model.WaveformMapping.dimmed(layer)

@@ -14,10 +14,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * AUD1 B1-B4: one source's decoded audio, 48 kHz stereo 16-bit, cached on disk (decoded ONCE per source; edits only re-mix).
+ * AUD1 B1-B4: one source's decoded audio, 48 kHz stereo 16-bit, cached on disk (decoded once; edits only re-mix).
  * A worker decodes progressively in 1 s chunks from wherever it is needed (a seek into a not-yet-decoded region restarts
  * it there). Bulk conversion (no per-sample ByteBuffer calls; reused primitive arrays), resampled only when the rate
  * differs, the AAC priming trimmed ([AudioTiming.primingSamples]) so audio starts at its true time.
+ * MP1 B2 / B5: it decodes what a reader needs (PLAYBACK priority: the first 0.5 s at a start, then [PcmScope.LEAD_FRAMES]
+ * ahead) and otherwise only the USED range ([setScope]) at background priority, paused while playing or scrubbing. It no
+ * longer goes on to the whole source. The file is sparse: only decoded chunks take disk space.
  */
 class SourcePcm internal constructor(private val context: Context, val uri: String, val file: File, durationUs: Long) : Closeable {
     val frames: Long = AudioTiming.frames(durationUs) + AudioTiming.RATE / 10
@@ -29,6 +32,10 @@ class SourcePcm internal constructor(private val context: Context, val uri: Stri
     private val wanted = AtomicLong(-1)          // the frame a reader needs next (restart target), -1 = none
     private val runFrom = AtomicLong(-1)          // the current decode run's start frame
     private val runAt = AtomicLong(-1)            // how far the current run has written
+    /** MP1 B2: the used range of this source (48 kHz frames, merged); background decoding stays inside it. */
+    @Volatile private var scope: List<LongRange> = emptyList()
+    /** MP1 B5: the frame up to which a reader needs audio now (-1: none); decoding within the lead of it is PLAYBACK work. */
+    private val demand = AtomicLong(-1)
     private var worker: Thread? = null
     private val reader: RandomAccessFile
     @Volatile var primingUs = 0L; private set
@@ -51,9 +58,22 @@ class SourcePcm internal constructor(private val context: Context, val uri: Stri
     val allocatedBytes: Long get() = runCatching { android.system.Os.stat(file.path).st_blocks * 512L }.getOrDefault(file.length())
     fun covers(from: Long, to: Long) = synchronized(lock) { coverage.covers(from.coerceAtLeast(0), to.coerceAtMost(frames)) }
 
-    /** Make sure the region from [frame] gets decoded (restarting the worker there if it is elsewhere). */
-    fun ensure(frame: Long) {
+    /**
+     * MP1 B2: the source's USED range (µs windows: in-point to out-point plus the margin, per layer). Background decoding
+     * fills only these (at background priority, paused while playing or scrubbing); nothing outside them is decoded unless
+     * a reader asks for it ([ensure]). A run outside a new scope stops (the job is cancelled).
+     */
+    fun setScope(windowsUs: List<LongRange>) {
+        val next = UsedRange.merge(windowsUs.map { UsedRange.framesOf(it, frames) })
+        scope = next
         if (noAudio || closed) return
+        if (synchronized(lock) { PcmScope.nextTarget(coverage, next) } >= 0) synchronized(this) { if (worker?.isAlive != true) startWorker() }
+    }
+
+    /** Make sure the region from [frame] (to [until]) gets decoded (restarting the worker there if it is elsewhere). */
+    fun ensure(frame: Long, until: Long = frame + AudioTiming.frames(StreamingWindow.READY_US)) {
+        if (noAudio || closed) return
+        demand.set(maxOf(frame, until))
         val chunk = PcmCachePolicy.chunkOf(frame.coerceIn(0, frames - 1))
         val gap = synchronized(lock) { coverage.firstGap(chunk) }
         if (gap < 0) return
@@ -64,6 +84,8 @@ class SourcePcm internal constructor(private val context: Context, val uri: Stri
         wanted.set(gapFrame)
         synchronized(this) { if (worker?.isAlive != true) startWorker() }
     }
+
+    private fun coveredBytes(): Long = synchronized(lock) { coverage.count.toLong() } * PcmCachePolicy.CHUNK_FRAMES * 4
 
     /** Reads [count] frames from [frame] into [dst] (interleaved stereo); uncovered frames read as silence. Returns covered. */
     fun read(frame: Long, count: Int, dst: ShortArray, scratch: ByteArray): Boolean {
@@ -82,15 +104,26 @@ class SourcePcm internal constructor(private val context: Context, val uri: Stri
         worker = Thread({ runCatching { decodeLoop() } }, "FluxxAudioDecode").apply { priority = Thread.NORM_PRIORITY - 1; isDaemon = true; start() }
     }
 
-    /** Decodes from [wanted] forward until everything is covered (or a new target arrives, which restarts the run). */
+    /**
+     * Decodes what a reader [wanted], then (MP1 B2) the rest of the used range only, never the whole source; stops when the
+     * scope is covered (a new target or scope starts it again).
+     */
     private fun decodeLoop() {
         while (!closed) {
-            val target = wanted.getAndSet(-1).takeIf { it >= 0 } ?: synchronized(lock) { coverage.firstGap(0) }.let {
-                if (it < 0) { persist(); return } else it.toLong() * PcmCachePolicy.CHUNK_FRAMES }
+            val target = wanted.getAndSet(-1).takeIf { it >= 0 } ?: nextBackgroundTarget()
+            if (target < 0) {
+                persist()
+                // Exit under the start lock, so an ensure() racing with this exit starts a new worker.
+                synchronized(this) { if (wanted.get() < 0 && nextBackgroundTarget() < 0) { worker = null; return } }
+                continue
+            }
             decodeRun(target)
             if (noAudio) return
         }
     }
+
+    private fun nextBackgroundTarget(): Long =
+        if (!PcmScope.backgroundAllowed(coveredBytes())) -1 else synchronized(lock) { PcmScope.nextTarget(coverage, scope) }
 
     private fun decodeRun(startFrame: Long) {
         val ex = MediaExtractor(); var codec: MediaCodec? = null
@@ -119,11 +152,23 @@ class SourcePcm internal constructor(private val context: Context, val uri: Stri
             var out = ShortArray(0); var bytes = ByteArray(0)
             var resampler = Resampler(rate)
             var inputEnded = false; var ended = false
+            var urgentNow: Boolean? = null
             writer.use {
                 while (!ended && !closed) {
                     // A reader needs a region this run will not reach soon: restart there.
                     val w = wanted.get()
                     if (w >= 0 && (w < runFrom.get() || w - runAt.get() > 2L * PcmCachePolicy.CHUNK_FRAMES)) return
+                    // MP1 B2: past the used range and no reader needs more: stop (no whole-source decode).
+                    if (!PcmScope.runMayContinue(runAt.get(), scope, demand.get())) return
+                    // MP1 B5: PLAYBACK work while a reader needs it (the first 0.5 s at a start, then the lead ahead of the
+                    // play position); otherwise BACKGROUND: lower thread priority, paused while playing / scrubbing.
+                    val urgent = MediaWorkPolicy.urgent(runAt.get(), demand.get(), PcmScope.LEAD_FRAMES)
+                    if (urgent != urgentNow) { urgentNow = urgent
+                        runCatching { Process.setThreadPriority(if (urgent) Process.THREAD_PRIORITY_DEFAULT else Process.THREAD_PRIORITY_BACKGROUND) } }
+                    if (!urgent) {
+                        if (!PcmScope.backgroundAllowed(coveredBytes())) return
+                        if (!MediaWork.checkpoint({ closed || wanted.get() >= 0 }) { MediaWorkPolicy.urgent(runAt.get(), demand.get(), PcmScope.LEAD_FRAMES) }) return
+                    }
                     while (!inputEnded) {
                         val i = c.dequeueInputBuffer(0); if (i < 0) break
                         val n = ex.readSampleData(requireNotNull(c.getInputBuffer(i)), 0)
@@ -267,7 +312,8 @@ class SourcePcmCache private constructor(private val context: Context) {
         val f = File(dir, PcmCachePolicy.fileName(uri, size, modified))
         val keep = open.values.map { it.file.name }.toSet() + f.name
         val files = dir.listFiles().orEmpty().filter { it.name.endsWith(".pcm") }
-        for (name in PcmCachePolicy.evict(files.map { Triple(it.name, it.length(), it.lastModified()) }, keep)) {
+        // MP1 B2: sizes as allocated on disk (sparse files), not their logical length.
+        for (name in PcmCachePolicy.evict(files.map { Triple(it.name, allocated(it), it.lastModified()) }, keep)) {
             File(dir, name).delete(); File(dir, name.removeSuffix(".pcm") + ".cov").delete()
         }
         return SourcePcm(context, uri, f, durationUs).also { open[uri] = it }
@@ -275,6 +321,8 @@ class SourcePcmCache private constructor(private val context: Context) {
 
     /** MP1: stops [uri]'s background decode and forgets the open instance (the benchmarks' runaway guard; the next get reopens). */
     @Synchronized fun release(uri: String) { open.remove(uri)?.close() }
+
+    private fun allocated(f: File): Long = runCatching { android.system.Os.stat(f.path).st_blocks * 512L }.getOrDefault(f.length())
 
     private fun meta(u: Uri): Pair<Long, Long> {
         var size = -1L; var modified = -1L
@@ -309,9 +357,16 @@ class BlockMixer(context: Context, project: ProjectDocument) {
     init {
         val cache = SourcePcmCache.get(context)
         val headroom = AudioMixPolicy.headroom(project)
-        voices = AudioGains.audible(project)
+        val audible = AudioGains.audible(project)
+        voices = audible
             .map { l -> Voice(l.id, cache.get(l.asset!!.uri!!, l.asset.durationUs ?: (l.timing.sourceInUs + l.timing.durationUs!!)),
                 AudioTiming.frames(l.timing.startUs), AudioTiming.frames(minOf(l.timing.endUs!!, duration)), AudioTiming.frames(l.timing.sourceInUs), l.audioGain * headroom) }
+        // MP1 B2: each source decodes only its used range (every audible clip's in-point to out-point, plus the margin).
+        for ((uri, layers) in audible.groupBy { it.asset!!.uri!! }) {
+            val windows = layers.map { l -> UsedRange.windowUs(l.timing.sourceInUs, (minOf(l.timing.endUs!!, duration) - l.timing.startUs).coerceAtLeast(0),
+                l.asset!!.durationUs ?: Long.MAX_VALUE) }
+            voices.first { it.pcm.uri == uri }.pcm.setScope(windows)
+        }
     }
     val hasAudio get() = voices.isNotEmpty()
     /** AUD2 B3: new effective gains (layer id -> gain x headroom) for the voices playing; heard from the next block. */
@@ -321,7 +376,7 @@ class BlockMixer(context: Context, project: ProjectDocument) {
     fun ready(frame: Long, ahead: Long): Boolean = voices.all { v ->
         val a = maxOf(frame, v.startFrame); val b = minOf(frame + ahead, v.endFrame)
         if (b <= a || v.pcm.noAudio) true else { val s = v.inFrame + (a - v.startFrame); val e = v.inFrame + (b - v.startFrame)
-            v.pcm.covers(s, e).also { ok -> if (!ok) v.pcm.ensure(s) } }
+            v.pcm.covers(s, e).also { ok -> if (!ok) v.pcm.ensure(s, e) } }
     }
 
     /** Mixes [count] (<= 8 blocks) frames from [frame] into [out] (interleaved 16-bit stereo). */

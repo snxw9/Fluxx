@@ -49,7 +49,11 @@ object PcmCachePolicy {
     /** A cache file of another format version (rebuilt, so deleted). */
     fun stale(name: String) = (name.endsWith(".pcm") || name.endsWith(".cov")) && !name.substringBeforeLast('.').endsWith("-v$VERSION")
 
-    /** Files to delete (least recently used first) so the rest fit in [cap]; [keep] (in use) never goes. */
+    /**
+     * Files to delete (least recently used first) so the rest fit in [cap]; [keep] (in use) never goes. MP1 B2: the sizes
+     * are the bytes ALLOCATED on disk (the files are sparse: a 50-minute source is ~580 MB long but holds only its decoded
+     * chunks), so a long source no longer evicts every other cache.
+     */
     fun evict(files: List<Triple<String, Long, Long>>, keep: Set<String>, cap: Long = CAP_BYTES): List<String> {
         var total = files.sumOf { it.second }
         val out = ArrayList<String>()
@@ -60,6 +64,71 @@ object PcmCachePolicy {
     fun bytes(frames: Long) = frames * 4
     fun chunks(frames: Long) = ((frames + CHUNK_FRAMES - 1) / CHUNK_FRAMES).toInt()
     fun chunkOf(frame: Long) = (frame / CHUNK_FRAMES).toInt()
+}
+
+/**
+ * MP1 B2: the part of a source that is USED (pure, JVM tested): each visible layer's in-point to out-point plus [MARGIN_US]
+ * on each side, clamped to the source and merged per source (overlapping windows only: two clips far apart in one long
+ * file stay two windows, never the hull). Background decoding (the PCM cache, waveform peaks, thumbnails) stays inside it;
+ * a reader's demand outside it (a seek, a widened trim before the next update) extends it on demand.
+ */
+object UsedRange {
+    const val MARGIN_US = 10_000_000L
+
+    fun windowUs(sourceInUs: Long, durationUs: Long, sourceDurationUs: Long, marginUs: Long = MARGIN_US): LongRange =
+        (sourceInUs - marginUs).coerceAtLeast(0)..minOf(sourceInUs + durationUs + marginUs, sourceDurationUs).coerceAtLeast(0)
+
+    /** Sorted, overlapping (or touching) ranges joined. */
+    fun merge(ranges: List<LongRange>): List<LongRange> {
+        val out = ArrayList<LongRange>()
+        for (r in ranges.filter { !it.isEmpty() }.sortedBy { it.first }) {
+            val last = out.lastOrNull()
+            if (last != null && r.first <= last.last + 1) out[out.size - 1] = last.first..maxOf(last.last, r.last) else out += r
+        }
+        return out
+    }
+
+    fun covers(ranges: List<LongRange>, r: LongRange): Boolean = ranges.any { r.first >= it.first && r.last <= it.last }
+
+    /** [ranges] with a demand at [demand] for [lead] more added (a playhead / reader outside the used range). */
+    fun extend(ranges: List<LongRange>, demand: Long, lead: Long): List<LongRange> = merge(ranges + listOf(demand..demand + lead))
+
+    /** [us] (a µs range) as 48 kHz output frames within [0, maxFrames). */
+    fun framesOf(us: LongRange, maxFrames: Long): LongRange =
+        AudioTiming.frames(us.first).coerceIn(0, maxFrames - 1)..AudioTiming.frames(us.last).coerceIn(0, maxFrames - 1)
+
+    /** The used windows (µs) per source URI of the composition's visible video layers. */
+    fun of(project: com.fluxx.android.model.ProjectDocument): Map<String, List<LongRange>> = project.composition.layers
+        .filter { it.visible && it.type == com.fluxx.android.model.LayerType.VIDEO && it.asset?.uri != null && it.timing.durationUs != null }
+        .groupBy({ it.asset!!.uri!! }) { l -> windowUs(l.timing.sourceInUs, l.timing.durationUs!!, l.asset!!.durationUs ?: (l.timing.sourceInUs + l.timing.durationUs)) }
+        .mapValues { merge(it.value) }
+}
+
+/** MP1 B2 / B5: what the PCM cache worker decodes next and when it may stop (pure, JVM tested). */
+object PcmScope {
+    /** A reader's demand keeps the worker decoding (at playback priority) this far ahead of it. */
+    const val LEAD_FRAMES = 3L * AudioTiming.RATE
+
+    /** The first undecoded chunk start (frames) inside [scope], or -1: nothing left to decode there (never the whole file). */
+    fun nextTarget(coverage: ChunkCoverage, scope: List<LongRange>): Long {
+        for (r in scope) {
+            val g = coverage.firstGap(PcmCachePolicy.chunkOf(r.first))
+            if (g >= 0 && g.toLong() * PcmCachePolicy.CHUNK_FRAMES <= r.last) return g.toLong() * PcmCachePolicy.CHUNK_FRAMES
+        }
+        return -1
+    }
+
+    /**
+     * A run at [runAt] may go on while it is inside the scope, up to the END of the chunk holding the scope's last frame (a
+     * chunk only counts as decoded when it is complete; stopping at the scope's last frame left that chunk open forever and
+     * the worker restarted there in a loop), or within [LEAD_FRAMES] of what a reader needs ([demandFrame]).
+     */
+    fun runMayContinue(runAt: Long, scope: List<LongRange>, demandFrame: Long): Boolean =
+        scope.any { runAt >= it.first - PcmCachePolicy.CHUNK_FRAMES && runAt < (PcmCachePolicy.chunkOf(it.last) + 1L) * PcmCachePolicy.CHUNK_FRAMES } ||
+            MediaWorkPolicy.urgent(runAt, demandFrame, LEAD_FRAMES)
+
+    /** Background filling stops before one source alone reaches the cache cap (partial coverage); demand still decodes. */
+    fun backgroundAllowed(coveredBytes: Long, cap: Long = PcmCachePolicy.CAP_BYTES): Boolean = coveredBytes < cap
 }
 
 /**
@@ -90,6 +159,8 @@ class ChunkCoverage(val chunks: Int, initial: java.util.BitSet? = null) {
         return n
     }
     val complete get() = bits.cardinality() >= chunks
+    /** MP1 B2: covered chunks (no copy). */
+    val count: Int get() = bits.cardinality()
     fun snapshot(): java.util.BitSet = bits.clone() as java.util.BitSet
 }
 

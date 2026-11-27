@@ -25,7 +25,8 @@ class Mp1BackgroundTest : Aud2Base() {
         val cold = Aud2Bench.distinctUri(v, 40 + (System.currentTimeMillis() / 1000 % 50).toInt())
         val pcm = SourcePcmCache.get(context).get(cold, vm.durationUs)
         try {
-            // The whole source is the used range: the worker decodes it from 0 (before MP1 B2 it always went on to the end).
+            // The whole source is the used range (MP1 B2 scope); the worker decodes it from 0 (before B2 it always went on).
+            pcm.setScope(listOf(0L..vm.durationUs))
             pcm.ensure(0)
             compose.runOnIdle { AudioPeakProvider.get(context).request(cold) }
             Thread.sleep(300)
@@ -38,8 +39,19 @@ class Mp1BackgroundTest : Aud2Base() {
         } finally {
             SourcePcmCache.get(context).release(cold)
             compose.runOnIdle { AudioPeakProvider.get(context).cancel(cold) }
-            probe.stop()
         }
+        // Cold first sound: the typical clip under a never-seen URI spelling (its PCM cache is empty), Play from 0.
+        val fresh = Aud2Bench.distinctUri(f, 100 + (System.currentTimeMillis() / 1000 % 80).toInt())
+        compose.runOnIdle { editor.dispatch(com.fluxx.android.editor.EditorAction.Load(Aud2Bench.project(1920, 1080, m.durationUs, m.fps,
+            listOf(Aud2Bench.layer(1, f, m, uri = fresh))))); c.update(editor.state.project, 0, false) }
+        Thread.sleep(2500); seekTo(0, 1500)
+        rec.clear(); val p0 = System.nanoTime()
+        toggle()
+        while (System.nanoTime() - p0 < 15_000_000_000L && rec.firstSoundNs() == null) Thread.sleep(5)
+        report("B5 cold first sound (typical clip, empty PCM cache): %.0f ms after Play".format(rec.firstSoundNs()?.let { (it - p0) / 1e6 } ?: Double.NaN))
+        Thread.sleep(2000); if (playing) toggle()
+        SourcePcmCache.get(context).release(fresh)
+        probe.stop()
     }
 
     /** Plays 15 s from the middle; (preview intervals, UI frame durations). Also reports the first sound. */

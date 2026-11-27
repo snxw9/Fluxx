@@ -45,7 +45,8 @@ class Mp1LongSourceTest : Aud2Base() {
                 if (!Mp1Bench.coolEnough(context) { report("A3 long $label: $it") }) continue
                 position(label, f, uri, m, inUs)
             }
-            peaksAndThumb(uri)
+            // As the twirl-down row and the timeline clip ask since MP1 B2: the last position's used range (49:00, 5 s).
+            peaksAndThumb(uri, 2_940_000_000L, 5_000_000L)
         } finally {
             // Never leave a background decode running at the end of the class.
             val pcm = SourcePcmCache.get(context).get(uri, m.durationUs)
@@ -108,17 +109,17 @@ class Mp1LongSourceTest : Aud2Base() {
         report("A3 long $label: first frame %.0f ms after load; Play -> first frame %.0f ms, first sound %.0f ms; underruns ${rec.underruns}".format(firstFrameMs, playFrameMs, firstSoundMs))
         report("A3 long $label after 20 s: PCM cache ${pcm.coveredChunks} s decoded, %.1f MB on disk (logical file %.0f MB); background decode still running: ${pcm.decoding}; process CPU %.1f s; storage read %.1f MB (rchar %.1f MB); busiest threads ${busy.joinToString { "${it.key} %.1fs".format(it.value / 1000.0) }}; PCM runs ${runs.joinToString(" | ")}"
             .format(pcm.allocatedBytes / 1e6, pcm.frames * 4 / 1e6, cpu / 1000.0, (io.first - io0.first) / 1e6, (io.second - io0.second) / 1e6))
-        if (pcm.decoding) { SourcePcmCache.get(context).release(uri); report("A3 long $label: background PCM decode ABORTED at the 20 s limit (it was decoding beyond the used range)") }
+        if (pcm.decoding) { SourcePcmCache.get(context).release(uri); report("A3 long $label: background PCM decode still running at the 20 s limit: ABORTED (last runs above)") }
         check(System.nanoTime() - start < limitNs + 30_000_000_000L) { "position over its wall-clock limit" }
         Thread.sleep(1000)
     }
 
     /** The waveform peaks as the twirl-down row requests them, and the timeline thumbnail; both with a limit. */
-    private fun peaksAndThumb(uri: String) {
+    private fun peaksAndThumb(uri: String, inUs: Long, durUs: Long) {
         val provider = AudioPeakProvider.get(context)
         probe.events.clear()
         val t0 = System.nanoTime(); val cpu0 = Mp1Bench.cpuMs()
-        compose.runOnIdle { provider.request(uri) }
+        compose.runOnIdle { provider.request(uri, inUs, durUs) }
         val limit = 40_000_000_000L
         while (System.nanoTime() - t0 < limit && compose.runOnIdle { provider.states[uri] is AudioPeakProvider.Peaks.Loading }) Thread.sleep(200)
         val state = compose.runOnIdle { provider.states[uri] }
@@ -129,7 +130,10 @@ class Mp1LongSourceTest : Aud2Base() {
         (state as? AudioPeakProvider.Peaks.Ready)?.let { report("A3 long peaks scope: source %.1f s, %d level-0 buckets (%.1f MB in memory)".format(it.pyramid.durationUs / 1e6, it.pyramid.levels[0].first.size, it.pyramid.levels.sumOf { l -> l.first.size * 8L } / 1e6)) }
         probe.events.clear()
         val r0 = System.nanoTime()
-        val bmp = kotlinx.coroutines.runBlocking { MediaRepository(context).thumbnail(uri) }
-        report("A3 long thumbnail (the timeline loader, layer URI): ${if (bmp != null) "${bmp.width}x${bmp.height}" else "none"} in %.0f ms; ${probe.events.joinToString(" | ") { it.second }}".format((System.nanoTime() - r0) / 1e6))
+        val bmp = kotlinx.coroutines.runBlocking { MediaRepository(context).timelineThumbnail(uri, inUs + minOf(1_000_000L, durUs / 2)) }
+        report("A3 long thumbnail (the timeline loader, the clip's used range): ${if (bmp != null) "${bmp.width}x${bmp.height}" else "none"} in %.0f ms; ${probe.events.joinToString(" | ") { it.second }}".format((System.nanoTime() - r0) / 1e6))
+        val r1 = System.nanoTime()
+        val again = kotlinx.coroutines.runBlocking { MediaRepository(context).timelineThumbnail(uri, inUs + minOf(1_000_000L, durUs / 2)) }
+        report("A3 long thumbnail again (memory / disk cache): ${if (again != null) "hit" else "none"} in %.1f ms".format((System.nanoTime() - r1) / 1e6))
     }
 }
