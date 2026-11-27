@@ -9,6 +9,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.FixMethodOrder
@@ -66,12 +68,21 @@ class Tlv1Test : Aud2Base() {
         return total / 1e6 to worst / 1e6
     }
 
+    /**
+     * The Compose test rule drives the UI on a VIRTUAL frame clock: while the test thread sleeps no frame runs (nothing
+     * recomposes, no fling advances, the window draws nothing). [pump] advances it one frame per 16 ms of real time, so the
+     * timeline runs at a real cadence while it is measured (the window draws real frames for FrameMetrics).
+     */
+    private fun frame() { compose.mainClock.advanceTimeByFrame(); Thread.sleep(16) }
+    private fun pump(ms: Long) { val end = System.nanoTime() + ms * 1_000_000; while (System.nanoTime() < end) frame() }
+    private fun seek(us: Long, ms: Long) { seekTo(us, 0); pump(ms) }
+
     private fun fling(v: Float) {
         val ctl = TimelineProbe.control ?: error("no timeline probe")
         var job: kotlinx.coroutines.Job? = null
         main.runOnMainSync { job = ctl.fling(v) }
         val t0 = System.nanoTime()
-        while (job?.isActive == true && System.nanoTime() - t0 < 30_000_000_000L) Thread.sleep(20)
+        while (job?.isActive == true && System.nanoTime() - t0 < 30_000_000_000L) frame()
     }
 
     /** The test's window must be in front (another app on top draws no frames for it and nothing recomposes). */
@@ -83,7 +94,7 @@ class Tlv1Test : Aud2Base() {
 
     private fun measure(label: String, project: ProjectDocument) {
         host(project)
-        Thread.sleep(2500)
+        pump(2500)
         front(label)
         val dur = project.composition.resolvedDurationUs
         val (n0, w0) = nodes()
@@ -92,15 +103,15 @@ class Tlv1Test : Aud2Base() {
         // 5 s of playback follow from 0 (the first source's sound decoded first, so Play starts at once).
         project.composition.layers.filter { it.type == LayerType.VIDEO && it.timing.startUs == 0L }.mapNotNull { it.asset }.distinctBy { it.uri }
             .forEach { a -> warmPcm(a.uri!!, a.durationUs ?: 10_000_000, 90_000) }
-        seekTo(0, 1500)
+        seek(0, 1500)
         TimelineProbe.reset()
         var ui = emptyList<Double>()
-        val (mainMs, mainWorst) = mainThreadTime { ui = uiFrames(compose.activity.window) { main.runOnMainSync { c.play() }; Thread.sleep(5000); main.runOnMainSync { c.pause() } } }
+        val (mainMs, mainWorst) = mainThreadTime { ui = uiFrames(compose.activity.window) { main.runOnMainSync { c.play() }; pump(5000); main.runOnMainSync { c.pause() } } }
         report("$label FOLLOW 5 s: timeline recompositions ${TimelineProbe.viewCompositions.get()}, clip-row recompositions ${TimelineProbe.rowCompositions.get()}; UI frames ${ui.size} p50 %.1f p95 %.1f p99 %.1f max %.1f ms; main thread %.0f ms busy, worst message %.1f ms; centre now %.2f s"
             .format(Aud2Bench.pct(ui, .5), Aud2Bench.pct(ui, .95), Aud2Bench.pct(ui, .99), ui.maxOrNull() ?: 0.0, mainMs, mainWorst, (TimelineProbe.control?.centreUs?.invoke() ?: 0) / 1e6))
-        Thread.sleep(1000)
+        pump(1000)
         // A programmatic fling forward from the middle (the timeline's own fling behaviour).
-        front("$label fling"); seekTo(dur / 2, 1500)
+        front("$label fling"); seek(dur / 2, 1500)
         TimelineProbe.reset()
         val from = TimelineProbe.control?.centreUs?.invoke() ?: 0
         val (fMain, fWorst) = mainThreadTime { ui = uiFrames(compose.activity.window) { fling(8000f) } }
@@ -108,7 +119,7 @@ class Tlv1Test : Aud2Base() {
             .format(((TimelineProbe.control?.centreUs?.invoke() ?: 0) - from) / 1e6, Aud2Bench.pct(ui, .5), Aud2Bench.pct(ui, .95), Aud2Bench.pct(ui, .99), ui.maxOrNull() ?: 0.0, fMain, fWorst))
         // The highest zoom asked for.
         front("$label zoom"); main.runOnMainSync { TimelineProbe.control?.setZoom?.invoke(com.fluxx.android.editor.TimelineZoom.MAX_DP_PER_SECOND) }
-        Thread.sleep(2000)
+        pump(2000)
         val z = TimelineProbe.control?.zoomDpPerSecond?.invoke() ?: -1f
         val fps = project.composition.frameRate.let { it.numerator.toDouble() / it.denominator }
         val (n1, w1) = nodes()
@@ -138,4 +149,104 @@ class Tlv1Test : Aud2Base() {
     }
 
     @Test fun a3ThreeHours() { val (f, m) = typical(); measure("3 h (180 x 60 s)", Aud2Bench.project(1920, 1080, 10_800_000_000, 30, clips(180, 60_000_000, f, m))) }
+
+    // ---- B5 (after the virtualisation) ----------------------------------------------------------------------------------
+    private val viewport get() = compose.activity.resources.displayMetrics.widthPixels
+    private fun topZoom(label: String, fps: Double): Float {
+        main.runOnMainSync { TimelineProbe.control?.setZoom?.invoke(com.fluxx.android.editor.TimelineZoom.MAX_DP_PER_SECOND) }
+        pump(2000)
+        val z = TimelineProbe.control?.zoomDpPerSecond?.invoke() ?: -1f
+        val (n, w) = nodes()
+        report("$label TOP ZOOM: %.1f dp/s = %.2f px per frame; layout nodes $n, widest node $w px (viewport $viewport, window ${viewport + 2 * (viewport / 2)})"
+            .format(z, z * compose.density.density / fps))
+        assertTrue("$label: widest node $w px must not exceed the window", w <= viewport + 2 * (viewport / 2) + 2)
+        return z
+    }
+
+    @Test fun b1ThreeHoursAtTopZoomStartMiddleEnd() {
+        val (f, m) = typical()
+        val p = Aud2Bench.project(1920, 1080, 10_800_000_000, 30, clips(180, 60_000_000, f, m))
+        host(p); pump(2500); front("b1")
+        topZoom("b1 3 h", 30.0)
+        for ((name, t) in listOf("start" to 0L, "middle" to 5_400_000_000L, "end" to 10_800_000_000L)) {
+            seek(t, 2000)
+            val (n, w) = nodes()
+            val centre = TimelineProbe.control?.centreUs?.invoke() ?: -1
+            report("b1 3 h at the $name: centre %.3f s (asked %.3f s); layout nodes $n, widest $w px".format(centre / 1e6, t / 1e6))
+            assertTrue("b1 $name: the playhead reached ${t / 1e6} s", kotlin.math.abs(centre - t) <= 34_000)
+            assertTrue("b1 $name: widest node $w", w <= viewport + 2 * (viewport / 2) + 2)
+        }
+    }
+
+    /** A MediaStore video row whose DISPLAY_NAME matches [like] (as the picker returns it). */
+    private fun content(like: String): Pair<android.net.Uri, String>? {
+        val cr = context.contentResolver
+        for (col in listOf(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, android.provider.MediaStore.Files.getContentUri("external")))
+            cr.query(col, arrayOf(android.provider.MediaStore.MediaColumns._ID, android.provider.MediaStore.MediaColumns.DISPLAY_NAME),
+                "${android.provider.MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?", arrayOf(like), null)?.use { c ->
+                if (c.moveToFirst()) return android.content.ContentUris.withAppendedId(col, c.getLong(0)) to c.getString(1) }
+        return null
+    }
+    private fun add(items: List<Pair<android.net.Uri, String>>, placement: com.fluxx.android.editor.EditorViewModel.BulkPlacement) {
+        val done = java.util.concurrent.CountDownLatch(1); var err: Throwable? = null
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                val repo = com.fluxx.android.media.MediaRepository(context)
+                if (items.size == 1) editor.addMedia(repo, items[0].first, items[0].second, 0) else editor.addMediaBatch(repo, items, 0, placement)
+                c.update(editor.state.project, 0, false)
+            } catch (t: Throwable) { err = t } finally { done.countDown() }
+        }
+        check(done.await(120, java.util.concurrent.TimeUnit.SECONDS)) { "add did not return" }
+        err?.let { throw it }
+    }
+
+    @Test fun b2FiftyMinuteImport() {
+        val long = content("Project 3%")
+        assumeTrue("TLV1: Project 3 (the 50-minute HEVC) not found in MediaStore; skipping", long != null)
+        host(Aud2Bench.project(1920, 1080, 10_000_000, 30, emptyList()).let { p -> p.copy(composition = p.composition.copy(durationUs = null)) })
+        pump(1500); front("b2")
+        add(listOf(long!!), com.fluxx.android.editor.EditorViewModel.BulkPlacement.AT_PLAYHEAD)
+        pump(2500)
+        val d = compose.runOnIdle { editor.state.project.composition.resolvedDurationUs }
+        report("b2 the 50-minute import: composition %.1f s".format(d / 1e6))
+        val z = topZoom("b2 50 min", 30.0)
+        assertEquals("b2: the top zoom at 50 minutes is the short-project maximum", com.fluxx.android.editor.TimelineZoom.MAX_DP_PER_SECOND, z, 0f)
+        seek(d / 2, 2000); val (n, w) = nodes(); report("b2 at the middle: layout nodes $n, widest $w px")
+    }
+
+    @Test fun b3SequenceThirtyBySixty() {
+        val t = content("%" + Aud2Bench.TYPICAL_ID + "%")
+        assumeTrue("TLV1: the typical clip not found in MediaStore; skipping", t != null)
+        host(Aud2Bench.project(1920, 1080, 10_000_000, 30, emptyList()).let { p -> p.copy(composition = p.composition.copy(durationUs = null)) })
+        pump(1500); front("b3")
+        add(List(30) { t!! }, com.fluxx.android.editor.EditorViewModel.BulkPlacement.SEQUENCE)
+        pump(3000)
+        val d = compose.runOnIdle { editor.state.project.composition.resolvedDurationUs }
+        report("b3 Sequence of 30 x 60 s: composition %.1f s, ${compose.runOnIdle { editor.state.project.composition.layers.size }} layers".format(d / 1e6))
+        topZoom("b3 Sequence", 30.0)
+        for (at in listOf(0L, d / 2, d)) { seek(at, 1500); val (n, w) = nodes(); report("b3 at %.1f s: layout nodes $n, widest $w px".format(at / 1e6)) }
+    }
+
+    @Test fun b5FlingAcrossThreeHours() {
+        val (f, m) = typical()
+        host(Aud2Bench.project(1920, 1080, 10_800_000_000, 30, clips(180, 60_000_000, f, m))); pump(2500); front("b5")
+        // A low zoom so a run of flings crosses all 3 hours (at 4 dp/s, 3 h is ~121,500 px).
+        main.runOnMainSync { TimelineProbe.control?.setZoom?.invoke(4f) }; pump(1500)
+        seek(0, 1500)
+        val frames = CopyOnWriteArrayList<LongArray>()
+        TimelineProbe.coverage = { ws, we, vs, ve -> frames += longArrayOf(ws, we, vs, ve) }
+        var ui = emptyList<Double>(); var flings = 0
+        val t0 = System.nanoTime()
+        ui = uiFrames(compose.activity.window) {
+            while (flings < 60 && (TimelineProbe.control?.centreUs?.invoke() ?: 0) < 10_800_000_000L - 1) { fling(30_000f); flings++ }
+        }
+        TimelineProbe.coverage = null
+        val f0 = frames.toList()
+        val blank = f0.count { (ws, we, vs, ve) -> ws > vs + 1 || we < ve - 1 }
+        val end = TimelineProbe.control?.centreUs?.invoke() ?: -1
+        report("b5 FLING across 3 h: $flings flings in %.1f s wall, reached %.1f s; ${f0.size} drawn frames, frames whose window did not cover the screen: $blank; UI frames ${ui.size} p50 %.1f p95 %.1f p99 %.1f max %.1f ms"
+            .format((System.nanoTime() - t0) / 1e9, end / 1e6, Aud2Bench.pct(ui, .5), Aud2Bench.pct(ui, .95), Aud2Bench.pct(ui, .99), ui.maxOrNull() ?: 0.0))
+        assertEquals("b5: no blank edge", 0, blank)
+        assertTrue("b5: the flings crossed the whole composition", end >= 10_800_000_000L - 1_000_000)
+    }
 }

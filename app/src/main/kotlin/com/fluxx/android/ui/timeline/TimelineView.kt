@@ -796,8 +796,6 @@ internal fun EyeIcon(
 
 /** TL1: the ruler's px per µs, for tests that check tick positions exactly (not read by accessibility services). */
 internal val TimelineZoomKey = androidx.compose.ui.semantics.SemanticsPropertyKey<Double>("TimelinePxPerUs")
-/** TLV1: the window origin (content px) of the timeline's horizontal nodes: a time's x in a row or the ruler is `t × pxPerUs − origin`. */
-internal val TimelineOriginKey = androidx.compose.ui.semantics.SemanticsPropertyKey<Long>("TimelineOriginPx")
 
 /**
  * Timeline Ruler with zoom-derived major, medium, and minor graduated tick marks.
@@ -835,7 +833,7 @@ private fun TimelineRuler(
     val startFrame = remember(startTimecodeUs, frameRate) { com.fluxx.android.model.CompositionTimecode.startFrame(startTimecodeUs, frameRate) }
     ExactTimelineTargets { Box(Modifier.fillMaxWidth().height(RULER_HEIGHT_DP.dp)) {
         Canvas(Modifier.fillMaxWidth().height(RULER_HEIGHT_DP.dp).background(Background)
-            .testTag("timeline-ruler").semantics { this[TimelineZoomKey] = axis.pxPerUs; this[TimelineOriginKey] = axis.originPx }
+            .testTag("timeline-ruler").semantics { this[TimelineZoomKey] = axis.pxPerUs }
             .pointerInput(durationUs, axis, markers) {
                 detectTapGestures { offset ->
                     val targetUs = axis.timeAt(offset.x).toLong().coerceIn(0L, durationUs)

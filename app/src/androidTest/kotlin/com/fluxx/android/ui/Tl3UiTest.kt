@@ -16,7 +16,6 @@ import com.fluxx.android.ui.editor.EditorScreen
 import com.fluxx.android.ui.theme.FluxxTheme
 import com.fluxx.android.ui.timeline.TimelineView
 import com.fluxx.android.ui.timeline.TimelineZoomKey
-import com.fluxx.android.ui.timeline.TimelineOriginKey
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -49,8 +48,17 @@ class Tl3UiTest {
     private fun state(tag: String) = node(tag).fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription)
     private fun layer(id: Long) = editor.state.project.composition.layers.first { it.id == id }
     private fun pxPerUs() = compose.onNodeWithTag("timeline-ruler").fetchSemanticsNode().config[TimelineZoomKey]
-    /** TLV1: the window origin: a time's x in a row is `t × pxPerUs − origin`. */
-    private fun origin() = compose.onNodeWithTag("timeline-ruler").fetchSemanticsNode().config[TimelineOriginKey]
+    /**
+     * TLV1: a time's x inside [row]'s VISIBLE bounds (what performTouchInput measures from): the row node is a window wider
+     * than the screen, clipped at the screen's left, so its local 0 is not the visible left. Root x from the scroll semantics
+     * (content px under the playhead), exactly as TimeAuditTest does.
+     */
+    private fun xIn(row: String, t: Long): Float {
+        val s = compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)).fetchSemanticsNodes().first()
+        val scroll = s.config[SemanticsProperties.HorizontalScrollAxisRange].value()
+        val rootX = s.boundsInRoot.left + Math.round(s.boundsInRoot.width / 2f) + (t * pxPerUs() - scroll).toFloat()
+        return rootX - node(row).fetchSemanticsNode().boundsInRoot.left
+    }
     private fun rowTag(id: Long, p: AnimPropertyType) = "twirl-row-" + TwirlRow.Property(id, GraphTarget(p), "", "", TwirlValueKind.SCALAR).key
     private fun nameTag(id: Long, p: AnimPropertyType) = "twirl-name-" + TwirlRow.Property(id, GraphTarget(p), "", "", TwirlValueKind.SCALAR).key
 
@@ -82,8 +90,8 @@ class Tl3UiTest {
 
     private fun arrow(id: Long) { node("d-arrow-$id").performClick(); settle() }
     /** Tap / hold a key of [row] at composition time [t] (twirl rows draw keys at t × px per µs). */
-    private fun tapKey(row: String, t: Long) { val x = (t * pxPerUs() - origin()).toFloat(); node(row).performTouchInput { click(Offset(x, centerY)) }; settle() }
-    private fun holdKey(row: String, t: Long) { val x = (t * pxPerUs() - origin()).toFloat(); node(row).performTouchInput { longClick(Offset(x, centerY)) }; settle() }
+    private fun tapKey(row: String, t: Long) { val x = xIn(row, t); node(row).performTouchInput { click(Offset(x, centerY)) }; settle() }
+    private fun holdKey(row: String, t: Long) { val x = xIn(row, t); node(row).performTouchInput { longClick(Offset(x, centerY)) }; settle() }
 
     // ---- B1 / B2 ----------------------------------------------------------------------------------------------------
     @Test fun theArrowExpandsOnlyKeyedRowsAndTheDGrowsWithNames() {

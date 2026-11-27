@@ -74,6 +74,9 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
     onDragInfo: (TimelineDragInfo?) -> Unit, modifier: Modifier = Modifier) {
     val density = LocalDensity.current
     val pxPerUs = axis.pxPerUs
+    // TLV1: the gesture below outlives compositions; it hit-tests through the LATEST axis (a new one comes with the first
+    // real viewport width and with each zoom), never the one it started with.
+    val latestAxis by rememberUpdatedState(axis)
     val view = LocalView.current
     val haptic = LocalHapticFeedback.current
     val latest by rememberUpdatedState(Triple(project, layer, selection))
@@ -132,12 +135,12 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
         fun keyMode() = latest.third != null
         fun selected(t: Long) = latest.third?.contains(row.layerId, row.target, t) == true
         detectKeyGestures(
-            onDown = { p -> downRootX = rowRootX + p.x; scrollAtDown = latestScroll(); val (_, l, _) = latest; hit = nearestKey(TwirlRows.keyTimes(l, row.target), l, axis, p.x, halfHit)
+            onDown = { p -> downRootX = rowRootX + p.x; scrollAtDown = latestScroll(); val (_, l, _) = latest; hit = nearestKey(TwirlRows.keyTimes(l, row.target), l, latestAxis, p.x, halfHit)
                 barTime = null
                 if (hit == null && row.kind == TwirlValueKind.COLOUR) {
                     // B4: a tap on the bar between keys (not on a diamond) opens the bar popover.
                     val keys = TwirlRows.keyTimes(l, row.target); val anchor = l.resolvedKeyframeAnchorUs
-                    val comp = kotlin.math.round(axis.timeAt(p.x)).toLong()
+                    val comp = kotlin.math.round(latestAxis.timeAt(p.x)).toLong()
                     val inBar = kotlin.math.abs(p.y - size.height / 2f) <= barHeightPx / 2f
                     if (keys.size >= 2 && inBar && comp > anchor + keys.first() && comp < anchor + keys.last() &&
                         comp in l.timing.startUs..(l.timing.endUs ?: l.timing.startUs)) barTime = comp
