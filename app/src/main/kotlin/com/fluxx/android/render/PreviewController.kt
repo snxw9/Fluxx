@@ -116,7 +116,7 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
                     clockAnchor=if(playing && playback?.started==true && time<duration) longArrayOf(readNs,time,duration) else null
                     if(time>=duration && playing) {
                         clockAnchor=null
-                        requestedUs=duration;playing=false;playback?.close();playback=null
+                        requestedUs=duration;playing=false;MediaWork.playback(false);playback?.close();playback=null
                         renderer.renderPreview(snapshot,duration,quality,cancel)
                         position(epoch,duration);status(epoch,null)
                         continue
@@ -141,13 +141,14 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
                     if(closed) break
                 } catch(e:Exception) {
                     clockAnchor=null
-                    playing=false;playback?.close();playback=null
+                    playing=false;MediaWork.playback(false);playback?.close();playback=null
                     status(epoch,e.message ?: "Preview failed")
                 }
             }
         } catch(e:Exception) { if(!closed) status(generation.get(),e.message ?: "Preview unavailable") }
         finally {
             samplingRenderer=null
+            MediaWork.playback(false)
             playback?.close();renderer?.close()
         }
     }
@@ -177,6 +178,8 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
         if(play) scrubbing=false
         else if(target!=requestedUs) { scrubbing=ScrubPolicy.scrubbing(now-lastSeekNs); lastSeekNs=now }
         this.project=project;requestedUs=timeUs.coerceIn(0L, project.composition.resolvedDurationUs);playing=play && project.composition.resolvedDurationUs > 0
+        // MP1 B5: background media work (PCM filling, peaks, thumbnails) pauses while playing or scrubbing.
+        MediaWork.playback(playing); if(!play && scrubbing) MediaWork.scrub()
         mutableState.update { it.copy(playing=playing) }
         requestGeneration.incrementAndGet()
         generation.incrementAndGet();changes.trySend(Unit)
