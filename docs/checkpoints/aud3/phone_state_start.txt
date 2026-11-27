@@ -1,0 +1,9 @@
+1
+0
+600000
+  AC powered: true
+  USB powered: false
+  level: 76
+  temperature: 372
+mWakefulness=Awake
+isKeyguardShowing=false

@@ -1,0 +1,96 @@
+<a id="rec-aud3"></a>
+
+# AUD3: choppy audio on HE-AAC clips (and the timeline merge)
+
+Branch `timeline`. **AUD3 is not merged into `master`.** Device: A16 (SM-A165F, Android 16), debug package `com.fluxx.android.debug`. Raw results are in `docs/checkpoints/aud3/`.
+
+## Part A: the merge (git only)
+
+| Step | Result |
+|---|---|
+| Before | `master` `2377a83`, `graph` `365937e`, `text` `861644a`, `tlp` `1768112`, `aud1` `bb8e112` (local and origin); working tree clean |
+| Ancestry | `tlp` is an ancestor of `aud1`. `master` is an ancestor of `aud1`, so there were no conflicts. |
+| Rename | `aud1` became `timeline`, was pushed (`origin/timeline` at `bb8e112`), and then `origin/aud1` was deleted |
+| Merge | `git merge --no-ff timeline` on `master`: **merge commit `eec4878`** ("Merge timeline: TLP, TL3, AUD1, AUD2, MP1, MP1.1, MP1.2"), pushed |
+| `tlp` | deleted with `git branch -d` (accepted: fully merged) and on origin |
+| JVM on `master` | **721 tests, 0 failures, 0 errors** (39 s wall, no `clean`) |
+| Records | "records: timeline merged" `f57a611` on `master` (TLP.md status); `timeline` fast-forwarded to `f57a611` |
+| Branches after | `master` `f57a611`, `timeline` `f57a611` (then AUD3 commits), `graph` `365937e`, `text` `861644a`; `tlp` and `aud1` gone |
+
+## Part B: AUD3
+
+### What was known (MP1.2, `mp1_2/audio_probe.txt`, AUD1)
+
+- **The six clips Snxw hears as choppy** (17, 20, 21, 22, 27, 28) are exactly the Instagram "… - Video by <name>.mkv" files with AAC declared at 24 kHz, which the decoder outputs at 48 kHz.
+- **Already ruled out:**
+  - decode speed: 13–25× real time;
+  - format-change order: the change arrives before the first buffer;
+  - gaps in the samples.
+- **Audio seeks in these MKV files land at 0–0.13 s.**
+- **The MP1.2 cache-vs-decode check was inconclusive** (its Opus control failed too).
+- **The audio path (AUD1):**
+  - the per-source cache is 48 kHz stereo 16-bit, with 1 s chunk coverage;
+  - the stereo linear resampler runs only when the decoder's output rate is not 48 kHz (a pass-through otherwise);
+  - AAC priming is 2048 samples at the output rate unless the container gives an encoder delay;
+  - a 20 ms-block feeding thread mixes from the caches, and an undecoded block is mixed as silence, not an underrun.
+
+### B1. Evidence (`Aud3Test`, one invocation, 987 s wall; Saver 0, AC, 37.3–39.3 °C, screen on and unlocked: comparable)
+
+Files: the six choppy clips; controls Project 1 clips 1 and 5 (AAC-LC 44.1 kHz), 15 (Opus) and 23 / 26 (HE-AAC declared at 22.05 kHz); and from Download/Seal, two MP4 HE-AAC v2 files (22.05 kHz mono) and one more 24 kHz "Video by" MKV. Project 1 was read through `ProjectManager.loadProject` only: size 9256, mtime 1795802998935 before and after, unchanged. Its file had last changed at 19:09:58 because Snxw opened it in the app after MP1.2, not because of a test.
+
+**A1: declared versus decoded** (all `c2.android.aac.decoder`, except Opus):
+
+| File | Declared | AudioSpecificConfig | Output | Samples per buffer | First in / first out | App priming |
+|---|---|---|---|---|---|---|
+| clips 1, 5 (MKV) | 44100 Hz, 2 ch, profile 2 | `1210`: AAC-LC | 44100 / 2 | 1024 | 0 / 0 | 2048 = 46.4 ms |
+| clip 15 (MKV, Opus) | 48000 / 2 | OpusHead | 48000 / 2 | 960 | 0.007 / 0.007 | 0 |
+| clips 23, 26 (MKV) | 22050 / 2, profile 5 | `2b920800`: SBR explicit | **44100** / 2 | 2048 | 0 / 0 | 2048 = 46.4 ms |
+| **clips 17, 20, 21, 22, 27, 28 (MKV)**, Seal "3 - Video by xtosy" | 24000 / 2, profile 5 | `2b118800`: SBR explicit | **48000** / 2 | 2048 | 0 / 0 | 2048 = 42.7 ms |
+| two Seal MP4s (HE-AAC v2) | 22050 / 1, profile 29 | `eb8a0800`: PS explicit | 44100 / 2 | 2048 | −0.161 / 0.025 | encoder-delay 3553 = 80.6 ms |
+
+The decoder's output rate is the one the app uses (priming at 42.7 ms, not 85.3).
+
+**A2: the app's PCM against a straight-through reference decode.**
+- **The method:** a MediaCodec decode with no cache or seek, through the app's own fold and resampler to 48 kHz. It is aligned by normalised cross-correlation (global, then a local lag every second), level-normalised by least squares, and compared as error energy per 20 ms block.
+- **The caches measured:** a fresh test cache filled from 0, a fresh cache filled reader-first at 3 s then 0, and the app's existing cache.
+
+| File | Gain | Per-second RMS error (median / max) | Bad 20 ms blocks | At a 1 s chunk join | Local lag per second |
+|---|---|---|---|---|---|
+| clip 1 (control) | 1.000 | **0.000 / 0.000** | 0 / 1359 | – | 0 throughout |
+| clip 5 (control) | 1.000 | 0.000 / 0.000 | 0 / 1042 | – | 0 |
+| clip 15 Opus (control) | 1.000 | 0.000 / 0.000 | 0 / 1443 | – | 0 |
+| clip 23 (22.05 kHz HE-AAC) | 1.000 | 0.000 / 0.000 | 0 / 642 | – | 0 |
+| clip 26 (22.05 kHz HE-AAC) | 1.000 | 0.000 / 0.000 | 0 / 1403 | – | 0 |
+| **clip 17** | 0.723 | **0.965 / 1.165** | **397 / 397** | 15 | 0 |
+| **clip 20** | 0.827 | 0.690 / 1.099 | 1137 / 1443 | 45 | jumps of ±16 (7 changes) |
+| **clip 21** | 0.912 | 0.503 / 0.702 | 773 / 1164 | 31 | −16 / −32 / −17 |
+| **clip 22** | 0.772 | 0.832 / 1.035 | 1175 / 1448 | 46 | ±15–16 (12 changes) |
+| **clip 27** | 0.808 | 0.697 / 0.925 | 959 / 1198 | 38 | 16, 1, 2 |
+| **clip 28** | 0.788 | 0.739 / 1.116 | 927 / 1142 | 36 | 16, 1 |
+| Seal 24 kHz MKV | 0.953 | 0.327 / 0.364 | 337 / 795 | 12 | −16 |
+| Seal MP4 HE-AAC v2 (×2) | 0.995 | 0.083–0.100 / 0.445 | 5–31 | 1–4 | 0; 4 silent blocks at 0.00 s |
+
+- **The method is proven:** every clean control, including the two 22.05 kHz HE-AAC MKVs, compares exactly (0.000).
+- **The 24 kHz HE-AAC files are wrong throughout,** not at chunk joins. Join blocks are 2/50 of all blocks, and that is their share of the bad ones. The error is the same in all three caches (fresh, reader-first, the app's own), so it is not the run or restart pattern.
+- **The local alignment moves in steps of 16 frames,** which is a third of a millisecond at 48 kHz.
+
+**A3: playback from a cold cache** (the same files under a distinct `file://` spelling, so the app built new cache entries; 10 s from 0, and 5 s after a seek to 5 s):
+- the mixer played **0** blocks as silence for every file, choppy and control alike;
+- track underruns were 0–1 for both, with first sound 264–1269 ms after Play;
+- so the choppiness does not line up with feeding or underruns.
+
+**Why:** the timestamps of these MKV files are in whole milliseconds. The probe in `mp1_2/audio_probe.txt` gives the output pts as 0.000, 0.042, 0.085, 0.128, 0.170, 0.213 s, steps of 42 and 43 ms for buffers of 2048 frames (42.667 ms).
+- **On the resampler path** (any output rate other than 48 kHz) the samples are written contiguously: the resampler follows on from its last frame unless the timestamp jumps by more than 100 ms.
+- **On the pass-through path** (output already 48 kHz) each buffer was written at its own timestamp. A 2048-frame buffer then lands 2016 or 2064 frames after the previous one, a 32-frame overlap or a 16-frame gap of stale data every 43 ms, throughout the file.
+- **Why only these files:** Opus (960-sample frames, exact 20 ms timestamps) and MP4 (exact timestamps) are not affected. Only a 48 kHz output with millisecond-rounded timestamps is: here, HE-AAC declared at 24 kHz in MKV. AAC at 48 kHz in MKV would be affected too.
+
+### Suspects (written before the fix)
+
+| # | Suspect | Verdict | Evidence |
+|---|---|---|---|
+| S1 | The declared 24 kHz rate is used where the 48 kHz output rate should be (resampler, cache, priming, peaks, mixer) | **Refuted** | SourcePcm takes the rate from the output format (the change comes before the first buffer). The priming is 42.7 ms (at 48 kHz), matching the measured offset of 43.0 ms. The cache and mixer are 48 kHz by design. |
+| S2 | SBR frame size (2048 against 1024) or priming off by 2×, an error at every chunk or block join | **Refuted as stated** | The 2048-sample buffers are handled, and the priming is right. Errors are not concentrated at joins. But the per-buffer placement (S5) is where the frame size matters. |
+| S3 | Chunk or coverage bookkeeping mixes source-rate and output-rate samples | **Refuted** | There are no holes, coverage is complete, and fresh, reader-first and app caches are identical. |
+| S4 | The feeding thread underruns on these files (cold re-decode from 0 s) | **Refuted** | No block was mixed as silence, and underruns were 0–1, the same as the controls. |
+| S5 | Other | **Confirmed: 48 kHz pass-through placed each decoded buffer at its millisecond-rounded container timestamp**, so buffers overlap or leave gaps every 43 ms | The local lag jumps by 16 frames, error is present throughout, and the same file family resampled (22.05 kHz) is exact. |
+| (open) | MP4 HE-AAC v2 with an edit list (first pts −0.161 s, encoder-delay 3553) | Not by ear; a separate small offset | The measured offset is 102.4 ms against the app's 80.6 ms priming, giving 4 silent blocks at the very start and 8–10 % residual error. Not reported by Snxw; left for its own pass. |

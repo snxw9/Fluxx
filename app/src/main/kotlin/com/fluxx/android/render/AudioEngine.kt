@@ -394,7 +394,8 @@ class BlockMixer(context: Context, project: ProjectDocument) {
             val a = maxOf(frame, v.startFrame); val b = minOf(frame + count, v.endFrame)
             if (b <= a || v.pcm.noAudio) continue
             val n = (b - a).toInt()
-            v.pcm.read(v.inFrame + (a - v.startFrame), n, tmp, scratch)
+            // AUD3: a block not decoded yet plays as silence; the test observer counts those (null in the app).
+            if (!v.pcm.read(v.inFrame + (a - v.startFrame), n, tmp, scratch)) PreviewFrames.testPlayback?.invoke("miss frame=$a n=$n")
             val off = ((a - frame) * 2).toInt(); val g = v.gain / 32768f
             for (i in 0 until n * 2) acc[off + i] += tmp[i] * g
         }
