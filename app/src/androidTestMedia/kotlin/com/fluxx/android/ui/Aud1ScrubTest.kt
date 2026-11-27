@@ -38,6 +38,7 @@ class Aud1ScrubTest {
     private val presented = CopyOnWriteArrayList<LongArray>()
 
     @Before fun setUp() {
+        TestDeviceState.record(javaClass.simpleName)
         previousLibrary = CurveLibraryStore.replaceForTest(CurveLibraryStore.inMemory())
         val f = Aud1Bench.file(context)
         assumeTrue("AUD1: the benchmark file '${Aud1Bench.PREFIX}…' was not found or is not readable (${Aud1Bench.lookupLog}); skipping", f != null)

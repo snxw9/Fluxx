@@ -68,6 +68,7 @@ class Mp1CullGoldenTest {
     private fun same(a: Frame, b: Frame) = a.y == b.y && a.u == b.u && a.v == b.v
 
     @Test fun cullingIsPixelIdentical() {
+        TestDeviceState.record(javaClass.simpleName)
         f = Aud2Bench.find(context, Aud2Bench.TYPICAL) ?: run { assumeTrue("MP1: typical clip not found (${Aud2Bench.lookupLog})", false); return }
         m = Aud1Bench.media(f)
         val times = longArrayOf(0, 500_000, 1_000_000, 1_966_666)

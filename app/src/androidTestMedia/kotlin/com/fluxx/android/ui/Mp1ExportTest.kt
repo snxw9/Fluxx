@@ -30,6 +30,7 @@ class Mp1ExportTest {
     }
 
     @Test fun a0SixLayerExport() {
+        TestDeviceState.record(javaClass.simpleName)
         val f = Aud2Bench.find(context, Aud2Bench.TYPICAL)
         assumeTrue("MP1: the typical H.264 file was not found (${Aud2Bench.lookupLog}); skipping", f != null)
         val m = Aud1Bench.media(f!!)

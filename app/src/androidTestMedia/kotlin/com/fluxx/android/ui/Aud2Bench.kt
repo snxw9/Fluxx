@@ -179,7 +179,7 @@ abstract class Aud2Base {
     protected val c get() = controller.value!!
     protected val rec = Aud2Recorder { controller.value }
 
-    @Before fun aud2SetUp() { previousLibrary = CurveLibraryStore.replaceForTest(CurveLibraryStore.inMemory()) }
+    @Before fun aud2SetUp() { TestDeviceState.record(javaClass.simpleName); previousLibrary = CurveLibraryStore.replaceForTest(CurveLibraryStore.inMemory()) }
     @After fun aud2TearDown() {
         rec.stop()
         CurveLibraryStore.replaceForTest(previousLibrary)
