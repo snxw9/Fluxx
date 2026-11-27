@@ -52,6 +52,9 @@ class AudioPeakProvider private constructor(private val context: Context) {
         }
     }
 
+    /** MP1: a peak decode for [uri] is in flight (the benchmarks' runaway guard). Main thread. */
+    fun decoding(uri: String): Boolean = jobs[uri]?.isActive == true
+
     /** A row left while its peaks were still decoding: stop the work (it restarts on the next request). */
     fun cancel(uri: String) {
         val job = jobs.remove(uri) ?: return
@@ -77,8 +80,13 @@ class AudioPeakProvider private constructor(private val context: Context) {
         val uri = Uri.parse(uriText)
         val (size, modified) = meta(uri)
         val file = File(dir(), PeakCachePolicy.fileName(uriText, size, modified))
-        if (file.exists()) PeakPyramid.read(file)?.let { file.setLastModified(System.currentTimeMillis()); return Peaks.Ready(it) }
+        val probe = com.fluxx.android.render.MediaProbes.events
+        val key = com.fluxx.android.render.MediaProbes.key(uriText)
+        if (file.exists()) PeakPyramid.read(file)?.let { file.setLastModified(System.currentTimeMillis()); probe?.invoke("peaks-cached $key"); return Peaks.Ready(it) }
+        val t0 = System.nanoTime()
+        probe?.invoke("peaks-start $key")
         val pyramid = decode(uri) ?: return Peaks.NoAudio
+        probe?.invoke("peaks-done $key ms=${(System.nanoTime() - t0) / 1_000_000} sourceUs=${pyramid.durationUs} buckets=${pyramid.levels[0].first.size}")
         currentCoroutineContext().ensureActive()
         val tmp = File(dir(), file.name + ".tmp"); pyramid.write(tmp); tmp.renameTo(file)
         val files = dir().listFiles().orEmpty().filter { it.name.endsWith(".peaks") }

@@ -53,7 +53,19 @@ android {
             applicationIdSuffix = ".debug"
             isDebuggable = true
         }
+        // MP1 A1: release-like measurement build. Not debuggable, R8 minify / resource shrinking as release, signed with
+        // the debug key, its own package (.bench: installs beside debug, no uninstall). Instrumented tests target it only
+        // when -PfluxxTestBuildType=benchmark is passed (debug stays the default test build type).
+        create("benchmark") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".bench"
+            isDebuggable = false
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            proguardFiles("benchmark-rules.pro")
+        }
     }
+    testBuildType = providers.gradleProperty("fluxxTestBuildType").orElse("debug").get()
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -66,6 +78,13 @@ android {
         prefab = true
     }
     sourceSets.getByName("androidTest").assets.srcDir(rootProject.file("tools/text/fixtures"))
+    // MP1 A1: the benchmark build ships what release ships (no debug-only fixture registry or proof activity).
+    sourceSets.getByName("benchmark").kotlin.srcDir("src/release/kotlin")
+    // MP1 A1: the media benchmarks (AUD1 / AUD2 / MP1) need nothing debug-only. Debug compiles them with every other
+    // instrumented test; the benchmark test APK compiles only them (other classes use debug-only text proof helpers).
+    val mediaBenchTests = "src/androidTestMedia/kotlin"
+    if (testBuildType == "benchmark") sourceSets.getByName("androidTest").kotlin.setSrcDirs(listOf(mediaBenchTests))
+    else sourceSets.getByName("androidTest").kotlin.srcDir(mediaBenchTests)
 }
 
 kotlin {
@@ -99,4 +118,6 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    // MP1 A1: the benchmark variant hosts the same instrumented classes (ComponentActivity for the Compose test rule).
+    "benchmarkImplementation"(libs.androidx.compose.ui.test.manifest)
 }

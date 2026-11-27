@@ -68,7 +68,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
                 codec = it
                 it.configure(format, reader!!.surface, null, 0); it.start()
             }
-            testEvents?.invoke("open $probeKey ${width}x$height cache=$frames")
+            testEvents?.invoke("open $probeKey ${width}x$height cache=$frames codec=${codec?.name}")
         } catch (e: Exception) {
             testEvents?.invoke("open-failed $probeKey ${e.javaClass.simpleName}: ${e.message}")
             releaseAll(made); throw e
@@ -85,19 +85,20 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
         var decoded = 0
         var how = "decode"
         lastApproximate = false
-        fun log(kind: String) = probe?.invoke("$kind $probeKey t=$timeUs from=$probeFrom seek=$probeSeek decoded=$decoded how=$how us=${(SystemClock.elapsedRealtimeNanos() - probeStart) / 1000}")
+        // MP1 A3: shown= is the pts of the frame returned (the scrub display rule compares it with the target t=).
+        fun log(kind: String, shown: Image? = null) = probe?.invoke("$kind $probeKey t=$timeUs from=$probeFrom seek=$probeSeek decoded=$decoded how=$how us=${(SystemClock.elapsedRealtimeNanos() - probeStart) / 1000} shown=${shown?.let { it.timestamp / 1000 } ?: -1}")
         try {
             cache.exact(timeUs)?.let { hit ->
                 // Playback: the hit is the look-ahead frame of the previous request; decode the next one now, so every
                 // frame costs one decode (without this, calls alternated 0 / 2 decodes and the pacing got uneven).
                 if (!approximate && !outputEnded && hit.timestamp / 1000 == outPos) { decodeNext(cancelled); decoded++ }
-                how = "cached"; log("frame"); return hit
+                how = "cached"; log("frame", hit); return hit
             }
             var sync = Long.MIN_VALUE
             val action = DecoderPlan.decide(timeUs, false, outPos, outputEnded) { prevSync(timeUs).also { sync = it } }
             if (action == DecoderPlan.Action.CACHED) {
-                how = "ended"; log("frame")
-                return cache.exact(timeUs) ?: requireNotNull(cache.nearest(timeUs)) { "The decoder returned no video frames" }.second
+                how = "ended"
+                return (cache.exact(timeUs) ?: requireNotNull(cache.nearest(timeUs)) { "The decoder returned no video frames" }.second).also { log("frame", it) }
             }
             if (action == DecoderPlan.Action.SEEK) {
                 if (sync == Long.MIN_VALUE) sync = prevSync(timeUs)
@@ -105,7 +106,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
                     // Scrubbing: the nearer of a frame already in memory and the sync frame (one decode), never a GOP decode.
                     val near = cache.nearest(timeUs)
                     if (near != null && kotlin.math.abs(near.first - timeUs) <= kotlin.math.abs(sync - timeUs)) {
-                        lastApproximate = true; how = "approx-cached"; log("frame"); return near.second
+                        lastApproximate = true; how = "approx-cached"; log("frame", near.second); return near.second
                     }
                 }
                 seek(sync); probeSeek = sync
@@ -118,8 +119,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
             }
             val exact = cache.exact(timeUs)
             if (exact == null) { lastApproximate = !outputEnded; if (lastApproximate) how = "approx" }
-            log("frame")
-            return exact ?: requireNotNull(cache.nearest(timeUs)) { "The decoder returned no video frames" }.second
+            return (exact ?: requireNotNull(cache.nearest(timeUs)) { "The decoder returned no video frames" }.second).also { log("frame", it) }
         } catch (e: CancellationException) {
             log("cancelled")
             throw e

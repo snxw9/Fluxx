@@ -186,9 +186,11 @@ abstract class Aud2Base {
         controller.value?.let { pc -> kotlinx.coroutines.runBlocking { pc.close() } }
     }
 
+    /** The status key of [report] lines (MP1 classes use "MP1"). */
+    protected open val tag = "AUD2"
     protected fun report(line: String) {
-        android.util.Log.i("AUD2", line)
-        InstrumentationRegistry.getInstrumentation().sendStatus(0, Bundle().apply { putString("AUD2", line) })
+        android.util.Log.i(tag, line)
+        InstrumentationRegistry.getInstrumentation().sendStatus(0, Bundle().apply { putString(tag, line) })
     }
 
     protected fun file(kind: String, match: (String) -> Boolean): File {

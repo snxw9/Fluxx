@@ -43,6 +43,12 @@ class SourcePcm internal constructor(private val context: Context, val uri: Stri
     }
 
     val complete get() = synchronized(lock) { coverage.complete }
+    /** MP1: the background decode worker is running (diagnostics and the benchmarks' runaway guard). */
+    val decoding: Boolean get() = worker?.isAlive == true
+    /** MP1: decoded 1 s chunks so far. */
+    val coveredChunks: Int get() = synchronized(lock) { coverage.snapshot().cardinality() }
+    /** MP1: bytes the cache file really occupies on disk (it is sparse: only decoded chunks are allocated). */
+    val allocatedBytes: Long get() = runCatching { android.system.Os.stat(file.path).st_blocks * 512L }.getOrDefault(file.length())
     fun covers(from: Long, to: Long) = synchronized(lock) { coverage.covers(from.coerceAtLeast(0), to.coerceAtMost(frames)) }
 
     /** Make sure the region from [frame] gets decoded (restarting the worker there if it is elsewhere). */
@@ -105,6 +111,7 @@ class SourcePcm internal constructor(private val context: Context, val uri: Stri
             val c = MediaCodec.createDecoderByType(requireNotNull(mime)); codec = c
             c.configure(fmt, null, null, 0); c.start()
             runFrom.set(startFrame); runAt.set(startFrame)
+            MediaProbes.events?.invoke("pcm-run ${MediaProbes.key(uri)} from=$startFrame frames=$frames")
             val writer = RandomAccessFile(file, "rw")
             val info = MediaCodec.BufferInfo()
             var encoding = AudioFormat.ENCODING_PCM_16BIT
@@ -174,6 +181,7 @@ class SourcePcm internal constructor(private val context: Context, val uri: Stri
             try { codec?.stop() } catch (_: Exception) {}
             codec?.release(); ex.release()
             persist()
+            MediaProbes.events?.invoke("pcm-run-end ${MediaProbes.key(uri)} from=${runFrom.get()} at=${runAt.get()} covered=$coveredChunks closed=$closed")
         }
     }
 
@@ -264,6 +272,9 @@ class SourcePcmCache private constructor(private val context: Context) {
         }
         return SourcePcm(context, uri, f, durationUs).also { open[uri] = it }
     }
+
+    /** MP1: stops [uri]'s background decode and forgets the open instance (the benchmarks' runaway guard; the next get reopens). */
+    @Synchronized fun release(uri: String) { open.remove(uri)?.close() }
 
     private fun meta(u: Uri): Pair<Long, Long> {
         var size = -1L; var modified = -1L

@@ -158,8 +158,12 @@ class MediaRepository(private val context: Context) {
 
     suspend fun thumbnail(uri: String): Bitmap? = thumbnailPermits.withPermit { withContext(Dispatchers.IO) {
         thumbnails.get(uri) ?: try {
-            context.contentResolver.loadThumbnail(Uri.parse(uri), Size(160,160), null).also { thumbnails.put(uri,it) }
-        } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
+            val probe = com.fluxx.android.render.MediaProbes.events; val t0 = System.nanoTime()
+            probe?.invoke("thumb-start ${com.fluxx.android.render.MediaProbes.key(uri)} thread=${Thread.currentThread().name} priority=${android.os.Process.getThreadPriority(android.os.Process.myTid())}")
+            context.contentResolver.loadThumbnail(Uri.parse(uri), Size(160,160), null).also { thumbnails.put(uri,it)
+                probe?.invoke("thumb-done ${com.fluxx.android.render.MediaProbes.key(uri)} ms=${(System.nanoTime() - t0) / 1_000_000} ${it.width}x${it.height}") }
+        } catch (cancelled: CancellationException) { throw cancelled } catch (e: Exception) {
+            com.fluxx.android.render.MediaProbes.events?.invoke("thumb-failed ${com.fluxx.android.render.MediaProbes.key(uri)} ${e.javaClass.simpleName}"); null }
     } }
 
     suspend fun reference(uri: Uri, identity: String = UUID.randomUUID().toString()): Pair<AssetReference, LayerType> = withContext(Dispatchers.IO) {
