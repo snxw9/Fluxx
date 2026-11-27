@@ -51,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
@@ -331,6 +332,20 @@ fun TimelineView(
     }
     val draggingTimeline by verticalScrollState.interactionSource.collectIsDraggedAsState()
     val horizontalScrollState = rememberScrollState()
+    // TLV1: test-only handles (off in the app).
+    if (TimelineProbe.enabled) {
+        val fling = androidx.compose.foundation.gestures.ScrollableDefaults.flingBehavior()
+        val zoomUsed by rememberUpdatedState(pxPerSecond); val ppuNow by rememberUpdatedState(pxPerUs); val durNow by rememberUpdatedState(durationUs)
+        val viewport = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width
+        val probeScope = androidx.compose.runtime.rememberCoroutineScope()
+        SideEffect {
+            TimelineProbe.viewCompositions.incrementAndGet()
+            TimelineProbe.control = TimelineProbe.Control(setZoom = { chosenDpPerSecond = it },
+                fling = { v -> probeScope.launch { horizontalScrollState.scroll { with(fling) { performFling(v) } } } },
+                zoomDpPerSecond = { zoomUsed }, contentWidthPx = { durNow * ppuNow + viewport },
+                centreUs = { (horizontalScrollState.value / ppuNow).toLong() })
+        }
+    }
     val reorder = remember { TimelineReorderState() }
     // TL3.1 A3: once rows settle, the side controls go back to the list's own (current-frame) offsets.
     LaunchedEffect(twirlMoving, reorder.draggingId) { if (!twirlMoving && reorder.draggingId == null) reorder.placedTops.clear() }
@@ -951,6 +966,7 @@ private fun TimelineClipRow(
     onKeyCancel: () -> Unit = onCancelGesture,
     modifier: Modifier = Modifier
 ) {
+    if (TimelineProbe.enabled) SideEffect { TimelineProbe.rowCompositions.incrementAndGet() }
     val currentLayer by rememberUpdatedState(layer)
     val keyEdge by rememberUpdatedState(onKeyEdge)
     val keyCommit by rememberUpdatedState(onKeyCommit)
