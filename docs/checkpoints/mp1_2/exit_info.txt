@@ -1,0 +1,88 @@
+ACTIVITY MANAGER PROCESS EXIT INFO (dumpsys activity exit-info)
+Last Timestamp of Persistence Into Persistent Storage: 2026-11-27 16:04:15.369
+  package: com.fluxx.android.debug
+    Historical Process Exit for uid=0
+        ApplicationExitInfo #0:
+          timestamp=2026-11-22 16:32:50.261 pid=32424 realUid=99655 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug:font_worker:com.fluxx.android.fonts.FontWorkerService reason=3 (LOW_MEMORY) subreason=0 (UNKNOWN) status=0
+          importance=400 pss=0.00 rss=48MB description=null state=empty trace=null
+    Historical Process Exit for uid=10352
+        ApplicationExitInfo #0:
+          timestamp=2026-11-27 16:01:19.179 pid=19693 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=10 (USER REQUESTED) subreason=22 (REMOVE TASK) status=0
+          importance=400 pss=0.00 rss=206MB description=remove task state=empty trace=null
+        ApplicationExitInfo #1:
+          timestamp=2026-11-27 16:01:03.409 pid=19493 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=10 (USER REQUESTED) subreason=22 (REMOVE TASK) status=0
+          importance=200 pss=0.00 rss=0.00 description=remove task state=empty trace=null
+        ApplicationExitInfo #2:
+          timestamp=2026-11-27 16:00:50.648 pid=11043 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=3 (LOW_MEMORY) subreason=0 (UNKNOWN) status=0
+          importance=100 pss=0.00 rss=124MB description=null state=empty trace=null
+        ApplicationExitInfo #3:
+          timestamp=2026-11-27 15:46:16.213 pid=9406 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=10 (USER REQUESTED) subreason=22 (REMOVE TASK) status=0
+          importance=400 pss=0.00 rss=442MB description=remove task state=empty trace=null
+        ApplicationExitInfo #4:
+          timestamp=2026-11-27 15:43:33.890 pid=7349 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=10 (USER REQUESTED) subreason=22 (REMOVE TASK) status=0
+          importance=400 pss=0.00 rss=297MB description=remove task state=empty trace=null
+        ApplicationExitInfo #5:
+          timestamp=2026-11-27 15:41:03.473 pid=5517 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=10 (USER REQUESTED) subreason=22 (REMOVE TASK) status=0
+          importance=400 pss=0.00 rss=0.00 description=remove task state=empty trace=null
+        ApplicationExitInfo #6:
+          timestamp=2026-11-27 15:40:53.976 pid=30875 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=3 (LOW_MEMORY) subreason=0 (UNKNOWN) status=0
+          importance=100 pss=0.00 rss=138MB description=null state=empty trace=null
+        ApplicationExitInfo #7:
+          timestamp=2026-11-27 15:36:12.536 pid=31129 realUid=99421 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug:font_worker:com.fluxx.android.fonts.FontWorkerService reason=13 (OTHER KILLS BY SYSTEM) subreason=17 (ISOLATED NOT NEEDED) status=0
+          importance=300 pss=0.00 rss=75MB description=isolated not needed state=empty trace=null
+        ApplicationExitInfo #8:
+          timestamp=2026-11-27 15:02:03.227 pid=13606 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=125 pss=0.00 rss=192MB description=stop com.fluxx.android.debug due to finished inst state=empty trace=null
+        ApplicationExitInfo #9:
+          timestamp=2026-11-27 14:58:52.258 pid=10613 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=125 pss=0.00 rss=172MB description=stop com.fluxx.android.debug due to finished inst state=empty trace=null
+        ApplicationExitInfo #10:
+          timestamp=2026-11-27 14:55:10.353 pid=8719 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=125 pss=0.00 rss=211MB description=stop com.fluxx.android.debug due to finished inst state=empty trace=null
+        ApplicationExitInfo #11:
+          timestamp=2026-11-27 14:53:38.285 pid=7777 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=125 pss=0.00 rss=0.00 description=stop com.fluxx.android.debug due to finished inst state=empty trace=null
+        ApplicationExitInfo #12:
+          timestamp=2026-11-27 14:52:50.574 pid=7464 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=125 pss=0.00 rss=235MB description=stop com.fluxx.android.debug due to finished inst state=empty trace=null
+        ApplicationExitInfo #13:
+          timestamp=2026-11-27 14:52:16.346 pid=6579 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=125 pss=0.00 rss=213MB description=stop com.fluxx.android.debug due to finished inst state=empty trace=null
+        ApplicationExitInfo #14:
+          timestamp=2026-11-27 14:49:54.944 pid=5469 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=125 pss=0.00 rss=211MB description=stop com.fluxx.android.debug due to finished inst state=empty trace=null
+        ApplicationExitInfo #15:
+          timestamp=2026-11-27 14:47:46.468 pid=4331 realUid=10352 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=125 pss=0.00 rss=229MB description=stop com.fluxx.android.debug due to finished inst state=empty trace=null
+    Historical Process Exit for uid=99270
+        ApplicationExitInfo #0:
+          timestamp=2026-11-26 12:41:43.903 pid=31801 realUid=99270 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug:font_worker:com.fluxx.android.fonts.FontWorkerService reason=3 (LOW_MEMORY) subreason=0 (UNKNOWN) status=0
+          importance=400 pss=0.00 rss=39MB description=null state=empty trace=null
+    Historical Process Exit for uid=99325
+        ApplicationExitInfo #0:
+          timestamp=2026-11-26 22:29:39.540 pid=866 realUid=99325 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug:font_worker:com.fluxx.android.fonts.FontWorkerService reason=3 (LOW_MEMORY) subreason=0 (UNKNOWN) status=0
+          importance=100 pss=0.00 rss=20MB description=null state=empty trace=null
+    Historical Process Exit for uid=99400
+        ApplicationExitInfo #0:
+          timestamp=2026-11-27 12:40:27.060 pid=23444 realUid=99400 packageUid=10352 definingUid=10352 user=0
+          process=com.fluxx.android.debug:font_worker:com.fluxx.android.fonts.FontWorkerService reason=3 (LOW_MEMORY) subreason=0 (UNKNOWN) status=0
+          importance=100 pss=0.00 rss=14MB description=null state=empty trace=null

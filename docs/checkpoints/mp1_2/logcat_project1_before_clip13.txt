@@ -1,0 +1,142 @@
+11-27 16:36:40.001  1178  9345 W C2MtkBufferManager: [0xB400007DCB73C320] fetchNewCcBlock: wait fence 0x0xb400007dcb669b40 timed out. ret 110
+11-27 16:36:40.653  1178  9345 W C2MtkBufferManager: [0xB400007DCB73C320] fetchNewCcBlock: wait fence 0x0xb400007dcb669b40 timed out. ret 110
+11-27 16:36:42.600  1178  9345 W C2MtkBufferManager: [0xB400007DCB73C320] fetchNewCcBlock: wait fence 0x0xb400007dcb669b40 timed out. ret 110
+11-27 16:36:45.703  1178  9345 W C2MtkBufferManager: [0xB400007DCB73C320] fetchNewCcBlock: wait fence 0x0xb400007dcb669b40 timed out. ret 110
+11-27 16:36:46.900  1178  9345 W C2MtkBufferManager: [0xB400007DCB73C320] fetchNewCcBlock: wait fence 0x0xb400007dcb669b40 timed out. ret 110
+11-27 16:36:48.524   472   482 I lowmemorykiller: Process 8609 was reaped in 68ms
+11-27 16:36:49.102  1178  9345 W C2MtkBufferManager: [0xB400007DCB73C320] fetchNewCcBlock: wait fence 0x0xb400007dcb669b40 timed out. ret 110
+11-27 16:36:49.896  1178  9345 W C2MtkBufferManager: [0xB400007DCB73C320] fetchNewCcBlock: wait fence 0x0xb400007dcb669b40 timed out. ret 110
+11-27 16:36:51.204  1178  9345 W C2MtkBufferManager: [0xB400007DCB73C320] fetchNewCcBlock: wait fence 0x0xb400007dcb669b40 timed out. ret 110
+11-27 16:36:52.596  1178  9345 W C2MtkBufferManager: [0xB400007DCB73C320] fetchNewCcBlock: wait fence 0x0xb400007dcb669b40 timed out. ret 110
+11-27 16:36:53.849  1178  9345 W C2MtkBufferManager: [0xB400007DCB73C320] fetchNewCcBlock: wait fence 0x0xb400007dcb669b40 timed out. ret 110
+11-27 16:36:55.903   472   481 I lowmemorykiller: Process 9383 was reaped in 16ms
+11-27 16:36:56.648  1178  9345 W C2MtkBufferManager: [0xB400007DCB73C320] fetchNewCcBlock: wait fence 0x0xb400007dcb669b40 timed out. ret 110
+11-27 16:36:56.792   472   482 I lowmemorykiller: Process 9400 was reaped in 28ms
+11-27 16:36:58.293   472   481 I lowmemorykiller: Process 9860 was reaped in 16ms
+11-27 16:36:59.853  1178  8054 D C2MtkBufferManager: C2MtkBMCcFetchThread mIsBufferFetchPaused
+11-27 16:36:59.853  1178  8054 D C2MtkBufferManager: C2MtkBMCcFetchThread mIsBufferFetchPaused
+11-27 16:36:59.891  1178  8037 D C2MtkBufferManager: [0xB400007DCB73B520] stopFetchThread, BM fetch thread join
+11-27 16:36:59.891  1178  8051 D C2MtkBufferManager: C2MtkBMFetchThread terminated
+11-27 16:36:59.892  1178  8037 D C2MtkBufferManager: [0xB400007DCB73B520] stopFetchThread, BM fetch thread join complete
+11-27 16:36:59.892  1178  8037 D C2MtkBufferManager: [0xB400007DCB73B520] stopFetchThread, BM CC fetch thread join
+11-27 16:36:59.892  1178  8054 D C2MtkBufferManager: C2MtkBMCcFetchThread terminated
+11-27 16:36:59.892  1178  8037 D C2MtkBufferManager: [0xB400007DCB73B520] stopFetchThread, BM CC fetch thread join complete
+11-27 16:36:59.892  1178  8037 D C2MtkBufferManager: [0xB400007DCB73B520] stopFetchThread
+11-27 16:36:59.915  1178  1753 D C2MtkBufferManager: [0xB400007DCB73B520] mFetchLock by cancelAllBuffers
+11-27 16:36:59.915  1178  1753 D C2MtkBufferManager: [0xB400007DCB73B520]   mBufferLock by cancelAllBuffers
+11-27 16:36:59.919  1178  1753 D C2MtkBufferManager: [0xB400007DCB73B520] mCcFetchLock by cancelAllBuffers
+11-27 16:36:59.919  1178  1753 D C2MtkBufferManager: [0xB400007DCB73B520]   mCcBufferLock by cancelAllBuffers
+11-27 16:36:59.925  1178  1753 D C2MtkBufferManager: [0xB400007DCB73B520] cancelAllBuffers, Free all Buffers Done!
+11-27 16:36:59.925  1178  1753 D C2MtkBufferManager: [0xB400007DCB73B520] ~C2MtkBufferManager
+11-27 16:37:00.253  1178  9964 D C2MtkBufferManager: C2MtkBMFetchThread Start
+11-27 16:37:00.253  1178  9957 D C2MtkBufferManager: [0xB400007DCB73A720] C2MtkBufferManager: allocId 20, mIsFetchCcNeeded 0, mFence:cb669b70
+11-27 16:37:00.253  1178  9957 D C2MtkBufferManager: [0xB400007DCB73A720] setCcBuffersParams Params: ((320,240) 0x32315659, total:1, type:1, mParamChanged:0)
+11-27 16:37:00.253  1178  9957 D C2MtkBufferManager: [0xB400007DCB73A720] mFetchLock by cancelAllBuffers
+11-27 16:37:00.253  1178  9957 D C2MtkBufferManager: [0xB400007DCB73A720]   mBufferLock by cancelAllBuffers
+11-27 16:37:00.253  1178  9957 D C2MtkBufferManager: [0xB400007DCB73A720] cancelAllBuffers, Free all Buffers Done!
+11-27 16:37:00.253  1178  9957 D C2MtkBufferManager: [0xB400007DCB73A720] (setBuffersParams Params: ((320,240) 0x32315679, usage:1, total:1, type:1, mParamChanged:0)
+11-27 16:37:00.284  1178  9966 D C2MtkBufferManager: C2MtkBMCcFetchThread Start
+11-27 16:37:00.286  1178  9955 D C2MtkBufferManager: [0xB400007DCB73A720] mFetchLock by cancelAllBuffers
+11-27 16:37:00.286  1178  9955 D C2MtkBufferManager: [0xB400007DCB73A720]   mBufferLock by cancelAllBuffers
+11-27 16:37:00.286  1178  9955 D C2MtkBufferManager: [0xB400007DCB73A720] mCcFetchLock by cancelAllBuffers
+11-27 16:37:00.286  1178  9955 D C2MtkBufferManager: [0xB400007DCB73A720]   mCcBufferLock by cancelAllBuffers
+11-27 16:37:00.287  1178  9955 D C2MtkBufferManager: [0xB400007DCB73A720] cancelAllBuffers, Free all Buffers Done!
+11-27 16:37:00.287  1178  9955 D C2MtkBufferManager: [0xB400007DCB73A720] setCcBuffersParams Params: ((1440,1080) 0x32315659, total:13, type:1, mParamChanged:0)
+11-27 16:37:00.287  1178  9955 D C2MtkBufferManager: [0xB400007DCB73A720] mFetchLock by cancelAllBuffers
+11-27 16:37:00.287  1178  9955 D C2MtkBufferManager: [0xB400007DCB73A720]   mBufferLock by cancelAllBuffers
+11-27 16:37:00.287  1178  9955 D C2MtkBufferManager: [0xB400007DCB73A720] mCcFetchLock by cancelAllBuffers
+11-27 16:37:00.287  1178  9955 D C2MtkBufferManager: [0xB400007DCB73A720]   mCcBufferLock by cancelAllBuffers
+11-27 16:37:00.287  1178  9955 D C2MtkBufferManager: [0xB400007DCB73A720] cancelAllBuffers, Free all Buffers Done!
+11-27 16:37:00.287  1178  9955 D C2MtkBufferManager: [0xB400007DCB73A720] (setBuffersParams Params: ((1440,1080) 0x7f000001, usage:0, total:13, type:1, mParamChanged:0)
+11-27 16:37:00.800  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:01.198  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:01.598  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:01.997  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:02.798  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:03.197  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:03.257  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:03.602  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:03.996  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:04.351  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:04.699  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:04.803  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:05.023   472   481 I lowmemorykiller: Process 8924 was reaped in 52ms
+11-27 16:37:05.203  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:05.499  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:05.605  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:06.800  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:07.601  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:07.997  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:08.396  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:08.800  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:08.860  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:08.920  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:08.981  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:09.994  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:10.395  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:12.395  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:12.795  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:13.997  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:15.995  1178  9966 W C2MtkBufferManager: [0xB400007DCB73A720] fetchNewCcBlock: wait fence 0x0xb400007dcb669b70 timed out. ret 110
+11-27 16:37:24.253   472   482 I lowmemorykiller: Process 7007 was reaped in 20ms
+11-27 16:37:25.154 32502 32515 I MP12    : Project 1: RESULT STOPPED at clip 13/30 (440.8 s) in 447.8 s wall; peak PSS 794 MB, peak dmabuf 999 MB, peak graphics 720 MB, decoders open max 4; slope after clip 4: PSS -0.8 MB/clip, dmabuf -6.3 MB/clip; decoders opened 12 closed 9 failed 0; trims []; MemAvailable min 171 MB; status 'Video decoding timed out for this source. Retry or relink the media.'
+11-27 16:37:25.412  1178  8812 D C2MtkBufferManager: over 5000ms not request from VCodec, stop BM Cc fetch thread
+11-27 16:37:25.432  1178  8812 D C2MtkBufferManager: C2MtkBMCcFetchThread mIsBufferFetchPaused
+11-27 16:37:25.484  1178  8802 D C2MtkBufferManager: [0xB400007DCB73D120] stopFetchThread, BM fetch thread join
+11-27 16:37:25.485  1178  8811 D C2MtkBufferManager: C2MtkBMFetchThread terminated
+11-27 16:37:25.486  1178  8802 D C2MtkBufferManager: [0xB400007DCB73D120] stopFetchThread, BM fetch thread join complete
+11-27 16:37:25.486  1178  8802 D C2MtkBufferManager: [0xB400007DCB73D120] stopFetchThread, BM CC fetch thread join
+11-27 16:37:25.486  1178  8812 D C2MtkBufferManager: C2MtkBMCcFetchThread terminated
+11-27 16:37:25.487  1178  8802 D C2MtkBufferManager: [0xB400007DCB73D120] stopFetchThread, BM CC fetch thread join complete
+11-27 16:37:25.487  1178  8802 D C2MtkBufferManager: [0xB400007DCB73D120] stopFetchThread
+11-27 16:37:25.500  1178  9218 D C2MtkBufferManager: over 5000ms not request from VCodec, stop BM Cc fetch thread
+11-27 16:37:25.519  1178  9218 D C2MtkBufferManager: C2MtkBMCcFetchThread mIsBufferFetchPaused
+11-27 16:37:25.526  1178  9201 D C2MtkBufferManager: [0xB400007DCB73DF20] stopFetchThread, BM fetch thread join
+11-27 16:37:25.526  1178  9217 D C2MtkBufferManager: C2MtkBMFetchThread terminated
+11-27 16:37:25.527  1178  9201 D C2MtkBufferManager: [0xB400007DCB73DF20] stopFetchThread, BM fetch thread join complete
+11-27 16:37:25.527  1178  9201 D C2MtkBufferManager: [0xB400007DCB73DF20] stopFetchThread, BM CC fetch thread join
+11-27 16:37:25.528  1178  9218 D C2MtkBufferManager: C2MtkBMCcFetchThread terminated
+11-27 16:37:25.529  1178  9201 D C2MtkBufferManager: [0xB400007DCB73DF20] stopFetchThread, BM CC fetch thread join complete
+11-27 16:37:25.529  1178  9201 D C2MtkBufferManager: [0xB400007DCB73DF20] stopFetchThread
+11-27 16:37:25.584  1178  9345 D C2MtkBufferManager: over 5000ms not request from VCodec, stop BM Cc fetch thread
+11-27 16:37:25.604  1178  9345 D C2MtkBufferManager: C2MtkBMCcFetchThread mIsBufferFetchPaused
+11-27 16:37:25.611  1178  9336 D C2MtkBufferManager: [0xB400007DCB73C320] stopFetchThread, BM fetch thread join
+11-27 16:37:25.611  1178  9344 D C2MtkBufferManager: C2MtkBMFetchThread terminated
+11-27 16:37:25.611  1178  9336 D C2MtkBufferManager: [0xB400007DCB73C320] stopFetchThread, BM fetch thread join complete
+11-27 16:37:25.611  1178  9336 D C2MtkBufferManager: [0xB400007DCB73C320] stopFetchThread, BM CC fetch thread join
+11-27 16:37:25.612  1178  9345 D C2MtkBufferManager: C2MtkBMCcFetchThread terminated
+11-27 16:37:25.613  1178  9336 D C2MtkBufferManager: [0xB400007DCB73C320] stopFetchThread, BM CC fetch thread join complete
+11-27 16:37:25.613  1178  9336 D C2MtkBufferManager: [0xB400007DCB73C320] stopFetchThread
+11-27 16:37:25.616  1178 29428 D C2MtkBufferManager: [0xB400007DCB73D120] mFetchLock by cancelAllBuffers
+11-27 16:37:25.616  1178 29428 D C2MtkBufferManager: [0xB400007DCB73D120]   mBufferLock by cancelAllBuffers
+11-27 16:37:25.617  1178 29428 D C2MtkBufferManager: [0xB400007DCB73D120] mCcFetchLock by cancelAllBuffers
+11-27 16:37:25.617  1178 29428 D C2MtkBufferManager: [0xB400007DCB73D120]   mCcBufferLock by cancelAllBuffers
+11-27 16:37:25.618  1178  1753 D C2MtkBufferManager: [0xB400007DCB73DF20] mFetchLock by cancelAllBuffers
+11-27 16:37:25.618  1178  1753 D C2MtkBufferManager: [0xB400007DCB73DF20]   mBufferLock by cancelAllBuffers
+11-27 16:37:25.621  1178  1753 D C2MtkBufferManager: [0xB400007DCB73DF20] mCcFetchLock by cancelAllBuffers
+11-27 16:37:25.621  1178  1753 D C2MtkBufferManager: [0xB400007DCB73DF20]   mCcBufferLock by cancelAllBuffers
+11-27 16:37:25.639  1178  1312 D C2MtkBufferManager: [0xB400007DCB73C320] mFetchLock by cancelAllBuffers
+11-27 16:37:25.639  1178  1312 D C2MtkBufferManager: [0xB400007DCB73C320]   mBufferLock by cancelAllBuffers
+11-27 16:37:25.640  1178  1312 D C2MtkBufferManager: [0xB400007DCB73C320] mCcFetchLock by cancelAllBuffers
+11-27 16:37:25.640  1178  1312 D C2MtkBufferManager: [0xB400007DCB73C320]   mCcBufferLock by cancelAllBuffers
+11-27 16:37:25.678  1178  9966 D C2MtkBufferManager: C2MtkBMCcFetchThread mIsBufferFetchPaused
+11-27 16:37:25.678  1178  9966 D C2MtkBufferManager: C2MtkBMCcFetchThread mIsBufferFetchPaused
+11-27 16:37:25.705  1178  9957 D C2MtkBufferManager: [0xB400007DCB73A720] stopFetchThread, BM fetch thread join
+11-27 16:37:25.714  1178  1312 D C2MtkBufferManager: [0xB400007DCB73C320] cancelAllBuffers, Free all Buffers Done!
+11-27 16:37:25.714  1178  1312 D C2MtkBufferManager: [0xB400007DCB73C320] ~C2MtkBufferManager
+11-27 16:37:25.719  1178  9964 D C2MtkBufferManager: C2MtkBMFetchThread terminated
+11-27 16:37:25.722  1178  1753 D C2MtkBufferManager: [0xB400007DCB73DF20] cancelAllBuffers, Free all Buffers Done!
+11-27 16:37:25.722  1178  1753 D C2MtkBufferManager: [0xB400007DCB73DF20] ~C2MtkBufferManager
+11-27 16:37:25.722  1178  9957 D C2MtkBufferManager: [0xB400007DCB73A720] stopFetchThread, BM fetch thread join complete
+11-27 16:37:25.723  1178  9966 D C2MtkBufferManager: C2MtkBMCcFetchThread terminated
+11-27 16:37:25.727  1178  9957 D C2MtkBufferManager: [0xB400007DCB73A720] stopFetchThread, BM CC fetch thread join
+11-27 16:37:25.727  1178  9957 D C2MtkBufferManager: [0xB400007DCB73A720] stopFetchThread, BM CC fetch thread join complete
+11-27 16:37:25.727  1178  9957 D C2MtkBufferManager: [0xB400007DCB73A720] stopFetchThread
+11-27 16:37:25.736  1178 29428 D C2MtkBufferManager: [0xB400007DCB73D120] cancelAllBuffers, Free all Buffers Done!
+11-27 16:37:25.736  1178 29428 D C2MtkBufferManager: [0xB400007DCB73D120] ~C2MtkBufferManager
+11-27 16:37:25.827  1178  1313 D C2MtkBufferManager: [0xB400007DCB73A720] mFetchLock by cancelAllBuffers
+11-27 16:37:25.828  1178  1313 D C2MtkBufferManager: [0xB400007DCB73A720]   mBufferLock by cancelAllBuffers
+11-27 16:37:25.830  1178  1313 D C2MtkBufferManager: [0xB400007DCB73A720] mCcFetchLock by cancelAllBuffers
+11-27 16:37:25.830  1178  1313 D C2MtkBufferManager: [0xB400007DCB73A720]   mCcBufferLock by cancelAllBuffers
+11-27 16:37:25.834  1178  1313 D C2MtkBufferManager: [0xB400007DCB73A720] cancelAllBuffers, Free all Buffers Done!
+11-27 16:37:25.834  1178  1313 D C2MtkBufferManager: [0xB400007DCB73A720] ~C2MtkBufferManager
