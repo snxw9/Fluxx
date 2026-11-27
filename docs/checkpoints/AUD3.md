@@ -94,3 +94,65 @@ The decoder's output rate is the one the app uses (priming at 42.7 ms, not 85.3)
 | S4 | The feeding thread underruns on these files (cold re-decode from 0 s) | **Refuted** | No block was mixed as silence, and underruns were 0–1, the same as the controls. |
 | S5 | Other | **Confirmed: 48 kHz pass-through placed each decoded buffer at its millisecond-rounded container timestamp**, so buffers overlap or leave gaps every 43 ms | The local lag jumps by 16 frames, error is present throughout, and the same file family resampled (22.05 kHz) is exact. |
 | (open) | MP4 HE-AAC v2 with an edit list (first pts −0.161 s, encoder-delay 3553) | Not by ear; a separate small offset | The measured offset is 102.4 ms against the app's 80.6 ms priming, giving 4 silent blocks at the very start and 8–10 % residual error. Not reported by Snxw; left for its own pass. |
+
+### B2. The fix (`2ba9b52`)
+
+- **48 kHz decoder output is written contiguously,** like the resampling path, in `Resampler.run`'s pass-through (`AudioEngine.kt`). A buffer that follows the previous one within 100 ms is written straight after it; a larger jump (a seek inside a run, an edit list) is honoured.
+  - Sources with exact timestamps (Opus, MP4, any 44.1 kHz source) are placed exactly as before.
+  - The run start is still placed by its timestamp and priming (unchanged).
+- **The PCM cache version is now 2** (`PcmCachePolicy.VERSION`). The app's existing rule deletes the stale v1 files, so every source's cache rebuilds on its next play. The `APP-CACHE` rows after the fix show "not fully covered" for that reason.
+- **Peaks are unchanged** (`AudioPeakProvider` still places by timestamp). Its per-buffer error is at most 1 ms, it does not accumulate, and a waveform bucket is far coarser, so the waveform and playback still agree to within about 1 ms.
+- **JVM** (`Aud3BookkeepingTest`, pure, 5 tests):
+  - millisecond-stamped 2048-frame HE-AAC buffers at 48 kHz are written back to back, with no gap, overlap or drift, from the primed first frame;
+  - the old per-stamp rule really does step by values other than 2048, so the test fails on the old code;
+  - a jump over 100 ms still resets;
+  - exact 20 ms Opus stamps are placed exactly as before;
+  - v1 cache names are stale.
+
+**Before / after** (`Aud3Test`, the same files, the same method; the after-run took 770 s wall, Saver 0, AC, 37.4–38.3 °C, comparable):
+
+| File | Before: error median / max, bad blocks, lag | After: error median / max, bad blocks, lag |
+|---|---|---|
+| clip 17 | 0.965 / 1.165, 397 of 397, gain 0.72 | **0.000 / 0.000, 0**, lag 2048 frames (= the 42.7 ms priming), steady |
+| clip 20 | 0.690 / 1.099, 1137 of 1443, ±16 jumps | **0.000 / 0.000, 0**, steady |
+| clip 21 | 0.503 / 0.702, 773 of 1164 | **0.000 / 0.005, 0**, steady |
+| clip 22 | 0.832 / 1.035, 1175 of 1448, 12 jumps | **0.000 / 0.000, 0**, steady |
+| clip 27 | 0.697 / 0.925, 959 of 1198 | **0.000 / 0.000, 0** |
+| clip 28 | 0.739 / 1.116, 927 of 1142 | **0.000 / 0.000, 0** |
+| Seal 24 kHz MKV | 0.327 / 0.364, 337 of 795 | **0.000 / 0.000, 0** |
+| controls 1, 5, 15, 23, 26 | 0.000 | 0.000 (unchanged) |
+| Seal MP4 HE-AAC v2 (×2) | 0.083–0.100, 4 silent blocks at 0 s | unchanged (the open offset below) |
+
+- **Playback after:** every file had 0 blocks mixed as silence, underruns 0–1 (the same as before and as the controls), and first sound 292–892 ms after Play.
+- **What Snxw should hear:** clips 17, 20, 21, 22, 27 and 28 play smoothly, like the other clips, from the first play. The first play of every source rebuilds its cache once, the same cost as a new import.
+
+### Still open
+
+- **MP4 HE-AAC v2 with an edit list** (first pts −0.161 s, encoder-delay 3553): the cache sits about 22 ms off the reference (102.4 ms measured against 80.6 ms of priming), with 4 silent 20 ms blocks at the very start and 8–10 % residual error, which is likely resampling phase. It was not reported by ear and was not fixed.
+- **AAC at 48 kHz in MKV** (AAC-LC with 1024-frame buffers of 21.333 ms) would have had the same fault. None was in the test set; the fix covers it by the same rule.
+
+## Records
+
+- **Power state per class:** both `Aud3Test` runs had Saver 0, AC, 37.3–39.3 °C, screen on and unlocked. None is NOT COMPARABLE. The JVM suites ran on the PC.
+- **Wall-clock times:**
+  - JVM on `master` after the merge: 39 s (721, 0 failures);
+  - `Aud3Test` before: 987 s; after: 770 s;
+  - JVM full suite at the end: 45 s (726, 0 failures).
+  - No infrastructure failures, and no re-runs.
+- **Project 1:** size 9256, mtime 2026-11-27 19:09:58.935 before and after (adb stat, `aud3/project1_stat_*.txt`; in-process checks in every method). The file had changed at 19:09:58, before this pass, because Snxw opened it in the app; nothing in this pass wrote it.
+- **Test files:**
+  - the fresh test caches were written to `cacheDir/aud3-test/` and deleted by the test;
+  - the cold-start playback (A3) used distinct `file://` spellings of the same files, so the app built its own new cache entries for them (its normal LRU-capped cache);
+  - with the version bump, the app deleted its own v1 caches on the next start.
+- **Phone state:**
+  - found: Saver 1, stay-on 0, timeout 600000;
+  - for the session: Saver 0, stay-on 15, timeout 600000;
+  - **restored:** Saver 1, stay-on 0, timeout 600000.
+  - The crash buffer was empty and was not cleared (nothing to save).
+  - Installed with `install -r` only. No uninstall, `pm clear`, compile, data deletion or scripted taps.
+- **Not verified:**
+  - **by ear on Snxw's phone**: he is the final check for clips 17, 20, 21, 22, 27 and 28, and for 23 and 26 (measured exact before and after, never confirmed by ear);
+  - other devices (other AAC decoders);
+  - other audio codecs (AC-3, Vorbis, FLAC, PCM in MKV: none in the test set);
+  - AAC at 48 kHz in MKV;
+  - the MP4 HE-AAC v2 offset above.
