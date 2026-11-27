@@ -57,6 +57,25 @@ class FrameCache<T>(val capacity: Int, private val onEvict: (T) -> Unit) {
     /** The cached frame nearest [t] (the earlier on a tie), exact or not; null when empty. With its distance in [distanceOut]. */
     fun nearest(t: Long): Pair<Long, T>? = entries.minWithOrNull(compareBy<Entry<T>> { kotlin.math.abs(it.pts - t) }.thenBy { it.pts })?.let { it.pts to it.item }
 
+    /** MP1 B1: the cached frame with the largest pts AT OR BEFORE [t]; null when there is none. */
+    fun floor(t: Long): Pair<Long, T>? {
+        val i = entries.indexOfLast { it.pts <= t }
+        return if (i < 0) null else entries[i].let { it.pts to it.item }
+    }
+
+    /**
+     * MP1 B1: the floor frame of [t] when the cache PROVES it is the stream's last frame at or before [t] (it is at [t], or
+     * the next cached frame of the same run follows it directly and lies after [t], or it ends the stream); else null.
+     */
+    fun floorExact(t: Long): T? {
+        val i = entries.indexOfLast { it.pts <= t }
+        if (i < 0) return null
+        val b = entries[i]
+        if (b.pts == t) return b.item
+        if (i + 1 < entries.size) { val a = entries[i + 1]; if (a.run == b.run && a.seq == b.seq + 1) return b.item }
+        return if (b.run == endedRun && b.seq == lastSeqOfRun(b.run)) b.item else null
+    }
+
     /** Whether the newest frame of the current run lies at or after [t] (a forward decode has reached it). */
     fun lastPts(): Long = entries.filter { it.run == run }.maxByOrNull { it.seq }?.pts ?: Long.MIN_VALUE
 
@@ -64,6 +83,48 @@ class FrameCache<T>(val capacity: Int, private val onEvict: (T) -> Unit) {
     fun ptsList(): List<Long> = entries.map { it.pts }
 
     private fun lastSeqOfRun(r: Long): Long = entries.filter { it.run == r }.maxOf { it.seq }
+}
+
+/**
+ * MP1 B1: the scrub display rule (pure, JVM tested; [VideoDecoder] runs exactly this). While scrubbing, the frame shown is
+ * the nearest decoded frame AT OR BEFORE the target, never a later one (a later frame shows time ahead of the finger):
+ * 1. the cache's exact floor; otherwise
+ * 2. when the decoder stands before the target in the target's GOP (or less than [DecoderPlan.SEEK_AHEAD_US] before it):
+ *    decode forward, at most [maxDecode] frames, stopping once a frame lies past the target (cached, not shown);
+ * 3. otherwise the nearer of the cached floor and the sync frame at or before the target: the cached floor when it is at
+ *    or after that sync frame (no decode), else seek to the sync frame and decode forward as in 2.
+ * The frame returned is the cache's floor afterwards. Returns (frame, exact floor). The exact (nearest-rule) frame still
+ * follows after the scrub settles (AUD2 B2), outside this rule.
+ */
+object ScrubFloor {
+    interface Source {
+        /** The pts of the last frame decoded in the current run (-1: none; just below the sync frame after a seek). */
+        val outPos: Long
+        val ended: Boolean
+        fun prevSync(t: Long): Long
+        fun seek(sync: Long)
+        /** Decodes the next frame into the cache; false at the end of the stream. */
+        fun decodeNext(): Boolean
+    }
+
+    fun <T> frame(target: Long, cache: FrameCache<T>, src: Source, maxDecode: Int): Pair<T, Boolean> {
+        cache.floorExact(target)?.let { return it to true }
+        val out = src.outPos
+        val forward = out in 0..target && !src.ended &&
+            (target - out <= DecoderPlan.SEEK_AHEAD_US || src.prevSync(target) <= out)
+        if (!forward) {
+            val sync = src.prevSync(target)
+            val floor = cache.floor(target)
+            if (floor != null && (floor.first >= sync || (src.ended && out <= target))) return floor.second to false
+            src.seek(sync)
+        }
+        var n = 0
+        while (n < maxDecode && !src.ended && src.outPos <= target) { if (!src.decodeNext()) break; n++ }
+        cache.floorExact(target)?.let { return it to true }
+        // Nothing decoded at or before the target (a target before the stream's first frame): the first frame there is.
+        val shown = cache.floor(target) ?: requireNotNull(cache.nearest(target)) { "The decoder returned no video frames" }
+        return shown.second to false
+    }
 }
 
 /** AUD2 B2: the seek decisions of [VideoDecoder] (pure, JVM tested). */

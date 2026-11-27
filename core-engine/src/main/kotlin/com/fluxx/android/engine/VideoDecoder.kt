@@ -18,7 +18,8 @@ import java.util.concurrent.CancellationException
  * the previous sync frame and a forward decode. It only seeks forward when the target's sync frame lies PAST what is
  * already decoded (decoding on is never slower than seeking back to the same sync frame), and a request after a
  * cancelled one continues from where that one stopped (the latest target wins; no flush). With [approximate] (scrubbing)
- * the work per request is bounded: a miss shows the nearest cached or sync frame, and the exact frame follows when asked.
+ * the work per request is bounded and MP1 B1's floor rule applies ([ScrubFloor]): the frame shown is the nearest decoded
+ * frame at or before the target, never a later one; the exact frame follows when asked.
  */
 class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
     private val app = context.applicationContext
@@ -88,6 +89,15 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
         // MP1 A3: shown= is the pts of the frame returned (the scrub display rule compares it with the target t=).
         fun log(kind: String, shown: Image? = null) = probe?.invoke("$kind $probeKey t=$timeUs from=$probeFrom seek=$probeSeek decoded=$decoded how=$how us=${(SystemClock.elapsedRealtimeNanos() - probeStart) / 1000} shown=${shown?.let { it.timestamp / 1000 } ?: -1}")
         try {
+            if (approximate) {
+                // MP1 B1: scrubbing shows the nearest decoded frame AT OR BEFORE the target (bounded work), never a later one.
+                scrubCancel = cancelled; scrubDecoded = 0; scrubSeek = -1L
+                val (img, exactFloor) = ScrubFloor.frame(timeUs, cache, scrubSource, DecoderPlan.APPROX_DECODE_FRAMES)
+                decoded = scrubDecoded; probeSeek = scrubSeek
+                // Not the exact (nearest-rule) frame: the preview renders that once the scrub settles.
+                lastApproximate = !(exactFloor && cache.exact(timeUs) === img)
+                how = if (exactFloor) "floor" else "floor-approx"; log("frame", img); return img
+            }
             cache.exact(timeUs)?.let { hit ->
                 // Playback: the hit is the look-ahead frame of the previous request; decode the next one now, so every
                 // frame costs one decode (without this, calls alternated 0 / 2 decodes and the pacing got uneven).
@@ -102,18 +112,10 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
             }
             if (action == DecoderPlan.Action.SEEK) {
                 if (sync == Long.MIN_VALUE) sync = prevSync(timeUs)
-                if (approximate) {
-                    // Scrubbing: the nearer of a frame already in memory and the sync frame (one decode), never a GOP decode.
-                    val near = cache.nearest(timeUs)
-                    if (near != null && kotlin.math.abs(near.first - timeUs) <= kotlin.math.abs(sync - timeUs)) {
-                        lastApproximate = true; how = "approx-cached"; log("frame", near.second); return near.second
-                    }
-                }
                 seek(sync); probeSeek = sync
             }
             // Decode forward until a frame after the target exists (the nearest-frame rule needs both neighbours).
             while (!outputEnded && outPos <= timeUs) {
-                if (approximate && decoded >= DecoderPlan.APPROX_DECODE_FRAMES) break
                 decodeNext(cancelled) ?: break
                 decoded++
             }
@@ -124,6 +126,18 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
             log("cancelled")
             throw e
         }
+    }
+
+    // MP1 B1: the scrub rule (ScrubFloor) over this decoder's own seek / sync / decode steps.
+    private var scrubCancel: () -> Boolean = { false }
+    private var scrubDecoded = 0
+    private var scrubSeek = -1L
+    private val scrubSource = object : ScrubFloor.Source {
+        override val outPos: Long get() = this@VideoDecoder.outPos
+        override val ended: Boolean get() = outputEnded
+        override fun prevSync(t: Long): Long = this@VideoDecoder.prevSync(t)
+        override fun seek(sync: Long) { this@VideoDecoder.seek(sync); scrubSeek = sync }
+        override fun decodeNext(): Boolean = (this@VideoDecoder.decodeNext(scrubCancel) != null).also { if (it) scrubDecoded++ }
     }
 
     /** Flush and seek to [sync]; the decoder then stands just before it (a later target continues forward from there). */
