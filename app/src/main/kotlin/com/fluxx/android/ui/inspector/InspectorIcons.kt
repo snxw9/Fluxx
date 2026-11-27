@@ -291,6 +291,18 @@ internal object InspectorIcons {
         put("EYE_OFF", p().cubic(3f, 12f, 7f, 5.5f, 17f, 5.5f, 21f, 12f).cubic(21f, 12f, 17f, 18.5f, 7f, 18.5f, 3f, 12f).line(5f, 19f, 19f, 5f).build())
         put("GRIP", p().line(6f, 8.5f, 18f, 8.5f).line(6f, 12f, 18f, 12f).line(6f, 15.5f, 18f, 15.5f).build())
         put("EXPANDED", p().line(5f, 9f, 12f, 16f, 19f, 9f).build())
+        // TLP T1: the D-button's arrow (an open chevron toward the timeline; expands the layer in TL3).
+        put("ARROW", p().line(9.5f, 5f, 16.5f, 12f, 9.5f, 19f).build())
+        // TLP T3/T4 selection bars: group (overlapping boxes), odd / even (alternate rows), stagger (offset bars), sequence (boxes end to end).
+        put("GROUP", p().rect(3f, 8f, 11f, 11f, 2.5f).rect(10f, 5f, 11f, 11f, 2.5f).build())
+        put("ODD_EVEN", p().rect(4f, 4f, 16f, 4.5f, 2f).line(6f, 12f, 18f, 12f).rect(4f, 15.5f, 16f, 4.5f, 2f).build())
+        put("STAGGER", p().line(4f, 6f, 10f, 6f).line(9f, 12f, 15f, 12f).line(14f, 18f, 20f, 18f).build())
+        put("SEQUENCE", p().rect(2.5f, 9f, 6f, 6f, 2f).rect(9f, 9f, 6f, 6f, 2f).rect(15.5f, 9f, 6f, 6f, 2f).build())
+        // TLP.2 drag readouts: |<- (the dragged item's start) and the shift arrows (the delta since the drag began).
+        put("TO_START", p().line(5f, 6f, 5f, 18f).line(19f, 12f, 9f, 12f).line(13f, 8f, 9f, 12f, 13f, 16f).build())
+        // TL3 B4: add a keyframe here (a key diamond with a plus).
+        put("KEY_ADD", p().line(9f, 8f, 15f, 14f, 9f, 20f, 3f, 14f, 9f, 8f).line(18f, 3f, 18f, 11f).line(14f, 7f, 22f, 7f).build())
+        put("SHIFT", p().line(5f, 8f, 19f, 8f).line(15f, 4f, 19f, 8f, 15f, 12f).line(19f, 16f, 5f, 16f).line(9f, 12f, 5f, 16f, 9f, 20f).build())
         // TEXT F3.2: axis glyphs at the start of each two-axis slider row (Position, Anchor point, Scale X/Y).
         put("AXIS_X", p().line(7f, 7f, 17f, 17f).line(17f, 7f, 7f, 17f).build())
         put("AXIS_Y", p().line(7f, 6f, 12f, 12f).line(17f, 6f, 12f, 12f).line(12f, 12f, 12f, 18f).build())

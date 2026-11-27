@@ -28,6 +28,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import com.fluxx.android.render.PreviewResolution
 import com.fluxx.android.ui.preview.ViewSettings
 import com.fluxx.android.model.CompositionLayer
@@ -73,6 +74,15 @@ fun EditorActionBar(
     onPlayPauseToggle: () -> Unit,
     onNextBoundary: () -> Unit,
     onPasteLayer: () -> Unit = {},
+    /** TLP T4: the 6th icon is context-aware (selection mode, multi-layer copy / duplicate; TLP.1: Copy / Paste keys are in the property page ⋮). */
+    selectionMode: Boolean = false,
+    onSelectAll: () -> Unit = {},
+    /** TL3.1 B4: keys are displayed (a twirl-down is open, or a property page shows its keys): Select all asks Layers / Keyframes. */
+    keysDisplayed: Boolean = false,
+    onSelectAllKeys: () -> Unit = {},
+    onInvertSelection: () -> Unit = {},
+    onDuplicateSelection: (Int) -> Unit = {},
+    onCopySelection: () -> Unit = {},
     viewSettings: ViewSettings = ViewSettings(),
     onViewSettingsChange: (ViewSettings) -> Unit = {},
     previewResolution: PreviewResolution = PreviewResolution.FULL,
@@ -146,7 +156,10 @@ fun EditorActionBar(
                 onFitToWidth = onFitToWidth, onFitToHeight = onFitToHeight,
                 onStretchToArea = onStretchToArea, onMediaInfo = onMediaInfo,
                 textCanFit = textCanFit,
-                onPasteLayer = onPasteLayer
+                onPasteLayer = onPasteLayer,
+                selectionMode = selectionMode, onSelectAll = onSelectAll, onInvertSelection = onInvertSelection,
+                keysDisplayed = keysDisplayed, onSelectAllKeys = onSelectAllKeys,
+                onDuplicateSelection = onDuplicateSelection, onCopySelection = onCopySelection
             )
 
             // 7. View / Preview. Resolution stays inside this menu to retain seven targets.
@@ -156,10 +169,10 @@ fun EditorActionBar(
 }
 
 /**
- * 6th toolbar icon: Layer menu dropdown.
- * - Selected-layer transforms, media info and deferred action placeholders
- * - Paste layer (enabled only when clipboard has content)
- * - Select all layers (always disabled — multi-select not yet implemented)
+ * 6th toolbar icon: the contextual Layer menu (TLP T4: context-aware).
+ * - No selection: Select all, Paste.
+ * - One layer selected (outside selection mode): its transforms / media info and deferred placeholders, then Paste, Select all.
+ * - Layers selected (selection mode): Duplicate, Duplicate ×N (typed count), Copy, Paste, Select all, Invert selection.
  */
 @Composable
 private fun LayerMenuButton(
@@ -172,67 +185,84 @@ private fun LayerMenuButton(
     onStretchToArea: () -> Unit = {},
     onMediaInfo: () -> Unit = {},
     onPasteLayer: () -> Unit,
-    textCanFit: Boolean = false
+    textCanFit: Boolean = false,
+    selectionMode: Boolean = false,
+    onSelectAll: () -> Unit = {},
+    /** TL3.1 B4: keys are displayed (a twirl-down is open, or a property page shows its keys): Select all asks Layers / Keyframes. */
+    keysDisplayed: Boolean = false,
+    onSelectAllKeys: () -> Unit = {},
+    onInvertSelection: () -> Unit = {},
+    onDuplicateSelection: (Int) -> Unit = {},
+    onCopySelection: () -> Unit = {},
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    // TL3.1 B4: with keys displayed, Select all opens a small non-modal popover: Layers | Keyframes.
+    var selectAllChoice by remember { mutableStateOf(false) }
+    var duplicateCount by remember { mutableStateOf(false) }
 
     Box(Modifier.semantics { contentDescription = "Layer actions" }) {
+        com.fluxx.android.ui.inspector.AnchoredPopover(selectAllChoice, { selectAllChoice = false }, "select-all-popover", modal = false) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                com.fluxx.android.ui.inspector.InspectorIconButton(com.fluxx.android.ui.inspector.InspectorIcons.icon("LAYER"), "Select all layers",
+                    Modifier.testTag("select-all-layers")) { selectAllChoice = false; onSelectAll() }
+                com.fluxx.android.ui.inspector.InspectorIconButton(com.fluxx.android.ui.inspector.InspectorIcons.icon("KEY"), "Select all keyframes",
+                    Modifier.testTag("select-all-keyframes")) { selectAllChoice = false; onSelectAllKeys() }
+            }
+        }
         ToolbarButton(
             enabled = true,
-            onClick = { menuExpanded = true }
+            onClick = { duplicateCount = false; menuExpanded = true }
         ) { color ->
             LayerActionVectorIcon(color = color)
         }
 
         DropdownMenu(
             expanded = menuExpanded,
-            onDismissRequest = { menuExpanded = false }
+            onDismissRequest = { menuExpanded = false; duplicateCount = false }
         ) {
-            if (selectedLayer != null) {
-                DropdownMenuItem(text = { Text("Flip Horizontal") }, onClick = { menuExpanded = false; onFlipHorizontal() })
-                DropdownMenuItem(text = { Text("Flip Vertical") }, onClick = { menuExpanded = false; onFlipVertical() })
+            val close = { menuExpanded = false; duplicateCount = false }
+            if (selectionMode) {
+                DropdownMenuItem(text = { Text("Duplicate") }, onClick = { close(); onDuplicateSelection(1) },
+                    modifier = Modifier.testTag("layer-menu-duplicate"))
+                if (!duplicateCount) DropdownMenuItem(text = { Text("Duplicate ×N") }, onClick = { duplicateCount = true },
+                    modifier = Modifier.testTag("layer-menu-duplicate-n"))
+                else Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Copies", color = TextPrimary, modifier = Modifier.padding(end = 8.dp))
+                    com.fluxx.android.ui.inspector.InspectorValueField("2", "Number of duplicates", "", onCommit = { text ->
+                        text.trim().toIntOrNull()?.takeIf { it in 1..99 }?.let { n -> close(); onDuplicateSelection(n) }
+                    }, onCancel = { duplicateCount = false }, modifier = Modifier.testTag("layer-menu-duplicate-count"),
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                }
+                DropdownMenuItem(text = { Text("Copy") }, onClick = { close(); onCopySelection() }, modifier = Modifier.testTag("layer-menu-copy"))
+            } else if (selectedLayer != null) {
+                DropdownMenuItem(text = { Text("Flip Horizontal") }, onClick = { close(); onFlipHorizontal() })
+                DropdownMenuItem(text = { Text("Flip Vertical") }, onClick = { close(); onFlipVertical() })
                 if (selectedLayer.type == LayerType.VIDEO || selectedLayer.type == LayerType.IMAGE || selectedLayer.type == LayerType.TEXT) {
                     val fitEnabled = selectedLayer.type != LayerType.TEXT || textCanFit
-                    DropdownMenuItem(text = { Text("Fit to Composition Width") }, enabled = fitEnabled, onClick = { menuExpanded = false; onFitToWidth() })
-                    DropdownMenuItem(text = { Text("Fit to Composition Height") }, enabled = fitEnabled, onClick = { menuExpanded = false; onFitToHeight() })
-                    DropdownMenuItem(text = { Text("Stretch to Composition Area") }, enabled = fitEnabled, onClick = { menuExpanded = false; onStretchToArea() })
-                    if (selectedLayer.type != LayerType.TEXT) DropdownMenuItem(text = { Text("Media Info") }, onClick = { menuExpanded = false; onMediaInfo() })
+                    DropdownMenuItem(text = { Text("Fit to Composition Width") }, enabled = fitEnabled, onClick = { close(); onFitToWidth() })
+                    DropdownMenuItem(text = { Text("Fit to Composition Height") }, enabled = fitEnabled, onClick = { close(); onFitToHeight() })
+                    DropdownMenuItem(text = { Text("Stretch to Composition Area") }, enabled = fitEnabled, onClick = { close(); onStretchToArea() })
+                    if (selectedLayer.type != LayerType.TEXT) DropdownMenuItem(text = { Text("Media Info") }, onClick = { close(); onMediaInfo() })
                 }
                 DropdownMenuItem(text = { Text("Auto Orient") }, enabled = false, onClick = {})
                 DropdownMenuItem(text = { Text("Convert to Outline / Autotrace") }, enabled = false, onClick = {})
                 HorizontalDivider()
             }
             DropdownMenuItem(
-                text = {
-                    Text(
-                        "Paste layer",
-                        color = if (hasClipboard) TextPrimary else TextDisabled
-                    )
-                },
-                onClick = {
-                    menuExpanded = false
-                    onPasteLayer()
-                },
+                text = { Text("Paste layer", color = if (hasClipboard) TextPrimary else TextDisabled) },
+                onClick = { close(); onPasteLayer() },
                 enabled = hasClipboard,
-                leadingIcon = {
-                    PasteVectorIcon(
-                        color = if (hasClipboard) TextPrimary else TextDisabled
-                    )
-                }
+                leadingIcon = { PasteVectorIcon(color = if (hasClipboard) TextPrimary else TextDisabled) },
+                modifier = Modifier.testTag("layer-menu-paste")
             )
             DropdownMenuItem(
-                text = {
-                    Text(
-                        "Select all layers",
-                        color = TextDisabled
-                    )
-                },
-                onClick = { /* No-op: multi-select not yet implemented */ },
-                enabled = false,
-                leadingIcon = {
-                    SelectAllVectorIcon(color = TextDisabled)
-                }
+                text = { Text("Select all layers", color = TextPrimary) },
+                onClick = { close(); if (keysDisplayed) { com.fluxx.android.ui.inspector.PopoverDismissal.request(); selectAllChoice = true } else onSelectAll() },
+                leadingIcon = { SelectAllVectorIcon(color = TextPrimary) },
+                modifier = Modifier.testTag("layer-menu-select-all")
             )
+            if (selectionMode) DropdownMenuItem(text = { Text("Invert selection") }, onClick = { close(); onInvertSelection() },
+                modifier = Modifier.testTag("layer-menu-invert"))
         }
     }
 }

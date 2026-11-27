@@ -17,6 +17,7 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -96,6 +97,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import com.fluxx.android.ui.inspector.AnchoredPopover
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.semantics.semantics
@@ -167,6 +173,40 @@ fun TimelineView(
     onMarkerAction: (EditorAction) -> Unit = {},
     onMarkerSelect: (Long?, Marker) -> Unit = { _, _ -> },
     onMarkerConfigure: () -> Unit = {},
+    /** TLP: selection mode (null = off); the D-button routes taps / long presses through [onDTap] / [onDLongPress]. */
+    selection: com.fluxx.android.editor.LayerSelection? = null,
+    onDTap: (Long, com.fluxx.android.editor.DZone) -> Unit = { id, zone ->
+        if (zone == com.fluxx.android.editor.DZone.EYE) project.composition.layers.firstOrNull { it.id == id }?.let { onToggleVisibility(id, !it.visible) } },
+    onDLongPress: (Long) -> Unit = {},
+    /** TLP T3: extra bottom scroll padding under the last row (the selection bar overlays the timeline, never resizing it). */
+    extraBottomPadding: Dp = 0.dp,
+    /** TLP T5: key selection mode on the selected layer's focused property (local key times), and its key taps. */
+    selectedKeys: Set<Long>? = null,
+    onKeyToggle: (Long) -> Unit = {},
+    onKeyDoubleTap: (Long) -> Unit = {},
+    /** TLP.1: a hold-drag on a selected key moved the selected keys (old → new local times); called just before the commit. */
+    onKeysMoved: (Map<Long, Long>) -> Unit = {},
+    /** TLP.2: the live hold-drag state for the readout overlay over the action bar; null when no drag runs. */
+    onDragInfo: (com.fluxx.android.editor.TimelineDragInfo?) -> Unit = {},
+    /** TL3: the expanded layers, the key selection (all tracks), audio capability and the twirl-down callbacks. */
+    expandedLayers: Set<Long> = emptySet(),
+    keySelection: com.fluxx.android.editor.KeySelectionSet? = null,
+    hasAudio: (CompositionLayer) -> Boolean = { true },
+    onTwirlNameTap: (Long, com.fluxx.android.editor.GraphTarget) -> Unit = { _, _ -> },
+    onTwirlNameLongPress: (Long, com.fluxx.android.editor.GraphTarget) -> Unit = { _, _ -> },
+    onTwirlGraph: (Long, com.fluxx.android.editor.GraphTarget) -> Unit = { _, _ -> },
+    /** TL3.1 B7: add a key at the playhead to a property row (null: no add-key buttons). */
+    onTwirlAddKey: ((Long, com.fluxx.android.editor.GraphTarget) -> Unit)? = null,
+    /** TL3 B1: scroll (animated) so this layer is at the top; the second value makes repeated requests distinct. */
+    scrollToLayer: Pair<Long, Int>? = null,
+    /** TL3 B3: twirl-row key interactions (null: rows display only). */
+    twirlHost: TwirlKeyHost? = null,
+    /**
+     * AUD2 B1: playback is running, and the HEARD composition time at a System.nanoTime (null when not playing). While
+     * playing, the view follows the sound instead of the start of the last presented video frame.
+     */
+    playing: Boolean = false,
+    playbackClock: ((Long) -> Long?)? = null,
     modifier: Modifier = Modifier
 ) {
     val comp = project.composition
@@ -242,24 +282,64 @@ fun TimelineView(
     val durationUs = comp.resolvedDurationUs
 
     val density = LocalDensity.current
-    var pxPerSecond by remember { mutableFloatStateOf(com.fluxx.android.editor.TIMELINE_DEFAULT_DP_PER_SECOND) }
+    var chosenDpPerSecond by remember { mutableFloatStateOf(com.fluxx.android.editor.TIMELINE_DEFAULT_DP_PER_SECOND) }
+    // MP1.1: the zoom used is the chosen one within the composition's ceiling, so the horizontal content (composition x
+    // zoom + the two half-viewport spacers) never exceeds TimelineZoom.MAX_CONTENT_PX (Compose cannot lay out a node wider
+    // than 262,143 px: long imports and Sequence over many clips crashed). The window width bounds the viewport.
+    val windowPx = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width
+    // Every clip box is sized by its own duration, so the span also covers layers that end past a fixed composition length.
+    val layoutSpanUs = maxOf(durationUs, comp.layers.maxOfOrNull { it.timing.endUs ?: 0L } ?: 0L)
+    val pxPerSecond = com.fluxx.android.editor.TimelineZoom.clamp(chosenDpPerSecond, layoutSpanUs, density.density, windowPx)
     val pxPerUs = (pxPerSecond * density.density) / 1_000_000.0
+    // Read fresh inside the long-lived pinch handler (pointerInput(Unit) would capture the first composition's values).
+    val zoomNow by rememberUpdatedState(pxPerSecond); val zoomDurationUs by rememberUpdatedState(layoutSpanUs); val zoomWindowPx by rememberUpdatedState(windowPx)
     // TL1: the one time <-> x mapping (frame x = round(frame x pxPerFrame)); ticks and the playhead's scroll both use it.
     val scale = remember(comp.frameRate, pxPerUs) { com.fluxx.android.editor.TimelineScale(comp.frameRate, pxPerUs) }
+    // TLP.2: one live hold-drag state (ruler highlights, readouts); UI only, never in history.
+    var dragInfo by remember { mutableStateOf<com.fluxx.android.editor.TimelineDragInfo?>(null) }
+    val reportDrag by rememberUpdatedState(onDragInfo)
+    val snapLevel = remember(comp.frameRate, scale, density) { com.fluxx.android.editor.RulerTiers.level(comp.frameRate, scale.pxPerFrame, density.density) }
+    val snapStartFrame = remember(comp.startTimecodeUs, comp.frameRate) { com.fluxx.android.model.CompositionTimecode.startFrame(comp.startTimecodeUs, comp.frameRate) }
 
     // Top to bottom in list = front to back in draw order
     val sortedLayers = remember(comp.layers) {
         comp.layers.filter { (it.timing.durationUs ?: 1L) > 0L }
             .sortedWith(compareByDescending<CompositionLayer> { it.zOrder }.thenByDescending { it.id })
     }
+    // TL3 B1: the timeline items: every layer, each expanded layer followed by its rows (recomputed only when the layers,
+    // the expansion or the audio capability change; never per scroll frame).
+    // TL3 B5: audio capability (a video with an audio track; a source found without one drops its row).
+    val peaks = remember(context) { com.fluxx.android.media.AudioPeakProvider.get(context) }
+    val noAudio = peaks.states.count { it.value is com.fluxx.android.media.AudioPeakProvider.Peaks.NoAudio }
+    val items = remember(sortedLayers, expandedLayers, noAudio) { com.fluxx.android.editor.TwirlRows.items(sortedLayers, expandedLayers) { peaks.hasAudio(it) && hasAudio(it) } }
+    val latestItems by rememberUpdatedState(items)
+    fun itemIndex(layerId: Long) = latestItems.indexOfFirst { it is com.fluxx.android.editor.TwirlItem.Layer && it.layer.id == layerId }
+    // TL3 B2: while a twirl-down opens or closes, the layer rows below move on the shared spec (else the reorder's 100ms).
+    var settledExpanded by remember { mutableStateOf(expandedLayers) }
+    val twirlMoving = settledExpanded != expandedLayers
+    LaunchedEffect(expandedLayers) { delay(TL3Motion.MS.toLong()); settledExpanded = expandedLayers }
 
+    // TL3 B3 / B4: the ONE twirl popover (value or colour bar); UI state only.
+    var twirlPopover by remember { mutableStateOf<TwirlPopover?>(null) }
+    LaunchedEffect(expandedLayers) { twirlPopover?.let { if (it.layerId !in expandedLayers) twirlPopover = null } }
     val verticalScrollState = rememberLazyListState()
+    // TL3 B1: on expand, the layer scrolls (animated) to the top, exactly where opening the inspector puts it.
+    LaunchedEffect(scrollToLayer) {
+        val id = scrollToLayer?.first ?: return@LaunchedEffect
+        val index = itemIndex(id)
+        if (index >= 0) verticalScrollState.animateScrollToItem(index)
+    }
     val draggingTimeline by verticalScrollState.interactionSource.collectIsDraggedAsState()
     val horizontalScrollState = rememberScrollState()
     val reorder = remember { TimelineReorderState() }
+    // TL3.1 A3: once rows settle, the side controls go back to the list's own (current-frame) offsets.
+    LaunchedEffect(twirlMoving, reorder.draggingId) { if (!twirlMoving && reorder.draggingId == null) reorder.placedTops.clear() }
     var preInspectorViewport by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var skipInspectorRestore by remember { mutableStateOf(false) }
+    var scrollAtOpen by remember { mutableStateOf<Pair<Long, Int>?>(null) }
     var editing by remember { mutableStateOf(false) }
+    /** TL3.1 B1: the view is easing back to the playhead after a key drag (not a scrub). */
+    var returning by remember { mutableStateOf(false) }
     var pinching by remember { mutableStateOf(false) }
     var edgeScroll by remember { mutableFloatStateOf(0f) }
     var viewportLeft by remember { mutableFloatStateOf(0f) }
@@ -301,7 +381,8 @@ fun TimelineView(
                             if (event.changes.count { it.pressed } >= 2 && !editing) {
                                 pinching = true
                                 val zoom = event.calculateZoom()
-                                if (zoom.isFinite()) pxPerSecond = com.fluxx.android.editor.TimelineZoom.clamp(pxPerSecond * zoom)
+                                // From the zoom in use (not the stored choice), so a ceiling below the choice has no dead zone.
+                                if (zoom.isFinite()) chosenDpPerSecond = com.fluxx.android.editor.TimelineZoom.clamp(zoomNow * zoom, zoomDurationUs, density.density, zoomWindowPx)
                             }
                             // Keep ownership until both fingers lift; don't finish with a one-finger seek.
                             if (pinching) event.changes.forEach { it.consume() }
@@ -314,8 +395,14 @@ fun TimelineView(
                 viewportTop = it.positionInRoot().y
             }
     ) {
-        BoxWithConstraints(modifier = (if (inspectorVisible) Modifier.fillMaxWidth().height(TimelineTracksBottom)
-            else Modifier.fillMaxSize()).clipToBounds()) {
+        // TL3 B2: the viewport is the full height, shown down to one row while the inspector is open; the visible height
+        // animates on the shared motion spec (read in the draw phase: no recomposition, no relayout per animation frame).
+        val sheetOpen = androidx.compose.animation.core.animateFloatAsState(if (inspectorVisible) 1f else 0f, TL3Motion.spec(), label = "timeline-viewport")
+        val oneRowPx = with(density) { TimelineTracksBottom.toPx() }
+        BoxWithConstraints(modifier = Modifier.fillMaxSize().drawWithContent {
+            val h = size.height + (oneRowPx - size.height) * sheetOpen.value
+            clipRect(bottom = h) { this@drawWithContent.drawContent() }
+        }.clipToBounds()) {
             // Allow even the last layer to align above the inspector.
             val bottomPadding = (maxHeight - TimelineTracksBottom).coerceAtLeast(0.dp)
             val totalViewportWidthPx = constraints.maxWidth.toFloat()
@@ -323,14 +410,60 @@ fun TimelineView(
             val centerPx = (totalViewportWidthPx / 2f).roundToInt()
             val centerXPx = centerPx.toFloat()
             val centerXDp = with(density) { centerPx.toDp() }
+            // TL3: the visible content range (px), read only by twirl rows in their draw phase.
+            val scrollOffsetReader = remember { { horizontalScrollState.value } }
+            // TL3.1 A3: stable parameters, so twirl rows SKIP recomposition on scroll / playhead frames (the playhead is read
+            // in their draw phase; the callbacks are remembered and forward to the latest ones).
+            val playheadState = rememberUpdatedState(playheadUs)
+            val playheadReader = remember { { playheadState.value } }
+            val setTwirlPopover = remember { { p: TwirlPopover? -> twirlPopover = p } }
+            val setDragInfo = remember { { d: com.fluxx.android.editor.TimelineDragInfo? -> dragInfo = d; reportDrag(d) } }
+            val latestBegin by rememberUpdatedState(beginEdit); val latestPreviewG by rememberUpdatedState(onPreviewGesture)
+            val latestCommit by rememberUpdatedState(commitEdit); val latestCancel by rememberUpdatedState(cancelEdit)
+            // TL3.1 B1: key drags auto-scroll near the edges (ramped); their commit / cancel never seek: the view eases back to
+            // the (unchanged) playhead afterwards.
+            val viewportW by rememberUpdatedState(totalViewportWidthPx)
+            val edgeZonePx = with(density) { com.fluxx.android.editor.EdgeScroll.ZONE_DP.dp.toPx() }
+            val edgeMaxPx = with(density) { com.fluxx.android.editor.EdgeScroll.MAX_DP_PER_FRAME.dp.toPx() }
+            val keyEdgeFn = remember { { x: Float? -> edgeScroll = if (x == null) 0f else com.fluxx.android.editor.EdgeScroll.speed(x - viewportLeft, viewportW, edgeZonePx, edgeMaxPx) } }
+            val keyScope = androidx.compose.runtime.rememberCoroutineScope()
+            val latestCommitG by rememberUpdatedState(onCommitGesture); val latestCancelG by rememberUpdatedState(onCancelGesture)
+            val keyFinish = remember { { commitIt: Boolean ->
+                if (commitIt) latestCommitG() else latestCancelG()
+                edgeScroll = 0f; editing = false
+                // Easing back to the (unchanged) playhead is not a scrub: no seek while it runs.
+                keyScope.launch { returning = true; try { horizontalScrollState.animateScrollTo(scale.timeX(playheadState.value.coerceIn(0L, durationUs)).toInt()) } finally { returning = false } }
+                Unit
+            } }
+            val keyCommitFn = remember { { keyFinish(true) } }
+            val keyCancelFn = remember { { keyFinish(false) } }
+            val twirlGestures = remember { TwirlGestures({ latestBegin() }, { latestPreviewG(it) }, keyCommitFn, keyCancelFn) }
+            val hostState = rememberUpdatedState(twirlHost)
+            val stableTwirlHost = remember { TwirlKeyHost(
+                onEffect = { a, b, c, d -> hostState.value?.onEffect?.invoke(a, b, c, d) },
+                onMoved = { hostState.value?.onMoved?.invoke(it) },
+                onValue = { a, b, c -> hostState.value?.onValue?.invoke(a, b, c) },
+                onAddColourKey = { a, b, c -> hostState.value?.onAddColourKey?.invoke(a, b, c) }) }
+            val visibleRange = remember(centerXPx) { VisibleRange { (horizontalScrollState.value - centerXPx)..(horizontalScrollState.value + centerXPx) } }
 
             val contentWidthPx = (durationUs * pxPerUs).toFloat()
             val contentWidthDp = with(density) { contentWidthPx.toDp() }
 
             // Synchronize playheadUs -> horizontalScrollState when not user-scrolling
             // TL1: keyed on the scroll ending too, so a released scrub settles exactly on its snapped frame's x.
-            LaunchedEffect(playheadUs, pxPerUs, durationUs, pinching, horizontalScrollState.maxValue, horizontalScrollState.isScrollInProgress) {
+            // AUD2 B1: while playing, the view goes to the time HEARD when this frame reaches the screen (the playback clock
+            // extrapolated), not to the start of the last presented video frame one UI frame late (33-85 ms behind the sound).
+            // A raw delta, not scrollTo: it is not a scroll "in progress", so the scrub path below never sees it as a drag.
+            // When playback stops ([playing] changes) the view settles back on the playhead's frame x.
+            val latestClock by rememberUpdatedState(playbackClock)
+            LaunchedEffect(playheadUs, pxPerUs, durationUs, pinching, horizontalScrollState.maxValue, horizontalScrollState.isScrollInProgress, playing) {
                 if (!editing && (pinching || !horizontalScrollState.isScrollInProgress)) {
+                    val heard = if (playing && !pinching && !returning) latestClock?.invoke(System.nanoTime() + TimelineFollow.LEAD_NS) else null
+                    if (heard != null) {
+                        val delta = TimelineFollow.scrollFor(heard, durationUs, pxPerUs) - horizontalScrollState.value
+                        if (delta != 0) horizontalScrollState.dispatchRawDelta(delta.toFloat())
+                        return@LaunchedEffect
+                    }
                     val targetScroll = scale.timeX(playheadUs.coerceIn(0L, durationUs)).toInt()
                     if (horizontalScrollState.value != targetScroll) {
                         horizontalScrollState.scrollTo(targetScroll)
@@ -339,14 +472,18 @@ fun TimelineView(
             }
 
             // Synchronize horizontalScrollState -> playheadUs when user is actively scrolling/scrubbing
-            LaunchedEffect(horizontalScrollState.value, horizontalScrollState.isScrollInProgress) {
-                // TL1 scrub: the scroll position maps to the NEAREST whole frame; a Seek is sent only when that frame
-                // changes (at most one per frame crossed), and the preview receives the same snapped time.
-                if (!editing && !pinching && horizontalScrollState.isScrollInProgress &&
-                    horizontalScrollState.value.toLong() != scale.timeX(playheadUs)) {
-                    val newTimeUs = scale.snappedTime(horizontalScrollState.value.toDouble(), durationUs)
-                    if (newTimeUs != playheadUs) {
-                        onSeek(newTimeUs, true)
+            // TL3.1 A3: observed with snapshotFlow, so a scroll frame no longer recomposes the whole timeline by itself.
+            val scrubPlayhead by rememberUpdatedState(playheadUs)
+            val scrubScale by rememberUpdatedState(scale)
+            val scrubDuration by rememberUpdatedState(durationUs)
+            val scrubSeek by rememberUpdatedState(onSeek)
+            LaunchedEffect(horizontalScrollState) {
+                androidx.compose.runtime.snapshotFlow { horizontalScrollState.value to horizontalScrollState.isScrollInProgress }.collect { (value, inProgress) ->
+                    // TL1 scrub: the scroll position maps to the NEAREST whole frame; a Seek is sent only when that frame
+                    // changes (at most one per frame crossed), and the preview receives the same snapped time.
+                    if (!editing && !pinching && !returning && inProgress && value.toLong() != scrubScale.timeX(scrubPlayhead)) {
+                        val newTimeUs = scrubScale.snappedTime(value.toDouble(), scrubDuration)
+                        if (newTimeUs != scrubPlayhead) scrubSeek(newTimeUs, true)
                     }
                 }
             }
@@ -357,14 +494,17 @@ fun TimelineView(
                     if (preInspectorViewport == null) {
                         preInspectorViewport = verticalScrollState.firstVisibleItemIndex to verticalScrollState.firstVisibleItemScrollOffset
                         skipInspectorRestore = false
+                        scrollAtOpen = scrollToLayer
                     }
-                    val index = sortedLayers.indexOfFirst { it.id == selectedLayerId }
+                    val index = itemIndex(selectedLayerId)
                     if (index >= 0 && !draggingTimeline && reorder.draggingId == null) verticalScrollState.scrollToItem(index)
                 } else if (!inspectorVisible) {
                     val saved = preInspectorViewport
                     preInspectorViewport = null
-                    if (saved != null && !skipInspectorRestore && !draggingTimeline && reorder.draggingId == null && sortedLayers.isNotEmpty()) {
-                        verticalScrollState.scrollToItem(saved.first.coerceAtMost(sortedLayers.lastIndex), saved.second)
+                    // TL3 B2: closing the sheet BECAUSE a layer is expanding keeps that layer at the top (no restore).
+                    val expanding = scrollToLayer != null && scrollToLayer != scrollAtOpen
+                    if (saved != null && !skipInspectorRestore && !expanding && !draggingTimeline && reorder.draggingId == null && latestItems.isNotEmpty()) {
+                        verticalScrollState.scrollToItem(saved.first.coerceAtMost(latestItems.lastIndex), saved.second)
                     }
                 }
             }
@@ -375,11 +515,15 @@ fun TimelineView(
                 }
             }
 
+            // TL3 B1: the faded area behind expanded rows, the full viewport width (drawn in the draw phase only).
+            TwirlArea(verticalScrollState, with(density) { TimelineTracksOrigin.toPx() }, Modifier.matchParentSize())
             // 1. Horizontally scrollable content (ruler + clip tracks)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .horizontalScroll(horizontalScrollState, enabled = !pinching)
+                    // TL3.1 A3: no overscroll stretch: the timeline cannot go before 00:00, and the stretch left past the start
+                    // kept requesting frames forever (the UI never went idle: the jolt at the start of the timeline).
+                    .horizontalScroll(horizontalScrollState, overscrollEffect = null, enabled = !pinching)
                     .pointerInput(Unit) {
                         detectTapGestures { onSelectLayer(null) }
                     }
@@ -388,6 +532,7 @@ fun TimelineView(
                     modifier = Modifier
                         .width(contentWidthDp + centerXDp * 2)
                         .fillMaxHeight()
+                        .then(WaveformProbe.scroll?.let { probe -> Modifier.onGloballyPositioned { probe(System.nanoTime(), it.positionInRoot().x.toInt(), pxPerUs) } } ?: Modifier)
                 ) {
                     // Leading spacer equal to half screen width: keeps time 0 aligned under 50% center playhead
                     Spacer(
@@ -412,12 +557,13 @@ fun TimelineView(
                             scale = scale,
                             startTimecodeUs = comp.startTimecodeUs,
                             markers = comp.markers,
-                            visibleStartUs = ((horizontalScrollState.value - centerXPx) / pxPerUs).toLong().coerceAtLeast(0),
-                            visibleEndUs = ((horizontalScrollState.value + centerXPx) / pxPerUs).toLong().coerceAtMost(durationUs),
+                            visibleUs = { ((horizontalScrollState.value - centerXPx) / pxPerUs).toLong().coerceAtLeast(0) to
+                                ((horizontalScrollState.value + centerXPx) / pxPerUs).toLong().coerceAtMost(durationUs) },
                             popoverMarkerId = markerSession?.ref?.takeIf { it.layerId == null }?.id,
                             popover = markerPopover,
                             onMarkerSelect = { tapMarker(null, it) },
-                            onSeek = { onMarkerAction(EditorAction.SelectMarker(null)); onSeek(it, false) }
+                            onSeek = { onMarkerAction(EditorAction.SelectMarker(null)); onSeek(it, false) },
+                            highlightUs = dragInfo?.let { listOf(it.spanStartUs, it.spanEndUs).distinct() }.orEmpty()
                         )
 
                         Spacer(Modifier.height(RULER_TRACK_GAP_DP.dp))
@@ -432,30 +578,52 @@ fun TimelineView(
                         ) {
                             LazyColumn(
                                 state = verticalScrollState,
+                                // TL3.1 A3: no overscroll stretch on the layer list either (the same never-idle edge effect).
+                                overscrollEffect = null,
                                 modifier = Modifier.fillMaxSize(),
                                 verticalArrangement = Arrangement.spacedBy(TRACK_GAP_DP.dp),
-                                contentPadding = PaddingValues(bottom = bottomPadding)
+                                contentPadding = PaddingValues(bottom = bottomPadding + extraBottomPadding)
                             ) {
-                                items(sortedLayers, key = { it.id }) { layer ->
+                                items(items, key = { when (it) { is com.fluxx.android.editor.TwirlItem.Layer -> it.layer.id; is com.fluxx.android.editor.TwirlItem.Row -> it.row.key } }) { item ->
+                                    if (item is com.fluxx.android.editor.TwirlItem.Row) {
+                                        // TL3 B1: an expanded layer's row, appearing / leaving on the shared motion spec.
+                                        val r = item.row
+                                        val owner = project.layer(r.layerId) ?: return@items
+                                        val m = Modifier.animateItem(fadeInSpec = TL3Motion.spec(), placementSpec = TL3Motion.spec(), fadeOutSpec = TL3Motion.spec())
+                                        when (r) {
+                                            is com.fluxx.android.editor.TwirlRow.Property -> if (twirlHost != null) TwirlKeyRow(project, owner, r, pxPerUs, playheadReader, scrollOffsetReader, keyEdgeFn,
+                                                keySelection, visibleRange, twirlPopover, setTwirlPopover, stableTwirlHost,
+                                                twirlGestures, snapLevel, snapStartFrame, setDragInfo, m)
+                                                else TwirlTrackRow(owner, r, pxPerUs, playheadReader, keySelection?.timesOf(r.layerId, r.target).orEmpty(), visibleRange, m)
+                                            is com.fluxx.android.editor.TwirlRow.Empty -> TwirlEmptyRow(r, m)
+                                            is com.fluxx.android.editor.TwirlRow.Audio -> TwirlAudioRow(owner, r, pxPerUs, visibleRange, peaks, m)
+                                        }
+                                        return@items
+                                    }
+                                    val layer = (item as com.fluxx.android.editor.TwirlItem.Layer).layer
                                     val isDragging = layer.id == reorder.draggingId
                                     DisposableEffect(layer.id) {
                                         onDispose { reorder.placedTops.remove(layer.id) }
                                     }
                                     TimelineClipRow(
                                         modifier = (if (isDragging) Modifier else Modifier.animateItem(
-                                            placementSpec = androidx.compose.animation.core.tween(durationMillis = 100)))
+                                            placementSpec = if (twirlMoving) TL3Motion.spec() else androidx.compose.animation.core.tween(durationMillis = 100)))
                                             .zIndex(if (isDragging) 1f else 0f)
                                             .graphicsLayer {
                                                 translationY = if (isDragging) reorder.offsetFor(layer.id, verticalScrollState) else 0f
                                             }
                                             .onGloballyPositioned {
                                                 // Side controls follow the same placement animation as the clip.
-                                                reorder.placedTops[layer.id] = it.positionInRoot().y - viewportTop - with(density) { TimelineTracksOrigin.roundToPx().toFloat() }
+                                                // TL3.1 A3: recorded only while rows animate (reorder, twirl open / close); a write on
+                                                // every scroll frame made the D lag its row (and its name column) by a frame.
+                                                if (reorder.draggingId != null || twirlMoving)
+                                                    reorder.placedTops[layer.id] = it.positionInRoot().y - viewportTop - with(density) { TimelineTracksOrigin.roundToPx().toFloat() }
                                             },
                                         project = project,
                                         mediaRepository = mediaRepository,
                                         layer = layer,
-                                        isSelected = layer.id == selectedLayerId,
+                                        // TLP T1: in selection mode the D-button shows selection; the row is not highlighted.
+                                        isSelected = layer.id == selectedLayerId && selection == null,
                                         activeProperty = activeProperty,
                                         activeAnimatorTrack = activeAnimatorTrack,
                                         onMarkerSelect = { tapMarker(layer.id, it) },
@@ -463,13 +631,13 @@ fun TimelineView(
                                         popover = markerPopover,
                                         onDragSelect = { onDragSelect(layer.id) },
                                         pxPerUs = pxPerUs,
-                                        playheadUs = playheadUs,
+                                        playhead = playheadReader,
                                         frameRate = comp.frameRate,
                                         onSelect = { onSelectLayer(layer.id) },
                                         onEmptyTap = { onSelectLayer(null) },
                                         onSeek = onSeek,
                                         onBeginGesture = beginEdit,
-                                        scrollOffsetPx = horizontalScrollState.value,
+                                        scrollOffset = scrollOffsetReader,
                                         onMoveEdge = { x ->
                                             edgeScroll = when {
                                                 x == null -> 0f
@@ -481,7 +649,13 @@ fun TimelineView(
                                         onPreviewGesture = onPreviewGesture,
                                         onCommitGesture = commitEdit,
                                         onCancelGesture = cancelEdit,
-                                        onOptionsClick = { onOpenClipOptions(layer.id) }
+                                        onOptionsClick = { onOpenClipOptions(layer.id) },
+                                        groupSelection = selection?.takeIf { layer.id in it },
+                                        selectedKeys = selectedKeys?.takeIf { layer.id == selectedLayerId },
+                                        onKeyToggle = onKeyToggle, onKeyDoubleTap = onKeyDoubleTap, onKeysMoved = onKeysMoved,
+                                        snapLevel = snapLevel, snapStartFrame = snapStartFrame,
+                                        onDragInfo = { dragInfo = it; reportDrag(it) },
+                                        onKeyEdge = keyEdgeFn, onKeyCommit = keyCommitFn, onKeyCancel = keyCancelFn
                                     )
                                 }
 
@@ -516,12 +690,15 @@ fun TimelineView(
                     .fillMaxHeight()
             )
 
-            TimelineSideControls(sortedLayers, selectedLayerId, verticalScrollState, reorder,
-                onToggleVisibility, onDragSelect, beginEdit, onPreviewGesture, commitEdit, cancelEdit,
+            TimelineSideControls(sortedLayers, selection, verticalScrollState, reorder,
+                onDTap, onDLongPress, onDragSelect, beginEdit, onPreviewGesture, commitEdit, cancelEdit,
                 onScrollStart = {
                     skipInspectorRestore = true
                     if (inspectorVisible) onDismissInspector()
-                })
+                }, items = items, expanded = expandedLayers, onNameTap = onTwirlNameTap, onNameLongPress = onTwirlNameLongPress, onNameGraph = onTwirlGraph, animating = twirlMoving,
+                addKeyState = onTwirlAddKey?.let { { p -> project.layer(p.layerId)?.let { com.fluxx.android.editor.KeyAdd.check(project, it, p.target, playheadUs) }
+                    ?: com.fluxx.android.editor.KeyAdd.Why.UNSUPPORTED } },
+                onAddKey = { p -> onTwirlAddKey?.invoke(p.layerId, p.target) })
         }
     }
 }
@@ -619,12 +796,14 @@ private fun TimelineRuler(
     scale: com.fluxx.android.editor.TimelineScale,
     startTimecodeUs: Long,
     markers: List<Marker>,
-    visibleStartUs: Long,
-    visibleEndUs: Long,
+    /** TL3.1 A3: the visible range, read in the draw phase only (a scroll frame redraws, it does not recompose). */
+    visibleUs: () -> Pair<Long, Long>,
     onMarkerSelect: (Marker) -> Unit,
     popoverMarkerId: Long?,
     popover: @Composable () -> Unit,
-    onSeek: (Long) -> Unit
+    onSeek: (Long) -> Unit,
+    /** TLP.2 part 5: the dragged item's start / end ticks while a hold-drag runs (composition times); empty otherwise. */
+    highlightUs: List<Long> = emptyList()
 ) {
     val selectMarker by rememberUpdatedState(onMarkerSelect)
     val seek by rememberUpdatedState(onSeek)
@@ -636,6 +815,7 @@ private fun TimelineRuler(
     } }
     // TL1 tiered ticks: classified by the displayed timecode frame (start frame + composition frame).
     val level = remember(frameRate, scale, density) { com.fluxx.android.editor.RulerTiers.level(frameRate, scale.pxPerFrame, density.density) }
+    val highlightColour = MaterialTheme.colorScheme.primary
     val startFrame = remember(startTimecodeUs, frameRate) { com.fluxx.android.model.CompositionTimecode.startFrame(startTimecodeUs, frameRate) }
     ExactTimelineTargets { Box(Modifier.fillMaxWidth().height(RULER_HEIGHT_DP.dp)) {
         Canvas(Modifier.fillMaxWidth().height(RULER_HEIGHT_DP.dp).background(Background)
@@ -651,6 +831,7 @@ private fun TimelineRuler(
                 }
             }) {
             val baseline = size.height - 1.dp.toPx()
+            val (visibleStartUs, visibleEndUs) = visibleUs()
             val startX = (visibleStartUs * pxPerUs).toFloat()
             val endX = (visibleEndUs * pxPerUs).toFloat()
             drawLine(TextSecondary.copy(alpha = .45f), Offset(startX, baseline), Offset(endX, baseline), .75.dp.toPx())
@@ -683,6 +864,13 @@ private fun TimelineRuler(
                     for (o in offsets) tick(boundary + o)
                     boundary += level.period
                 }
+            }
+            // TLP.2 part 5: while dragging, the dragged item's start and end ticks in the accent token, taller and brighter
+            // than any tick, on the exact frame x (no ghost columns).
+            for (t in highlightUs) {
+                val frame = frameRate.nearestFrame(t.coerceAtLeast(0))
+                val w = (wMajor * 2).toFloat(); val h = kotlin.math.round(majorH * 1.6f)
+                drawRect(highlightColour, topLeft = Offset(scale.frameX(frame) - w / 2f, kotlin.math.round(baseline) - h), size = androidx.compose.ui.geometry.Size(w, h))
             }
             for ((index, marker) in markers.withIndex()) {
                 if (marker.timeUs < visibleStartUs || marker.timeUs > visibleEndUs || marker.timeUs > durationUs) continue
@@ -731,10 +919,11 @@ private fun TimelineClipRow(
     popoverMarkerId: Long?,
     popover: @Composable () -> Unit,
     onDragSelect: () -> Unit,
-    scrollOffsetPx: Int,
+    scrollOffset: () -> Int,
     onMoveEdge: (Float?) -> Unit,
     pxPerUs: Double,
-    playheadUs: Long,
+    /** AUD1 C: the playhead, read where it is drawn (and as derived state for the text label), not as a parameter. */
+    playhead: () -> Long,
     frameRate: FrameRate,
     onSelect: () -> Unit,
     onEmptyTap: () -> Unit,
@@ -744,40 +933,89 @@ private fun TimelineClipRow(
     onCommitGesture: () -> Unit,
     onCancelGesture: () -> Unit,
     onOptionsClick: () -> Unit,
+    /** TLP T3: the selection when this layer is part of it (a hold-drag then moves every selected layer). */
+    groupSelection: com.fluxx.android.editor.LayerSelection? = null,
+    /** TLP T5: the selected keys (local times) of this row in key selection mode, else null. */
+    selectedKeys: Set<Long>? = null,
+    onKeyToggle: (Long) -> Unit = {},
+    onKeyDoubleTap: (Long) -> Unit = {},
+    onKeysMoved: (Map<Long, Long>) -> Unit = {},
+    /** TLP.2: the ruler's zoom level and start frame (major / mid tick snapping). */
+    snapLevel: com.fluxx.android.editor.RulerLevel? = null,
+    snapStartFrame: Long = 0,
+    /** TLP.2: the live hold-drag state (readouts, ruler highlights); null when the drag ends. */
+    onDragInfo: (com.fluxx.android.editor.TimelineDragInfo?) -> Unit = {},
+    /** TL3.1 B1: a key drag's finger (root x, null at the end) for the edge auto-scroll, and its commit / cancel (no seek). */
+    onKeyEdge: (Float?) -> Unit = {},
+    onKeyCommit: () -> Unit = onCommitGesture,
+    onKeyCancel: () -> Unit = onCancelGesture,
     modifier: Modifier = Modifier
 ) {
     val currentLayer by rememberUpdatedState(layer)
-    val markerSnapTimes by rememberUpdatedState(remember(project.composition.markers, layer.markers,
-        layer.resolvedKeyframeAnchorUs, layer.timing) {
-        buildList<Long> {
-            val start = layer.timing.startUs
-            val end = layer.timing.endUs ?: start
-            for (marker in project.composition.markers) if (marker.timeUs in start..end) add(marker.timeUs - start)
-            for (marker in layer.markers) {
-                val time = Math.addExact(layer.resolvedKeyframeAnchorUs, marker.timeUs)
-                if (time in start..end) add(time - start)
-            }
-        }
-    })
+    val keyEdge by rememberUpdatedState(onKeyEdge)
+    val keyCommit by rememberUpdatedState(onKeyCommit)
+    val keyCancel by rememberUpdatedState(onKeyCancel)
     val begin by rememberUpdatedState(onBeginGesture)
     val preview by rememberUpdatedState(onPreviewGesture)
     val commit by rememberUpdatedState(onCommitGesture)
     val cancel by rememberUpdatedState(onCancelGesture)
     val selectForDrag by rememberUpdatedState(onDragSelect)
-    val currentScroll by rememberUpdatedState(scrollOffsetPx)
+    val scrollReader by rememberUpdatedState(scrollOffset)
+    fun currentScroll() = scrollReader()
     val moveEdge by rememberUpdatedState(onMoveEdge)
     val selectMarker by rememberUpdatedState(onMarkerSelect)
     var moveBase by remember { mutableStateOf<CompositionLayer?>(null) }
+    var moveProject by remember { mutableStateOf<ProjectDocument?>(null) }
+    val group by rememberUpdatedState(groupSelection)
+    val currentProject by rememberUpdatedState(project)
+    val keyMode by rememberUpdatedState(selectedKeys != null)
+    val keyToggle by rememberUpdatedState(onKeyToggle)
+    val keyDoubleTap by rememberUpdatedState(onKeyDoubleTap)
+    val keysMoved by rememberUpdatedState(onKeysMoved)
+    val latestSelectedKeys by rememberUpdatedState(selectedKeys)
     var movePixels by remember { mutableFloatStateOf(0f) }
     var moveScrollOrigin by remember { mutableStateOf(0) }
     var labelRootX by remember { mutableFloatStateOf(0f) }
+    val density0 = LocalDensity.current
+    fun dragPlayhead() = playhead()
+    val dragInfo by rememberUpdatedState(onDragInfo)
+    val dragLevel by rememberUpdatedState(snapLevel)
+    val view = androidx.compose.ui.platform.LocalView.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    /** TLP.2: the target the drag is locked to (the haptic ticks once per lock, like the inspector's Magnet). */
+    var lockedTarget by remember { mutableStateOf<com.fluxx.android.editor.SnapTarget?>(null) }
+    fun locked(target: com.fluxx.android.editor.SnapTarget?) {
+        if (target != null && target != lockedTarget) com.fluxx.android.ui.inspector.InspectorHaptics.tick(view)
+        lockedTarget = target
+    }
     fun previewMove() {
         val base = moveBase ?: return
-        val delta = ((movePixels + currentScroll - moveScrollOrigin) / pxPerUs).roundToLong()
-        preview(TimelineEdits.move(project, base, base.timing.startUs + delta))
+        val raw = ((movePixels + currentScroll() - moveScrollOrigin) / pxPerUs).roundToLong()
+        // TLP.2: snap the dragged clip(s): every selected layer's start and end against the playhead, markers, the
+        // other clips' edges, 0 / the end and the major / mid ticks; the whole selection shifts by the winning pair.
+        val p0 = moveProject ?: project
+        val g = group
+        val members = if (g != null) g.ids.mapNotNull { id -> p0.composition.layers.firstOrNull { it.id == id } }.filter { it.timing.durationUs != 0L } else listOf(base)
+        val candidates = members.flatMap { listOfNotNull(it.timing.startUs, it.timing.endUs) }
+        val targets = com.fluxx.android.editor.DragSnap.withTicks(com.fluxx.android.editor.DragSnap.targets(p0, dragPlayhead(), members.map { it.id }.toSet(), clipEdges = true),
+            candidates, raw, frameRate, dragLevel, snapStartFrame)
+        val zoneUs = com.fluxx.android.editor.SnapZones.of(pxPerUs / density0.density, frameRate)
+        val snap = com.fluxx.android.editor.DragSnap.snap(raw, candidates, targets, zoneUs)
+        locked(snap.target)
+        // TLP T3: a selected layer moves the whole selection by the same frames (one Batch of Move, same gesture calls).
+        val together = g?.let { sel -> moveProject?.let { p -> com.fluxx.android.editor.MultiLayerEdits.moveTogether(p, sel, snap.deltaUs) ?: EditorAction.Batch(emptyList()) } }
+        val action = together ?: TimelineEdits.move(project, base, base.timing.startUs + snap.deltaUs)
+        preview(action)
+        // TLP.2 part 5: the live readouts / ruler highlights (UI state only).
+        val moved = when (action) { is EditorAction.Move -> listOf(action); is EditorAction.Batch -> action.actions.filterIsInstance<EditorAction.Move>(); else -> emptyList() }
+        val origin = members.minOf { it.timing.startUs }
+        val start = moved.minOfOrNull { it.startUs } ?: origin
+        val span = members.maxOf { it.timing.endUs ?: it.timing.startUs } - origin
+        dragInfo(com.fluxx.android.editor.TimelineDragInfo(start, origin, start, start + span))
     }
-    LaunchedEffect(scrollOffsetPx) { if (moveBase != null) previewMove() }
-    DisposableEffect(layer.id) { onDispose { if (moveBase != null) { moveEdge(null); cancel() } } }
+    fun endMoveIndicators() { locked(null); dragInfo(null) }
+    LaunchedEffect(Unit) { androidx.compose.runtime.snapshotFlow { scrollReader() }.collect { if (moveBase != null) previewMove() } }
+    DisposableEffect(layer.id) { onDispose { if (moveBase != null) { moveEdge(null); dragInfo(null); cancel() } } }
     val timing = layer.timing
     val startUs = timing.startUs
     val durationUs = timing.durationUs ?: 0L
@@ -790,12 +1028,14 @@ private fun TimelineClipRow(
     val startDp = with(density) { startX.toDp() }
     val widthDp = with(density) { widthPx.toDp() }
 
-    // Fetch real decoded thumbnail where available
+    // Fetch real decoded thumbnail where available. MP1 B2: a video clip shows a frame from its used range (low priority,
+    // waits while playing / scrubbing; the previous frame stays until the new one is ready).
     var thumbnail by remember(layer.asset?.uri) { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(layer.asset?.uri) {
+    val thumbAtUs = layer.timing.sourceInUs + minOf(1_000_000L, (layer.timing.durationUs ?: 0L) / 2)
+    LaunchedEffect(layer.asset?.uri, thumbAtUs / 1_000_000) {
         val uri = layer.asset?.uri
         if (uri != null) {
-            thumbnail = mediaRepository.thumbnail(uri)
+            thumbnail = (if (layer.type == LayerType.VIDEO) mediaRepository.timelineThumbnail(uri, thumbAtUs) else mediaRepository.thumbnail(uri)) ?: thumbnail
         }
     }
 
@@ -843,22 +1083,24 @@ private fun TimelineClipRow(
             // Video / Image: Repeated timeline thumbnails strip when available
             if (layer.type == LayerType.VIDEO || layer.type == LayerType.IMAGE) {
                 thumbnail?.let { bmp ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(6.dp))
-                    ) {
-                        val numThumbnails = (widthPx / 48f).toInt().coerceAtLeast(1)
-                        repeat(numThumbnails) {
-                            Image(
-                                bitmap = bmp.asImageBitmap(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .width(48.dp)
-                                    .fillMaxHeight()
-                                    .border(0.5.dp, ClipVideoBorder)
-                            )
+                    // MP1 B2: the same 48dp tiles (centre-cropped, 0.5dp border) drawn by ONE canvas, only across the clip's
+                    // width. One Image composable per tile (hundreds on a long clip) were re-placed on every playback scroll
+                    // step: the timeline never went idle and UI frames doubled once file-URI clips got a thumbnail.
+                    val image = remember(bmp) { bmp.asImageBitmap() }
+                    Canvas(Modifier.fillMaxSize().clip(RoundedCornerShape(6.dp))) {
+                        val tileW = 48.dp.toPx(); val h = size.height; val stroke = 0.5.dp.toPx()
+                        if (image.width <= 0 || image.height <= 0 || h <= 0f) return@Canvas
+                        val scale = maxOf(tileW / image.width, h / image.height)
+                        val srcW = (tileW / scale).toInt().coerceIn(1, image.width); val srcH = (h / scale).toInt().coerceIn(1, image.height)
+                        val src = androidx.compose.ui.unit.IntOffset((image.width - srcW) / 2, (image.height - srcH) / 2)
+                        val tiles = (widthPx / 48f).toInt().coerceAtLeast(1)
+                        for (i in 0 until tiles) {
+                            val x = i * tileW
+                            if (x >= size.width) break
+                            drawImage(image, src, androidx.compose.ui.unit.IntSize(srcW, srcH), androidx.compose.ui.unit.IntOffset(x.toInt(), 0),
+                                androidx.compose.ui.unit.IntSize(kotlin.math.ceil(tileW).toInt(), kotlin.math.ceil(h).toInt()))
+                            drawRect(ClipVideoBorder, androidx.compose.ui.geometry.Offset(x + stroke / 2, stroke / 2),
+                                androidx.compose.ui.geometry.Size(tileW - stroke, h - stroke), style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
                         }
                     }
                 }
@@ -871,7 +1113,10 @@ private fun TimelineClipRow(
                     .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
-                val label = if (layer.type == LayerType.TEXT) layer.text.source.evaluate(playheadUs - layer.resolvedKeyframeAnchorUs)
+                // AUD1 C: the label only changes when the text at the playhead does (a Source Text key): derived state.
+                val textAtPlayhead by remember(layer) { androidx.compose.runtime.derivedStateOf {
+                    if (layer.type == LayerType.TEXT) layer.text.source.evaluate(playhead() - layer.resolvedKeyframeAnchorUs) else "" } }
+                val label = if (layer.type == LayerType.TEXT) textAtPlayhead
                     .replace('\n', ' ').ifBlank { "Text" } else layer.name.ifBlank {
                     when (layer.type) {
                         LayerType.VIDEO -> "Video ${layer.id}"
@@ -909,11 +1154,11 @@ private fun TimelineClipRow(
                 .pointerInput(layer.id, pxPerUs) {
                     detectDragGesturesAfterLongPress(
                         onDragStart = { point ->
-                            moveBase = currentLayer; movePixels = 0f; moveScrollOrigin = currentScroll
+                            moveBase = currentLayer; moveProject = currentProject; movePixels = 0f; moveScrollOrigin = currentScroll()
                             selectForDrag(); begin(); moveEdge(labelRootX + point.x)
                         },
-                        onDragEnd = { previewMove(); moveBase = null; moveEdge(null); commit() },
-                        onDragCancel = { moveBase = null; moveEdge(null); cancel() },
+                        onDragEnd = { previewMove(); moveBase = null; moveEdge(null); endMoveIndicators(); commit() },
+                        onDragCancel = { moveBase = null; moveEdge(null); endMoveIndicators(); cancel() },
                         onDrag = { change, amount ->
                             change.consume(); movePixels += amount.x
                             moveEdge(labelRootX + change.position.x); previewMove()
@@ -932,85 +1177,131 @@ private fun TimelineClipRow(
                 LayerKeyMarkers.focusedAnimatorClipTimes(layer, activeAnimatorTrack, anchorOffsetUs)
         }
         val diamondPath = remember { Path() }
+        val quietPath = remember { Path() }
+        val quietSquare = remember { Path() }
+        val holdTimes = remember(anim, layer.text, anchorOffsetUs) { LayerKeyMarkers.holdClipTimes(layer, anchorOffsetUs) }
+        val focusTarget = activeProperty?.let { com.fluxx.android.editor.GraphTarget(property = it) } ?: activeAnimatorTrack?.let { com.fluxx.android.editor.GraphTarget(animator = it) }
+        val selectedStroke = remember(density) { Stroke(width = with(density) { 2.5.dp.toPx() }) }
         val markerStroke = remember(density) { Stroke(width = with(density) { 1.5.dp.toPx() }) }
         val knockoutStroke = remember(density) { Stroke(width = with(density) { LayerKeyMarkers.KNOCKOUT_STROKE_DP.dp.toPx() }) }
         // Keep pointer nodes stable while the transient document moves/reorders the markers.
         var dragTimes by remember(layer.id) { mutableStateOf<List<Long>?>(null) }
         var movingFrom by remember(layer.id) { mutableStateOf<Long?>(null) }
         var movingTo by remember(layer.id) { mutableStateOf<Long?>(null) }
+        // TLP.1: a hold-drag on a selected key moves every selected key; old → new clip-relative times while it runs.
+        var groupMap by remember(layer.id) { mutableStateOf<Map<Long, Long>?>(null) }
+        var groupBase by remember(layer.id) { mutableStateOf<Pair<ProjectDocument, com.fluxx.android.editor.KeyframeSelection>?>(null) }
         val keyframeTimes = dragTimes ?: observedTimes
-        val latestPlayhead by rememberUpdatedState(playheadUs)
+        fun latestPlayhead() = playhead()
         val latestTimes by rememberUpdatedState(observedTimes)
         val cancelDrag by rememberUpdatedState(onCancelGesture)
         DisposableEffect(layer.id) { onDispose { if (dragTimes != null) cancelDrag() } }
 
         if (keyframeTimes.isNotEmpty()) {
-            val snapThresholdPx = with(density) { 12.dp.toPx() }
-            val snapThresholdUs = (snapThresholdPx / pxPerUs).toLong()
 
             Box(
                 modifier = Modifier
                     .offset(x = startDp)
                     .width(widthDp)
                     .fillMaxHeight()
+                    // TL3.1 A3: the quiet (display-only) keys are drawn here in ONE pass instead of one composable each, so a
+                    // row scrolling into view composes only its editable keys (the vertical-scroll jolt).
+                    .drawBehind {
+                        val sz = LayerKeyMarkers.QUIET_DP.dp.toPx()
+                        LayerKeyMarkers.diamond(quietPath, androidx.compose.ui.geometry.Size(sz, sz))
+                        LayerKeyMarkers.keyShape(quietSquare, androidx.compose.ui.geometry.Size(sz, sz), hold = true)
+                        val a = LayerKeyMarkers.QUIET_ALPHA
+                        for (t in keyframeTimes) {
+                            if (t !in 0L..durationUs) continue
+                            if (isSelected && (t in focusedTimes || movingFrom == t || groupMap?.containsKey(t) == true)) continue
+                            val x = (t * pxPerUs).toFloat()
+                            val p = if (t in holdTimes) quietSquare else quietPath
+                            translate(x - sz / 2f, (size.height - sz) / 2f) {
+                                drawPath(p, clipBgColor, alpha = a, style = knockoutStroke)
+                                if (selectedKeys?.contains(t - anchorOffsetUs) == true) drawPath(p, Highlight, alpha = a, style = selectedStroke)
+                                if (playhead() == startUs + t) { drawPath(p, Highlight, alpha = a); drawPath(p, Color(0xFF1C1C1C), alpha = a, style = markerStroke) }
+                                else { drawPath(p, Color(0xFF1C1C1C), alpha = a); drawPath(p, Highlight.copy(alpha = 0.9f), alpha = a, style = markerStroke) }
+                            }
+                        }
+                    }
             ) {
                 // GRAPH G4.2: editable keys split overlapping 48dp targets at their midpoints (nearest wins), so keys
                 // that cluster when zoomed far out all stay reachable; quiet keys are display only.
                 val editableTimes = keyframeTimes.filter { it in 0L..durationUs && isSelected && (it in focusedTimes || movingFrom == it) }
-                    .map { if (movingFrom == it) movingTo ?: it else it }.sorted()
+                    .map { groupMap?.get(it) ?: if (movingFrom == it) movingTo ?: it else it }.sorted()
                 val editableXs = editableTimes.map { with(density) { (it * pxPerUs).toFloat().toDp().value } }
                 val editableSpans = com.fluxx.android.editor.TimelineHits.spans(editableXs, LayerKeyMarkers.HIT_WIDTH_DP / 2f)
                 for (kfTimeUs in keyframeTimes) {
-                    if (kfTimeUs in 0L..durationUs) {
-                        val editable = isSelected && (kfTimeUs in focusedTimes || movingFrom == kfTimeUs)
-                        val displayTime = if (movingFrom == kfTimeUs) movingTo ?: kfTimeUs else kfTimeUs
+                    val editable = isSelected && (kfTimeUs in focusedTimes || movingFrom == kfTimeUs || groupMap?.containsKey(kfTimeUs) == true)
+                    if (kfTimeUs in 0L..durationUs && editable) {
+                        val displayTime = groupMap?.get(kfTimeUs) ?: if (movingFrom == kfTimeUs) movingTo ?: kfTimeUs else kfTimeUs
                         val kfOffsetDp = with(density) { (displayTime * pxPerUs).toFloat().toDp() }
-                        val isAtPlayhead = playheadUs == startUs + displayTime
                         val span = if (editable) editableSpans.getOrNull(editableTimes.indexOf(displayTime)) else null
                         val hitLeft = span?.start?.dp ?: (kfOffsetDp - (LayerKeyMarkers.HIT_WIDTH_DP / 2).dp)
                         val hitWidth = span?.let { (it.endInclusive - it.start).dp } ?: LayerKeyMarkers.HIT_WIDTH_DP.dp
+                        val keyRoot = remember(kfTimeUs) { floatArrayOf(0f) }
 
                         Box(
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
                                 .offset(x = hitLeft)
                                 .size(width = hitWidth, height = TRACK_ROW_HEIGHT_DP.dp)
-                                .then(if (editable) Modifier.pointerInput(kfTimeUs, startUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
-                                    detectTapGestures(
-                                        onTap = {
-                                            onSeek(startUs + kfTimeUs, false)
-                                        }
-                                    )
-                                }
-                                .pointerInput(kfTimeUs, startUs, durationUs, pxPerUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
+                                .onGloballyPositioned { keyRoot[0] = it.positionInRoot().x }
+                                .then(if (editable) Modifier.testTag("timeline-key-${layer.id}-${kfTimeUs - anchorOffsetUs}").pointerInput(kfTimeUs, startUs, durationUs, pxPerUs, anchorOffsetUs, activeProperty, activeAnimatorTrack) {
                                     var initialKfTime = kfTimeUs
                                     var accumulatedUs = kfTimeUs
-                                    detectDragGesturesAfterLongPress(
-                                        onDragStart = {
-                                            initialKfTime = kfTimeUs
-                                            accumulatedUs = kfTimeUs
-                                            dragTimes = latestTimes
-                                            movingFrom = kfTimeUs
-                                            movingTo = kfTimeUs
-                                            begin()
-                                        },
-                                        onDragEnd = { commit(); dragTimes = null; movingFrom = null; movingTo = null },
-                                        onDragCancel = { cancel(); dragTimes = null; movingFrom = null; movingTo = null },
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            val deltaUs = (dragAmount.x / pxPerUs).roundToLong()
-                                            accumulatedUs += deltaUs
-                                            val snappedUs = TimelineEdits.snapKeyframeTime(
-                                                rawTimeUs = accumulatedUs,
-                                                playheadLocalUs = latestPlayhead - startUs,
-                                                durationUs = durationUs,
-                                                frameRate = frameRate,
-                                                snapThresholdUs = snapThresholdUs,
-                                                adjacentTimes = dragTimes.orEmpty(),
-                                                movingTime = initialKfTime,
-                                                clipStartUs = startUs,
-                                                markerTimes = markerSnapTimes
-                                            )
+                                    // TL3 B3 (KeyGestureRules, the sheet open on this property): a tap does nothing outside key
+                                    // mode and toggles in it (at once: no double tap, no wait); a hold released without moving
+                                    // selects and enters key mode (in the mode: adds an unselected key); a hold and drag moves the
+                                    // key, or the selection from a selected key. Nothing seeks.
+                                    val local = kfTimeUs - anchorOffsetUs
+                                    fun apply(effect: com.fluxx.android.editor.KeyGestureEffect) = when (effect) {
+                                        com.fluxx.android.editor.KeyGestureEffect.SELECT -> keyDoubleTap(local)
+                                        com.fluxx.android.editor.KeyGestureEffect.TOGGLE, com.fluxx.android.editor.KeyGestureEffect.ADD -> keyToggle(local)
+                                        else -> Unit
+                                    }
+                                    // TL3.1 B1: the drag in content coordinates (screen move + scroll since the down); while the content
+                                    // auto-scrolls under a still finger the key keeps following.
+                                    var lastDx = 0f; var scrollAtDown = 0; var downRoot = 0f; var dragging = false
+                                    val keyDrag: ((Float) -> Unit)? = keyDrag@{ dx: Float ->
+                                            accumulatedUs = kfTimeUs + (dx / pxPerUs).roundToLong()
+                                            val raw = accumulatedUs - initialKfTime
+                                            val zoneUs = com.fluxx.android.editor.SnapZones.of(pxPerUs / density0.density, frameRate)
+                                            val base = groupBase
+                                            if (base != null) {
+                                                // TLP.2: every selected key's time against the playhead, markers (the composition's and this
+                                                // layer's: the existing key-drag set; other layers count as excluded), 0 / the end and the
+                                                // major / mid ticks; the whole selection shifts by the winning pair (then whole frames).
+                                                val (project0, sel0) = base
+                                                val layer0 = project0.composition.layers.first { it.id == layer.id }
+                                                val anchor = layer0.resolvedKeyframeAnchorUs
+                                                val candidates = sel0.times.map { Math.addExact(anchor, it) }
+                                                val targets = com.fluxx.android.editor.DragSnap.withTicks(com.fluxx.android.editor.DragSnap.targets(project0, latestPlayhead(), project0.composition.layers.map { it.id }.toSet() - layer.id, clipEdges = false),
+                                                    candidates, raw, frameRate, dragLevel, snapStartFrame)
+                                                val snap = com.fluxx.android.editor.DragSnap.snap(raw, candidates, targets, zoneUs)
+                                                locked(snap.target)
+                                                val moved = com.fluxx.android.editor.KeyEdits.moveTogether(project0, layer0, sel0, snap.deltaUs)
+                                                preview(moved?.action ?: EditorAction.Batch(emptyList()))
+                                                groupMap = moved?.let { m -> sel0.times.zip(m.times).associate { (from, to) -> (from + anchorOffsetUs) to (to + anchorOffsetUs) } } ?: emptyMap()
+                                                val now = (moved?.times ?: sel0.times).map { Math.addExact(anchor, it) }
+                                                dragInfo(com.fluxx.android.editor.TimelineDragInfo(now.min(), candidates.min(), now.min(), now.max()))
+                                                return@keyDrag
+                                            }
+                                            // TLP.2: one key against the shared targets plus its existing ones (the other keys of
+                                            // the property and its clip's start / end), all inside its clip (keys stay in the clip).
+                                            val candidate = Math.addExact(startUs, initialKfTime)
+                                            val own = buildList {
+                                                for (t in dragTimes.orEmpty()) if (t != initialKfTime) add(com.fluxx.android.editor.SnapTarget(startUs + t, com.fluxx.android.editor.SnapKind.NEIGHBOUR))
+                                                add(com.fluxx.android.editor.SnapTarget(startUs, com.fluxx.android.editor.SnapKind.NEIGHBOUR))
+                                                add(com.fluxx.android.editor.SnapTarget(startUs + durationUs, com.fluxx.android.editor.SnapKind.NEIGHBOUR))
+                                            }
+                                            val targets = com.fluxx.android.editor.DragSnap.withTicks(com.fluxx.android.editor.DragSnap.targets(currentProject, latestPlayhead(), currentProject.composition.layers.map { it.id }.toSet() - layer.id, clipEdges = false) + own,
+                                                listOf(candidate), raw, frameRate, dragLevel, snapStartFrame).filter { it.timeUs in startUs..(startUs + durationUs) }
+                                            val snap = com.fluxx.android.editor.DragSnap.snap(raw, listOf(candidate), targets, zoneUs)
+                                            locked(snap.target)
+                                            val rawLocal = accumulatedUs.coerceIn(0L, durationUs)
+                                            val snappedUs = if (snap.target != null) (snap.target.timeUs - startUs).coerceIn(0L, durationUs)
+                                                else (frameRate.snap(Math.addExact(startUs, rawLocal)) - startUs).coerceIn(0L, durationUs)
                                             movingTo = snappedUs
                                             val fromLocal = Math.subtractExact(initialKfTime, anchorOffsetUs)
                                             val toLocal = Math.subtractExact(snappedUs, anchorOffsetUs)
@@ -1018,8 +1309,54 @@ private fun TimelineClipRow(
                                             preview(if (activeProperty == null && activeAnimatorTrack != null)
                                                 EditorAction.EditTextAnimator(layer.id, AnimatorEdit.Key(activeAnimatorTrack, AnimatorKeyOperation.MOVE, fromLocal, toLocal))
                                             else EditorAction.MoveKeyframe(layer.id, activeProperty, fromLocal, toLocal))
-                                        }
+                                            dragInfo(com.fluxx.android.editor.TimelineDragInfo(startUs + snappedUs, candidate, startUs + snappedUs, startUs + snappedUs))
+                                    }
+                                    kotlinx.coroutines.coroutineScope {
+                                    launch { androidx.compose.runtime.snapshotFlow { currentScroll() }.collect { sc -> if (dragging) keyDrag?.invoke(com.fluxx.android.editor.EdgeScroll.contentDx(lastDx, scrollAtDown, sc)) } }
+                                    detectKeyGestures(
+                                        onDown = { p -> downRoot = keyRoot[0] + p.x; scrollAtDown = currentScroll(); true },
+                                        onTap = { apply(com.fluxx.android.editor.KeyGestureRules.tap(com.fluxx.android.editor.KeyPlace.SHEET, keyMode)) },
+                                        onLongPress = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) },
+                                        onHoldRelease = { apply(com.fluxx.android.editor.KeyGestureRules.holdRelease(com.fluxx.android.editor.KeyPlace.SHEET, keyMode,
+                                            latestSelectedKeys?.contains(local) == true)) },
+                                        onDragStart = {
+                                            val sel = latestSelectedKeys
+                                            val local = kfTimeUs - anchorOffsetUs
+                                            if (keyMode && sel != null && local in sel) {
+                                                // TLP.1: a selected key carries the whole selection (KeyEdits.moveTogether), previewed
+                                                // from the drag's base project, committed once. Unselected keys still move alone.
+                                                val target = if (activeProperty == null && activeAnimatorTrack != null) com.fluxx.android.editor.GraphTarget(animator = activeAnimatorTrack)
+                                                    else com.fluxx.android.editor.GraphTarget(property = activeProperty)
+                                                groupBase = currentProject to com.fluxx.android.editor.KeyframeSelection(layer.id, target, sel.toList())
+                                                groupMap = emptyMap()
+                                            }
+                                            initialKfTime = kfTimeUs
+                                            accumulatedUs = kfTimeUs
+                                            dragTimes = latestTimes
+                                            movingFrom = kfTimeUs
+                                            movingTo = kfTimeUs
+                                            dragging = true
+                                            begin()
+                                        },
+                                        onDragEnd = {
+                                            dragging = false; keyEdge(null)
+                                            // Zero frames moved: no edit (the release is a hold release).
+                                            val moved = groupMap?.any { (from, to) -> from != to } ?: (movingTo != null && movingTo != initialKfTime)
+                                            if (moved) {
+                                                groupMap?.let { m -> keysMoved(m.entries.associate { (from, to) -> (from - anchorOffsetUs) to (to - anchorOffsetUs) }) }
+                                                keyCommit()
+                                            } else keyCancel()
+                                            dragTimes = null; movingFrom = null; movingTo = null; groupMap = null; groupBase = null; endMoveIndicators()
+                                            moved
+                                        },
+                                        onDragCancel = { dragging = false; keyEdge(null); keyCancel(); dragTimes = null; movingFrom = null; movingTo = null; groupMap = null; groupBase = null; endMoveIndicators() },
+                                        onDrag = { sdx ->
+                                            lastDx = sdx; keyEdge(downRoot + sdx)
+                                            keyDrag?.invoke(com.fluxx.android.editor.EdgeScroll.contentDx(sdx, scrollAtDown, currentScroll()))
+                                        },
+                                        rootX = { keyRoot[0] }
                                     )
+                                    }
                                 } else Modifier),
                             contentAlignment = Alignment.CenterStart
                         ) {
@@ -1029,9 +1366,12 @@ private fun TimelineClipRow(
                             val marker = LayerKeyMarkers.Marker(kfTimeUs, editable)
                             Canvas(modifier = Modifier.offset(x = kfOffsetDp - hitLeft - (marker.sizeDp / 2f).dp)
                                 .size(marker.sizeDp.dp).alpha(marker.alpha)) {
-                                LayerKeyMarkers.diamond(diamondPath, size)
+                                // TL3.1 B3: a hold key of the focused track is a square.
+                                LayerKeyMarkers.keyShape(diamondPath, size, focusTarget?.let { LayerKeyMarkers.holdAt(layer, it, displayTime - anchorOffsetUs) } ?: (displayTime in holdTimes))
                                 drawPath(path = diamondPath, color = clipBgColor, style = knockoutStroke)
-                                if (isAtPlayhead) {
+                                // TLP T5: a selected key gets an outer accent outline (beside the playhead fill rule).
+                                if (selectedKeys?.contains(kfTimeUs - anchorOffsetUs) == true) drawPath(path = diamondPath, color = Highlight, style = Stroke(width = 2.5.dp.toPx()))
+                                if (playhead() == startUs + displayTime) {
                                     drawPath(
                                         path = diamondPath,
                                         color = Highlight

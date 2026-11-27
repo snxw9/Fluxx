@@ -494,12 +494,13 @@ private fun ClipRow(
     val startDp = with(density) { startX.toDp() }
     val widthDp = with(density) { widthPx.toDp() }
 
-    // Load decoded thumbnail if video/image asset available
+    // Load decoded thumbnail if video/image asset available. MP1 B2: a video clip shows a frame from its used range.
     var thumbnail by remember(layer.asset?.uri) { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(layer.asset?.uri) {
+    val thumbAtUs = layer.timing.sourceInUs + minOf(1_000_000L, (layer.timing.durationUs ?: 0L) / 2)
+    LaunchedEffect(layer.asset?.uri, thumbAtUs / 1_000_000) {
         val uri = layer.asset?.uri
         if (uri != null) {
-            thumbnail = mediaRepository.thumbnail(uri)
+            thumbnail = (if (layer.type == LayerType.VIDEO) mediaRepository.timelineThumbnail(uri, thumbAtUs) else mediaRepository.thumbnail(uri)) ?: thumbnail
         }
     }
 

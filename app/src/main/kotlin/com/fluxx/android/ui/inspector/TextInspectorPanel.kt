@@ -102,6 +102,20 @@ import kotlinx.coroutines.delay
     // Animate tab (TEXT F3): the focused animator field owns the rail diamond, timeline focus and Prev/Next.
     val animateState=rememberAnimatePageState(layer.id)
     val animOwner=if(tab==TextTab.ANIMATE) AnimateSelection.focus(layer.text,animateState.focus) else null
+    // TL3.1 B2: a twirl-down name long-press opens the exact place: the control's tab with that control focused, or the
+    // Animate tab on that animator field (its animator / selector expanded and scrolled into view).
+    val openTarget=LocalTextOpenTarget.current
+    LaunchedEffect(openTarget) {
+        val t=openTarget?.first ?: return@LaunchedEffect
+        t.animator?.let {a->
+            tabIndex=TextTab.ANIMATE.ordinal;animateState.focus=a
+            var bars=animateState.bars.expandAnimator(a.animatorId)
+            a.selectorId?.let {bars=bars.expandSelector(it)}
+            animateState.bars=bars;animateState.reveal=a.animatorId
+            return@LaunchedEffect
+        }
+        TextOpenTarget.control(requireNotNull(t.property))?.let {c->tabIndex=TextOpenTarget.tab(c).ordinal;controlName=c.name}
+    }
     // TEXT F3.1: Position / Rotation / Scale control style, an app preference switched from the rail menu.
     val controlsPreference=AnimateControlsPreference.get(androidx.compose.ui.platform.LocalContext.current)
     val animateControls by controlsPreference.value.collectAsState()
@@ -412,7 +426,10 @@ import kotlinx.coroutines.delay
         if(it.key==Key.Escape && it.type==KeyEventType.KeyUp && (mode!=TextInspectorMode.Browse || popover!=null || resetAnimation)) {back();true} else false}) {
         // ---- Header: ← | Character | Paragraph | Animate | (⚠ only on error) ---------------------------------------
         val subPage=mode==TextInspectorMode.Fonts
-        Row(Modifier.fillMaxWidth().height(TextInspectorBudget.header(fontScale).dp).testTag("text-inspector-header"),verticalAlignment=Alignment.CenterVertically) {
+        // TLP.2: while key selection is active the key bar takes the header's place, at exactly its height.
+        val keyBar=com.fluxx.android.ui.editor.LocalKeyHeaderBar.current
+        if(keyBar!=null) com.fluxx.android.ui.editor.KeyHeaderBar(TextInspectorBudget.header(fontScale).dp,keyBar)
+        else Row(Modifier.fillMaxWidth().height(TextInspectorBudget.header(fontScale).dp).testTag("text-inspector-header"),verticalAlignment=Alignment.CenterVertically) {
             InspectorIconButton(InspectorIcons.icon("BACK"),if(subPage) "Back to ${tab.name.lowercase()}" else "Back to layer tools") {back()}
             if(subPage) Text("Fonts · $scopeLabel",Modifier.weight(1f).padding(horizontal=8.dp).semantics {heading()},color=TextPrimary,
                 style=MaterialTheme.typography.titleSmall,maxLines=1,overflow=TextOverflow.Ellipsis)
@@ -522,7 +539,8 @@ import kotlinx.coroutines.delay
                         hit=hitSize,modifier=Modifier.fillMaxSize())
                     face==null->TextAnimatePage(layer,time,frameRate,compositionWidth,compositionHeight,animateState,finishing,palette,animateControls,
                         onAction=onAction,onValueBegin=onValueBegin,onPayloadPreview=onPayloadPreview,onFinish=onFinish,onCancel=onCancel,
-                        onMessage={message=it},metrics=AnimateMetrics(bodyHeight,bodyWidth,hitSize<48.dp),modifier=Modifier.fillMaxSize())
+                        onMessage={message=it},metrics=AnimateMetrics(bodyHeight,bodyWidth,hitSize<48.dp),modifier=Modifier.fillMaxSize(),
+                        sampleColour=sampleColour)
                     large->{
                         // Large font scales: labelled 3-column reflow of the same controls; whole rows page from a button.
                         val pitch=TextInspectorBudget.LABELLED_PITCH

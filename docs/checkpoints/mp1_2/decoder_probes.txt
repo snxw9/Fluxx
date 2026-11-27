@@ -1,0 +1,25 @@
+H6 clip 13: 'lyrfae_1 - VOGUE ｜ Lamine Yamal back aft' in-point 0 us, stop at source 16.759 s
+H6 format: {max-bitrate=9981309, sar-width=1, mime=video/avc, frame-count=3400, bitrate=998130, language=und, color-standard=1, display-width=1440, track-fourcc=828601953, color-transfer=3, sar-height=1, display-height=1080, color-range=2, max-input-size=253626, frame-rate=20, height=1080, has-ctts=1, track-id=1, level=2048, profile=8, accurate-durationUs=169800000, accurate-framecount=3399, csd-1=java.nio.HeapByteBuffer[pos=0 lim=10 cap=10], durationUs=169900000, width=1440, csd-0=java.nio.HeapByteBuffer[pos=0 lim=34 cap=34]}
+H6 samples: 3400, first 0.000 last 169.850 s, syncs 15, max pts gap 0.050 s at 0.000 s, decode-order backwards steps 72
+H6 around stop: #316 15.950/7110/0 #317 15.850/4384/0 #318 15.800/2304/0 #319 15.900/1915/0 #320 16.050/5522/0 #321 16.000/2387/0 #322 16.250/6451/0 #323 16.150/6846/0 #324 16.100/3790/0 #325 16.200/2294/0 #326 16.300/4548/0 #327 16.450/3815/0
+H6 around stop: #328 16.350/2484/0 #329 16.400/2225/0 #330 16.600/4575/0 #331 16.500/2899/0 #332 16.550/2949/0 #333 16.650/2434/0 #334 16.700/2835/1 #335 16.900/1393/0 #336 16.800/221/0 #337 16.750/203/0 #338 16.850/150/0 #339 16.950/185/0
+H6 around stop: #340 16.900/8/0 #341 16.950/8/0 #342 17.000/8/0 #343 17.050/8/0 #344 17.100/8/0 #345 17.150/8/0 #346 17.200/8/0 #347 17.250/8/0 #348 17.300/8/0 #349 17.350/8/0 #350 17.400/8/0 #351 17.450/8/0
+H6 around stop: #352 17.500/8/0 #353 17.550/8/0 #354 17.600/8/0 #355 17.650/8/0 #356 17.700/8/0 #357 17.750/8/0
+H6 VideoDecoder: reached request 16.750 s, last frame 16.700 s, 6.8 s wall, IllegalStateException: Video decoding timed out for this source. Retry or relink the media.
+H6 buffer decoder (c2.mtk.avc.decoder): 336 frames, last 16.750 s, STALLED 5 s, 9.6 s wall
+H6 clip 13: 'lyrfae_1 - VOGUE ｜ Lamine Yamal back aft' in-point 0 us, stop at source 16.759 s
+H6 format: {max-bitrate=9981309, sar-width=1, mime=video/avc, frame-count=3400, bitrate=998130, language=und, color-standard=1, display-width=1440, track-fourcc=828601953, color-transfer=3, sar-height=1, display-height=1080, color-range=2, max-input-size=253626, frame-rate=20, height=1080, has-ctts=1, track-id=1, level=2048, profile=8, accurate-durationUs=169800000, accurate-framecount=3399, csd-1=java.nio.HeapByteBuffer[pos=0 lim=10 cap=10], durationUs=169900000, width=1440, csd-0=java.nio.HeapByteBuffer[pos=0 lim=34 cap=34]}
+H6 samples: 3400, first 0.000 last 169.850 s, syncs 15, max pts gap 0.050 s at 0.000 s, decode-order backwards steps 72
+H6 around stop: #316 15.950/7110/0 #317 15.850/4384/0 #318 15.800/2304/0 #319 15.900/1915/0 #320 16.050/5522/0 #321 16.000/2387/0 #322 16.250/6451/0 #323 16.150/6846/0 #324 16.100/3790/0 #325 16.200/2294/0 #326 16.300/4548/0 #327 16.450/3815/0
+H6 around stop: #328 16.350/2484/0 #329 16.400/2225/0 #330 16.600/4575/0 #331 16.500/2899/0 #332 16.550/2949/0 #333 16.650/2434/0 #334 16.700/2835/1 #335 16.900/1393/0 #336 16.800/221/0 #337 16.750/203/0 #338 16.850/150/0 #339 16.950/185/0
+H6 around stop: #340 16.900/8/0 #341 16.950/8/0 #342 17.000/8/0 #343 17.050/8/0 #344 17.100/8/0 #345 17.150/8/0 #346 17.200/8/0 #347 17.250/8/0 #348 17.300/8/0 #349 17.350/8/0 #350 17.400/8/0 #351 17.450/8/0
+H6 around stop: #352 17.500/8/0 #353 17.550/8/0 #354 17.600/8/0 #355 17.650/8/0 #356 17.700/8/0 #357 17.750/8/0
+H6 VideoDecoder: reached request 19.800 s, last frame 16.750 s, 2.9 s wall, no error
+H6 buffer decoder (c2.mtk.avc.decoder): 336 frames, last 16.750 s, STALLED 5 s, 9.7 s wall
+H6 clip 17 (671.22-679.96 s): 'A1 - Video by aeria11st.mkv' in-point 0 us, stop at source 0.003 s
+H6 format: {track-id=1, mime=video/x-vnd.on2.vp9, color-standard=1, display-width=1080, color-transfer=3, durationUs=8746000, display-height=1080, width=1080, error-type=0, color-range=2, max-input-size=1572864, frame-rate=20, height=1080}
+H6 samples: 172, first 0.105 last 8.655 s, syncs 2, max pts gap 0.050 s at 0.105 s, decode-order backwards steps 0
+H6 around stop: #0 0.105/10034/1 #1 0.155/44660/0 #2 0.205/6852/0 #3 0.255/7297/0 #4 0.305/6844/0 #5 0.355/8199/0 #6 0.405/6839/0 #7 0.455/6031/0 #8 0.505/4577/0 #9 0.555/3981/0 #10 0.605/142/0 #11 0.655/59063/0
+H6 around stop: #12 0.705/11078/0 #13 0.755/9196/0 #14 0.805/9528/0 #15 0.855/6766/0 #16 0.905/3128/0 #17 0.955/3304/0
+H6 VideoDecoder: reached request 3.050 s, last frame 3.005 s, 0.6 s wall, no error
+H6 buffer decoder (c2.mtk.vp9.decoder): 59 frames, last 3.005 s, no stall, 0.5 s wall

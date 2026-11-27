@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import com.fluxx.android.editor.*
 import com.fluxx.android.model.*
+import com.fluxx.android.render.AudioGains
 import com.fluxx.android.ui.theme.*
 import kotlinx.coroutines.flow.collect
 import kotlin.math.atan2
@@ -111,6 +112,10 @@ fun ElementInspectorSheet(
     onTransformEdit: (Transform) -> Unit,
     onTimingChange: (ClipTiming) -> Unit,
     onAudioChange: (muted: Boolean, gain: Float) -> Unit,
+    /** AUD2 B3: a gain slider drag is ONE gesture: begin, live previews, commit (a cancelled drag keeps its value). */
+    onAudioBegin: () -> Unit = {},
+    onAudioPreview: (muted: Boolean, gain: Float) -> Unit = onAudioChange,
+    onAudioCommit: () -> Unit = {},
     onColorChange: (Int) -> Unit,
     onEyedropperRequest: () -> Unit = {},
     onColorPreview: (Int) -> Unit = onColorChange,
@@ -147,10 +152,15 @@ fun ElementInspectorSheet(
     onExplodeCommit: (TextExplodePlan,(String?)->Unit)->Unit = {_,reply->reply("Explode unavailable")},
     onTextEditVisible: (Boolean)->Unit = {},
     /** GRAPH G1: live preview of a Graph page drag (SetKeyEasing) inside the begin/commit/cancel gesture. */
-    onGesturePreview: (EditorAction) -> Unit = {}
+    onGesturePreview: (EditorAction) -> Unit = {},
+    /** TL3 B1: open the page of this property (a twirl-down name long-press); the second value makes requests distinct. */
+    openPage: Pair<GraphTarget, Int>? = null,
+    /** TL3.1 B8: open this property's Graph page (the name cell's graph icon); it returns to the property's own page. */
+    openGraph: Pair<GraphTarget, Int>? = null
 ) {
     key(layer.id) {
-        var section by rememberSaveable { mutableStateOf<InspectorSection?>(null) }
+        var section by rememberSaveable { mutableStateOf<InspectorSection?>(InspectorOpenPage.section(openPage?.first)) }
+        LaunchedEffect(openPage) { InspectorOpenPage.section(openPage?.first)?.let { section = it } }
         // GRAPH G1: the Graph page's property and the page it returns to. The return page's saveable state (tab, focused
         // field, transform mode) is kept by [pages] while the Graph page is open and dropped on any other navigation.
         var graphTarget by remember { mutableStateOf<GraphTarget?>(null) }
@@ -167,6 +177,7 @@ fun ElementInspectorSheet(
                     if (section != InspectorSection.GRAPH) graphReturn = section; graphTarget = target; section = InspectorSection.GRAPH },
                 close = { host?.session?.reset(); section = graphReturn; graphTarget = null }).also { host = it }
         }
+        LaunchedEffect(openGraph) { openGraph?.first?.let { t -> InspectorOpenPage.section(t)?.let { section = it }; graphHost.open(t) } }
         // A restored GRAPH page without its target (process death) returns to the page it came from.
         if (section == InspectorSection.GRAPH && graphTarget == null) LaunchedEffect(Unit) { section = graphReturn }
         val textEditVisible by rememberUpdatedState(onTextEditVisible)
@@ -224,7 +235,10 @@ fun ElementInspectorSheet(
                             contentAlignment = Alignment.Center) {
                             Box(Modifier.size(36.dp, 4.dp).background(Border, CircleShape))
                         }
-                        Row(Modifier.fillMaxWidth().height(InspectorChromeBudget.nameRow(compactHeight).dp), verticalAlignment = Alignment.CenterVertically) {
+                        // TL3 B3: while keys are selected the key bar replaces the landing grid's name row (same height: no shift).
+                        val landingKeyBar = com.fluxx.android.ui.editor.LocalKeyHeaderBar.current
+                        if (landingKeyBar != null) com.fluxx.android.ui.editor.KeyHeaderBar(InspectorChromeBudget.nameRow(compactHeight).dp, landingKeyBar)
+                        else Row(Modifier.fillMaxWidth().height(InspectorChromeBudget.nameRow(compactHeight).dp).testTag("inspector-name-row"), verticalAlignment = Alignment.CenterVertically) {
                             val hit = InspectorChromeBudget.nameRow(compactHeight).dp
                             BasicTextField(
                                 value = layer.name,
@@ -283,7 +297,7 @@ fun ElementInspectorSheet(
                                     onTransformCommit, onTransformCancel,
                                     { onTransformEdit(layer.evaluatedTransform(playheadUs).copy(opacity = it)) })
                                 InspectorSection.TIMING -> CompactTimingSectionContent(layer.timing, layer.type == LayerType.VIDEO, onTimingChange)
-                                InspectorSection.AUDIO -> CompactAudioSectionContent(layer.muted, layer.audioGain, onAudioChange)
+                                InspectorSection.AUDIO -> CompactAudioSectionContent(layer.muted, layer.audioGain, onAudioChange, onAudioBegin, onAudioPreview, onAudioCommit)
                                 InspectorSection.CONTEXTUAL_EDIT -> if (layer.type == LayerType.TEXT) TextInspectorPanel(
                                     layer,playheadUs,textFrameRate,onAction,onPropertyFocus,onTextBegin,onTextDraftSelection,onTextFinish,onTextCancel,
                                     onTextSizeBegin,onTextPayloadPreview,onTextCharacter,onTextParagraph,onTextBoxWidth,compositionWidth,textSelection,onTextSelection,textError,
@@ -329,6 +343,8 @@ internal fun sectionTitle(tab: InspectorSection, type: LayerType) = when (tab) {
 private fun SectionHeader(sections: List<InspectorSection>, section: InspectorSection, type: LayerType,
     onBack: () -> Unit, onSelect: (InspectorSection) -> Unit) {
     val fontScale = LocalDensity.current.fontScale
+    // TLP.2: while key selection is active the key bar takes this row's place, at exactly its height.
+    com.fluxx.android.ui.editor.LocalKeyHeaderBar.current?.let { bar -> com.fluxx.android.ui.editor.KeyHeaderBar(InspectorChromeBudget.header(fontScale).dp, bar); return }
     // The swipe-down-to-close gesture is the sheet's (InspectorSwipe), not this row's, so every page has it.
     Row(Modifier.fillMaxWidth().height(InspectorChromeBudget.header(fontScale).dp).testTag("inspector-section-header"),
         verticalAlignment = Alignment.CenterVertically) {
@@ -682,6 +698,10 @@ internal fun InspectorUtilityRail(resetLabel: String, onReset: () -> Unit,
                     DropdownMenuItem(text = { Text(resetLabel) }, onClick = { menu = false; onReset() })
                     if (onResetAll != null) DropdownMenuItem(text = { Text("Reset all transforms") }, onClick = { menu = false; onResetAll() })
                     extraItems.forEach { item -> DropdownMenuItem(text = { Text(item.label) }, enabled = item.enabled, onClick = { menu = false; item.action() }) }
+                    // TLP.1: Copy keys / Paste keys for this rail's property (the editor's key clipboard).
+                    keyClipboardItems(LocalKeyClipboardHost.current, graphTarget).forEach { item ->
+                        DropdownMenuItem(text = { Text(item.label) }, enabled = item.enabled, onClick = { menu = false; item.action() },
+                            modifier = Modifier.testTag(if (item.label == "Copy keys") "rail-menu-copy-keys" else "rail-menu-paste-keys")) }
                 }
                 AnchoredPopover(confirm != null, onConfirmDismiss, "inspector-rail-confirm") {
                     Text(confirm?.first.orEmpty(), Modifier.widthIn(max = 240.dp).padding(8.dp), color = TextPrimary, style = MaterialTheme.typography.labelMedium)
@@ -708,7 +728,9 @@ private fun OverhauledTransformSectionContent(
     onAnchorPreview: (EditorAction.SetAnchorPoint) -> Unit
 ) {
     // GRAPH G1: saveable, so returning from the Graph page restores the mode it was opened from.
-    var mode by rememberSaveable { mutableStateOf(TransformSubMode.POSITION) }
+    // TL3 B1: a twirl-down name long-press opens the page on its property (Position, Scale or Rotation).
+    val openMode = LocalTransformOpenMode.current
+    var mode by rememberSaveable { mutableStateOf(openMode ?: TransformSubMode.POSITION) }
     var isAnchorMode by rememberSaveable { mutableStateOf(false) }
     val anchorModeCallback by rememberUpdatedState(onAnchorModeChange)
     SideEffect { anchorModeCallback(isAnchorMode) }
@@ -1092,7 +1114,10 @@ private fun CompactTimingSectionContent(
 private fun CompactAudioSectionContent(
     muted: Boolean,
     gain: Float,
-    onAudioChange: (Boolean, Float) -> Unit
+    onAudioChange: (Boolean, Float) -> Unit,
+    onAudioBegin: () -> Unit = {},
+    onAudioPreview: (Boolean, Float) -> Unit = onAudioChange,
+    onAudioCommit: () -> Unit = {}
 ) {
     // Same sizing discipline as Timing: fixed rows (SectionLayout), the measured group centred in the content area.
     val fontScale = LocalDensity.current.fontScale
@@ -1136,14 +1161,15 @@ private fun CompactAudioSectionContent(
             modifier = Modifier.fillMaxWidth(),
             label = "Gain",
             value = gain,
-            valueRange = 0f..2f,
+            // AUD2 B3: the model's range (CompositionLayer requires 0..1; 0..2 here crashed the app above 100 %). Above 100 %
+            // could not be louder anyway: the mix headroom divides by the summed gain (one layer at 150 % plays at 100 %).
+            valueRange = AudioGains.RANGE,
             displayValue = String.format("%.0f%%", gain * 100f),
-            onBegin = {},
-            onValueChange = { onAudioChange(muted, it) },
-            onCommit = {},
+            onBegin = onAudioBegin,
+            onValueChange = { onAudioPreview(muted, AudioGains.clamp(it)) },
+            onCommit = onAudioCommit,
             onDirectEdit = {
-                val clamped = (it / 100f).coerceIn(0f, 2f)
-                onAudioChange(muted, clamped)
+                onAudioChange(muted, AudioGains.clamp(it / 100f))
             },
             dialogTitle = "Set Volume Gain (%)"
         )
@@ -1267,3 +1293,23 @@ private fun NumericInputDialog(
     )
 }
 
+
+/** TL3 B1: the page a twirl-down name long-press opens for a property, and the Transform page's mode for it. */
+internal object InspectorOpenPage {
+    fun section(target: GraphTarget?): InspectorSection? = when {
+        target == null -> null
+        target.animator != null -> InspectorSection.CONTEXTUAL_EDIT
+        target.property == AnimPropertyType.POSITION || target.property == AnimPropertyType.SCALE || target.property == AnimPropertyType.ROTATION -> InspectorSection.TRANSFORM
+        target.property == AnimPropertyType.OPACITY -> InspectorSection.BLENDING_OPACITY
+        else -> InspectorSection.CONTEXTUAL_EDIT // text properties: Edit Text
+    }
+    fun mode(target: GraphTarget?): TransformSubMode? = when (target?.property) {
+        AnimPropertyType.POSITION -> TransformSubMode.POSITION
+        AnimPropertyType.SCALE -> TransformSubMode.SCALE
+        AnimPropertyType.ROTATION -> TransformSubMode.ROTATION
+        else -> null
+    }
+}
+
+/** TL3 B1: the Transform page's initial mode when it is opened for one property. */
+internal val LocalTransformOpenMode = androidx.compose.runtime.compositionLocalOf<TransformSubMode?> { null }

@@ -53,6 +53,8 @@ internal class AnimatePageState(bars: MutableState<AnimateBars>, focus: MutableS
     /** Position / Rotation / Scale pad, dial or rulers shown in place of the list (Controls: Pad, dial, rulers). */
     var subPage by subPage
     var linkScale by linkScale
+    /** TL3.1 B2: scroll this animator into view (a twirl-down name long-press); consumed by the page. */
+    var reveal by mutableStateOf<Long?>(null)
 }
 
 @Composable internal fun rememberAnimatePageState(layerId: Long): AnimatePageState {
@@ -92,7 +94,9 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
 @Composable internal fun TextAnimatePage(layer: CompositionLayer, time: Long, frameRate: FrameRate, compositionWidth: Int, compositionHeight: Int,
     state: AnimatePageState, finishing: Boolean, palette: PaletteRepository?, controls: AnimateControls,
     onAction: (EditorAction) -> Unit, onValueBegin: () -> Unit, onPayloadPreview: (TextProperties) -> Unit,
-    onFinish: () -> Unit, onCancel: () -> Unit, onMessage: (String) -> Unit, metrics: AnimateMetrics, modifier: Modifier = Modifier) {
+    onFinish: () -> Unit, onCancel: () -> Unit, onMessage: (String) -> Unit, metrics: AnimateMetrics, modifier: Modifier = Modifier,
+    /** TLP T6: the preview eyedropper (the same sampler the Edit Text colour picker uses); null = no eyedropper. */
+    sampleColour: (((Int?) -> Unit) -> Unit)? = null) {
     val text = layer.text
     val local = Math.subtractExact(frameRate.snap(time), layer.resolvedKeyframeAnchorUs)
     val resolved = state.bars.resolve(text)
@@ -274,6 +278,9 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
                                 onPreview = { c -> preview { t -> TextAnimatorEdits.set(t, address, local, argb = c) } }, onFinish = ::finish, onCancel = ::cancel,
                                 modifier = Modifier.testTag("animate-colour-picker"), name = spec.label.lowercase(), swatches = paletteSwatches(palette, TEXT_DEFAULT_SWATCHES),
                                 onReset = { commit { listOf(TextAnimatorEdits.reset(it, address, local)) } },
+                                // TLP T6: the eyedropper, as the main colour picker: close the popover, sample on the preview,
+                                // one edit on release (a release outside the composition, or Back, changes nothing).
+                                onEyedropper = sampleColour?.let { sample -> { close(); sample { c -> if (c != null) set(address, argb = c) } } },
                                 onSwatch = { c -> set(address, argb = TextColourEdit.swatch(argb, c)) })
                         }
                     }) { focus(address); popover = PopoverToggle.next(popover, key(address)) }
@@ -356,6 +363,7 @@ private val CHARACTER_PROPERTIES = setOf(AnimatorProperty.CHARACTER_OFFSET, Anim
         val keys = rows.map { it.key }
         // TEXT F3.2: the add bar moves below the new animator, and the list keeps its scroll anchored to the add bar's key;
         // without this the list would jump to the end. Show the new (expanded) animator from its bar instead.
+        LaunchedEffect(state.reveal) { state.reveal?.let { revealAnimator = it; state.reveal = null } }
         LaunchedEffect(revealAnimator, keys) {
             val id = revealAnimator ?: return@LaunchedEffect
             val index = keys.indexOf("a:$id")

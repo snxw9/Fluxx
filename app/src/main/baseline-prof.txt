@@ -1,0 +1,31 @@
+# MP1 B4: hand-written baseline profile rules for Fluxx's own hot paths (startup, opening the editor, timeline scroll
+# and scrub, play / pause). Written by hand: generating one needs `cmd package compile` / profile dumps, which are not
+# allowed on the test phone. Library profiles (Compose, AndroidX) are merged in by the build from their AARs.
+# H = hot, S = startup, P = post-startup. Wildcards cover a class and its Kotlin-generated members.
+
+# Startup and the shell
+HSPLcom/fluxx/android/MainActivity;->**(**)**
+HSPLcom/fluxx/android/MainActivity$**;->**(**)**
+Lcom/fluxx/android/MainActivity;
+HSPLcom/fluxx/android/ProjectManager;->**(**)**
+HSPLcom/fluxx/android/ui/theme/**;->**(**)**
+HSPLcom/fluxx/android/ui/navigation/**;->**(**)**
+HSPLcom/fluxx/android/ui/home/**;->**(**)**
+
+# Opening the editor: the view model, the reducer, the document model and its codec
+HSPLcom/fluxx/android/editor/**;->**(**)**
+HSPLcom/fluxx/android/model/**;->**(**)**
+HSPLfluxx/schema/**;->**(**)**
+
+# The editor screen, the timeline (scroll, scrub, twirl-downs), the preview surface, the inspector shell
+HSPLcom/fluxx/android/ui/editor/**;->**(**)**
+HSPLcom/fluxx/android/ui/timeline/**;->**(**)**
+HSPLcom/fluxx/android/ui/preview/**;->**(**)**
+HSPLcom/fluxx/android/ui/common/**;->**(**)**
+HPLcom/fluxx/android/ui/inspector/**;->**(**)**
+
+# Preview, play / pause, scrub: the controller, renderer, decoder, audio streaming and mixing, media access
+HSPLcom/fluxx/android/render/**;->**(**)**
+HSPLcom/fluxx/android/engine/**;->**(**)**
+HSPLcom/fluxx/android/media/**;->**(**)**
+HPLcom/fluxx/android/fonts/**;->**(**)**

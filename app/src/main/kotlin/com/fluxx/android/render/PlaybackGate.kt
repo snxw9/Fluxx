@@ -10,6 +10,15 @@ object PreviewFrames {
     private val presented = AtomicLong()
     val count: Long get() = presented.get()
     internal fun presented() { presented.incrementAndGet() }
+    /**
+     * AUD1: a TEST-ONLY observer of presented preview frames: (frame time us, render start ns, presented ns). Null in the
+     * app; the benchmark sets it to time video against audio. No behaviour change.
+     */
+    @Volatile var testObserver: ((Long, Long, Long) -> Unit)? = null
+    /** AUD2: TEST-ONLY playback lifecycle events ("playback-create", "track-play", "playback-close", "gain-live"). Null in the app. */
+    @Volatile var testPlayback: ((String) -> Unit)? = null
+    /** AUD2: TEST-ONLY clock reads: (now ns, head frames, timestamp valid, position us). Null in the app. */
+    @Volatile var testClock: ((Long, Long, Boolean, Long) -> Unit)? = null
 }
 
 /**
@@ -31,4 +40,13 @@ internal class PlaybackGate(private val presented: () -> Long, private val nowNs
         return open
     }
     companion object { const val HOLD_NS = 2_000_000_000L }
+}
+
+/** AUD2 B2: when preview seeks count as a scrub (pure, JVM tested). */
+object ScrubPolicy {
+    /** A seek within this long after the previous one is part of a scrub (bounded decodes allowed). */
+    const val GAP_NS = 250_000_000L
+    /** After an approximate scrub frame, the exact frame is rendered once no request came for this long. */
+    const val SETTLE_MS = 120L
+    fun scrubbing(sinceLastSeekNs: Long) = sinceLastSeekNs in 0 until GAP_NS
 }

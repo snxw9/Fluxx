@@ -92,7 +92,8 @@ class LayerKeyMarkersTest {
         val timeline=java.io.File("src/main/kotlin/com/fluxx/android/ui/timeline/TimelineView.kt").readText()
         assertTrue(timeline.contains("drawPath(path = diamondPath, color = clipBgColor, style = knockoutStroke)"))
         // Markers are composed after the clip body (which holds the name), so they draw above the text; the name is untouched.
-        assertTrue(timeline.indexOf("text = label,")<timeline.indexOf("LayerKeyMarkers.diamond(diamondPath, size)"))
+        // TL3.1 B3: the shared key shape (diamond, or a square for hold keys).
+        assertTrue(timeline.indexOf("text = label,")<timeline.indexOf("LayerKeyMarkers.keyShape(diamondPath, size,"))
         // Allocation-free: one remembered Path and Strokes, rebuilt in place.
         assertTrue(timeline.contains("val diamondPath = remember { Path() }") && timeline.contains("val knockoutStroke = remember(density)"))
     }

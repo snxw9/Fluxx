@@ -20,6 +20,32 @@ internal enum class TextControl(val label: String,val unit: String="") {
     PAINT("Fill and stroke colour"),EXPLODE("Explode Text"),BASE_FONT("Layer base font"),BASE_ALIGNMENT("Layer base alignment")
 }
 
+/**
+ * TL3.1 B2: where a twirl-down name long-press lands in Edit Text: a text property's control (and its tab), or the
+ * Animate tab focused on an animator field (its animator / selector expanded and scrolled into view).
+ */
+internal object TextOpenTarget {
+    fun control(p: com.fluxx.android.editor.AnimPropertyType): TextControl? = when (p) {
+        com.fluxx.android.editor.AnimPropertyType.FONT_SIZE -> TextControl.SIZE
+        com.fluxx.android.editor.AnimPropertyType.FILL_COLOUR -> TextControl.FILL
+        com.fluxx.android.editor.AnimPropertyType.STROKE_COLOUR -> TextControl.STROKE
+        com.fluxx.android.editor.AnimPropertyType.STROKE_WIDTH -> TextControl.STROKE_WIDTH
+        com.fluxx.android.editor.AnimPropertyType.TRACKING -> TextControl.TRACKING
+        com.fluxx.android.editor.AnimPropertyType.LEADING -> TextControl.LEADING
+        com.fluxx.android.editor.AnimPropertyType.BASELINE_SHIFT -> TextControl.BASELINE
+        com.fluxx.android.editor.AnimPropertyType.STROKE_OVER_FILL -> TextControl.ORDER
+        com.fluxx.android.editor.AnimPropertyType.LIGATURES -> TextControl.LIGATURES
+        com.fluxx.android.editor.AnimPropertyType.SOURCE_TEXT -> TextControl.SOURCE
+        else -> null
+    }
+    /** The tab whose face (or bottom bar) holds [c]: Character unless only Paragraph has it. */
+    fun tab(c: TextControl): TextTab =
+        if (c in TextInspectorLayout.inventory(TextTab.PARAGRAPH) && c !in TextInspectorLayout.inventory(TextTab.CHARACTER)) TextTab.PARAGRAPH else TextTab.CHARACTER
+}
+
+/** TL3.1 B2: the property a name long-press asked for (with a serial so repeated requests count), for Edit Text. */
+internal val LocalTextOpenTarget = androidx.compose.runtime.compositionLocalOf<Pair<com.fluxx.android.editor.GraphTarget, Int>?> { null }
+
 /** One grid cell; [control] null is an empty slot that keeps columns aligned. */
 internal data class TextGridCell(val control: TextControl?,val weight: Float=1f)
 
