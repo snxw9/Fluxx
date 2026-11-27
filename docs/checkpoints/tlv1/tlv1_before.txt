@@ -1,0 +1,19 @@
+STATE=Tlv1Test start: low_power=0 plugged=AC level=80 percent temperature=37.0C screen=Awake keyguard=unlocked
+short 30 x 2 s: 30 layers, 60.0 s; default zoom 120.0 dp/s; layout nodes 238, widest node 21330 px; content width 21330 px
+short 30 x 2 s FOLLOW 5 s: timeline recompositions 55, clip-row recompositions 594; UI frames 110 p50 65.3 p95 106.6 p99 119.1 max 125.0 ms; main thread 4596 ms busy, worst message 126.9 ms; centre now 4.72 s
+short 30 x 2 s FLING 8000 px/s: moved 9.94 s; timeline recompositions 68, clip-row recompositions 704; UI frames 148 p50 51.0 p95 65.5 p99 69.2 max 74.1 ms; main thread 3426 ms busy, worst 69.9 ms
+short 30 x 2 s (timeline recompositions so far 69)
+short 30 x 2 s HIGHEST ZOOM asked 2400 dp/s: got 1178.8 dp/s = 110.51 px per frame (39.29 dp per frame); content width 200000 px; layout nodes 238, widest node 200000 px
+STATE=Tlv1Test start: low_power=0 plugged=AC level=80 percent temperature=37.0C screen=Awake keyguard=unlocked
+Project 1: 30 layers, 1078.7 s; default zoom 65.6 dp/s; layout nodes 238, widest node 200000 px; content width 200000 px
+Project 1 FOLLOW 5 s: timeline recompositions 66, clip-row recompositions 715; UI frames 132 p50 45.3 p95 64.6 p99 66.7 max 84.8 ms; main thread 3879 ms busy, worst message 88.6 ms; centre now 4.32 s
+Project 1 FLING 8000 px/s: moved 18.22 s; timeline recompositions 67, clip-row recompositions 737; UI frames 150 p50 37.9 p95 49.4 p99 56.6 max 56.8 ms; main thread 2637 ms busy, worst 50.9 ms
+Project 1 (timeline recompositions so far 68)
+Project 1 HIGHEST ZOOM asked 2400 dp/s: got 65.6 dp/s = 9.22 px per frame (3.28 dp per frame); content width 200000 px; layout nodes 238, widest node 200000 px
+Project 1 stat: before 9256/1795809411123, after 9256/1795809411123 -> UNCHANGED
+STATE=Tlv1Test start: low_power=0 plugged=AC level=80 percent temperature=37.2C screen=Awake keyguard=unlocked
+3 h (180 x 60 s): 180 layers, 10800.0 s; default zoom 6.5 dp/s; layout nodes 238, widest node 200000 px; content width 200000 px
+3 h (180 x 60 s) FOLLOW 5 s: timeline recompositions 88, clip-row recompositions 946; UI frames 176 p50 38.2 p95 57.7 p99 61.6 max 74.9 ms; main thread 4032 ms busy, worst message 82.3 ms; centre now 4.78 s
+3 h (180 x 60 s) FLING 8000 px/s: moved 182.21 s; timeline recompositions 74, clip-row recompositions 814; UI frames 150 p50 38.8 p95 47.5 p99 48.7 max 59.8 ms; main thread 2400 ms busy, worst 47.0 ms
+3 h (180 x 60 s) (timeline recompositions so far 75)
+3 h (180 x 60 s) HIGHEST ZOOM asked 2400 dp/s: got 6.5 dp/s = 0.61 px per frame (0.22 dp per frame); content width 200000 px; layout nodes 238, widest node 200000 px
