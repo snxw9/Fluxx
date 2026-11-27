@@ -28,6 +28,13 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). **Push
   - A non-debuggable `benchmark` build type (its numbers are in the record), and a hand-written baseline profile (its effect not measurable via `adb install`).
   - 30 clips with non-contiguous cuts still hitch: pre-opening is MP2.
   - See `docs/checkpoints/MP1.md`.
+- **MP1.1 (branch `aud1`, not merged): crashes on big imports.**
+  - Root cause of every crash (the 50-minute import, bulk adds, Sequence over 30): the timeline asked Compose for a node wider than 262,143 px. It is not an MP1 regression (the AUD2 tip crashes identically).
+  - Fixed by a zoom ceiling tied to the composition length: frame-level zoom remains up to about 14 min of composition on the A16.
+  - Bulk add is one edit (one undo); Sequence and Stagger icons beside Add in the media browser.
+  - Every media test now records Battery Saver and charging state.
+  - Two low-memory kills on the phone were not reproduced.
+  - See `docs/checkpoints/MP1_1.md`.
 - **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1, TLP.2, TLP.3 and TL3 (phone test lists at the end of each section).
 
 ## T0. Selection architecture (written before the code)
