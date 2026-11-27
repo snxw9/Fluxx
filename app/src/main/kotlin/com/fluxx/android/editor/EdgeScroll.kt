@@ -25,5 +25,5 @@ object EdgeScroll {
      * The drag in CONTENT px: the finger's SCREEN move since the down ([screenDx]) plus how far the content scrolled since
      * then. So a still finger in the edge zone keeps the key under it while the content scrolls.
      */
-    fun contentDx(screenDx: Float, scrollAtDown: Int, scrollNow: Int): Float = screenDx + (scrollNow - scrollAtDown)
+    fun contentDx(screenDx: Float, scrollAtDown: Double, scrollNow: Double): Float = (screenDx + (scrollNow - scrollAtDown)).toFloat()
 }

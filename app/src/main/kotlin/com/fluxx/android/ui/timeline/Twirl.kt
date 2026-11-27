@@ -150,18 +150,19 @@ internal object TwirlStyle {
     }
 }
 
-/** TL3: the visible horizontal range of the content (px), read in the draw phase only. */
-internal fun interface VisibleRange { fun px(): ClosedFloatingPointRange<Float> }
+
+
 
 /**
  * AUD2 B1: the timeline while playback runs (pure, JVM tested). The view follows the HEARD time [LEAD_NS] ahead (the
- * frame being laid out reaches the screen about one display frame later); content x of a time is `time × pxPerUs`, and a
- * time shows on screen at `lineX + time × pxPerUs − scroll` (the waveform row draws through the same mapping).
+ * frame being laid out reaches the screen about one display frame later). TLV1: the scroll state is the time under the
+ * playhead; a time shows on screen at `lineX + (time − centre) × pxPerUs`, relative, exact at any length.
  */
 object TimelineFollow {
     const val LEAD_NS = 16_000_000L
-    fun scrollFor(heardUs: Long, durationUs: Long, pxPerUs: Double): Int = Math.round(heardUs.coerceIn(0L, durationUs) * pxPerUs).toInt()
-    fun screenX(timeUs: Long, scrollPx: Int, pxPerUs: Double, lineX: Float): Float = (lineX + timeUs * pxPerUs - scrollPx).toFloat()
+    /** The time to put under the playhead for the HEARD time [heardUs]. */
+    fun centreFor(heardUs: Long, durationUs: Long): Long = heardUs.coerceIn(0L, durationUs.coerceAtLeast(0))
+    fun screenX(timeUs: Long, centreUs: Long, pxPerUs: Double, lineX: Float): Float = (lineX + (timeUs - centreUs) * pxPerUs).toFloat()
 }
 
 /**
@@ -180,8 +181,8 @@ object WaveformProbe {
  * drawn in ONE Canvas for the visible horizontal range only (sorted keys, binary-searched); paths are reused, so a scroll
  * frame allocates nothing and recomposes nothing. Gestures and popovers are attached by the caller ([gestures]).
  */
-@Composable internal fun TwirlTrackRow(layer: CompositionLayer, row: TwirlRow.Property, pxPerUs: Double, playhead: () -> Long,
-    selectedTimes: Set<Long>, visible: VisibleRange, modifier: Modifier = Modifier, underlay: (DrawScope.() -> Unit)? = null,
+@Composable internal fun TwirlTrackRow(layer: CompositionLayer, row: TwirlRow.Property, axis: TimelineAxis, playhead: () -> Long,
+    selectedTimes: Set<Long>, modifier: Modifier = Modifier, underlay: (DrawScope.() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit = {}) {
     val times = remember(layer, row.target) { TwirlRows.keyTimes(layer, row.target) }
     val anchor = layer.resolvedKeyframeAnchorUs
@@ -197,16 +198,17 @@ object WaveformProbe {
     Box(modifier.fillMaxWidth().height(row.heightDp.dp).testTag("twirl-row-${row.key}")
         .drawBehind {
             underlay?.invoke(this)
-            val range = visible.px()
+            // TLV1: the whole window (fixed between origin steps, so a scroll frame translates and redraws nothing).
+            val range = 0f..axis.widthPx.toFloat()
             val playheadUs = playhead()
             val sizePx = LayerKeyMarkers.FOCUSED_DP.dp.toPx()
             LayerKeyMarkers.diamond(diamond, Size(sizePx, sizePx))
             LayerKeyMarkers.keyShape(square, Size(sizePx, sizePx), hold = true)
             val pad = sizePx
-            var i = firstVisible(times, anchor, pxPerUs, range.start - pad)
+            var i = firstVisible(times, anchor, axis, range.start - pad)
             while (i < times.size) {
                 val comp = anchor + times[i]
-                val x = (comp * pxPerUs).toFloat()
+                val x = axis.x(comp)
                 if (x > range.endInclusive + pad) break
                 // TL3.1 B3: hold keys are squares.
                 val shape = if (holds[i]) square else diamond
@@ -221,22 +223,22 @@ object WaveformProbe {
         }, content = content)
 }
 
-/** The first index whose x is at or after [px] (keys sorted by time). */
-internal fun firstVisible(times: List<Long>, anchor: Long, pxPerUs: Double, px: Float): Int {
+/** The first index whose window x is at or after [px] (keys sorted by time). */
+internal fun firstVisible(times: List<Long>, anchor: Long, axis: TimelineAxis, px: Float): Int {
     var lo = 0; var hi = times.size
-    while (lo < hi) { val mid = (lo + hi) ushr 1; if (((anchor + times[mid]) * pxPerUs).toFloat() < px) lo = mid + 1 else hi = mid }
+    while (lo < hi) { val mid = (lo + hi) ushr 1; if (axis.x(anchor + times[mid]) < px) lo = mid + 1 else hi = mid }
     return lo
 }
 
-/** The key of [times] nearest to [x] (px, content space) within [halfHitPx]; midpoints split close keys. */
-internal fun nearestKey(times: List<Long>, layer: CompositionLayer, pxPerUs: Double, x: Float, halfHitPx: Float): Long? {
+/** The key of [times] nearest to [x] (px, window space) within [halfHitPx]; midpoints split close keys. */
+internal fun nearestKey(times: List<Long>, layer: CompositionLayer, axis: TimelineAxis, x: Float, halfHitPx: Float): Long? {
     val anchor = layer.resolvedKeyframeAnchorUs
     val start = layer.timing.startUs; val end = layer.timing.endUs ?: start
     var best: Long? = null; var bestD = Float.MAX_VALUE
     for (t in times) {
         val comp = anchor + t
         if (comp !in start..end) continue
-        val d = kotlin.math.abs((comp * pxPerUs).toFloat() - x)
+        val d = kotlin.math.abs(axis.x(comp) - x)
         if (d <= halfHitPx && d < bestD) { best = t; bestD = d }
     }
     return best
@@ -314,9 +316,10 @@ internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectK
  * row is shown and the layer is visible (eye on); a row leaving mid-decode cancels it. While they compute, a static faint
  * placeholder (no animation).
  */
-@Composable internal fun TwirlAudioRow(layer: CompositionLayer, row: TwirlRow.Audio, pxPerUs: Double, visible: VisibleRange,
+@Composable internal fun TwirlAudioRow(layer: CompositionLayer, row: TwirlRow.Audio, axis: TimelineAxis,
     provider: com.fluxx.android.media.AudioPeakProvider, modifier: Modifier = Modifier) {
     val uri = layer.asset?.uri
+    val pxPerUs = axis.pxPerUs
     // MP1 B2: the peaks of the clip's used range (plus a margin), extended when the trim widens or the clip moves.
     val sourceIn = layer.timing.sourceInUs; val clipUs = layer.timing.durationUs ?: Long.MAX_VALUE / 4
     if (uri != null && layer.visible) DisposableEffect(uri, sourceIn, clipUs) { provider.request(uri, sourceIn, clipUs); onDispose { provider.cancel(uri) } }
@@ -328,9 +331,10 @@ internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectK
         .then(if (placedProbe != null) Modifier.onGloballyPositioned { placedProbe(System.nanoTime(), it.positionInRoot().x) } else Modifier)
         .semantics { contentDescription = if (peaks != null) "Audio waveform" else "Audio waveform loading" }
         .drawBehind {
-            val range = visible.px()
-            WaveformProbe.draw?.invoke(System.nanoTime(), (range.start + range.endInclusive) / 2f, pxPerUs)
-            val clipL = (layer.timing.startUs * pxPerUs).toFloat(); val clipR = ((layer.timing.endUs ?: layer.timing.startUs) * pxPerUs).toFloat()
+            // TLV1: the whole window (fixed between origin steps, so a scroll frame translates and redraws nothing).
+            val range = 0f..axis.widthPx.toFloat()
+            WaveformProbe.draw?.invoke(System.nanoTime(), (axis.originPx + axis.widthPx / 2.0).toFloat(), pxPerUs)
+            val clipL = axis.x(layer.timing.startUs); val clipR = axis.x(layer.timing.endUs ?: layer.timing.startUs)
             val x0 = maxOf(range.start, clipL); val x1 = minOf(range.endInclusive, clipR)
             if (x1 <= x0) return@drawBehind
             // TL3.1 B6: the upper half only: the rectified peak envelope max(|min|, |max|) rises from the bottom baseline.
@@ -348,7 +352,7 @@ internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectK
             val (mins, maxs) = pyramid.levels[level]
             var x = kotlin.math.floor(x0)
             while (x < x1) {
-                val src = com.fluxx.android.model.WaveformMapping.sourceUs(layer, (x / pxPerUs).toLong())
+                val src = com.fluxx.android.model.WaveformMapping.sourceUs(layer, axis.timeAt(x).toLong())
                 if (src != null) {
                     val b0 = pyramid.bucketAt(level, src); val b1 = pyramid.bucketAt(level, src + usPerPx.toLong()).let { if (it < 0) b0 else it }
                     if (b0 >= 0) {

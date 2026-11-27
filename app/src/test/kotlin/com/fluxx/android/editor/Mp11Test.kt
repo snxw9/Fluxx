@@ -8,38 +8,37 @@ import org.junit.Test
 class Mp11Test {
     private val composeLimit = 262_143
 
-    @Test fun timelineContentNeverExceedsTheLimitFromOneSecondToThreeHours() {
-        val durations = listOf(1L, 10L, 60L, 300L, 780L, 1800L, 3018L, 3600L, 7200L, 10_800L).map { it * 1_000_000 }
+    @Test fun noTimelineNodeIsWiderThanTheWindowAtAnyLengthOrZoom() {
+        // TLV1: the old width-limit test. Only the window (the viewport plus half a viewport each side) is laid out, so no
+        // node depends on the composition's length or the zoom, from 1 s to 10 h, at every zoom and density.
+        val durations = listOf(1L, 10L, 60L, 300L, 780L, 1800L, 3018L, 3600L, 7200L, 10_800L, 36_000L).map { it * 1_000_000 }
         for (density in listOf(1f, 2f, 2.625f, 2.8125f, 3.5f, 4f)) for (viewport in listOf(720, 1080, 1440, 2560)) for (d in durations) {
-            val ceiling = TimelineZoom.ceiling(d, density, viewport); val floor = TimelineZoom.floor(d, density, viewport)
-            assertTrue(floor > 0f && floor <= ceiling)
             for (chosen in listOf(TimelineZoom.MIN_DP_PER_SECOND, TIMELINE_DEFAULT_DP_PER_SECOND, TimelineZoom.MAX_DP_PER_SECOND, 10_000f)) {
-                val used = TimelineZoom.clamp(chosen, d, density, viewport)
-                val px = TimelineZoom.contentPx(d, used, density, viewport)
-                assertTrue("d=${d / 1_000_000}s density=$density viewport=$viewport chosen=$chosen -> $px px",
-                    px <= TimelineZoom.MAX_CONTENT_PX + 1 && px < composeLimit)
+                val v = TimelineViewport(d / 2, TimelineZoom.clamp(chosen), density, viewport, d)
+                assertTrue("d=${d / 1_000_000}s density=$density viewport=$viewport chosen=$chosen -> ${v.windowWidthPx} px",
+                    v.windowWidthPx <= viewport + 2 * (viewport / 2) && v.windowWidthPx < composeLimit)
             }
         }
     }
 
-    @Test fun shortCompositionsKeepTheirFullZoomRange() {
-        // 1 min at 2.8x: the full 0.5 .. 2400 dp/s range would be 405,000 px at 2400, so only the top is capped; 1 s keeps all.
-        assertEquals(TimelineZoom.MAX_DP_PER_SECOND, TimelineZoom.ceiling(1_000_000, 2.8125f, 1080), 0f)
-        assertEquals(TimelineZoom.MIN_DP_PER_SECOND, TimelineZoom.floor(60_000_000, 2.8125f, 1080), 0f)
-        assertEquals(TIMELINE_DEFAULT_DP_PER_SECOND, TimelineZoom.clamp(TIMELINE_DEFAULT_DP_PER_SECOND, 60_000_000, 2.8125f, 1080), 0f)
+    @Test fun theZoomRangeIsTheSameAtEveryLength() {
+        for (d in listOf(1_000_000L, 60_000_000L, 3_018_400_000L, 10_800_000_000L)) {
+            assertEquals(TimelineZoom.MAX_DP_PER_SECOND, TimelineZoom.clamp(1e9f), 0f)
+            assertEquals(TimelineZoom.MIN_DP_PER_SECOND, TimelineZoom.clamp(0f), 0f)
+            assertEquals(TIMELINE_DEFAULT_DP_PER_SECOND, TimelineZoom.clamp(TIMELINE_DEFAULT_DP_PER_SECOND), 0f)
+            val top = TimelineViewport(d, TimelineZoom.MAX_DP_PER_SECOND, 2.8125f, 1080, d)
+            assertEquals(2400f, top.dpPerSecond, 0f)
+        }
     }
 
-    @Test fun snxwsCrashWidthsNowFit() {
-        // The phone's crash widths (A0): 3018.4 s (the 50-minute import) and 1800 s (Sequence of 30 x 60 s), 2.8125x, 1080 px.
-        for (d in listOf(3_018_400_000L, 1_800_000_000L, 798_000_000L)) {
-            val before = TimelineZoom.contentPx(d, TIMELINE_DEFAULT_DP_PER_SECOND, 2.8125f, 1080)
-            assertTrue("$before", before > composeLimit)
-            val after = TimelineZoom.contentPx(d, TimelineZoom.clamp(TIMELINE_DEFAULT_DP_PER_SECOND, d, 2.8125f, 1080), 2.8125f, 1080)
-            assertTrue("$after", after <= TimelineZoom.MAX_CONTENT_PX + 1)
+    @Test fun snxwsCrashLengthsKeepFrameLevelZoom() {
+        // The phone's crash lengths (MP1.1 A0): 3018.4 s (the 50-minute import), 1800 s (Sequence of 30 x 60 s), and 3 h.
+        // At the top zoom on the A16 (2.8125x, 30 fps) a frame is 225 px wide at every one of them; the window stays 2160 px.
+        for (d in listOf(3_018_400_000L, 1_800_000_000L, 798_000_000L, 10_800_000_000L)) {
+            val v = TimelineViewport(d, TimelineZoom.MAX_DP_PER_SECOND, 2.8125f, 1080, d)
+            assertEquals(225.0, TimelineScale(FrameRate(30, 1), v.pxPerUs).pxPerFrame, 1e-9)
+            assertEquals(2160, v.windowWidthPx)
         }
-        // About 40 h at 2.8x: even the usual floor would overflow, so the floor drops below it.
-        val veryLong = 40L * 3600 * 1_000_000
-        assertTrue(TimelineZoom.floor(veryLong, 2.8125f, 1080) < TimelineZoom.MIN_DP_PER_SECOND)
     }
 
     // ---- Bulk add ------------------------------------------------------------------------------------------------------

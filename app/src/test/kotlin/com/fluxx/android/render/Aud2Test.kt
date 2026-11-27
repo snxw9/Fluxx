@@ -115,14 +115,17 @@ class Aud2Test {
 
     @Test fun theTimelineFollowsTheHeardTimeAndTheWaveformMapsTimeAndScrollToScreenX() {
         val ppu = 0.000338                                      // 1 px = 2.96 ms (the A1 zoom)
-        assertEquals(20_716, TimelineFollow.scrollFor(61_290_000, 122_000_000, ppu))
-        assertEquals(0, TimelineFollow.scrollFor(-5, 122_000_000, ppu))
-        assertEquals(Math.round(122_000_000 * ppu).toInt(), TimelineFollow.scrollFor(999_000_000, 122_000_000, ppu))
+        // TLV1: the follow puts the heard time under the playhead (time, not px), clamped to the composition.
+        assertEquals(61_290_000L, TimelineFollow.centreFor(61_290_000, 122_000_000))
+        assertEquals(0L, TimelineFollow.centreFor(-5, 122_000_000))
+        assertEquals(122_000_000L, TimelineFollow.centreFor(999_000_000, 122_000_000))
         // A time under the line draws AT the line whatever the speed (same scroll -> same x: no drift).
         val line = 540.5f
-        val scroll = TimelineFollow.scrollFor(61_290_000, 122_000_000, ppu)
-        assertEquals(line, TimelineFollow.screenX(Math.round(scroll / ppu), scroll, ppu, line), 0.5f)
-        assertEquals(line + 100f, TimelineFollow.screenX(Math.round((scroll + 100) / ppu), scroll, ppu, line), 0.5f)
+        val centre = TimelineFollow.centreFor(61_290_000, 122_000_000)
+        assertEquals(line, TimelineFollow.screenX(centre, centre, ppu, line), 0.5f)
+        assertEquals(line + 100f, TimelineFollow.screenX(centre + Math.round(100 / ppu), centre, ppu, line), 0.5f)
+        // Hours into a composition the relative mapping is as exact as at the start.
+        assertEquals(line + 100f, TimelineFollow.screenX(3 * 3_600_000_000L + Math.round(100 / ppu), 3 * 3_600_000_000L, ppu, line), 0.5f)
         assertTrue(TimelineFollow.LEAD_NS in 0..33_000_000)
     }
 
