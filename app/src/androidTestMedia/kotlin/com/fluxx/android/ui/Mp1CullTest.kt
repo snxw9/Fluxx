@@ -54,6 +54,9 @@ class Mp1CullTest : Aud2Base() {
         val us = ev.mapNotNull { Mp1Bench.field(it.second, "us")?.toDoubleOrNull()?.div(1000) }
         val opens = rec.decoder.count { it.first >= t0 && it.second.startsWith("open ") }; val closes = rec.decoder.count { it.first >= t0 && it.second.startsWith("close") }
         val render = steady.map { (it[2] - it[1]) / 1e6 }
+        val times = frames.map { it[0] }
+        report("A3 cull $label sanity: wall %.1f s, composition %.1f s (first %.1f s), distinct frame times ${times.distinct().size}, repeated ${times.size - times.distinct().size}, backward steps ${times.zipWithNext().count { (a, b) -> b < a }}".format(
+            ((frames.lastOrNull()?.get(2) ?: t0) - t0) / 1e9, ((times.maxOrNull() ?: 0) - (times.minOrNull() ?: 0)) / 1e6, (times.firstOrNull() ?: 0) / 1e6))
         report("A3 cull $label: ${frames.size} frames in 10 s (target ${10 * m.fps}); interval ${Aud2Bench.stats(iv)} ms; render ${Aud2Bench.stats(render)} ms; decoder requests ${ev.size} (frameAt ${Aud2Bench.stats(us)} ms, total %.1f s); opened $opens closed $closes; underruns ${rec.underruns}".format(us.sum() / 1000))
         Thread.sleep(800)
         return frames

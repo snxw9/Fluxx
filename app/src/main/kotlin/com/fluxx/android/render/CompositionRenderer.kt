@@ -39,7 +39,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private var wantedRasters = emptySet<String>()
     private fun releaseHidden() {
         // AUD2 B4: decoders are keyed per URI and per distinct source time ("uri#k"); release those of hidden URIs.
-        val wantedKeys = decoders.keys.filter { DecoderKeys.uri(it) in wantedDecoders }.toSet()
+        // MP1 B3: a source whose every layer was cold-culled last frame counts as unwanted too (released after the delay).
+        val wantedKeys = decoders.keys.filter { DecoderKeys.uri(it).let { u -> u in wantedDecoders && u !in culledUris } }.toSet()
         for (key in decoderRelease.due(decoders.keys.toList(), wantedKeys)) { flush(); decoders.remove(key)?.decoder?.close() }
         for (key in rasterRelease.due(images.keys.toList(), wantedRasters)) { flush(); images.remove(key)?.buffer?.close() }
     }
@@ -200,6 +201,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
             animation.logicalBounds.copyInto(logicalBounds)
             LayerGeometry.textMatrixInto(matrix,evaluatedTransform,logicalBounds,comp.width,comp.height,
                 layer.referenceWidth.takeIf { it > 0 } ?: comp.width,layer.referenceHeight.takeIf { it > 0 } ?: comp.height,layer.anchorX,layer.anchorY)
+            // MP1 B3: evaluated above (always); not drawn when its padded bounds are outside the frame or it has no area.
+            if (textCulled(project, layer, local, size, logicalBounds, opacity, comp)) continue
             if (staged == 4) flush()
             val meshing = System.nanoTime()
             check(RenderBridge.textLayer(session,layout.handle,matrix,size,text.alignment.ordinal,text.fill.evaluate(local),opacity,
@@ -403,6 +406,86 @@ class CompositionRenderer(private val context: Context, private val repository: 
     /** MP1 A0: this frame's decoder keys in draw order, and those already drawn (export's decoder rotation). */
     private val frameOrder = ArrayList<String>()
     private val drawnKeys = ArrayList<String>()
+
+    // ---- MP1 B3: culling -------------------------------------------------------------------------------------------
+    /** MP1 B3: culling on (default). The differential golden test renders the same scenes with it off: byte-identical. */
+    @Volatile var cullingEnabled = true
+    /** This frame's video layers: [CULL_DRAW], [CULL_WARM] (decoded, not drawn) or [CULL_COLD] (neither). */
+    private val videoCull = HashMap<Long, Int>()
+    /** URIs whose every active layer is cold-culled this frame (their decoders get the 3 s delayed release). */
+    private val culledUris = HashSet<String>()
+    private val liveUris = HashSet<String>()
+    private var needed: Set<Long> = emptySet()
+    private var neededFor: ProjectDocument? = null
+    private var cullRate: FrameRate? = null
+    private var cullStepUs = 33_333L
+    /** The last decoded crop size per source (packed w << 32 | h): the same size the draw uses, before decoding. */
+    private val cropSizes = HashMap<String, Long>()
+    private val cullTransform = FloatArray(6)
+    private val cullMatrix = FloatArray(16)
+    private val cullQuad = FloatArray(16)
+    /** MP1 B3 counters since the last [cullStats] read: layers culled (no draw), video decodes skipped, warm decodes. */
+    private val cullCounts = LongArray(3)
+    internal fun cullStats(out: LongArray) { cullCounts.copyInto(out); java.util.Arrays.fill(cullCounts, 0L) }
+
+    private fun isNeeded(id: Long) = needed.isNotEmpty() && id in needed
+    private fun edgePadX(comp: Composition) = 2f * Culling.EDGE_PAD_PX / comp.width.coerceAtLeast(1)
+    private fun edgePadY(comp: Composition) = 2f * Culling.EDGE_PAD_PX / comp.height.coerceAtLeast(1)
+
+    /** A drawn video / image / solid quad with the renderer's own matrix [m]: culled (no draw)? */
+    private fun quadCulled(project: ProjectDocument, layer: CompositionLayer, localUs: Long, opacity: Float, m: FloatArray, comp: Composition): Boolean {
+        if (!cullingEnabled) return false
+        val pad = CullPadding.localPad(layer, localUs)
+        Culling.rectQuad(m, -1f, -1f, 2f, 2f, pad ?: 0f, cullQuad)
+        val culled = Culling.decide(opacity, cullQuad, pad != null, !CullPadding.addsArea(layer, localUs), edgePadX(comp), edgePadY(comp), isNeeded(layer.id)) == Culling.Decision.CULLED
+        if (culled) cullCounts[0]++
+        return culled
+    }
+
+    /** A text layer with its drawn matrix (in [matrix]) and logical bounds: culled? Animators make the bounds unprovable. */
+    private fun textCulled(project: ProjectDocument, layer: CompositionLayer, local: Long, size: Float, bounds: FloatArray, opacity: Float, comp: Composition): Boolean {
+        if (!cullingEnabled) return false
+        // Glyph ink can pass the logical (line-box) bounds: one em, the stroke, the baseline shift and the SDF edge.
+        val pad = CullPadding.localPad(layer, local)?.let { it + kotlin.math.abs(size) + kotlin.math.abs(layer.text.baselineShift.evaluate(local)) }
+        Culling.rectQuad(matrix, bounds[0], bounds[1], bounds[2], bounds[3], pad ?: 0f, cullQuad)
+        val culled = Culling.decide(opacity, cullQuad, pad != null, !CullPadding.addsArea(layer, local), edgePadX(comp), edgePadY(comp), isNeeded(layer.id)) == Culling.Decision.CULLED
+        if (culled) cullCounts[0]++
+        return culled
+    }
+
+    /** Whether video [layer] is drawn at [t]: evaluated with the draw's own geometry call (decoder crop size, rotation, aspect). */
+    private fun videoVisibleAt(project: ProjectDocument, layer: CompositionLayer, uri: String, t: Long): Boolean {
+        val comp = project.composition
+        if (!layer.timing.isActive(t) || (comp.durationUs != null && t >= comp.durationUs)) return false
+        layer.evaluatedTransformInto(t, cullTransform)
+        if (cullTransform[5] == 0f) return isNeeded(layer.id)
+        val info = repository.video(uri)
+        val crop = cropSizes[uri]
+        val w = if (crop != null) (crop ushr 32).toInt() else info.width
+        val h = if (crop != null) (crop and 0xffffffffL).toInt() else info.height
+        val rw = layer.referenceWidth.takeIf { it > 0 } ?: comp.width; val rh = layer.referenceHeight.takeIf { it > 0 } ?: comp.height
+        LayerGeometry.matrix(cullMatrix, cullTransform[0], cullTransform[1], cullTransform[2], cullTransform[3], cullTransform[4], comp.width, comp.height,
+            w, h, info.rotation, info.pixelAspect, referenceWidth = rw, referenceHeight = rh, anchorX = layer.anchorX, anchorY = layer.anchorY)
+        val local = t - layer.timing.startUs
+        val pad = CullPadding.localPad(layer, local)
+        // Without a decoded frame yet the crop may differ from the track size: a few pixels of margin cover it.
+        val edge = if (crop == null) 4f else 1f
+        Culling.rectQuad(cullMatrix, -1f, -1f, 2f, 2f, pad ?: 0f, cullQuad)
+        return Culling.decide(cullTransform[5], cullQuad, pad != null, !CullPadding.addsArea(layer, local),
+            edge * edgePadX(comp), edge * edgePadY(comp), isNeeded(layer.id)) == Culling.Decision.DRAW
+    }
+
+    /** MP1 B3 rule 5: drawn; culled but visible within 0.5 s (decode, keep warm); or culled (no decode). */
+    private fun videoCullState(project: ProjectDocument, layer: CompositionLayer, uri: String, t: Long): Int {
+        // Culling off: the rule before MP1 (only an opacity-0 video layer is left out of the decoder assignment).
+        if (!cullingEnabled) { layer.evaluatedTransformInto(t, cullTransform); return if (cullTransform[5] != 0f) CULL_DRAW else CULL_COLD }
+        if (videoVisibleAt(project, layer, uri, t)) return CULL_DRAW
+        cullCounts[0]++
+        // Static layers never change visibility within their clip: no lookahead needed.
+        if (layer.animTransform.isAnyAnimated() && Culling.visibleSoon(t, cullStepUs) { videoVisibleAt(project, layer, uri, it) }) { cullCounts[2]++; return CULL_WARM }
+        cullCounts[1]++
+        return CULL_COLD
+    }
     /** AUD2 B4: video layers left out of the last frame (more distinct sources than decoders). */
     var layersWithoutDecoder = 0; private set
     private fun raster(layer: CompositionLayer): Raster {
@@ -564,13 +647,19 @@ class CompositionRenderer(private val context: Context, private val repository: 
         }
         // AUD2 B4: this frame's decoders, assigned from the top layer down (preview: at most decoderSlots distinct ones;
         // MP1 A0: export assigns every layer and rotates decoders instead of leaving a layer out).
-        frameVideo.clear()
+        // MP1 B3: a culled video layer (opacity 0, zero area, outside the frame) gets no decoder unless it becomes visible
+        // within 0.5 s (then it keeps decoding, undrawn: "warm"). Its transform is still evaluated, here and below.
+        frameVideo.clear(); videoCull.clear(); culledUris.clear(); liveUris.clear()
+        if (neededFor !== project) { needed = RenderDependencies.needed(project); neededFor = project }
+        if (comp.frameRate != cullRate) { cullRate = comp.frameRate; cullStepUs = comp.frameRate.let { it.frameTimeUs(1) - it.frameTimeUs(0) } }
         requireNotNull(plan).forEachActive(timeUs) { layer,_,sourceTimeUs,_ ->
-            if (layer.type == LayerType.VIDEO) {
-                val visibleNow = (if (layer.animTransform.isAnyAnimated()) layer.evaluatedTransform(timeUs).opacity else layer.transform.opacity) != 0f
-                if (visibleNow) layer.asset?.uri?.let { frameVideo += Triple(layer.id, it, sourceTimeUs) }
+            if (layer.type == LayerType.VIDEO) layer.asset?.uri?.let { uri ->
+                val state = videoCullState(project, layer, uri, timeUs)
+                videoCull[layer.id] = state
+                if (state == CULL_COLD) culledUris += uri else { liveUris += uri; frameVideo += Triple(layer.id, uri, sourceTimeUs) }
             }
         }
+        culledUris.removeAll(liveUris)
         layerKeys.clear(); layerKeys.putAll(DecoderKeys.assign(frameVideo, if (interactive) decoderSlots else Int.MAX_VALUE))
         frameKeys.clear(); layerKeys.values.filterNotNullTo(frameKeys)
         frameOrder.clear(); for (v in frameVideo) layerKeys[v.first]?.let { if (it !in frameOrder) frameOrder += it }
@@ -615,11 +704,17 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 layer.evaluatedTransformInto(timeUs,evaluatedTransform)
                 LayerGeometry.textMatrixInto(matrix, evaluatedTransform, animation.logicalBounds,
                     comp.width, comp.height, referenceWidth, referenceHeight, layer.anchorX, layer.anchorY)
+                // MP1 B3: the drawn text matrix and its (padded) logical bounds; unprovable bounds never cull on position.
+                if (textCulled(project, layer, local, size, animation.logicalBounds, opacity, comp)) return@forEachActive
                 check(RenderBridge.textLayer(session, layout.handle, matrix, size, layer.text.alignment.ordinal,
                     layer.text.fill.evaluate(local), opacity, layer.text.tracking.evaluate(local), layer.text.leading.evaluate(local),
                     layer.text.baselineShift.evaluate(local), layer.text.strokeColour.evaluate(local), layer.text.strokeWidthAt(local), layer.text.paintOrder(local),modifiers=animation.modifiers)) { "Could not composite text" }
             } else if(layer.type == LayerType.VIDEO) {
                 val uri=requireNotNull(layer.asset?.uri)
+                // MP1 B3: culled and not entering within 0.5 s: neither decoded nor drawn (its decoder is released only
+                // after the 3 s delayed release, see releaseHidden).
+                val cull=videoCull[layer.id] ?: CULL_DRAW
+                if(cull == CULL_COLD) return@forEachActive
                 // AUD2 B4: over the decoder cap the layer is left out of this frame; the others keep playing.
                 val key=layerKeys[layer.id] ?: return@forEachActive
                 val decoder=decoder(key,uri) ?: run { layersWithoutDecoder++; return@forEachActive }
@@ -630,6 +725,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 if(decoder.lastApproximate) lastFrameApproximate=true
                 drawnKeys += key
                 val crop=image.cropRect
+                cropSizes[uri]=crop.width().toLong() shl 32 or crop.height().toLong()
+                // MP1 B3: warm: decoded so it is current when it re-enters, not drawn.
+                if(cull == CULL_WARM) return@forEachActive
                 LayerGeometry.matrix(matrix,posX,posY,scaleX,scaleY,rot,comp.width,comp.height,crop.width(),crop.height(),decoder.rotation,decoder.pixelAspect,
                     referenceWidth=referenceWidth,referenceHeight=referenceHeight,anchorX=layer.anchorX,anchorY=layer.anchorY)
                 image.hardwareBuffer?.use { buffer ->
@@ -641,6 +739,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
                     if(layer.type == LayerType.SOLID) referenceWidth else raster.width,
                     if(layer.type == LayerType.SOLID) referenceHeight else raster.height,
                     referenceWidth=referenceWidth,referenceHeight=referenceHeight,anchorX=layer.anchorX,anchorY=layer.anchorY)
+                // MP1 B3: the drawn matrix itself decides (outside the frame, zero area).
+                if(quadCulled(project, layer, localTimeUs, opacity, matrix, comp)) return@forEachActive
                 check(RenderBridge.layer(session,layer.id,raster.buffer,matrix,opacity)) { "Could not composite image" }
             }
             staged++
@@ -702,6 +802,10 @@ class CompositionRenderer(private val context: Context, private val repository: 
         const val STAGE_FLUSHES = 7
         const val STAGE_TIER_JNI = 8
         const val STAGES = 9
+        /** MP1 B3: a video layer's state for one frame. */
+        private const val CULL_DRAW = 0
+        private const val CULL_WARM = 1
+        private const val CULL_COLD = 2
         /** One background thread for imported-font tier fetches across renderers (worker calls are serialised anyway). */
         private val TIER_EXECUTOR=java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable,"fluxx-imported-tiers").apply { isDaemon=true;priority=Thread.NORM_PRIORITY-1 } }
