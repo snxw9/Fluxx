@@ -2,7 +2,7 @@
 
 # TLP: timeline productivity (selection, the D-button, the eye as a real off switch, multi-layer and key actions)
 
-Branch `tlp`, created from `master` at `2377a83` (after the graph merge). **Pushed to `origin/tlp`; not merged into `master`.**
+Branch `tlp`, created from `master` at `2377a83` (after the graph merge). The work continued on `aud1`, renamed `timeline`. **Merged into `master` on 2026-11-27 at merge commit `eec4878`** ("Merge timeline: TLP, TL3, AUD1, AUD2, MP1, MP1.1, MP1.2"). `tlp` and `aud1` were then deleted; `timeline`, `graph`, `text` and `master` remain. Later work (AUD3 onwards) is on `timeline` and is not merged until its own record says so.
 
 **Status:**
 - **T0–T6:** done. T6's coverage highlight was skipped at first and then built in TLP.1 Part 6 (the selector coverage box).
@@ -11,15 +11,15 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). **Push
 - **TLP.3:** done (A1 curve popover, A2 softer snapping, A3 no guide line; see the TLP.3 section at the end).
 - **TL3 (the twirl-down):** B1–B5 built; its record is `docs/checkpoints/TL3.md`. Device classes for TLP.3 / TL3 have passed on the A16 (see TL3.md, Tests).
 - **TL3.1:** phone-test fixes, B1–B8 additions, the waveform fix (C) and the playback diagnosis (D) are done; see the TL3.1 section of TL3.md.
-- **AUD1 (branch `aud1`, not merged):** streaming playback from a decoded-PCM cache, priming trim and a heard-time A/V clock (cold first sound 59.9 s -> 1.18 s; beats within +/-16 ms median); backward scrub stalls traced to the video seek path (reported, not changed). See `docs/checkpoints/AUD1.md`.
-- **AUD2 (branch `aud1`, not merged):**
+- **AUD1 (merged into `master` at `eec4878`):** streaming playback from a decoded-PCM cache, priming trim and a heard-time A/V clock (cold first sound 59.9 s -> 1.18 s; beats within +/-16 ms median); backward scrub stalls traced to the video seek path (reported, not changed). See `docs/checkpoints/AUD1.md`.
+- **AUD2 (merged into `master` at `eec4878`):**
   - The timeline follows the heard clock: it was 33–85 ms behind the sound, now ~0. The waveform row itself was never stale.
   - Pause / resume no longer triggers the decoder re-seek spiral: the VP9 mid-file jump went from 600–750 ms to 50 ms.
   - Backward scrub: the first frame went from 1.8–3.8 s to 60–120 ms. Gaps on H.264 are still up to 0.8 s.
   - Gain no longer crashes above 100 % (the slider is held to the model's 0–100 %) and plays live as one gesture.
   - Beyond 4 layers the decoder pool no longer thrashes: the cap is 4, and the lowest layers are left out.
   - See `docs/checkpoints/AUD2.md`.
-- **MP1 (branch `aud1`, not merged): media performance, pass 1.**
+- **MP1 (merged into `master` at `eec4878`): media performance, pass 1.**
   - Export no longer leaves layers out beyond the 4-decoder cap: 6 layers, 26/78 tiles missing → 0 (slower).
   - Backward scrub never shows a frame ahead of the finger: up to 1.2 s ahead → 0.
   - Long sources decode only the used range: a 5-s trim of a 50-minute file went from 31–80 MB of PCM, still decoding at 20 s, to about 5 MB and done. Peaks take 5 s instead of the whole track; thumbnails come from inside the clip.
@@ -28,14 +28,14 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). **Push
   - A non-debuggable `benchmark` build type (its numbers are in the record), and a hand-written baseline profile (its effect not measurable via `adb install`).
   - 30 clips with non-contiguous cuts still hitch: pre-opening is MP2.
   - See `docs/checkpoints/MP1.md`.
-- **MP1.1 (branch `aud1`, not merged): crashes on big imports.**
+- **MP1.1 (merged into `master` at `eec4878`): crashes on big imports.**
   - Root cause of every crash (the 50-minute import, bulk adds, Sequence over 30): the timeline asked Compose for a node wider than 262,143 px. It is not an MP1 regression (the AUD2 tip crashes identically).
   - Fixed by a zoom ceiling tied to the composition length: frame-level zoom remains up to about 14 min of composition on the A16.
   - Bulk add is one edit (one undo); Sequence and Stagger icons beside Add in the media browser.
   - Every media test now records Battery Saver and charging state.
   - Two low-memory kills on the phone were not reproduced.
   - See `docs/checkpoints/MP1_1.md`.
-- **MP1.2 (branch `aud1`, not merged): playback death in long mixed-source sequences.**
+- **MP1.2 (merged into `master` at `eec4878`): playback death in long mixed-source sequences.**
   - The deaths were lmkd low-memory kills, not crashes. Decoders of clips that had ended stayed open (four at about 250 MB of codec buffers each at 1440p).
   - They now close at the cut, against a memory budget, and on onTrimMemory. Project 1 went from 1 GB of codec buffers (118 MB of system memory left) to 350 MB.
   - Two file-specific stops were fixed: a codec that takes input but gives no picture now holds the last one; a cut before a file's first frame now gets that frame.
