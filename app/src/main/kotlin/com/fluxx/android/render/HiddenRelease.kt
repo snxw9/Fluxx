@@ -74,4 +74,19 @@ object DecoderKeys {
         return out
     }
     fun uri(key: String): String = key.substringBefore('#')
+
+    /**
+     * MP1 A0: export never leaves a layer out. When every pooled decoder is still needed by this frame, the one to close
+     * is the one whose NEXT use is farthest away (Belady): a decoder already drawn this frame is next needed in the next
+     * frame (at its draw position), one not drawn yet is needed later in this frame. [pool] the open keys, [drawn] the keys
+     * drawn so far this frame, [frameOrder] this frame's keys in draw order. With N keys through S slots this reopens
+     * about N - S decoders per frame (slower, never a missing layer).
+     */
+    fun exportVictim(pool: List<String>, drawn: List<String>, frameOrder: List<String>): String {
+        val n = frameOrder.size
+        return pool.maxBy { k ->
+            val at = frameOrder.indexOf(k)
+            when { at < 0 -> Int.MAX_VALUE; k in drawn -> n + at; else -> at }
+        }
+    }
 }

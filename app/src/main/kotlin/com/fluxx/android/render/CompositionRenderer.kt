@@ -361,9 +361,15 @@ class CompositionRenderer(private val context: Context, private val repository: 
         stageNs[STAGE_FLUSHES]++
         staged = 0
     }
-    /** Evicts the least recently used decoder the current frame does not use; false when every one is in use. */
+    /**
+     * Evicts the least recently used decoder the current frame does not use. When every one is in use: the preview gives
+     * up (false: the layer is left out of this frame, AUD2 B4); MP1 A0: export closes the decoder needed farthest ahead
+     * ([DecoderKeys.exportVictim]) and reopens it when its layer comes round again, so no exported frame lacks a layer.
+     */
     private fun evictDecoder(): Boolean {
-        val key = decoders.keys.firstOrNull { it !in frameKeys } ?: return false
+        val key = decoders.keys.firstOrNull { it !in frameKeys }
+            ?: (if (!interactive && decoders.isNotEmpty()) DecoderKeys.exportVictim(decoders.keys.toList(), drawnKeys, frameOrder) else null)
+            ?: return false
         flush() // A codec image cannot be released while a pending batch can still sample it.
         decoders.remove(key)?.decoder?.close()
         return true
@@ -379,7 +385,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         while (decoders.isNotEmpty() && (decoders.size >= decoderSlots ||
             decoders.values.sumOf { it.bytes } + info.width.toLong()*info.height*8 > frameBudget ||
             decoders.values.count { it.info.mime == info.mime } >= info.maxInstances)) if (!evictDecoder()) break
-        if (decoders.size >= decoderSlots) return null
+        if (decoders.size >= decoderSlots) return null // Preview only: export always frees a slot above.
         var opened: VideoDecoder? = null
         try { opened = VideoDecoder(context,Uri.parse(uri)) }
         catch (e: Exception) {
@@ -394,6 +400,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private val frameKeys = HashSet<String>()
     private val layerKeys = HashMap<Long, String?>()
     private val frameVideo = ArrayList<Triple<Long, String, Long>>()
+    /** MP1 A0: this frame's decoder keys in draw order, and those already drawn (export's decoder rotation). */
+    private val frameOrder = ArrayList<String>()
+    private val drawnKeys = ArrayList<String>()
     /** AUD2 B4: video layers left out of the last frame (more distinct sources than decoders). */
     var layersWithoutDecoder = 0; private set
     private fun raster(layer: CompositionLayer): Raster {
@@ -553,7 +562,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 staged++
             }
         }
-        // AUD2 B4: this frame's decoders, assigned from the top layer down (at most decoderSlots distinct ones).
+        // AUD2 B4: this frame's decoders, assigned from the top layer down (preview: at most decoderSlots distinct ones;
+        // MP1 A0: export assigns every layer and rotates decoders instead of leaving a layer out).
         frameVideo.clear()
         requireNotNull(plan).forEachActive(timeUs) { layer,_,sourceTimeUs,_ ->
             if (layer.type == LayerType.VIDEO) {
@@ -561,8 +571,10 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 if (visibleNow) layer.asset?.uri?.let { frameVideo += Triple(layer.id, it, sourceTimeUs) }
             }
         }
-        layerKeys.clear(); layerKeys.putAll(DecoderKeys.assign(frameVideo, decoderSlots))
+        layerKeys.clear(); layerKeys.putAll(DecoderKeys.assign(frameVideo, if (interactive) decoderSlots else Int.MAX_VALUE))
         frameKeys.clear(); layerKeys.values.filterNotNullTo(frameKeys)
+        frameOrder.clear(); for (v in frameVideo) layerKeys[v.first]?.let { if (it !in frameOrder) frameOrder += it }
+        drawnKeys.clear()
         layersWithoutDecoder = layerKeys.values.count { it == null }
         requireNotNull(plan).forEachActive(timeUs) { layer,localTimeUs,sourceTimeUs,_ ->
             if (cancelled()) throw CancellationException("Superseded frame")
@@ -616,6 +628,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 // AUD2 B2: while scrubbing, a bounded decode (the nearest cached / sync frame); the exact frame follows.
                 val image=decoder.frameAt(sourceTimeUs,cancelled,interactive && approximateFrames)
                 if(decoder.lastApproximate) lastFrameApproximate=true
+                drawnKeys += key
                 val crop=image.cropRect
                 LayerGeometry.matrix(matrix,posX,posY,scaleX,scaleY,rot,comp.width,comp.height,crop.width(),crop.height(),decoder.rotation,decoder.pixelAspect,
                     referenceWidth=referenceWidth,referenceHeight=referenceHeight,anchorX=layer.anchorX,anchorY=layer.anchorY)
