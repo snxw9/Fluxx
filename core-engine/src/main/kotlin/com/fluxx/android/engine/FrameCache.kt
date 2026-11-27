@@ -119,7 +119,8 @@ object ScrubFloor {
             src.seek(sync)
         }
         var n = 0
-        while (n < maxDecode && !src.ended && src.outPos <= target) { if (!src.decodeNext()) break; n++ }
+        // MP1.2: a target before the stream's first frame (a clip whose first frame lies after its in-point) still decodes that frame.
+        while (n < maxDecode && !src.ended && (src.outPos <= target || cache.size == 0)) { if (!src.decodeNext()) break; n++ }
         cache.floorExact(target)?.let { return it to true }
         // Nothing decoded at or before the target (a target before the stream's first frame): the first frame there is.
         val shown = cache.floor(target) ?: requireNotNull(cache.nearest(target)) { "The decoder returned no video frames" }
@@ -136,6 +137,18 @@ object DecoderPlan {
     const val CACHE_BYTES = 16L * 1024 * 1024
     /** While scrubbing ([approximate]), at most this many frames are decoded per request (the rest continues next time). */
     const val APPROX_DECODE_FRAMES = 4
+
+    /**
+     * MP1.2 H6: a stretch of samples the codec takes but never turns into a picture (one 1440x1080 AVC file on the A16 has
+     * 8-byte "duplicate frame" samples from 16.9 s; c2.mtk.avc.decoder outputs nothing for them). When the codec has taken
+     * more than [HOLD_MIN_INPUTS] inputs spanning more than [HOLD_SPAN_US] of stream since its last picture, and the input
+     * has reached the request, the last picture is held (the request is answered from the cache) instead of timing out.
+     * A codec that stops taking input still times out. Normal pipelines (VP9 holds up to ~31 frames) stay well below.
+     */
+    const val HOLD_MIN_INPUTS = 48
+    const val HOLD_SPAN_US = 2_000_000L
+    fun holdLastPicture(inputsSinceOutput: Int, firstInputPtsSinceOutput: Long, lastInputPts: Long, targetUs: Long): Boolean =
+        inputsSinceOutput > HOLD_MIN_INPUTS && lastInputPts - firstInputPtsSinceOutput > HOLD_SPAN_US && lastInputPts >= targetUs
 
     fun cacheFrames(width: Int, height: Int): Int = (CACHE_BYTES / (width.toLong() * height * 3 / 2).coerceAtLeast(1)).toInt().coerceIn(3, 6)
 

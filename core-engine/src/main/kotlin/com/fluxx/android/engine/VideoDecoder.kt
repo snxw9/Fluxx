@@ -85,13 +85,13 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
         var probeSeek = -1L
         var decoded = 0
         var how = "decode"
-        lastApproximate = false
+        lastApproximate = false; held = false
         // MP1 A3: shown= is the pts of the frame returned (the scrub display rule compares it with the target t=).
         fun log(kind: String, shown: Image? = null) = probe?.invoke("$kind $probeKey t=$timeUs from=$probeFrom seek=$probeSeek decoded=$decoded how=$how us=${(SystemClock.elapsedRealtimeNanos() - probeStart) / 1000} shown=${shown?.let { it.timestamp / 1000 } ?: -1}")
         try {
             if (approximate) {
                 // MP1 B1: scrubbing shows the nearest decoded frame AT OR BEFORE the target (bounded work), never a later one.
-                scrubCancel = cancelled; scrubDecoded = 0; scrubSeek = -1L
+                scrubCancel = cancelled; scrubDecoded = 0; scrubSeek = -1L; scrubTarget = timeUs
                 val (img, exactFloor) = ScrubFloor.frame(timeUs, cache, scrubSource, DecoderPlan.APPROX_DECODE_FRAMES)
                 decoded = scrubDecoded; probeSeek = scrubSeek
                 // Not the exact (nearest-rule) frame: the preview renders that once the scrub settles.
@@ -101,7 +101,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
             cache.exact(timeUs)?.let { hit ->
                 // Playback: the hit is the look-ahead frame of the previous request; decode the next one now, so every
                 // frame costs one decode (without this, calls alternated 0 / 2 decodes and the pacing got uneven).
-                if (!approximate && !outputEnded && hit.timestamp / 1000 == outPos) { decodeNext(cancelled); decoded++ }
+                if (!approximate && !outputEnded && hit.timestamp / 1000 == outPos) { decodeNext(cancelled, timeUs); decoded++ }
                 how = "cached"; log("frame", hit); return hit
             }
             var sync = Long.MIN_VALUE
@@ -115,12 +115,15 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
                 seek(sync); probeSeek = sync
             }
             // Decode forward until a frame after the target exists (the nearest-frame rule needs both neighbours).
-            while (!outputEnded && outPos <= timeUs) {
-                decodeNext(cancelled) ?: break
+            // MP1.2: also when nothing is cached yet: a target before the first frame (Project 1 clip 17: first frame at
+            // 0.105 s, the cut asks for 0.003 s) seeks to that first sync frame, already past the target.
+            while (!outputEnded && (outPos <= timeUs || cache.size == 0)) {
+                decodeNext(cancelled, timeUs) ?: break
                 decoded++
             }
             val exact = cache.exact(timeUs)
-            if (exact == null) { lastApproximate = !outputEnded; if (lastApproximate) how = "approx" }
+            // MP1.2 H6: a held last picture IS the answer (no picture exists for this time yet): not approximate.
+            if (exact == null) { lastApproximate = !outputEnded && !held; how = if (held) "held" else if (lastApproximate) "approx" else how }
             return (exact ?: requireNotNull(cache.nearest(timeUs)) { "The decoder returned no video frames" }.second).also { log("frame", it) }
         } catch (e: CancellationException) {
             log("cancelled")
@@ -132,12 +135,13 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
     private var scrubCancel: () -> Boolean = { false }
     private var scrubDecoded = 0
     private var scrubSeek = -1L
+    private var scrubTarget = Long.MAX_VALUE
     private val scrubSource = object : ScrubFloor.Source {
         override val outPos: Long get() = this@VideoDecoder.outPos
         override val ended: Boolean get() = outputEnded
         override fun prevSync(t: Long): Long = this@VideoDecoder.prevSync(t)
         override fun seek(sync: Long) { this@VideoDecoder.seek(sync); scrubSeek = sync }
-        override fun decodeNext(): Boolean = (this@VideoDecoder.decodeNext(scrubCancel) != null).also { if (it) scrubDecoded++ }
+        override fun decodeNext(): Boolean = (this@VideoDecoder.decodeNext(scrubCancel, scrubTarget) != null).also { if (it) scrubDecoded++ }
     }
 
     /** Flush and seek to [sync]; the decoder then stands just before it (a later target continues forward from there). */
@@ -145,7 +149,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
         // Every rendered output was acquired synchronously before this flush; no pending callbacks.
         codec!!.flush()
         extractor.seekTo(sync, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
-        inputEnded = false; outputEnded = false
+        inputEnded = false; outputEnded = false; inputsSinceOutput = 0
         cache.breakRun()
         outPos = extractor.sampleTime.let { if (it >= 0) it - 1 else -1 }
     }
@@ -157,8 +161,14 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
         return p.sampleTime.coerceAtLeast(0)
     }
 
-    /** Decodes the next frame into the cache; null at the end of the stream. */
-    private fun decodeNext(cancelled: () -> Boolean): Image? {
+    // MP1.2 H6: inputs the codec took since its last picture (see DecoderPlan.holdLastPicture).
+    private var inputsSinceOutput = 0
+    private var firstInputSinceOutput = 0L
+    private var lastInputPts = -1L
+    private var held = false
+
+    /** Decodes the next frame into the cache; null at the end of the stream, or (MP1.2) when the last picture is held for [targetUs]. */
+    private fun decodeNext(cancelled: () -> Boolean, targetUs: Long = Long.MAX_VALUE): Image? {
         if (outputEnded) return null
         val deadline = SystemClock.elapsedRealtime() + 5000
         val decoder = requireNotNull(codec)
@@ -173,12 +183,21 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
                     if (size < 0) {
                         decoder.queueInputBuffer(index,0,0,0,MediaCodec.BUFFER_FLAG_END_OF_STREAM); inputEnded = true
                     } else {
-                        decoder.queueInputBuffer(index,0,size,extractor.sampleTime,0); extractor.advance()
+                        val pts = extractor.sampleTime
+                        decoder.queueInputBuffer(index,0,size,pts,0); extractor.advance()
+                        if (inputsSinceOutput++ == 0) firstInputSinceOutput = pts
+                        lastInputPts = maxOf(lastInputPts, pts)
                     }
                 }
             }
             val index = decoder.dequeueOutputBuffer(info, 2000)
+            if (index < 0 && DecoderPlan.holdLastPicture(inputsSinceOutput, firstInputSinceOutput, lastInputPts, targetUs) && cache.size > 0) {
+                held = true
+                testEvents?.invoke("hold $probeKey t=$targetUs inputs=$inputsSinceOutput span=${lastInputPts - firstInputSinceOutput}")
+                return null
+            }
             if (index >= 0) {
+                inputsSinceOutput = 0
                 outputEnded = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
                 val hasImage = info.size > 0 && info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0
                 decoder.releaseOutputBuffer(index, hasImage)

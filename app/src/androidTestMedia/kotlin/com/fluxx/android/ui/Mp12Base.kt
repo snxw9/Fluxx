@@ -90,7 +90,7 @@ abstract class Mp12Base : Aud2Base() {
                 val mx = pts.map { it.first }.average(); val my = pts.map { it.second }.average()
                 return pts.sumOf { (it.first - mx) * (it.second - my) } / pts.sumOf { (it.first - mx) * (it.first - mx) }.coerceAtLeast(1e-9)
             }
-            say("$label: RESULT ${if (reached) "played to the end" else "STOPPED at clip $lastClip/${clips.size} (%.1f s)".format(lastT / 1e6)} in %.1f s wall; peak PSS %.0f MB, peak dmabuf %.0f MB, peak graphics %.0f MB, decoders open max ${o.maxDecoders}; slope after clip 4: PSS %+.1f MB/clip, dmabuf %+.1f MB/clip; decoders opened ${dec.opened} closed ${dec.closed} failed ${dec.failed}; trims ${trace.trims.map { it.second }}; MemAvailable min %.0f MB; status '${message ?: ""}'"
+            say("$label: RESULT ${if (reached) "played to the end" else "STOPPED at clip $lastClip/${clips.size} (%.1f s)".format(lastT / 1e6)} in %.1f s wall; peak PSS %.0f MB, peak dmabuf %.0f MB, peak graphics %.0f MB, decoders open max ${o.maxDecoders}; slope after clip 4: PSS %+.1f MB/clip, dmabuf %+.1f MB/clip; decoders opened ${dec.opened} closed ${dec.closed} failed ${dec.failed}; held-picture frames ${dec.holds}; trims ${trace.trims.map { it.second }}; MemAvailable min %.0f MB; status '${message ?: ""}'"
                 .format(wall, o.peakPss, o.peakDmabuf, o.peakGraphics, slope { it.pssMb }, slope { it.dmabufMb }, rows.minOf { it.memAvailMb }))
             return o
         } finally {

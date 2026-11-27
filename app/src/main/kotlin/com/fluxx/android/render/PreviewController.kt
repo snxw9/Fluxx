@@ -128,6 +128,7 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
                     if(settle) lastDrawTime=-1
                     if(lastDrawTime!=frameTime) {
                         renderer.approximateFrames=!playing && !settle && scrubbing
+                        renderer.playing=playing // MP1.2: decoders of clips that ended close at the cut
                         renderer.renderPreview(snapshot,frameTime,quality,cancel)
                         approximateShown=!playing && renderer.lastFrameApproximate
                         if(!cancel()) {

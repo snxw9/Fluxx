@@ -22,11 +22,26 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private val lowRam = context.getSystemService(android.app.ActivityManager::class.java).isLowRamDevice
     // AUD2 B4: the cap on simultaneous video decoders (code constants; beyond it the lowest layers are left out).
     private val decoderSlots = if (lowRam) DecoderKeys.MAX_DECODERS_LOW_RAM else DecoderKeys.MAX_DECODERS
-    private val frameBudget = if (lowRam) 48L*1024*1024 else 96L*1024*1024
+    // MP1.2: decoders are budgeted by what they really hold (codec + reader buffers), against a share of the device's RAM.
+    private val decoderBudget = DecoderKeys.memoryBudget(android.app.ActivityManager.MemoryInfo().also {
+        context.getSystemService(android.app.ActivityManager::class.java).getMemoryInfo(it) }.totalMem)
     private val imageBudget = if (lowRam) 16L*1024*1024 else 32L*1024*1024
     private data class DecoderEntry(val decoder: VideoDecoder, val info: MediaRepository.VideoInfo) {
-        val bytes get() = info.width.toLong()*info.height*8 // retained images plus codec surfaces, conservative estimate
+        val bytes get() = DecoderKeys.decoderBytes(info.width, info.height, decoder.cacheFrames)
     }
+    /** MP1.2: set by the preview while playback runs (decoders of clips that ended close at the cut). */
+    @Volatile var playing = false
+    /** MP1.2: an onTrimMemory since the last frame: idle decoders close before the next one. */
+    @Volatile private var trimmed = false
+    private val trimCallbacks = object : android.content.ComponentCallbacks2 {
+        override fun onTrimMemory(level: Int) {
+            if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) trimmed = true
+        }
+        override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {}
+        @Deprecated("Deprecated in Java") override fun onLowMemory() { trimmed = true }
+    }.also { if (interactive) context.applicationContext.registerComponentCallbacks(it) }
+    private val nearUris = HashSet<String>()
+    private val heldKeys = ArrayList<String>()
     private data class Raster(val buffer: HardwareBuffer, val width: Int, val height: Int) {
         val bytes get() = width.toLong()*height*4
     }
@@ -37,10 +52,19 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private val rasterRelease = DelayedRelease<String>(clock = releaseClock)
     private var wantedDecoders = emptySet<String>()
     private var wantedRasters = emptySet<String>()
-    private fun releaseHidden() {
+    private fun releaseHidden(project: ProjectDocument, timeUs: Long) {
+        // MP1.2: decoders of clips that are over (no layer of the source active now or within the warm window): closed now
+        // while playing, before this frame opens the next clip's; paused, all but the most recent go now (DecoderRetention).
+        if (decoders.isNotEmpty()) {
+            DecoderRetention.nearUris(project.composition.layers, timeUs, Culling.WARM_LOOKAHEAD_US, nearUris)
+            heldKeys.clear(); heldKeys.addAll(decoders.keys)
+            val wasTrimmed = trimmed; trimmed = false
+            for (key in DecoderRetention.closeNow(heldKeys, nearUris, !interactive || playing, wasTrimmed)) { flush(); decoders.remove(key)?.decoder?.close() }
+        }
         // AUD2 B4: decoders are keyed per URI and per distinct source time ("uri#k"); release those of hidden URIs.
         // MP1 B3: a source whose every layer was cold-culled last frame counts as unwanted too (released after the delay).
-        val wantedKeys = decoders.keys.filter { DecoderKeys.uri(it).let { u -> u in wantedDecoders && u !in culledUris } }.toSet()
+        // MP1.2: so does an idle one kept while paused.
+        val wantedKeys = decoders.keys.filter { DecoderKeys.uri(it).let { u -> u in wantedDecoders && u !in culledUris && u in nearUris } }.toSet()
         for (key in decoderRelease.due(decoders.keys.toList(), wantedKeys)) { flush(); decoders.remove(key)?.decoder?.close() }
         for (key in rasterRelease.due(images.keys.toList(), wantedRasters)) { flush(); images.remove(key)?.buffer?.close() }
     }
@@ -385,10 +409,13 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private fun decoder(key: String, uri: String): VideoDecoder? {
         decoders[key]?.let { return it.decoder }
         val info = repository.video(uri)
-        while (decoders.isNotEmpty() && (decoders.size >= decoderSlots ||
-            decoders.values.sumOf { it.bytes } + info.width.toLong()*info.height*8 > frameBudget ||
+        val needs = DecoderKeys.decoderBytes(info.width, info.height, DecoderPlan.cacheFrames(info.width, info.height))
+        fun overBudget() = decoders.values.sumOf { it.bytes } + needs > decoderBudget
+        while (decoders.isNotEmpty() && (decoders.size >= decoderSlots || overBudget() ||
             decoders.values.count { it.info.mime == info.mime } >= info.maxInstances)) if (!evictDecoder()) break
         if (decoders.size >= decoderSlots) return null // Preview only: export always frees a slot above.
+        // MP1.2: the preview leaves a layer out rather than open a decoder past the memory budget (lmkd kills the app there).
+        if (interactive && decoders.isNotEmpty() && overBudget()) return null
         var opened: VideoDecoder? = null
         try { opened = VideoDecoder(context,Uri.parse(uri)) }
         catch (e: Exception) {
@@ -582,7 +609,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
             wantedDecoders=RenderLayers.wantedDecoders(project); wantedRasters=RenderLayers.wantedRasters(project)
         }
         // Between frames: nothing is staged and the previous frame's GPU work has completed (submitWork waits on its fence).
-        releaseHidden()
+        releaseHidden(project, timeUs)
         val comp=project.composition
         check(RenderBridge.begin(session,targetWidth,targetHeight,comp.width,comp.height)) { "Could not start composition frame" }
         staged=0
@@ -818,7 +845,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
     override fun close() {
         // Native teardown waits for GPU completion before producers return their Images.
         synchronized(tierLock) { closed=true;RenderBridge.destroy(session) }
-        if (interactive) TextLayerErrors.clear()
+        if (interactive) { TextLayerErrors.clear(); context.applicationContext.unregisterComponentCallbacks(trimCallbacks) }
         decoders.values.forEach { it.decoder.close() }; decoders.clear()
         images.values.forEach { it.buffer.close() }; images.clear()
     }

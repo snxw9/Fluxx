@@ -65,7 +65,7 @@ object Mp12Bench {
     class DecoderTrack {
         data class Open(val key: String, val w: Int, val h: Int, val cache: Int, val codec: String)
         val open = java.util.concurrent.ConcurrentHashMap<String, MutableList<Open>>()
-        @Volatile var opened = 0; @Volatile var closed = 0; @Volatile var failed = 0
+        @Volatile var opened = 0; @Volatile var closed = 0; @Volatile var failed = 0; @Volatile var holds = 0
         val events = CopyOnWriteArrayList<Pair<Long, String>>()
         fun start() {
             VideoDecoder.testEvents = { e ->
@@ -79,6 +79,7 @@ object Mp12Bench {
                     }
                     e.startsWith("close ") -> { open[e.substringAfter(' ')]?.let { l -> if (l.isNotEmpty()) l.removeAt(0); if (l.isEmpty()) open.remove(e.substringAfter(' ')) }; closed++; events += System.nanoTime() to e }
                     e.startsWith("open-failed") -> { failed++; events += System.nanoTime() to e }
+                    e.startsWith("hold ") -> { if (holds++ == 0) events += System.nanoTime() to e }
                 }
             }
         }

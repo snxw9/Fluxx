@@ -47,6 +47,40 @@ class DelayedRelease<K>(private val delayMs: Long = DEFAULT_DELAY_MS, private va
 }
 
 /**
+ * MP1.2: decoders of clips that are over (pure, JVM tested). A decoder is IDLE when no visible video layer of its source is
+ * active at the frame time or starts within [Culling.WARM_LOOKAHEAD_US] after it (a clip that ended, or one not reached).
+ * Before MP1.2 such a decoder stayed open until a new source needed its slot: a sequence of different files kept four
+ * decoders (~1 GB of codec buffers at 1440p on the A16) and lmkd killed the app.
+ * - Playing: every idle decoder closes at once (a clip that ended is not coming back), before the next clip's opens.
+ * - Paused / scrubbing: the most recently used [KEEP_IDLE_PAUSED] idle decoder waits for the 3 s delayed release (a scrub
+ *   back over the cut finds it open); older idle ones close at once.
+ * - [trimmed] (onTrimMemory): every idle decoder closes at once.
+ */
+object DecoderRetention {
+    const val KEEP_IDLE_PAUSED = 1
+
+    /** The URIs some visible video layer uses in [t, t + [lookaheadUs]], into [out] (cleared first). */
+    fun nearUris(layers: List<CompositionLayer>, t: Long, lookaheadUs: Long, out: MutableSet<String>) {
+        out.clear()
+        for (l in layers) {
+            if (l.type != LayerType.VIDEO || !l.visible) continue
+            val uri = l.asset?.uri ?: continue
+            val end = l.timing.endUs
+            if (l.timing.startUs <= t + lookaheadUs && (end == null || end > t)) out += uri
+        }
+    }
+
+    /** The idle keys of [heldLru] (least recently used first). */
+    fun idle(heldLru: List<String>, near: Set<String>): List<String> = heldLru.filter { DecoderKeys.uri(it) !in near }
+
+    /** The keys of [heldLru] to close now. The idle keys left (paused) go to the delayed release. */
+    fun closeNow(heldLru: List<String>, near: Set<String>, playing: Boolean, trimmed: Boolean = false): List<String> {
+        val idle = idle(heldLru, near)
+        return if (playing || trimmed) idle else idle.dropLast(KEEP_IDLE_PAUSED)
+    }
+}
+
+/**
  * AUD2 B4: which decoder each video layer of one frame uses (pure, JVM tested). Assigned from the TOP layer down, so
  * when there are more distinct sources than [MAX_DECODERS]-style slots the layers left out are the lowest ones.
  * - Layers of the same URI whose source times are within [SHARE_US] share one decoder (it serves both from its cache).
@@ -74,6 +108,17 @@ object DecoderKeys {
         return out
     }
     fun uri(key: String): String = key.substringBefore('#')
+
+    /**
+     * MP1.2: what one open decoder really holds, as measured on the A16: the codec's own output buffers (Codec2 commits
+     * about [CODEC_OUTPUT_BUFFERS] to the surface) plus the reader's (its [cacheFrames] plus two), each about w x h x 2
+     * bytes (aligned YUV plus metadata). A 1920x1440 VP9 decoder held ~250 MB of dmabuf; the old w x h x 8 guess said 22 MB.
+     */
+    const val CODEC_OUTPUT_BUFFERS = 32
+    fun decoderBytes(width: Int, height: Int, cacheFrames: Int): Long =
+        width.toLong() * height * 2 * (cacheFrames + 2 + CODEC_OUTPUT_BUFFERS)
+    /** MP1.2: the preview's decoder memory budget: a fifth of the device's RAM (A16, 3.7 GB: ~750 MB). */
+    fun memoryBudget(totalMemBytes: Long): Long = totalMemBytes / 5
 
     /**
      * MP1 A0: export never leaves a layer out. When every pooled decoder is still needed by this frame, the one to close
