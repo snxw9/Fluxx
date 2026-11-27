@@ -19,6 +19,15 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). **Push
   - Gain no longer crashes above 100 % (the slider is held to the model's 0–100 %) and plays live as one gesture.
   - Beyond 4 layers the decoder pool no longer thrashes: the cap is 4, and the lowest layers are left out.
   - See `docs/checkpoints/AUD2.md`.
+- **MP1 (branch `aud1`, not merged): media performance, pass 1.**
+  - Export no longer leaves layers out beyond the 4-decoder cap: 6 layers, 26/78 tiles missing → 0 (slower).
+  - Backward scrub never shows a frame ahead of the finger: up to 1.2 s ahead → 0.
+  - Long sources decode only the used range: a 5-s trim of a 50-minute file went from 31–80 MB of PCM, still decoding at 20 s, to about 5 MB and done. Peaks take 5 s instead of the whole track; thumbnails come from inside the clip.
+  - Safe culling of layers outside the frame, at opacity 0 or with zero area: byte-identical output, decodes skipped.
+  - One scheduler pauses background media work during playback and scrub.
+  - A non-debuggable `benchmark` build type (its numbers are in the record), and a hand-written baseline profile (its effect not measurable via `adb install`).
+  - 30 clips with non-contiguous cuts still hitch: pre-opening is MP2.
+  - See `docs/checkpoints/MP1.md`.
 - **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1, TLP.2, TLP.3 and TL3 (phone test lists at the end of each section).
 
 ## T0. Selection architecture (written before the code)
