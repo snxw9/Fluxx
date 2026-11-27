@@ -1073,22 +1073,24 @@ private fun TimelineClipRow(
             // Video / Image: Repeated timeline thumbnails strip when available
             if (layer.type == LayerType.VIDEO || layer.type == LayerType.IMAGE) {
                 thumbnail?.let { bmp ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(6.dp))
-                    ) {
-                        val numThumbnails = (widthPx / 48f).toInt().coerceAtLeast(1)
-                        repeat(numThumbnails) {
-                            Image(
-                                bitmap = bmp.asImageBitmap(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .width(48.dp)
-                                    .fillMaxHeight()
-                                    .border(0.5.dp, ClipVideoBorder)
-                            )
+                    // MP1 B2: the same 48dp tiles (centre-cropped, 0.5dp border) drawn by ONE canvas, only across the clip's
+                    // width. One Image composable per tile (hundreds on a long clip) were re-placed on every playback scroll
+                    // step: the timeline never went idle and UI frames doubled once file-URI clips got a thumbnail.
+                    val image = remember(bmp) { bmp.asImageBitmap() }
+                    Canvas(Modifier.fillMaxSize().clip(RoundedCornerShape(6.dp))) {
+                        val tileW = 48.dp.toPx(); val h = size.height; val stroke = 0.5.dp.toPx()
+                        if (image.width <= 0 || image.height <= 0 || h <= 0f) return@Canvas
+                        val scale = maxOf(tileW / image.width, h / image.height)
+                        val srcW = (tileW / scale).toInt().coerceIn(1, image.width); val srcH = (h / scale).toInt().coerceIn(1, image.height)
+                        val src = androidx.compose.ui.unit.IntOffset((image.width - srcW) / 2, (image.height - srcH) / 2)
+                        val tiles = (widthPx / 48f).toInt().coerceAtLeast(1)
+                        for (i in 0 until tiles) {
+                            val x = i * tileW
+                            if (x >= size.width) break
+                            drawImage(image, src, androidx.compose.ui.unit.IntSize(srcW, srcH), androidx.compose.ui.unit.IntOffset(x.toInt(), 0),
+                                androidx.compose.ui.unit.IntSize(kotlin.math.ceil(tileW).toInt(), kotlin.math.ceil(h).toInt()))
+                            drawRect(ClipVideoBorder, androidx.compose.ui.geometry.Offset(x + stroke / 2, stroke / 2),
+                                androidx.compose.ui.geometry.Size(tileW - stroke, h - stroke), style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
                         }
                     }
                 }

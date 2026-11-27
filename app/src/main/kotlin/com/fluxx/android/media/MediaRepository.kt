@@ -82,6 +82,11 @@ class MediaRepository(private val context: Context) {
         private const val THUMB_DIR = "mp1-thumbs"
         private const val THUMB_CAP_BYTES = 16L * 1024 * 1024
         private val TIMELINE_THUMBS = object : LruCache<String, Bitmap>(8 * 1024 * 1024) { override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount }
+        /** MP1 B2: thumbnail jobs (two at a time, off any UI coroutine), the jobs in flight and keys that gave no frame. */
+        @OptIn(ExperimentalCoroutinesApi::class)
+        private val THUMB_SCOPE = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(2))
+        private val THUMB_JOBS = HashMap<String, Deferred<Bitmap?>>()
+        private val THUMB_FAILED = HashSet<String>()
     }
 
     suspend fun browse(type: LayerType, offset: Int = 0, pageSize: Int = 100, directoryId: String? = null): List<Entry> = withContext(Dispatchers.IO) {
@@ -180,38 +185,49 @@ class MediaRepository(private val context: Context) {
      * nearest sync frame at background thread priority. Cached in memory and on disk (keyed by source, size, date and the
      * second), so a frame is decoded once.
      */
-    suspend fun timelineThumbnail(uri: String, sourceUs: Long): Bitmap? = withContext(Dispatchers.IO) {
+    suspend fun timelineThumbnail(uri: String, sourceUs: Long): Bitmap? {
         val second = (sourceUs / 1_000_000).coerceAtLeast(0)
         val key = "$uri@$second"
-        timelineThumbs.get(key)?.let { return@withContext it }
+        timelineThumbs.get(key)?.let { return it }
+        if (synchronized(THUMB_FAILED) { key in THUMB_FAILED }) return null
+        // The work runs in the repository's own scope: the clip row only awaits it (no polling in the row's coroutine), and
+        // a row that leaves and comes back while it waits shares the same job.
+        val job = synchronized(THUMB_JOBS) {
+            THUMB_JOBS.getOrPut(key) { THUMB_SCOPE.async { loadTimelineThumbnail(uri, second, key) }
+                .also { d -> d.invokeOnCompletion { synchronized(THUMB_JOBS) { THUMB_JOBS.remove(key) } } } }
+        }
+        return job.await()
+    }
+
+    private fun loadTimelineThumbnail(uri: String, second: Long, key: String): Bitmap? {
         val u = Uri.parse(uri)
         val (size, modified) = if (u.scheme == "file") java.io.File(requireNotNull(u.path)).let { it.length() to it.lastModified() } else -1L to -1L
         val dir = java.io.File(context.cacheDir, THUMB_DIR).apply { mkdirs() }
         val name = "%s-%x-%x-%d.jpg".format(java.security.MessageDigest.getInstance("SHA-1").digest(uri.toByteArray()).take(8)
             .joinToString("") { "%02x".format(it) }, size, modified, second)
         val file = java.io.File(dir, name)
-        if (file.exists()) android.graphics.BitmapFactory.decodeFile(file.path)?.let { file.setLastModified(System.currentTimeMillis()); timelineThumbs.put(key, it); return@withContext it }
-        thumbnailPermits.withPermit {
-            while (!com.fluxx.android.render.MediaWork.mayRunBackground()) delay(50)
-            val probe = com.fluxx.android.render.MediaProbes.events; val t0 = System.nanoTime()
-            probe?.invoke("thumb-start ${com.fluxx.android.render.MediaProbes.key(uri)} at=${second}s")
-            val bmp = try {
-                com.fluxx.android.render.MediaWork.background {
-                    val r = MediaMetadataRetriever()
-                    try { r.setDataSource(context, u); r.getScaledFrameAtTime(second * 1_000_000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 160, 90) }
-                    finally { r.release() }
-                }
-            } catch (cancelled: CancellationException) { throw cancelled } catch (e: Exception) { probe?.invoke("thumb-failed ${e.javaClass.simpleName}"); null }
-            probe?.invoke("thumb-done ${com.fluxx.android.render.MediaProbes.key(uri)} ms=${(System.nanoTime() - t0) / 1_000_000} ${bmp?.width}x${bmp?.height}")
-            bmp?.also { b ->
-                timelineThumbs.put(key, b)
-                runCatching { file.outputStream().use { b.compress(Bitmap.CompressFormat.JPEG, 85, it) } }
-                // A small LRU cap for the disk thumbnails.
-                val files = dir.listFiles().orEmpty().sortedBy { it.lastModified() }
-                var total = files.sumOf { it.length() }
-                for (f in files) { if (total <= THUMB_CAP_BYTES) break; total -= f.length(); f.delete() }
+        if (file.exists()) android.graphics.BitmapFactory.decodeFile(file.path)?.let { file.setLastModified(System.currentTimeMillis()); timelineThumbs.put(key, it); return it }
+        // MP1 B5: a background job: blocks at the checkpoint while playing or scrubbing (on this job's own thread).
+        com.fluxx.android.render.MediaWork.checkpoint()
+        val probe = com.fluxx.android.render.MediaProbes.events; val t0 = System.nanoTime()
+        probe?.invoke("thumb-start ${com.fluxx.android.render.MediaProbes.key(uri)} at=${second}s")
+        val bmp = try {
+            com.fluxx.android.render.MediaWork.background {
+                val r = MediaMetadataRetriever()
+                try { r.setDataSource(context, u); r.getScaledFrameAtTime(second * 1_000_000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 160, 90) }
+                finally { r.release() }
             }
-        }
+        } catch (e: Exception) { probe?.invoke("thumb-failed ${e.javaClass.simpleName}"); null }
+        probe?.invoke("thumb-done ${com.fluxx.android.render.MediaProbes.key(uri)} ms=${(System.nanoTime() - t0) / 1_000_000} ${bmp?.width}x${bmp?.height}")
+        // A source that gives no frame is not retried on every recomposition.
+        if (bmp == null) { synchronized(THUMB_FAILED) { THUMB_FAILED += key }; return null }
+        timelineThumbs.put(key, bmp)
+        runCatching { file.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 85, it) } }
+        // A small LRU cap for the disk thumbnails.
+        val files = dir.listFiles().orEmpty().sortedBy { it.lastModified() }
+        var total = files.sumOf { it.length() }
+        for (f in files) { if (total <= THUMB_CAP_BYTES) break; total -= f.length(); f.delete() }
+        return bmp
     }
 
     suspend fun reference(uri: Uri, identity: String = UUID.randomUUID().toString()): Pair<AssetReference, LayerType> = withContext(Dispatchers.IO) {

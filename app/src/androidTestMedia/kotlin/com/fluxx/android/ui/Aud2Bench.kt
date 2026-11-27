@@ -229,7 +229,7 @@ abstract class Aud2Base {
         val pcm = com.fluxx.android.render.SourcePcmCache.get(context).get(uri, durationUs)
         val t0 = System.nanoTime()
         // MP1 B2: the cache decodes only a source's used range; for this warm-up the whole source is that range.
-        pcm.setScope(listOf(0L..durationUs))
+        pcm.setScope(listOf(0L..durationUs)); pcm.fill()
         while (!pcm.complete && (System.nanoTime() - t0) / 1_000_000 < timeoutMs) {
             Thread.sleep(100)
             // If the worker stopped, ask for the first gap (a reader's demand).

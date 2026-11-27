@@ -64,10 +64,16 @@ class SourcePcm internal constructor(private val context: Context, val uri: Stri
      * a reader asks for it ([ensure]). A run outside a new scope stops (the job is cancelled).
      */
     fun setScope(windowsUs: List<LongRange>) {
-        val next = UsedRange.merge(windowsUs.map { UsedRange.framesOf(it, frames) })
-        scope = next
+        scope = UsedRange.merge(windowsUs.map { UsedRange.framesOf(it, frames) })
+        // Not started here: a Play right after this asks for its start position first ([ensure]); starting at the scope's
+        // beginning (the margin before the in-point) made that first demand restart the worker (a second extractor open of
+        // the source: +0.3-0.6 s to first sound on a 5 GB file). [fill] starts the background filling.
+    }
+
+    /** MP1 B2: starts filling the used range in the background (if anything is missing), after what a reader needs. */
+    fun fill() {
         if (noAudio || closed) return
-        if (synchronized(lock) { PcmScope.nextTarget(coverage, next) } >= 0) synchronized(this) { if (worker?.isAlive != true) startWorker() }
+        if (synchronized(lock) { PcmScope.nextTarget(coverage, scope) } >= 0) synchronized(this) { if (worker?.isAlive != true) startWorker() }
     }
 
     /** Make sure the region from [frame] (to [until]) gets decoded (restarting the worker there if it is elsewhere). */
@@ -369,6 +375,8 @@ class BlockMixer(context: Context, project: ProjectDocument) {
         }
     }
     val hasAudio get() = voices.isNotEmpty()
+    /** MP1 B2: every source starts filling its used range in the background (paused while playing: B5). */
+    fun fillScopes() { for (pcm in voices.map { it.pcm }.distinct()) pcm.fill() }
     /** AUD2 B3: new effective gains (layer id -> gain x headroom) for the voices playing; heard from the next block. */
     fun setGains(gains: Map<Long, Float>) { for (v in voices) gains[v.id]?.let { v.gain = it } }
 
@@ -440,6 +448,9 @@ internal class StreamingPlayback(context: Context, project: ProjectDocument, sta
         try {
             val block = ShortArray(StreamingWindow.BLOCK_FRAMES * 2)
             while (running.get() && !ready) { ready = mixer.ready(startFrame, AudioTiming.frames(StreamingWindow.READY_US)); if (!ready) Thread.sleep(5) }
+            // MP1 B2: the start is decoded: the rest of each used range may now fill in the background (B5 keeps it paused
+            // while this playback runs, except what the play position needs next).
+            mixer.fillScopes()
             var frame = startFrame
             while (running.get() && frame < mixer.totalFrames) {
                 val n = minOf(StreamingWindow.BLOCK_FRAMES.toLong(), mixer.totalFrames - frame).toInt()
