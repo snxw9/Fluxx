@@ -279,7 +279,14 @@ internal class Resampler(private val rate: Int) {
     private var phase = 0.0     // the next output frame's position, in source frames relative to the current buffer
     private var nextOut = Long.MIN_VALUE
     fun run(src: FloatArray, n: Int, firstOut: Long, emit: (Long, FloatArray, Int) -> Unit): Int {
-        if (rate == AudioTiming.RATE) { emit(firstOut, src, n); return n }
+        if (rate == AudioTiming.RATE) {
+            // AUD3: contiguous, as the resampling path below. A buffer that follows the previous one within 100 ms is written
+            // right after it: container timestamps in whole milliseconds (MKV) put 2048-frame HE-AAC buffers (42.667 ms)
+            // at 42 / 43 ms steps, and placing each at its own timestamp left a 16-32 frame gap or overlap every buffer.
+            val first = if (nextOut != Long.MIN_VALUE && kotlin.math.abs(firstOut - nextOut) <= AudioTiming.RATE / 10) nextOut else firstOut
+            nextOut = first + n
+            emit(first, src, n); return n
+        }
         val step = rate.toDouble() / AudioTiming.RATE
         if (nextOut == Long.MIN_VALUE || kotlin.math.abs(firstOut - nextOut) > AudioTiming.RATE / 10) { nextOut = firstOut; phase = 0.0; havePrev = false }
         val cap = (n / step).toInt() + 2

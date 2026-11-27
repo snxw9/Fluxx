@@ -37,7 +37,8 @@ object AudioTiming {
 /** AUD1 B2: the decoded-PCM cache's key and size policy (pure). One file per source: 48 kHz stereo 16-bit. */
 object PcmCachePolicy {
     const val DIR = "aud1-pcm"
-    const val VERSION = 1
+    // AUD3: 2 (48 kHz sources are now written contiguously; v1 caches of millisecond-timestamped files were wrong).
+    const val VERSION = 2
     const val CAP_BYTES = 256L * 1024 * 1024
     /** 1 s chunks: the unit of decode coverage. */
     const val CHUNK_FRAMES = AudioTiming.RATE
