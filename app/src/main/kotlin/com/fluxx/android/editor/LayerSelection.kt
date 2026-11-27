@@ -3,6 +3,9 @@ package com.fluxx.android.editor
 import com.fluxx.android.model.CompositionLayer
 import com.fluxx.android.model.ProjectDocument
 import com.fluxx.android.model.FrameRate
+import com.fluxx.android.model.AssetReference
+import com.fluxx.android.model.ClipTiming
+import com.fluxx.android.model.LayerType
 
 /**
  * TLP T0/T1: the timeline's multi-layer selection, an ORDERED set of layer ids in selection order. [primary] is the last
@@ -43,10 +46,42 @@ object LayerOrder {
 }
 
 /** TLP: multi-layer edits, each ONE [EditorAction.Batch] of existing actions (one undo). */
+/**
+ * MP1.1 C: the media browser's bulk add as ONE Batch (pure, JVM tested): every item added at [startUs] (snapped) stacked
+ * above the existing layers in selection order, then the layer bar's own Sequence / Stagger ([MultiLayerEdits], its
+ * defaults) applied to the new layers, computed against the state after the adds. Returns the Batch and the new ids.
+ */
+object BulkAdd {
+    data class Item(val asset: AssetReference, val type: LayerType, val name: String)
+    fun batch(state: EditorState, items: List<Item>, startUs: Long, placement: EditorViewModel.BulkPlacement): Pair<EditorAction.Batch, List<Long>> {
+        var s = state
+        val actions = ArrayList<EditorAction>(); val ids = ArrayList<Long>()
+        for (item in items) {
+            val comp = s.project.composition
+            val duration = if (item.type == LayerType.VIDEO) requireNotNull(item.asset.durationUs) { "Video duration could not be read" } else 5_000_000L
+            val add = EditorAction.Add(CompositionLayer(EditorReducer.nextLayerId(s.project), item.type,
+                zOrder = (comp.layers.maxOfOrNull { it.zOrder } ?: -1) + 1,
+                timing = ClipTiming(comp.frameRate.snap(startUs), 0, duration), asset = item.asset, name = item.name))
+            actions += add; ids += add.layer.id; s = EditorReducer.reduce(s, add)
+        }
+        val selection = LayerSelection(ids)
+        val placed = when (placement) {
+            EditorViewModel.BulkPlacement.AT_PLAYHEAD -> null
+            EditorViewModel.BulkPlacement.SEQUENCE -> MultiLayerEdits.sequence(s.project, selection, MultiLayerEdits.SEQUENCE_DEFAULT_GAP_FRAMES, MultiLayerEdits.SEQUENCE_REVERSE_DEFAULT)
+            EditorViewModel.BulkPlacement.STAGGER -> MultiLayerEdits.stagger(s.project, selection, MultiLayerEdits.STAGGER_DEFAULT_FRAMES, MultiLayerEdits.STAGGER_REVERSE_DEFAULT)
+        }
+        when (placed) { is EditorAction.Batch -> actions += placed.actions; null -> Unit; else -> actions += placed }
+        return EditorAction.Batch(actions) to ids
+    }
+}
+
 object MultiLayerEdits {
     /** TLP.1: the layer Stagger popover opens with Reverse ON, Sequence with Reverse OFF (every open; never persisted). */
     const val STAGGER_REVERSE_DEFAULT = true
     const val SEQUENCE_REVERSE_DEFAULT = false
+    /** The popovers' starting values (MP1.1: shared with the media browser's bulk Sequence / Stagger). */
+    const val STAGGER_DEFAULT_FRAMES = 2
+    const val SEQUENCE_DEFAULT_GAP_FRAMES = 0
     private fun layers(project: ProjectDocument, selection: LayerSelection) =
         selection.ids.mapNotNull { id -> project.composition.layers.firstOrNull { it.id == id } }
 

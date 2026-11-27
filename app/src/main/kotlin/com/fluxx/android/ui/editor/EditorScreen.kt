@@ -886,12 +886,12 @@ fun EditorScreen(
                     // popover closes, so every open starts from the default (Stagger ON, Sequence OFF); never persisted.
                     BarPopoverIcon("STAGGER", "Stagger the selected layers", "sel-stagger", "selection-stagger", enabled = layerSel.size > 1) { close ->
                         var reverse by remember { mutableStateOf(MultiLayerEdits.STAGGER_REVERSE_DEFAULT) }
-                        FramesPopoverContent("Stagger", "frames", 2, reverse, { reverse = !reverse }, { n ->
+                        FramesPopoverContent("Stagger", "frames", MultiLayerEdits.STAGGER_DEFAULT_FRAMES, reverse, { reverse = !reverse }, { n ->
                             MultiLayerEdits.stagger(editor.state.project, layerSel, n, reverse)?.let { applyLayerAction(it) } }, close, "selection-stagger")
                     }
                     BarPopoverIcon("SEQUENCE", "Sequence the selected layers end to end", "sel-sequence", "selection-sequence", enabled = layerSel.size > 1) { close ->
                         var reverse by remember { mutableStateOf(MultiLayerEdits.SEQUENCE_REVERSE_DEFAULT) }
-                        FramesPopoverContent("Gap", "frames", 0, reverse, { reverse = !reverse }, { n ->
+                        FramesPopoverContent("Gap", "frames", MultiLayerEdits.SEQUENCE_DEFAULT_GAP_FRAMES, reverse, { reverse = !reverse }, { n ->
                             MultiLayerEdits.sequence(editor.state.project, layerSel, n, reverse)?.let { applyLayerAction(it) } }, close, "selection-sequence", allowNegative = true)
                     }
                 }
@@ -1170,6 +1170,11 @@ fun EditorScreen(
                 errorMessage = addContentError,
                 onRequestPermission = onRequestMediaPermission,
                 allowMultiSelect = relinkingAssetId == null,
+                // MP1.1: a multi-select add is one edit (one undo), placed at the playhead / end to end / staggered.
+                onAddSelected = { items, placement ->
+                    editor.addMediaBatch(mediaRepository, items, playheadUs, placement)
+                    previewController?.update(editor.state.project, playheadUs, false)
+                },
                 onSelectMedia = { uri, name ->
                     val assetIdToRelink = relinkingAssetId
                     if (assetIdToRelink != null) {

@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fluxx.android.media.MediaRepository
@@ -57,6 +58,11 @@ fun AddContentSheet(
     onAddSolid: (Int) -> Unit,
     onDismiss: () -> Unit,
     allowMultiSelect: Boolean = true,
+    /**
+     * MP1.1: the multi-select add as ONE edit (one undo): the selected clips in selection order, placed at the playhead
+     * (Add), end to end (Sequence) or staggered (Stagger), as the layer bar does. Null: the old per-item loop (Add only).
+     */
+    onAddSelected: (suspend (List<Pair<Uri, String>>, com.fluxx.android.editor.EditorViewModel.BulkPlacement) -> Unit)? = null,
     paletteRepository: PaletteRepository? = null,
     modifier: Modifier = Modifier,
     onAddText: () -> Unit = {}
@@ -84,15 +90,21 @@ fun AddContentSheet(
     fun toggle(entry: MediaRepository.Entry) {
         selected = if (entry.uri in selected) selected - entry.uri else selected + (entry.uri to entry)
     }
-    fun add(items: List<MediaRepository.Entry>) {
+    fun add(items: List<MediaRepository.Entry>, placement: com.fluxx.android.editor.EditorViewModel.BulkPlacement =
+        com.fluxx.android.editor.EditorViewModel.BulkPlacement.AT_PLAYHEAD) {
         if (busy || items.isEmpty()) return
         busy = true
         showAddMenu = false
         error = null
         scope.launch {
             try {
-                // Deliberately call the existing single-item flow sequentially, in selection order.
-                for (entry in items) {
+                val bulk = onAddSelected
+                if (bulk != null && items.size > 1) {
+                    // MP1.1: one edit for the whole selection (selection order); nothing is added if any item fails.
+                    bulk(items.map { Uri.parse(it.uri) to it.name }, placement)
+                    selected = emptyMap()
+                } else for (entry in items) {
+                    // A single item (and the fallback): the existing single-item flow.
                     onSelectMedia(Uri.parse(entry.uri), entry.name)
                     selected = selected - entry.uri
                 }
@@ -107,7 +119,8 @@ fun AddContentSheet(
             modifier = containerModifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (browserScreenVisible) "Media browser" else "Add layer", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    Text(if (browserScreenVisible) "Media browser" else "Add layer", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                     AnimatedVisibility(selecting && !audio && tab == AddContentTab.MEDIA) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             TextButton(enabled = !busy, onClick = { selecting = false; selected = emptyMap() }) { Text("Cancel") }
@@ -118,6 +131,17 @@ fun AddContentSheet(
                                 }
                                 DropdownMenu(showAddMenu, { showAddMenu = false }) {
                                     DropdownMenuItem(text = { Text("Add selected (${selected.size})") }, onClick = { add(selected.values.toList()) })
+                                }
+                            }
+                            // MP1.1 C: the layer bar's Sequence and Stagger, applied to the new clips in the same edit.
+                            if (onAddSelected != null) for ((icon, placement, label) in listOf(
+                                Triple("SEQUENCE", com.fluxx.android.editor.EditorViewModel.BulkPlacement.SEQUENCE, "Add ${selected.size} selected items end to end"),
+                                Triple("STAGGER", com.fluxx.android.editor.EditorViewModel.BulkPlacement.STAGGER, "Add ${selected.size} selected items staggered"))) {
+                                val on = !busy && selected.size > 1
+                                IconButton(enabled = on, onClick = { add(selected.values.toList(), placement) },
+                                    modifier = Modifier.semantics { contentDescription = label }.testTag("browser-add-${icon.lowercase()}")) {
+                                    Icon(com.fluxx.android.ui.inspector.InspectorIcons.icon(icon), null,
+                                        Modifier.size(com.fluxx.android.ui.inspector.InspectorIcons.SIZE), tint = if (on) Highlight else TextDisabled)
                                 }
                             }
                         }

@@ -297,6 +297,27 @@ class EditorViewModel : ViewModel() {
             zOrder=(comp.layers.maxOfOrNull { it.zOrder } ?: -1)+1,
             timing=ClipTiming(comp.frameRate.snap(startUs),0,duration),asset=asset,name=name)))
     }
+    /** MP1.1 C: how the media browser's bulk add places the clips. */
+    enum class BulkPlacement { AT_PLAYHEAD, SEQUENCE, STAGGER }
+
+    /**
+     * MP1.1: the media browser's multi-select add as ONE Batch (one undo step). The picked media are resolved one after
+     * another off the main thread (in selection order), then every clip is added at [startUs] stacked above the existing
+     * layers, and [placement] applies the layer bar's own Sequence / Stagger (MultiLayerEdits, its defaults) to the new
+     * clips, computed against the state after the adds. Returns the new layer ids (selection order). Nothing is added if any
+     * item fails to resolve. Before MP1.1 each item was its own dispatch (30 undo steps for 30 clips).
+     */
+    suspend fun addMediaBatch(repository: MediaRepository, items: List<Pair<Uri, String>>, startUs: Long = state.playheadUs,
+        placement: BulkPlacement = BulkPlacement.AT_PLAYHEAD): List<Long> {
+        if (items.isEmpty()) return emptyList()
+        val generation = projectGeneration
+        val resolved = items.map { (uri, name) -> repository.reference(uri).let { (asset, type) -> BulkAdd.Item(asset, type, name) } }
+        if (generation != projectGeneration) throw kotlinx.coroutines.CancellationException("Project changed during import")
+        val (batch, ids) = BulkAdd.batch(state, resolved, startUs, placement)
+        dispatch(batch)
+        return ids
+    }
+
     fun addSolid(argb: Int=0xff4477cc.toInt(),durationUs: Long=5_000_000L,startUs: Long=state.playheadUs) {
         val comp=state.project.composition
         dispatch(EditorAction.Add(CompositionLayer(EditorReducer.nextLayerId(state.project),LayerType.SOLID,
