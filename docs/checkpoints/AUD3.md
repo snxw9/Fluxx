@@ -2,7 +2,7 @@
 
 # AUD3: choppy audio on HE-AAC clips (and the timeline merge)
 
-Branch `timeline`. **AUD3 is not merged into `master`.** Device: A16 (SM-A165F, Android 16), debug package `com.fluxx.android.debug`. Raw results are in `docs/checkpoints/aud3/`.
+Branch `timeline`. **AUD3 was merged into `master` at merge commit `5fbadd9`** (2026-11-27; `timeline` kept). Device: A16 (SM-A165F, Android 16), debug package `com.fluxx.android.debug`. Raw results are in `docs/checkpoints/aud3/`.
 
 ## Part A: the merge (git only)
 
