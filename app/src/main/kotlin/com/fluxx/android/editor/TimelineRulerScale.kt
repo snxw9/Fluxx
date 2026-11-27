@@ -124,7 +124,27 @@ object RulerTiers {
 object TimelineZoom {
     const val MIN_DP_PER_SECOND = .5f
     const val MAX_DP_PER_SECOND = 2400f
+    /**
+     * MP1.1: the widest the timeline's horizontal content (composition x zoom plus the two half-viewport spacers) may ever
+     * be laid out, in px. Compose cannot represent a node wider than 262,143 px (`Constraints`); a 50-minute import at the
+     * default 120 dp/s on a 2.8x screen asked for 1,019,768 px and crashed. Kept well below the limit.
+     */
+    const val MAX_CONTENT_PX = 200_000
     fun clamp(dpPerSecond: Float) = dpPerSecond.coerceIn(MIN_DP_PER_SECOND, MAX_DP_PER_SECOND)
+
+    /** The highest zoom (dp/s) at which [durationUs] plus [viewportPx] of spacers fits in [MAX_CONTENT_PX] at [density]. */
+    fun ceiling(durationUs: Long, density: Float, viewportPx: Int): Float {
+        if (durationUs <= 0 || density <= 0f) return MAX_DP_PER_SECOND
+        val room = (MAX_CONTENT_PX - viewportPx).coerceAtLeast(1)
+        return minOf(MAX_DP_PER_SECOND.toDouble(), room / (durationUs / 1e6 * density)).toFloat()
+    }
+    /** The lowest zoom: the usual floor, lowered only for compositions so long that even it would not fit (about 39 h at 2.8x). */
+    fun floor(durationUs: Long, density: Float, viewportPx: Int): Float = minOf(MIN_DP_PER_SECOND, ceiling(durationUs, density, viewportPx))
+    /** The zoom actually used for a composition: the chosen [dpPerSecond] within [floor]..[ceiling]. */
+    fun clamp(dpPerSecond: Float, durationUs: Long, density: Float, viewportPx: Int): Float =
+        dpPerSecond.coerceIn(floor(durationUs, density, viewportPx), ceiling(durationUs, density, viewportPx))
+    /** The laid-out content width (px) at [dpPerSecond]: what must stay within [MAX_CONTENT_PX]. */
+    fun contentPx(durationUs: Long, dpPerSecond: Float, density: Float, viewportPx: Int): Double = durationUs / 1e6 * dpPerSecond * density + viewportPx
 }
 
 /**

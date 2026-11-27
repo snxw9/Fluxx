@@ -282,8 +282,17 @@ fun TimelineView(
     val durationUs = comp.resolvedDurationUs
 
     val density = LocalDensity.current
-    var pxPerSecond by remember { mutableFloatStateOf(com.fluxx.android.editor.TIMELINE_DEFAULT_DP_PER_SECOND) }
+    var chosenDpPerSecond by remember { mutableFloatStateOf(com.fluxx.android.editor.TIMELINE_DEFAULT_DP_PER_SECOND) }
+    // MP1.1: the zoom used is the chosen one within the composition's ceiling, so the horizontal content (composition x
+    // zoom + the two half-viewport spacers) never exceeds TimelineZoom.MAX_CONTENT_PX (Compose cannot lay out a node wider
+    // than 262,143 px: long imports and Sequence over many clips crashed). The window width bounds the viewport.
+    val windowPx = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width
+    // Every clip box is sized by its own duration, so the span also covers layers that end past a fixed composition length.
+    val layoutSpanUs = maxOf(durationUs, comp.layers.maxOfOrNull { it.timing.endUs ?: 0L } ?: 0L)
+    val pxPerSecond = com.fluxx.android.editor.TimelineZoom.clamp(chosenDpPerSecond, layoutSpanUs, density.density, windowPx)
     val pxPerUs = (pxPerSecond * density.density) / 1_000_000.0
+    // Read fresh inside the long-lived pinch handler (pointerInput(Unit) would capture the first composition's values).
+    val zoomNow by rememberUpdatedState(pxPerSecond); val zoomDurationUs by rememberUpdatedState(layoutSpanUs); val zoomWindowPx by rememberUpdatedState(windowPx)
     // TL1: the one time <-> x mapping (frame x = round(frame x pxPerFrame)); ticks and the playhead's scroll both use it.
     val scale = remember(comp.frameRate, pxPerUs) { com.fluxx.android.editor.TimelineScale(comp.frameRate, pxPerUs) }
     // TLP.2: one live hold-drag state (ruler highlights, readouts); UI only, never in history.
@@ -372,7 +381,8 @@ fun TimelineView(
                             if (event.changes.count { it.pressed } >= 2 && !editing) {
                                 pinching = true
                                 val zoom = event.calculateZoom()
-                                if (zoom.isFinite()) pxPerSecond = com.fluxx.android.editor.TimelineZoom.clamp(pxPerSecond * zoom)
+                                // From the zoom in use (not the stored choice), so a ceiling below the choice has no dead zone.
+                                if (zoom.isFinite()) chosenDpPerSecond = com.fluxx.android.editor.TimelineZoom.clamp(zoomNow * zoom, zoomDurationUs, density.density, zoomWindowPx)
                             }
                             // Keep ownership until both fingers lift; don't finish with a one-finger seek.
                             if (pinching) event.changes.forEach { it.consume() }
