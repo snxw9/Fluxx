@@ -156,3 +156,39 @@ The decoder's output rate is the one the app uses (priming at 42.7 ms, not 85.3)
   - other audio codecs (AC-3, Vorbis, FLAC, PCM in MKV: none in the test set);
   - AAC at 48 kHz in MKV;
   - the MP4 HE-AAC v2 offset above.
+
+## B3. The MP4 HE-AAC files (Snxw: "check those 2 mp4 files")
+
+**The files:**
+- Download/Seal: '#liloandstitch #livingroom #girlfriend …' and '(Scap edit) ib@melis #aura …'. Both are MP4 with HE-AAC v2 (object type 29, PS) declared at 22.05 kHz mono, decoded to 44.1 kHz stereo.
+- Project 1 clips 14, 19 and 24 turned out to be MP4 AAC files built the same way, with an edit list.
+
+**The evidence** (`Aud3Test#a4Mp4EditList`, 92 s wall; Saver 0, AC, 37.5 °C; comparable):
+- **Method:** a "true timeline" decode puts every decoder output buffer at its own pts, contiguously, at 48 kHz, with no priming trim. It is cross-correlated against a fresh app cache and compared after a 9-tap low-pass (insensitive to sub-sample resampling phase).
+- **The MKV control** (clip 1, AAC-LC, pts from 0, no encoder delay) shows the intended 46.4 ms AAC-LC priming trim (AUD1's proven rule), with error 0.000 at that offset.
+
+| File | First input pts | encoder-delay | App priming (before) | App vs true timeline (before) |
+|---|---|---|---|---|
+| Seal MP4 ×2 | −0.1611 s (= 3553 samples at 22.05 kHz) | 3553 | 80.6 ms | sound **80.6 ms early**; error at that offset 0.037–0.065 |
+| clip 19 | −0.1611 s (3553) | 3553 | 80.6 ms | **80.6 ms early** (0.029) |
+| clips 14, 24 | −0.1147 s (= 2529) | 2529 | 57.3 ms | **57.3 ms early** (0.012–0.013) |
+
+- **The cause:** the MP4 edit list both stamps the priming samples with negative times and reports the same count as "encoder-delay". `AudioTiming.primingSamples` checked the encoder delay before the "container already shifted it" rule, so these files were trimmed twice.
+- **What the earlier symptoms really were:**
+  - the 8–10 % "residual error" in B1 was sub-sample resampling phase in that comparison (about 0.01–0.07 after the low-pass), not damage;
+  - the "4 silent blocks at 0 s" were the doubled offset.
+- **Nothing is lost at the start:** the decoder does not drop the negative-stamped output (first output at −0.022 s).
+- **What it sounded like:** these clips' audio (and their waveform, which uses the same rule) ran 57–81 ms ahead of the picture. That is audible on lip sync or a beat cut, but not as choppiness.
+
+**The fix** (`AUD3 B2`):
+- `primingSamples` now returns 0 first when the first pts is negative, then the encoder delay, then the AAC default.
+- The PCM cache version is now 3, so those caches rebuild.
+- JVM: `anMp4EditListIsNotTrimmedTwice`. The AUD1 rule tests still pass: an encoder delay without a shift is still trimmed, and AAC with nothing said keeps 2048.
+
+**After** (`a4-after`, 108 s wall): the two Seal MP4s and clips 14, 19 and 24 have app priming 0 and **lag 0 against the true timeline, error 0.000**. The MKV control is unchanged (46.4 ms trim, 0.000).
+
+**JVM full suite after B3:** 727 tests, 0 failures (44 s). This is a second full run, because B3 was a new fix after the end-of-part run.
+
+**Phone, after B3:** Saver 1, stay-on 0, timeout 600000 restored. Project 1 is unchanged (size 9256, mtime 19:09:58.935).
+
+**Not verified:** by ear (clips 14, 19 and 24 and the two Seal MP4s should now sit in sync with their picture); other MP4 edit-list variants (a positive media-time offset, partial shifts).

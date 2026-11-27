@@ -50,8 +50,19 @@ class Aud3BookkeepingTest {
         for ((k, pl) in p.withIndex()) assertEquals(AudioTiming.outputFrame(k * 20_000L, primingUs), pl.first)
     }
 
+    @Test fun anMp4EditListIsNotTrimmedTwice() {
+        // The Seal MP4s and Project 1 clips 14 / 19 / 24: HE-AAC at 22.05 kHz, the edit list stamps the first sample at
+        // -0.161 s (= 3553 samples) AND reports encoder-delay 3553. The container already did the trim: nothing more.
+        assertEquals(0, AudioTiming.primingSamples("audio/mp4a-latm", 3553, -161_133))
+        assertEquals(0, AudioTiming.primingSamples("audio/mp4a-latm", 2529, -114_694))
+        // An encoder delay without a shift is still trimmed; AAC with nothing said keeps the standard priming.
+        assertEquals(1024, AudioTiming.primingSamples("audio/mp4a-latm", 1024, 0))
+        assertEquals(2048, AudioTiming.primingSamples("audio/mp4a-latm", null, 0))
+    }
+
     @Test fun staleCachesAreRebuilt() {
-        assertTrue(PcmCachePolicy.VERSION >= 2)
+        assertTrue(PcmCachePolicy.VERSION >= 3)
+        assertTrue(PcmCachePolicy.stale("0123456789abcdef0123-10-20-v2.pcm"))
         assertTrue(PcmCachePolicy.stale("0123456789abcdef0123-10-20-v1.pcm"))
     }
 }

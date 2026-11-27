@@ -264,6 +264,88 @@ class Aud3Test : Mp12Base() {
         checkP1()
     }
 
+    // ---- a4: MP4 with an edit list (negative first pts and an encoder delay) -----------------------------------------
+    /**
+     * The true timeline of a source at 48 kHz: index 0 = stream time 0. Inputs are queued with their pts shifted by
+     * [shiftUs] (so no input is negative and the decoder drops nothing), outputs placed at (pts - shift), contiguously.
+     * Returns (samples, output buffers, first output pts in source time).
+     */
+    private fun trueTimeline(uri: String, maxFrames: Int, shiftUs: Long): Triple<FloatArray, Int, Long> {
+        val ex = MediaExtractor(); ex.setDataSource(context, Uri.parse(uri), null)
+        val at = (0 until ex.trackCount).first { ex.getTrackFormat(it).getString(MediaFormat.KEY_MIME)!!.startsWith("audio/") }
+        val f = ex.getTrackFormat(at); ex.selectTrack(at)
+        val codec = MediaCodec.createDecoderByType(f.getString(MediaFormat.KEY_MIME)!!); codec.configure(f, null, null, 0); codec.start()
+        val out = FloatArray(maxFrames * 2); var rs: com.fluxx.android.render.Resampler? = null
+        val info = MediaCodec.BufferInfo(); var inEnd = false; var stereo = FloatArray(0); var shorts = ShortArray(0); var bufs = 0; var firstPts = Long.MIN_VALUE
+        try {
+            while (true) {
+                if (!inEnd) { val i = codec.dequeueInputBuffer(1000); if (i >= 0) { val m = ex.readSampleData(codec.getInputBuffer(i)!!, 0)
+                    if (m < 0) { codec.queueInputBuffer(i, 0, 0, 0, 4); inEnd = true } else { codec.queueInputBuffer(i, 0, m, ex.sampleTime + shiftUs, 0); ex.advance() } } }
+                val o = codec.dequeueOutputBuffer(info, 1000)
+                if (o >= 0) {
+                    val of = codec.outputFormat; val ch = of.getInteger(MediaFormat.KEY_CHANNEL_COUNT); val rate = of.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                    if (rs == null) rs = com.fluxx.android.render.Resampler(rate)
+                    val frames = info.size / (2 * ch)
+                    if (frames > 0) {
+                        bufs++; val pts = info.presentationTimeUs - shiftUs; if (firstPts == Long.MIN_VALUE) firstPts = pts
+                        val sb = codec.getOutputBuffer(o)!!.order(java.nio.ByteOrder.LITTLE_ENDIAN).also { it.position(info.offset); it.limit(info.offset + info.size) }.asShortBuffer()
+                        if (shorts.size < frames * ch) shorts = ShortArray(frames * ch); sb.get(shorts, 0, frames * ch)
+                        if (stereo.size < frames * 2) stereo = FloatArray(frames * 2)
+                        com.fluxx.android.render.AudioFold.stereo(shorts, frames, ch, stereo)
+                        rs.run(stereo, frames, Math.floorDiv(pts * 48_000 + 500_000, 1_000_000L)) { first, data, count ->
+                            for (k in 0 until count) { val p = first + k; if (p in 0 until maxFrames) { out[(p * 2).toInt()] = data[k * 2]; out[(p * 2 + 1).toInt()] = data[k * 2 + 1] } } }
+                    }
+                    codec.releaseOutputBuffer(o, false); if (info.flags and 4 != 0) break
+                }
+            }
+        } finally { codec.stop(); codec.release(); ex.release() }
+        return Triple(out, bufs, firstPts)
+    }
+
+    /** Error of [c] against [r] at lag 0 after a 9-tap moving average (insensitive to a sub-sample resampling phase). */
+    private fun lowPassError(c: FloatArray, r: FloatArray, from: Int, to: Int): Double {
+        var es = 0.0; var ed = 0.0
+        for (i in from until to) { var x = 0.0; var y = 0.0; for (k in -4..4) { x += mono(c, i + k); y += mono(r, i + k) }; es += y * y; ed += (x - y) * (x - y) }
+        return if (es > 0) Math.sqrt(ed / es) else 0.0
+    }
+
+    @Test fun a4Mp4EditList() {
+        val dir = File(context.cacheDir, "aud3-test").apply { mkdirs() }
+        val all = items()
+        val p = project1(); val clips = Mp12Bench.clips(p) { "" }
+        val more = listOf(14, 19, 24).map { k -> val cl = clips.first { it.index == k }
+            Item("clip $k MP4 AAC", cl.uri, cl.name, p.composition.layers.first { it.asset?.uri == cl.uri }.asset!!.durationUs!!, null) }
+        for (it in all.filter { x -> x.label.contains("mp4") || x.label.startsWith("clip 1 ") } + more) {
+            try {
+                val ex = MediaExtractor(); ex.setDataSource(context, Uri.parse(it.uri), null)
+                val at = (0 until ex.trackCount).first { t -> ex.getTrackFormat(t).getString(MediaFormat.KEY_MIME)!!.startsWith("audio/") }
+                val f = ex.getTrackFormat(at); ex.selectTrack(at); val firstIn = ex.sampleTime; ex.release()
+                val delay = if (f.containsKey(MediaFormat.KEY_ENCODER_DELAY)) f.getInteger(MediaFormat.KEY_ENCODER_DELAY) else null
+                val pad = if (f.containsKey(MediaFormat.KEY_ENCODER_PADDING)) f.getInteger(MediaFormat.KEY_ENCODER_PADDING) else null
+                val declared = f.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                val frames = minOf(AudioTiming.frames(it.durationUs).toInt() - 4_800, 48_000 * 20)
+                val shift = maxOf(0L, -firstIn)
+                val (plain, plainBufs, plainFirst) = trueTimeline(it.uri, frames, 0)
+                val (truth, shiftedBufs, shiftedFirst) = trueTimeline(it.uri, frames, shift)
+                // The app's cache, fresh.
+                val fc = File(dir, "a4-${it.uri.hashCode().toUInt()}.pcm"); fc.delete(); File(fc.path.removeSuffix(".pcm") + ".cov").delete()
+                val pcm = SourcePcm(context, it.uri, fc, it.durationUs); pcm.setScope(listOf(0L..it.durationUs)); pcm.fill()
+                val t0 = System.nanoTime(); while (!pcm.complete && System.nanoTime() - t0 < 60_000_000_000L) Thread.sleep(50)
+                val app = readCache(pcm, frames); pcm.close(); fc.delete(); File(fc.path.removeSuffix(".pcm") + ".cov").delete()
+                // Where the app's sound sits against the true timeline (positive = the app plays it EARLY by that much).
+                val l = lag(app, truth, 48_000, 96_000, -9_600, 9_600, 4).let { c -> lag(app, truth, 48_000, 96_000, c - 8, c + 8, 1) }
+                val firstSound = (0 until frames).firstOrNull { i -> kotlin.math.abs(mono(truth, i)) > 1e-3f } ?: -1
+                aud("A4 ${it.label} '${it.name.take(30)}': declared $declared Hz, first input pts %.4f s (= %d samples at the declared rate), encoder-delay ${delay ?: "-"} padding ${pad ?: "-"}; app priming %.1f ms; decoder: unshifted %d buffers, first out %.4f s; inputs shifted +%.4f s: %d buffers, first out %.4f s; true first sound at %.1f ms; app vs true: lag %d frames = app %s by %.1f ms; low-pass error at that lag %.3f, at lag 0 (correct placement) %.3f"
+                    .format(firstIn / 1e6, Math.round(-firstIn * declared / 1e6), pcm.primingUs / 1000.0, plainBufs, plainFirst / 1e6, shift / 1e6, shiftedBufs, shiftedFirst / 1e6,
+                        firstSound / 48.0, l, if (l >= 0) "EARLY" else "late", kotlin.math.abs(l) / 48.0,
+                        lowPassError(app, FloatArray(truth.size) { j -> val q = j + l * 2; if (q in truth.indices) truth[q] else 0f }, 24_000, frames - 20_000),
+                        lowPassError(app, truth, 24_000, frames - 20_000)))
+            } catch (e: Exception) { aud("A4 ${it.label}: failed ${e.javaClass.simpleName}: ${e.message}") }
+        }
+        dir.delete()
+        checkP1()
+    }
+
     // ---- a3: playback ------------------------------------------------------------------------------------------------
     private fun cold(path: String, k: Int) = Uri.fromFile(File(File(path).parentFile, "./".repeat(k) + File(path).name)).toString()
 

@@ -12,14 +12,16 @@ object AudioTiming {
 
     /**
      * The samples of decoder output that come BEFORE the stream's true start, in the source's own samples. B4:
-     * - the format's encoder delay ("encoder-delay"), where present;
      * - 0 when the container already shifts the priming before 0 (the first sample's pts is negative: those samples are
-     *   dropped as "before 0" by [outputFrame]);
+     *   dropped as "before 0" by [outputFrame]). AUD3: this comes FIRST: an MP4 edit list both stamps the priming
+     *   negative and reports it as "encoder-delay" (3553 samples at 22.05 kHz = the first pts of -0.161 s); trimming the
+     *   delay again played those files 57-81 ms early;
+     * - the format's encoder delay ("encoder-delay"), where present;
      * - otherwise the known AAC-LC priming for AAC, 0 for other codecs.
      */
     fun primingSamples(mime: String?, encoderDelay: Int?, firstPtsUs: Long): Int = when {
-        encoderDelay != null -> encoderDelay.coerceAtLeast(0)
         firstPtsUs < 0 -> 0
+        encoderDelay != null -> encoderDelay.coerceAtLeast(0)
         mime == "audio/mp4a-latm" -> AAC_PRIMING
         else -> 0
     }
@@ -37,8 +39,9 @@ object AudioTiming {
 /** AUD1 B2: the decoded-PCM cache's key and size policy (pure). One file per source: 48 kHz stereo 16-bit. */
 object PcmCachePolicy {
     const val DIR = "aud1-pcm"
-    // AUD3: 2 (48 kHz sources are now written contiguously; v1 caches of millisecond-timestamped files were wrong).
-    const val VERSION = 2
+    // AUD3: 2 (48 kHz sources are now written contiguously; v1 caches of millisecond-timestamped files were wrong);
+    // 3 (MP4 edit-list sources are no longer trimmed twice: v2 caches of those sat 57-81 ms early).
+    const val VERSION = 3
     const val CAP_BYTES = 256L * 1024 * 1024
     /** 1 s chunks: the unit of decode coverage. */
     const val CHUNK_FRAMES = AudioTiming.RATE
