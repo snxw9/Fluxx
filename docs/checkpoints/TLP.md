@@ -65,6 +65,11 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). The wo
   - The playback position is UI state while playing: timeline recompositions in 5 s 122 -> 1, clip rows 1342 -> 33, UI frame p95 38 -> 16 ms (test clock).
   - Project 1 peak PSS 425 MB (MP1.2: 306), MemAvailable min 585 MB, plays to the end. The re-entry 1.5x target was missed (scene jitter floor). No excess presented frames on current code.
   - See `docs/checkpoints/MP2_1.md`.
+- **MP2.3 (branch `mp23`, from `master` `4c753b0`; NOT merged into `master`): scrubbing.**
+  - A scrub preview strip (JPEG, 480 px, one picture per 0.1 s of source, used range only, disk cache keyed like the PCM cache) serves the scrub requests that would seek; decode-behind fills the cache behind a paused frame when it is empty there.
+  - Backward sweeps at 1x-8x on H.264, VP9, HEVC and AV1: 0 frames out of order, 0 ahead (baseline up to 23 of 28 out of order, frames up to 8.7 s behind); first step back after a pause 10-33 ms; strip 3.8-16.2 MB per minute of source.
+  - Exact frames, playback and export byte-identical (golden 179 frames, export digests unchanged); Project 1 peak PSS 414 MB, plays to the end.
+  - See `docs/checkpoints/MP2_3.md`.
 - **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1, TLP.2, TLP.3 and TL3 (phone test lists at the end of each section).
 
 ## T0. Selection architecture (written before the code)

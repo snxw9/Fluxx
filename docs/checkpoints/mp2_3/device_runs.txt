@@ -1,0 +1,63 @@
+== b0-Mp23ScrubTest com.fluxx.android.ui.Mp23ScrubTest Sat Nov 28 11:23:57 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 52   temperature: 376 
+== end b0-Mp23ScrubTest rc=0 wall=657s fluxx-crash-lines=0 Sat Nov 28 11:34:56 WCAST 2026 | OK (8 tests) 
+== b0r2-Mp23ScrubTest com.fluxx.android.ui.Mp23ScrubTest Sat Nov 28 11:38:18 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 57   temperature: 390 
+== end b0r2-Mp23ScrubTest rc=0 wall=918s fluxx-crash-lines=0 Sat Nov 28 11:53:39 WCAST 2026 | OK (8 tests) 
+== b1-Mp23FormatTest com.fluxx.android.ui.Mp23FormatTest Sat Nov 28 12:01:13 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 64   temperature: 382 
+== end b1-Mp23FormatTest rc=0 wall=4s fluxx-crash-lines=0 Sat Nov 28 12:01:20 WCAST 2026 | FAILURES!!! Tests run: 1,  Failures: 1 
+== b2-Mp23GoldenTest com.fluxx.android.ui.Mp23GoldenTest Sat Nov 28 12:01:20 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 64   temperature: 382 
+== end b2-Mp23GoldenTest rc=0 wall=1s fluxx-crash-lines=0 Sat Nov 28 12:01:24 WCAST 2026 | FAILURES!!! Tests run: 1,  Failures: 1 
+== b0r3-Mp23ScrubTest com.fluxx.android.ui.Mp23ScrubTest Sat Nov 28 12:04:22 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 65   temperature: 382 
+== end b0r3-Mp23ScrubTest rc=0 wall=677s fluxx-crash-lines=0 Sat Nov 28 12:15:41 WCAST 2026 | OK (8 tests) 
+== b1-Mp23FormatTest com.fluxx.android.ui.Mp23FormatTest Sat Nov 28 12:16:58 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 69   temperature: 393 
+== end b1-Mp23FormatTest rc=0 wall=259s fluxx-crash-lines=0 Sat Nov 28 12:21:20 WCAST 2026 | OK (1 test) 
+== b2-Mp23GoldenTest com.fluxx.android.ui.Mp23GoldenTest Sat Nov 28 12:21:20 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 70   temperature: 395 
+== end b2-Mp23GoldenTest rc=0 wall=115s fluxx-crash-lines=0 Sat Nov 28 12:23:17 WCAST 2026 | FAILURES!!! Tests run: 1,  Failures: 1 
+== b1r2-Mp23FormatTest com.fluxx.android.ui.Mp23FormatTest Sat Nov 28 12:27:06 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 72   temperature: 394 
+== end b1r2-Mp23FormatTest rc=0 wall=111s fluxx-crash-lines=0 Sat Nov 28 12:29:00 WCAST 2026 | OK (1 test) 
+== b2r2-Mp23GoldenTest com.fluxx.android.ui.Mp23GoldenTest Sat Nov 28 12:29:00 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 73   temperature: 393 
+== end b2r2-Mp23GoldenTest rc=0 wall=65s fluxx-crash-lines=0 Sat Nov 28 12:30:08 WCAST 2026 | OK (1 test) 
+== b3-Mp23ScrubTest com.fluxx.android.ui.Mp23ScrubTest Sat Nov 28 12:30:08 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 73   temperature: 393 
+== end b3-Mp23ScrubTest rc=0 wall=788s fluxx-crash-lines=0 Sat Nov 28 12:43:19 WCAST 2026 | OK (8 tests) 
+== d1-Mp23ScrubTest-longGop com.fluxx.android.ui.Mp23ScrubTest#b04Vp91080,com.fluxx.android.ui.Mp23ScrubTest#b08Av11080 Sat Nov 28 12:46:51 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 78   temperature: 398 
+== end d1-Mp23ScrubTest-longGop rc=0 wall=203s fluxx-crash-lines=0 Sat Nov 28 12:50:16 WCAST 2026 | OK (2 tests) 
+== d2-Mp23ScrubTest-vp9 com.fluxx.android.ui.Mp23ScrubTest#b04Vp91080 Sat Nov 28 12:51:42 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 79   temperature: 396 
+== end d2-Mp23ScrubTest-vp9 rc=0 wall=109s fluxx-crash-lines=0 Sat Nov 28 12:53:34 WCAST 2026 | OK (1 test) 
+== b0r4-Mp23ScrubTest com.fluxx.android.ui.Mp23ScrubTest Sat Nov 28 12:55:34 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 400 
+== end b0r4-Mp23ScrubTest rc=0 wall=689s fluxx-crash-lines=0 Sat Nov 28 13:07:05 WCAST 2026 | OK (8 tests) 
+== b3r2-Mp23ScrubTest com.fluxx.android.ui.Mp23ScrubTest Sat Nov 28 13:07:39 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 398 
+== end b3r2-Mp23ScrubTest rc=0 wall=694s fluxx-crash-lines=0 Sat Nov 28 13:19:15 WCAST 2026 | OK (8 tests) 
+== b3r2-Mp23GoldenTest com.fluxx.android.ui.Mp23GoldenTest Sat Nov 28 13:19:15 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 390 
+== end b3r2-Mp23GoldenTest rc=0 wall=66s fluxx-crash-lines=0 Sat Nov 28 13:20:23 WCAST 2026 | OK (1 test) 
+== b3-Mp21GoldenTest com.fluxx.android.ui.Mp21GoldenTest Sat Nov 28 13:20:23 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 396 
+== end b3-Mp21GoldenTest rc=0 wall=115s fluxx-crash-lines=0 Sat Nov 28 13:22:21 WCAST 2026 | OK (1 test) 
+== b3-Mp1CullGoldenTest com.fluxx.android.ui.Mp1CullGoldenTest Sat Nov 28 13:22:21 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 391 
+== ABORTED b3-Mp1CullGoldenTest (host sequence stopped to diagnose the pause-step regression; re-run on the final build) Sat Nov 28 13:23:40 WCAST 2026
+== d3-Mp23ScrubTest-vp9worst com.fluxx.android.ui.Mp23ScrubTest#b03Vp9Worst Sat Nov 28 13:24:06 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 392 
+== end d3-Mp23ScrubTest-vp9worst rc=0 wall=87s fluxx-crash-lines=1 Sat Nov 28 13:25:35 WCAST 2026 | OK (1 test) 
+== note: crash buffer line at 13:23:09 = the aborted b3-Mp1CullGoldenTest runner (UiAutomation DeadObjectException after the host adb shell was killed); saved to crash_buffer_d3.txt, buffer cleared Sat Nov 28 13:26:31 WCAST 2026
+== b3r3-Mp23ScrubTest com.fluxx.android.ui.Mp23ScrubTest Sat Nov 28 13:27:54 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 391 
+== end b3r3-Mp23ScrubTest rc=0 wall=696s fluxx-crash-lines=0 Sat Nov 28 13:39:33 WCAST 2026 | OK (8 tests) 
+== f-Mp23GoldenTest com.fluxx.android.ui.Mp23GoldenTest Sat Nov 28 13:43:21 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 387 
+== end f-Mp23GoldenTest rc=0 wall=87s fluxx-crash-lines=0 Sat Nov 28 13:44:51 WCAST 2026 | OK (1 test) 
+== f-Mp23ScrubTest com.fluxx.android.ui.Mp23ScrubTest Sat Nov 28 13:44:51 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 388 
+== end f-Mp23ScrubTest rc=0 wall=676s fluxx-crash-lines=0 Sat Nov 28 13:56:09 WCAST 2026 | OK (8 tests) 
+== f-Mp21GoldenTest com.fluxx.android.ui.Mp21GoldenTest Sat Nov 28 13:56:09 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 394 
+== end f-Mp21GoldenTest rc=0 wall=140s fluxx-crash-lines=0 Sat Nov 28 13:58:34 WCAST 2026 | OK (1 test) 
+== f-Mp1CullGoldenTest com.fluxx.android.ui.Mp1CullGoldenTest Sat Nov 28 13:58:35 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 397 
+== end f-Mp1CullGoldenTest rc=0 wall=45s fluxx-crash-lines=0 Sat Nov 28 13:59:23 WCAST 2026 | OK (1 test) 
+== f-Mp21Test com.fluxx.android.ui.Mp21Test Sat Nov 28 13:59:23 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 394 
+== end f-Mp21Test rc=0 wall=1091s fluxx-crash-lines=0 Sat Nov 28 14:17:37 WCAST 2026 | OK (7 tests) 
+== f-Mp12Project1 com.fluxx.android.ui.Mp12Project1Test#project1Playthrough Sat Nov 28 14:17:37 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 402 
+== end f-Mp12Project1 rc=0 wall=1101s fluxx-crash-lines=0 Sat Nov 28 14:36:00 WCAST 2026 | OK (1 test) 
+== f-Mp12Matrix com.fluxx.android.ui.Mp12MixedSequenceTest Sat Nov 28 14:36:00 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: false   level: 80   temperature: 387 
+== end f-Mp12Matrix rc=0 wall=445s fluxx-crash-lines=0 Sat Nov 28 14:43:30 WCAST 2026 | OK (6 tests) 
+== g-Mp23GoldenTest com.fluxx.android.ui.Mp23GoldenTest Sat Nov 28 14:45:53 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 410 
+== end g-Mp23GoldenTest rc=0 wall=81s fluxx-crash-lines=0 Sat Nov 28 14:47:17 WCAST 2026 | OK (1 test) 
+== g-Mp23ScrubTest com.fluxx.android.ui.Mp23ScrubTest Sat Nov 28 14:47:17 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 404 
+== end g-Mp23ScrubTest rc=0 wall=674s fluxx-crash-lines=0 Sat Nov 28 14:58:34 WCAST 2026 | OK (8 tests) 
+== h-Mp23GoldenTest com.fluxx.android.ui.Mp23GoldenTest Sat Nov 28 15:01:53 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 395 
+== end h-Mp23GoldenTest rc=0 wall=84s fluxx-crash-lines=0 Sat Nov 28 15:03:19 WCAST 2026 | OK (1 test) 
+== h-Mp23ScrubTest com.fluxx.android.ui.Mp23ScrubTest Sat Nov 28 15:03:19 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 393 
+== end h-Mp23ScrubTest rc=0 wall=724s fluxx-crash-lines=0 Sat Nov 28 15:15:26 WCAST 2026 | OK (8 tests) 
+== h-Mp12Matrix com.fluxx.android.ui.Mp12MixedSequenceTest Sat Nov 28 15:21:49 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false   AC powered: true   level: 80   temperature: 381 
+== end h-Mp12Matrix rc=0 wall=440s fluxx-crash-lines=0 Sat Nov 28 15:29:11 WCAST 2026 | OK (6 tests) 

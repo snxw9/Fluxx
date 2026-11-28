@@ -1,0 +1,3 @@
+STATE=Mp23GoldenTest start: low_power=0 plugged=AC level=73 percent temperature=39.3C screen=Awake keyguard=unlocked
+MP23=MP23 golden: strips built in 0.1 s; coverage 100.0 percent, 100.0 percent
+MP23=MP23 golden: 140 frames compared (playback, exact frames after sweeps, steps back after decode-behind), 0 differ; strip pictures shown 438, decode-behind calls 1 (frames decoded 4); layers 2

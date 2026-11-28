@@ -1,0 +1,58 @@
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23GoldenTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.fluxx.android.ui.Mp23GoldenTest:
+INSTRUMENTATION_STATUS: test=stripAndDecodeBehindArePixelIdentical
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp23GoldenTest start: low_power=0 plugged=AC level=70 percent temperature=39.5C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23GoldenTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stack=java.util.UnknownFormatConversionException: Conversion = ' '
+	at java.util.Formatter$FormatSpecifier.conversion(Formatter.java:3011)
+	at java.util.Formatter$FormatSpecifier.<init>(Formatter.java:3049)
+	at java.util.Formatter$FormatSpecifierParser.<init>(Formatter.java:2802)
+	at java.util.Formatter.parse(Formatter.java:2735)
+	at java.util.Formatter.format(Formatter.java:2684)
+	at java.util.Formatter.format(Formatter.java:2638)
+	at java.lang.String.format(String.java:4714)
+	at com.fluxx.android.ui.Mp23GoldenTest.stripAndDecodeBehindArePixelIdentical(Mp23GoldenTest.kt:85)
+
+INSTRUMENTATION_STATUS: stream=
+Error in stripAndDecodeBehindArePixelIdentical(com.fluxx.android.ui.Mp23GoldenTest):
+java.util.UnknownFormatConversionException: Conversion = ' '
+	at java.util.Formatter$FormatSpecifier.conversion(Formatter.java:3011)
+	at java.util.Formatter$FormatSpecifier.<init>(Formatter.java:3049)
+	at java.util.Formatter$FormatSpecifierParser.<init>(Formatter.java:2802)
+	at java.util.Formatter.parse(Formatter.java:2735)
+	at java.util.Formatter.format(Formatter.java:2684)
+	at java.util.Formatter.format(Formatter.java:2638)
+	at java.lang.String.format(String.java:4714)
+	at com.fluxx.android.ui.Mp23GoldenTest.stripAndDecodeBehindArePixelIdentical(Mp23GoldenTest.kt:85)
+
+INSTRUMENTATION_STATUS: test=stripAndDecodeBehindArePixelIdentical
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: stream=
+
+Time: 110.263
+There was 1 failure:
+1) stripAndDecodeBehindArePixelIdentical(com.fluxx.android.ui.Mp23GoldenTest)
+java.util.UnknownFormatConversionException: Conversion = ' '
+	at java.util.Formatter$FormatSpecifier.conversion(Formatter.java:3011)
+	at java.util.Formatter$FormatSpecifier.<init>(Formatter.java:3049)
+	at java.util.Formatter$FormatSpecifierParser.<init>(Formatter.java:2802)
+	at java.util.Formatter.parse(Formatter.java:2735)
+	at java.util.Formatter.format(Formatter.java:2684)
+	at java.util.Formatter.format(Formatter.java:2638)
+	at java.lang.String.format(String.java:4714)
+	at com.fluxx.android.ui.Mp23GoldenTest.stripAndDecodeBehindArePixelIdentical(Mp23GoldenTest.kt:85)
+
+FAILURES!!!
+Tests run: 1,  Failures: 1
+
+
+INSTRUMENTATION_CODE: -1

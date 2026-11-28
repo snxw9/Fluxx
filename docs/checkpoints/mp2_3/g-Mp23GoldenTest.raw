@@ -1,0 +1,33 @@
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23GoldenTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.fluxx.android.ui.Mp23GoldenTest:
+INSTRUMENTATION_STATUS: test=stripAndDecodeBehindArePixelIdentical
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp23GoldenTest start: low_power=0 plugged=AC level=80 percent temperature=41.0C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=MP23 golden: strips built in 0.1 s; coverage 100.0 percent, 100.0 percent
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=MP23 golden: strip picture shown from disk: 245 times, p50 15.53 p95 21.59 max 35.55 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=MP23 golden: strip picture shown from ram: 77 times, p50 0.07 p95 0.12 max 0.13 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=MP23 golden: 179 frames compared (playback, exact frames after sweeps, steps back after decode-behind), 0 differ; strip pictures shown 322, decode-behind calls 2 (frames decoded 53); layers 2
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23GoldenTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=stripAndDecodeBehindArePixelIdentical
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 78.221
+
+OK (1 test)
+
+
+INSTRUMENTATION_CODE: -1
