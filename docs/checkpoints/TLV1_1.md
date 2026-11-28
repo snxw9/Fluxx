@@ -174,7 +174,7 @@ Method:
   - for the session: Saver 0, stay-on true, timeout 600000;
   - **restored:** Saver 1, stay-on 0, timeout 600000.
   - The crash buffer at the start and end held only the same 7 vendor info lines, with no Fluxx line.
-- **`tlv` is NOT merged into `master`.**
+- **`tlv` was merged into `master` on 2026-11-28 at merge commit `8ad3dea`** (recorded in TLP.md).
 - **Not verified:**
   - a real finger on a key drag past the edge (the UI tests use Compose injected input);
   - thumbnails by eye;

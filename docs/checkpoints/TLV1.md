@@ -257,7 +257,7 @@ The NO TEST items get tests in B4 where a test can see them (R3, R5, R8, R15, R2
   - for the session: Saver 0, stay-on 15, timeout 600000;
   - **restored:** Saver 1, stay-on 0, timeout 600000.
   - The crash buffer at the end held only vendor info lines (`libpq_sec`, `meow_lib`, a system process), with no Fluxx crash.
-- **`tlv` is NOT merged into `master`.**
+- **`tlv` was merged into `master` on 2026-11-28 at merge commit `8ad3dea`** (recorded in TLP.md).
 - **Not verified:**
   - a real finger: fling feel and stop, pinch, edge auto-scroll speed, thumbnails, jitter while playing (the phone checklist);
   - other devices, densities and RTL layouts (`reverseDirection` follows the layout direction as before; not run);
