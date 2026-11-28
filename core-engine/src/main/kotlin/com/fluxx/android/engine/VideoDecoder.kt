@@ -31,6 +31,14 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
     private var outputEnded = false
     /** The pts (us) of the last frame decoded in the current run; -1 before any (or just before the sync frame of a seek). */
     private var outPos = -1L
+    /**
+     * MP2.1: the stream's first sample time, whether the current run started there (a fresh decoder, or a seek back to
+     * it), and the pts of the stream's first picture once decoded. A request before that picture (a cut at in-point 0 of
+     * a file whose first frame lies after 0) is answered by it, as a straight decode answers it, without a re-seek.
+     */
+    private var streamStartUs = Long.MIN_VALUE
+    private var runFromStart = true
+    private var firstFramePts = -1L
     private var track = -1
     private var syncProbe: MediaExtractor? = null
     val rotation: Int
@@ -57,6 +65,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
                 extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true
             } ?: error("This file has no video track")
             extractor.selectTrack(track)
+            streamStartUs = extractor.sampleTime
             val format = extractor.getTrackFormat(track)
             mime = requireNotNull(format.getString(MediaFormat.KEY_MIME))
             width = format.getInteger(MediaFormat.KEY_WIDTH)
@@ -104,6 +113,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
                 lastApproximate = !(exactFloor && cache.exact(timeUs) === img)
                 how = if (exactFloor) "floor" else "floor-approx"; log("frame", img); return img
             }
+            firstFrame(timeUs)?.let { how = "first"; log("frame", it); return it }
             cache.exact(timeUs)?.let { hit ->
                 // Playback: the hit is the look-ahead frame of the previous request; decode the next one now, so every
                 // frame costs one decode (without this, calls alternated 0 / 2 decodes and the pacing got uneven).
@@ -144,8 +154,11 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
      * [DecoderPlan.CHEAP_FORWARD_US] before it (decodes on, no seek). A warm decoder positioned for a cut answers yes for
      * its target; the previous clip's decoder of the same source, standing elsewhere, answers no (it would seek).
      */
-    fun cheapFor(timeUs: Long): Boolean = cache.exact(timeUs) != null ||
+    fun cheapFor(timeUs: Long): Boolean = cache.exact(timeUs) != null || firstFrame(timeUs) != null ||
         (outPos >= 0 && !outputEnded && timeUs >= outPos && timeUs - outPos <= DecoderPlan.CHEAP_FORWARD_US)
+
+    /** MP2.1: the stream's first picture, when [timeUs] lies before it and it is cached (the nearest-frame answer). */
+    private fun firstFrame(timeUs: Long): Image? = if (firstFramePts >= 0 && timeUs < firstFramePts) cache.exact(firstFramePts) else null
 
     // MP1 B1: the scrub rule (ScrubFloor) over this decoder's own seek / sync / decode steps.
     private var scrubCancel: () -> Boolean = { false }
@@ -168,6 +181,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
         inputEnded = false; outputEnded = false; inputsSinceOutput = 0
         cache.breakRun()
         outPos = extractor.sampleTime.let { if (it >= 0) it - 1 else -1 }
+        runFromStart = extractor.sampleTime == streamStartUs
     }
 
     /** The sync frame at or before [t] (a second extractor, so the decoding one keeps its position). */
@@ -223,6 +237,8 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
                     while (SystemClock.elapsedRealtime() < deadline) {
                         reader!!.acquireNextImage()?.let { img ->
                             val pts = img.timestamp / 1000
+                            if (runFromStart && firstFramePts < 0) firstFramePts = pts
+                            runFromStart = false
                             cache.add(pts, img); outPos = pts
                             if (outputEnded) cache.markEnded()
                             return img
