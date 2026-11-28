@@ -102,6 +102,8 @@ public:
     }
     // MP2.2: test-only buffer-id probe (off by default; enabling clears the id history). First pipeline creations' ns.
     void setProbe(bool on) { mProbe = on; mSeenIds.clear(); mRecentIds.clear(); }
+    // MP2.2 B2: the device's memory types and the readback type chosen (diagnostic text).
+    std::string memoryInfo() const { return mMemoryInfo; }
     void pipelineTimes(int64_t* out, size_t count) {
         for (size_t i = 0; i < count; ++i) out[i] = i < mPipelineTimes.size() ? mPipelineTimes[i] : -1;
     }
@@ -180,6 +182,9 @@ private:
     std::vector<uint64_t> mRecentIds; // most recent first, at most 32
     std::vector<int64_t> mPipelineTimes; // ns of this session's first 16 slot pipeline creations
     void probeBuffer(AHardwareBuffer* buffer);
+    // MP2.2 B2 state.
+    bool mReadbackCoherent = true;
+    std::string mMemoryInfo;
     VkQueryPool mTimestamps = VK_NULL_HANDLE; // 0/1: batch begin/end, 2/3: present blit begin/end.
     double mTimestampPeriodNs = 0;
     uint64_t mTimestampMask = 0;

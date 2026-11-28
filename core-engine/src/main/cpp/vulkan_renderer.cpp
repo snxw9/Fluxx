@@ -1682,11 +1682,32 @@ bool VulkanRenderer::readbackRgba() {
         if(vkCreateBuffer(mDevice,&info,nullptr,&mReadback)!=VK_SUCCESS) return false;
         VkMemoryRequirements req; vkGetBufferMemoryRequirements(mDevice,mReadback,&req);
         VkPhysicalDeviceMemoryProperties props; vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice,&props);
-        uint32_t type=UINT32_MAX;
-        for(uint32_t i=0;i<props.memoryTypeCount;i++) if((req.memoryTypeBits&(1u<<i)) &&
-            (props.memoryTypes[i].propertyFlags & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) ==
-            (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) { type=i; break; }
+        // MP2.2 B2: the CPU reads every byte of this buffer (copyYuv, the eyedropper), so prefer CACHED host memory
+        // (coherent if offered); fall back to the previous choice, the first HOST_VISIBLE | HOST_COHERENT type.
+        auto pick=[&](VkMemoryPropertyFlags want) {
+            for(uint32_t i=0;i<props.memoryTypeCount;i++)
+                if((req.memoryTypeBits&(1u<<i)) && (props.memoryTypes[i].propertyFlags & want)==want) return i;
+            return UINT32_MAX;
+        };
+        constexpr VkMemoryPropertyFlags visible=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, coherent=VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            cached=VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+        const uint32_t previous=pick(visible|coherent);
+        uint32_t type=pick(visible|cached|coherent);
+        if(type==UINT32_MAX) type=pick(visible|cached);
+        if(type==UINT32_MAX) type=previous;
         if(type==UINT32_MAX) return false;
+        mReadbackCoherent=(props.memoryTypes[type].propertyFlags & coherent)!=0;
+        std::ostringstream info2;
+        info2<<"memory types (allowed for the readback: bits 0x"<<std::hex<<req.memoryTypeBits<<std::dec<<"):";
+        for(uint32_t i=0;i<props.memoryTypeCount;i++) {
+            const auto f=props.memoryTypes[i].propertyFlags;
+            info2<<" ["<<i<<" heap "<<props.memoryTypes[i].heapIndex<<((f&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)?" DEVICE_LOCAL":"")
+                <<((f&visible)?" HOST_VISIBLE":"")<<((f&coherent)?" HOST_COHERENT":"")<<((f&cached)?" HOST_CACHED":"")
+                <<((f&VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT)?" LAZY":"")<<"]";
+        }
+        info2<<"; previous choice "<<static_cast<int>(previous)<<", chosen "<<type<<(mReadbackCoherent?" (coherent)":" (not coherent: invalidated after each readback)");
+        mMemoryInfo=info2.str();
+        LOGI("Readback %s", mMemoryInfo.c_str());
         VkMemoryAllocateInfo alloc{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO}; alloc.allocationSize=req.size; alloc.memoryTypeIndex=type;
         if(vkAllocateMemory(mDevice,&alloc,nullptr,&mReadbackMemory)!=VK_SUCCESS) return false;
         if(vkBindBufferMemory(mDevice,mReadback,mReadbackMemory,0)!=VK_SUCCESS) return false;
@@ -1718,6 +1739,13 @@ bool VulkanRenderer::readbackRgba() {
     barrier.buffer=mReadback; barrier.size=bytes;
     vkCmdPipelineBarrier(mWorkCommand,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_HOST_BIT,0,0,nullptr,1,&barrier,0,nullptr);
     if(!submitWork()) return false;
+    if(!mReadbackCoherent) {
+        // MP2.2 B2: non-coherent memory: make the GPU's writes visible to the CPU after the fence, before any read
+        // (copyYuv, readPreviewPixel and proofPixels all read through here).
+        VkMappedMemoryRange range{VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
+        range.memory=mReadbackMemory; range.offset=0; range.size=VK_WHOLE_SIZE;
+        if(vkInvalidateMappedMemoryRanges(mDevice,1,&range)!=VK_SUCCESS) return false;
+    }
     mReadbackValid=true;
     return true;
 }

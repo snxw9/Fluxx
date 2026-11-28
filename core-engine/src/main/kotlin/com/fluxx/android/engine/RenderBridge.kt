@@ -53,6 +53,8 @@ object RenderBridge {
     external fun probe(session: Long, on: Boolean)
     /** MP2.2, test-only: this session's first 16 slot pipeline creation times (ns; -1 = none yet). */
     external fun pipelineTimes(session: Long, out: LongArray)
+    /** MP2.2, test-only: the device's memory types and the readback type chosen (after the first readback). */
+    external fun memoryInfo(session: Long): String
 }
 
 /** MP2.2: indices of [RenderBridge.frameStages] (VulkanRenderer::Stage). */

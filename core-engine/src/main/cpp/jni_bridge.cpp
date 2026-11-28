@@ -338,3 +338,6 @@ extern "C" JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_pip
     reinterpret_cast<VulkanRenderer*>(session)->pipelineTimes(values,16);
     env->SetLongArrayRegion(output,0,std::min<jsize>(env->GetArrayLength(output),16),values);
 }
+extern "C" JNIEXPORT jstring JNICALL Java_com_fluxx_android_engine_RenderBridge_memoryInfo(JNIEnv* env,jobject,jlong session) {
+    return env->NewStringUTF(reinterpret_cast<VulkanRenderer*>(session)->memoryInfo().c_str());
+}
