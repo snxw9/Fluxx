@@ -70,6 +70,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
     internal fun stripCounts(): LongArray? = stripBuilder?.counts?.let { it.copyOf() + longArrayOf(stripFrames?.bytes ?: 0L) }
     /** MP2.3: each layer's last scrub request (source µs): the direction of the finger. Cleared when a frame is not a scrub frame. */
     private val scrubLastUs = HashMap<Long, Long>()
+    private val scrubForward = HashMap<Long, Boolean>()
     /** The last frame rendered completely: its time (decode-behind works only on it). */
     private var completeFrameUs = -1L
     private var completeFrameProject: ProjectDocument? = null
@@ -855,7 +856,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         }
         // MP2.3: a Play press stops the strip builder at once (it only runs while the preview is paused and idle).
         if (playing) stripBuilder?.cancel()
-        if (!approximateFrames && scrubLastUs.isNotEmpty()) scrubLastUs.clear()
+        if (!approximateFrames && scrubLastUs.isNotEmpty()) { scrubLastUs.clear(); scrubForward.clear() }
         if (stripTrim) { stripTrim = false; stripFrames?.clear() }
         // Between frames: nothing is staged and the previous frame's GPU work has completed (submitWork waits on its fence).
         releaseHidden(project, timeUs)
@@ -1001,8 +1002,10 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 // to within its GOP (the bounded decode, as before MP2.3: in order with the finger); moving backward only
                 // what its cache proves or it stands at most 200 ms before (cheapFor): there the bounded decode would walk
                 // forward while the finger goes back (MP2.3's out-of-order frames).
-                val forward=approximateFrames && stripFrames != null && sourceTimeUs >= (scrubLastUs[layer.id] ?: Long.MAX_VALUE)
-                if(approximateFrames) scrubLastUs[layer.id]=sourceTimeUs
+                // An unchanged target (a redraw: several seeks in one composition frame) keeps the previous direction.
+                val forward=approximateFrames && stripFrames != null && (scrubLastUs[layer.id] ?: Long.MAX_VALUE).let { last ->
+                    if(sourceTimeUs == last) scrubForward[layer.id] == true else sourceTimeUs > last }
+                if(approximateFrames) { scrubLastUs[layer.id]=sourceTimeUs; scrubForward[layer.id]=forward }
                 val open=if(approximateFrames && stripFrames != null) decoders[key]?.decoder else null
                 if(approximateFrames && stripFrames != null && open?.let { if(forward) it.scrubWithoutSeek(sourceTimeUs) else it.cheapFor(sourceTimeUs) } != true) {
                     val probe=MediaProbes.events
