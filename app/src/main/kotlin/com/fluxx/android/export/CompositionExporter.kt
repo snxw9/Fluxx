@@ -72,27 +72,36 @@ class CompositionExporter(private val context: Context) {
             var inputEnded=false
             var lastOutput=android.os.SystemClock.elapsedRealtime()
             CompositionRenderer(context,repository).use { renderer ->
+                // MP2.2, test-only (null in the app): per-frame render / copyYuv / encoder input wait / output drain ns.
+                val probe=testFrame
+                val times=LongArray(4)
                 while(!outputEnded) {
                     checkCancel(cancelled)
                     if(!inputEnded) {
+                        val waiting=if(probe != null) System.nanoTime() else 0L
                         val input=codec.dequeueInputBuffer(2000)
+                        if(probe != null) times[2]+=System.nanoTime()-waiting
                         if(input>=0) {
                             val time=comp.frameRate.frameTimeUs(frame)
                             if(time>=duration) {
                                 codec.queueInputBuffer(input,0,0,duration,MediaCodec.BUFFER_FLAG_END_OF_STREAM);inputEnded=true
                             } else {
+                                val rendering=if(probe != null) System.nanoTime() else 0L
                                 renderer.render(project,time,cancelled)
+                                val copying=if(probe != null) System.nanoTime() else 0L
                                 val image=requireNotNull(codec.getInputImage(input)) { "Encoder does not expose flexible YUV input" }
                                 val planes=image.planes
                                 check(planes[0].pixelStride==1 && RenderBridge.copyYuv(renderer.session,
                                     planes[0].buffer.slice(),planes[1].buffer.slice(),planes[2].buffer.slice(),
                                     planes[0].rowStride,planes[1].rowStride,planes[2].rowStride,planes[1].pixelStride,planes[2].pixelStride)) { "Could not transfer rendered frame to encoder" }
+                                if(probe != null) { times[0]=copying-rendering; times[1]=System.nanoTime()-copying; probe(renderer,times); times.fill(0L) }
                                 codec.queueInputBuffer(input,0,comp.width*comp.height*3/2,time,0)
                                 frame++;progress(time.toFloat()/duration)
                                 lastOutput=android.os.SystemClock.elapsedRealtime()
                             }
                         }
                     }
+                    val draining=if(probe != null) System.nanoTime() else 0L
                     var index=codec.dequeueOutputBuffer(info,2000)
                     while(index>=0) {
                         lastOutput=android.os.SystemClock.elapsedRealtime()
@@ -107,6 +116,7 @@ class CompositionExporter(private val context: Context) {
                         index=codec.dequeueOutputBuffer(info,0)
                     }
                     if(index==MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) { track=mux.addTrack(codec.outputFormat);mux.start();started=true }
+                    if(probe != null) times[3]+=System.nanoTime()-draining
                     check(android.os.SystemClock.elapsedRealtime()-lastOutput<15000) { "Video encoder stalled" }
                 }
             }
@@ -204,4 +214,12 @@ class CompositionExporter(private val context: Context) {
         } finally { muxer?.release() }
     }
     private fun checkCancel(cancelled: () -> Boolean) { if(cancelled()) throw CancellationException("Export cancelled") }
+
+    companion object {
+        /**
+         * MP2.2, TEST-ONLY (null in the app, nothing is measured then): called after each video frame is rendered and
+         * copied, with the renderer and (render ns, copyYuv ns, encoder input-wait ns, output-drain ns since the last call).
+         */
+        @Volatile @JvmStatic internal var testFrame: ((CompositionRenderer, LongArray) -> Unit)? = null
+    }
 }

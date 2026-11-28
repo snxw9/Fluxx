@@ -608,7 +608,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
 
     private fun flush() {
         if (staged == 0) return
+        val probing = testProbe; val flushing = if (probing) System.nanoTime() else 0L
         check(RenderBridge.flush(session)) { "GPU compositing failed" }
+        if (probing) probeNs[PROBE_FLUSH_NS] += System.nanoTime() - flushing
         stageNs[STAGE_FLUSHES]++
         staged = 0
     }
@@ -1032,9 +1034,14 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 val openStart=if(opening) System.nanoTime() else 0L
                 val decoder=decoder(key,uri) ?: run { layersWithoutDecoder++; return@forEachActive }
                 // A source reused by several clips may need a seek; finish earlier uses before advancing it.
-                flush()
+                // MP2.2: test-only switch (default off): skip this flush to measure its cost (distinct decoders only).
+                val probing=testProbe
+                if(probing && staged > 0 && !testSkipVideoFlush) probeNs[PROBE_VIDEO_FLUSHES]++
+                if(!testSkipVideoFlush) flush()
                 // AUD2 B2: while scrubbing, a bounded decode (the nearest cached / sync frame); the exact frame follows.
+                val decoding=if(probing) System.nanoTime() else 0L
                 val image=decoder.frameAt(sourceTimeUs,cancelled,interactive && approximateFrames)
+                if(probing) { probeNs[PROBE_DECODE_NS] += System.nanoTime()-decoding; probeNs[PROBE_DECODES]++ }
                 // MP2.1: a decoder opened by the frame itself: its open + seek + first frame feeds the warm horizon.
                 if(opening) warm?.measured(decoder.decoderClass,(System.nanoTime()-openStart)/1000)
                 if(decoder.lastApproximate) lastFrameApproximate=true
@@ -1045,9 +1052,11 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 if(cull == CULL_WARM) return@forEachActive
                 LayerGeometry.matrix(matrix,posX,posY,scaleX,scaleY,rot,comp.width,comp.height,crop.width(),crop.height(),decoder.rotation,decoder.pixelAspect,
                     referenceWidth=referenceWidth,referenceHeight=referenceHeight,anchorX=layer.anchorX,anchorY=layer.anchorY)
+                val layering=if(probing) System.nanoTime() else 0L
                 image.hardwareBuffer?.use { buffer ->
                     check(RenderBridge.layer(session,layer.id,buffer,matrix,opacity)) { "Could not import video frame" }
                 } ?: error("Decoder returned an inaccessible image")
+                if(probing) { probeNs[PROBE_LAYER_NS] += System.nanoTime()-layering; probeNs[PROBE_VIDEO_DRAWN]++ }
             } else {
                 val raster=raster(layer)
                 LayerGeometry.matrix(matrix,posX,posY,scaleX,scaleY,rot,comp.width,comp.height,
@@ -1062,7 +1071,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
         }
         drawFixtures(rasterIndex)
         if(cancelled()) throw CancellationException("Superseded frame")
+        val finishing=if(testProbe) System.nanoTime() else 0L
         check(RenderBridge.finish(session)) { "Could not finish composition frame" }
+        if(testProbe) probeNs[PROBE_FINISH_NS] += System.nanoTime()-finishing
         if(interactive && TextEditTimings.waitingFor(project)) TextEditTimings.frameReady(project,RenderBridge.textStats(session))
         staged=0
         val iterator = textLayouts.entries.iterator()
@@ -1102,6 +1113,11 @@ class CompositionRenderer(private val context: Context, private val repository: 
      * [STAGE_TIER_JNI] is the tier/tier-request JNI time inside [STAGE_TIERS].
      */
     private val stageNs = LongArray(STAGES)
+    /** MP2.2, test-only ([testProbe]): Kotlin-side render counters since the last [probeCounters] read (then reset). */
+    private val probeNs = LongArray(PROBE_COUNT)
+    internal fun probeCounters(out: LongArray) { probeNs.copyInto(out); java.util.Arrays.fill(probeNs, 0L) }
+    /** MP2.2, test-only: decoders open in this renderer's pool now. */
+    internal val decodersOpen: Int get() = decoders.size
     internal fun frameStages(out: LongArray) {
         require(out.size >= STAGES)
         stageNs.copyInto(out); java.util.Arrays.fill(stageNs, 0L)
@@ -1117,6 +1133,20 @@ class CompositionRenderer(private val context: Context, private val repository: 
         const val STAGE_FLUSHES = 7
         const val STAGE_TIER_JNI = 8
         const val STAGES = 9
+        /** MP2.2, test-only probe indices ([probeCounters]): ns in frameAt, frameAt calls, ns in the video RenderBridge.layer
+         *  calls (import included), video layers drawn, ns in every real flush, real per-video flushes, ns in RenderBridge.finish. */
+        const val PROBE_DECODE_NS = 0
+        const val PROBE_DECODES = 1
+        const val PROBE_LAYER_NS = 2
+        const val PROBE_VIDEO_DRAWN = 3
+        const val PROBE_FLUSH_NS = 4
+        const val PROBE_VIDEO_FLUSHES = 5
+        const val PROBE_FINISH_NS = 6
+        const val PROBE_COUNT = 7
+        /** MP2.2, test-only (default off; the app never sets it): collect [probeCounters]. */
+        @Volatile @JvmStatic internal var testProbe = false
+        /** MP2.2, test-only (default off; the app never sets it): skip the flush before each video frameAt (flush upper bound). */
+        @Volatile @JvmStatic internal var testSkipVideoFlush = false
         /** MP1 B3: a video layer's state for one frame. */
         private const val CULL_DRAW = 0
         private const val CULL_WARM = 1

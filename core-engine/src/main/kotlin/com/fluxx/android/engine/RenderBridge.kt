@@ -47,6 +47,25 @@ object RenderBridge {
     external fun finish(session: Long): Boolean
     external fun copyYuv(session: Long, y: java.nio.ByteBuffer, u: java.nio.ByteBuffer, v: java.nio.ByteBuffer,
         yRow: Int, uRow: Int, vRow: Int, uPixel: Int, vPixel: Int): Boolean
+    /** MP2.2, test-only diagnostics (the app never calls these): the native stage profile ([NativeStage] order; reset on read). */
+    external fun frameStages(session: Long, out: LongArray)
+    /** MP2.2, test-only: the AHardwareBuffer id probe (per-buffer cache simulation); enabling clears its history. */
+    external fun probe(session: Long, on: Boolean)
+    /** MP2.2, test-only: this session's first 16 slot pipeline creation times (ns; -1 = none yet). */
+    external fun pipelineTimes(session: Long, out: LongArray)
+}
+
+/** MP2.2: indices of [RenderBridge.frameStages] (VulkanRenderer::Stage). */
+object NativeStage {
+    const val WORK_FENCE_WAIT = 0; const val BATCH_RECORD = 1; const val BATCH_SUBMIT_WAIT = 2; const val PRESENT_FENCE_WAIT = 3
+    const val ACQUIRE = 4; const val PRESENT_RECORD = 5; const val PRESENT_SUBMIT = 6; const val PRESENT_IDLE_WAIT = 7
+    const val GPU_BATCH = 8; const val GPU_PRESENT = 9; const val BATCHES = 10; const val FRAMES = 11
+    const val IMPORTS = 20; const val IMPORT_NS = 21; const val PIPELINE_CREATES = 22; const val PIPELINE_NS = 23
+    const val CONVERSIONS = 24; const val SLOT_EVICTIONS = 25; const val RASTER_DRAWS = 26; const val SAME_BUFFER = 27
+    const val QUEUE_SUBMIT_NS = 28; const val FENCE_WAIT_NS = 29; const val READBACK_NS = 30; const val YUV_NS = 31
+    const val TRANSITIONS = 32; const val IDS_DISTINCT = 33; const val HIT4 = 34; const val HIT8 = 35; const val HIT16 = 36
+    const val HIT32 = 37; const val HIT_ALL = 38; const val ID_SAMPLES = 39
+    const val COUNT = 40
 }
 
 /** A whole frame fails before draws when the E1 proof's required glyph set cannot fit. */

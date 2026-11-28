@@ -11,6 +11,7 @@
 #include "gpu_ledger.h"
 #include <android/trace.h>
 #include <chrono>
+#include <dlfcn.h>
 
 namespace {
 // TEXT PERF 10: monotonic ns for the frame stage profile, and a Perfetto/atrace section scope.
@@ -939,6 +940,11 @@ void VulkanRenderer::cleanupVideoPipeline(VideoLayerState& layer) {
 
 bool VulkanRenderer::createVideoPipelineOnce(VideoLayerState& layer, VkAndroidHardwareBufferFormatPropertiesANDROID& formatProps) {
     if (layer.mVideoPipelineCreated) return true;
+    // MP2.2: diagnostic only. Counted when a slot builds its conversion + sampler + layouts + pool + pipeline.
+    struct PipelineTimer { VulkanRenderer& r; int64_t start=nowNs(); ~PipelineTimer() {
+        const int64_t ns=nowNs()-start; r.mStages[PipelineNs]+=ns; ++r.mStages[PipelineCreates];
+        if (r.mPipelineTimes.size()<16) r.mPipelineTimes.push_back(ns); } } pipelineTimer{*this};
+    if (formatProps.format != VK_FORMAT_R8G8B8A8_UNORM && formatProps.format != VK_FORMAT_R8G8B8A8_SRGB) ++mStages[Conversions];
 
     if (layer.mYcbcrConversion != VK_NULL_HANDLE) {
         vkDestroySamplerYcbcrConversion(mDevice, layer.mYcbcrConversion, nullptr);
@@ -1433,6 +1439,29 @@ std::string VulkanRenderer::textStatsJson() const {
         << ",\"tierWarmQueued\":" << stats.tierWarmQueued << ",\"tierWarmed\":" << stats.tierWarmed;
     json << "}"; return json.str();
 }
+// MP2.2: test-only. The buffer's AHardwareBuffer id (API 31+, looked up at run time: minSdk is 29) against the ids
+// imported so far: whether a per-buffer import cache of 4 / 8 / 16 / 32 entries (LRU by id) or an unbounded one would
+// have held it. Never changes what is imported or drawn.
+void VulkanRenderer::probeBuffer(AHardwareBuffer* buffer) {
+    using GetId = int (*)(const AHardwareBuffer*, uint64_t*);
+    static GetId getId = reinterpret_cast<GetId>(dlsym(RTLD_DEFAULT, "AHardwareBuffer_getId"));
+    if (!getId) return;
+    uint64_t id = 0;
+    if (getId(buffer, &id) != 0) return;
+    ++mStages[IdSamples];
+    if (!mSeenIds.insert(id).second) ++mStages[HitAll];
+    const auto at = std::find(mRecentIds.begin(), mRecentIds.end(), id);
+    if (at != mRecentIds.end()) {
+        const auto index = at - mRecentIds.begin();
+        if (index < 4) ++mStages[Hit4];
+        if (index < 8) ++mStages[Hit8];
+        if (index < 16) ++mStages[Hit16];
+        ++mStages[Hit32];
+        mRecentIds.erase(at);
+    }
+    mRecentIds.insert(mRecentIds.begin(), id);
+    if (mRecentIds.size() > 32) mRecentIds.pop_back();
+}
 bool VulkanRenderer::setFrameLayer(int64_t id, AHardwareBuffer* buffer, const float* matrix, float opacity) {
     if (!mInitialized || !buffer || mDrawOrder.size() >= 4) return false;
     if (mLayers.find(id) == mLayers.end() && mLayers.size() >= 4) {
@@ -1446,23 +1475,28 @@ bool VulkanRenderer::setFrameLayer(int64_t id, AHardwareBuffer* buffer, const fl
         if(victim==mLayers.end()) return false;
         cleanupVideoImage(victim->second);cleanupVideoPipeline(victim->second);
         if(victim->second.buffer) AHardwareBuffer_release(victim->second.buffer);
-        mLayers.erase(victim);
+        mLayers.erase(victim); ++mStages[SlotEvictions];
     }
     auto& layer = mLayers[id];
     layer.lastUse=++mUseCounter;
     if (layer.buffer != buffer) {
+        const int64_t importing = nowNs();
+        if (mProbe) probeBuffer(buffer);
         cleanupVideoImage(layer);
         if (layer.buffer) AHardwareBuffer_release(layer.buffer);
         layer.buffer = buffer;
         AHardwareBuffer_acquire(buffer);
         layer.transitioned = false;
-        if (!createHardwareBufferImage(layer, buffer)) {
+        const bool imported = createHardwareBufferImage(layer, buffer);
+        mStages[ImportNs] += nowNs() - importing; ++mStages[Imports];
+        if (!imported) {
             cleanupVideoImage(layer);
             AHardwareBuffer_release(layer.buffer);
             layer.buffer = nullptr;
             return false;
         }
-    }
+    } else ++mStages[SameBuffer];
+    ++mStages[RasterDraws];
     std::copy(matrix, matrix + 16, layer.transform.matrix);
     layer.transform.opacity = opacity;
     DrawEntry entry{}; entry.rasterId=id; mDrawOrder.push_back(entry);
@@ -1509,8 +1543,11 @@ bool VulkanRenderer::submitWork() {
     const int64_t submitted = nowNs();
     TraceScope trace("fluxx.batchSubmitWait");
     if (vkQueueSubmit(mGraphicsQueue,1,&submit,mWorkFence)!=VK_SUCCESS) return false;
+    const int64_t waiting = nowNs();
     const bool done = vkWaitForFences(mDevice,1,&mWorkFence,VK_TRUE,5000000000ULL)==VK_SUCCESS;
-    mStages[BatchSubmitWait] += nowNs() - submitted;
+    const int64_t waited = nowNs();
+    mStages[BatchSubmitWait] += waited - submitted;
+    mStages[QueueSubmitNs] += waiting - submitted; mStages[FenceWaitNs] += waited - waiting; // MP2.2: the two parts
     return done;
 }
 bool VulkanRenderer::flushBatch() {
@@ -1555,7 +1592,7 @@ bool VulkanRenderer::submitPending() {
         if(entry.text) continue;
         auto& layer = mLayers.at(entry.rasterId);
         if (layer.transitioned) continue;
-        layer.transitioned = true;
+        layer.transitioned = true; ++mStages[Transitions];
         VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -1697,7 +1734,11 @@ int64_t VulkanRenderer::readPreviewPixel(float nx, float ny) {
 }
 
 bool VulkanRenderer::copyYuv(uint8_t* y, uint8_t* u, uint8_t* v, int yr, int ur, int vr, int up, int vp) {
+    const int64_t reading = nowNs();
     if(!readbackRgba()) return false;
+    const int64_t converting = nowNs();
+    mStages[ReadbackNs] += converting - reading;
+    struct YuvTimer { int64_t start; int64_t& total; ~YuvTimer() { total += nowNs() - start; } } yuvTimer{converting, mStages[YuvNs]};
     const auto* rgba=static_cast<const uint8_t*>(mReadbackMapped);
     auto clamp=[](int a){ return static_cast<uint8_t>(std::max(0,std::min(255,a))); };
     for(int row=0;row<mCompHeight;row+=2) for(int col=0;col<mCompWidth;col+=2) {

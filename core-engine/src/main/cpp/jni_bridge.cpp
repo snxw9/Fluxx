@@ -323,3 +323,18 @@ JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_copyYuv(JN
     return r->copyYuv(yp,uptr,vptr,yr,ur,vr,up,vp);
 }
 }
+// MP2.2 (test-only diagnostics; the app never calls these): the frame stage profile in VulkanRenderer::Stage order
+// (resets the accumulators), the buffer-id probe switch, and the first slot pipeline creation times (ns, -1 = none).
+extern "C" JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_frameStages(JNIEnv* env,jobject,jlong session,jlongArray output) {
+    int64_t values[VulkanRenderer::StageCount]{};
+    reinterpret_cast<VulkanRenderer*>(session)->frameStages(values,VulkanRenderer::StageCount);
+    env->SetLongArrayRegion(output,0,std::min<jsize>(env->GetArrayLength(output),VulkanRenderer::StageCount),values);
+}
+extern "C" JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_probe(JNIEnv*,jobject,jlong session,jboolean on) {
+    reinterpret_cast<VulkanRenderer*>(session)->setProbe(on);
+}
+extern "C" JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_pipelineTimes(JNIEnv* env,jobject,jlong session,jlongArray output) {
+    int64_t values[16]{};
+    reinterpret_cast<VulkanRenderer*>(session)->pipelineTimes(values,16);
+    env->SetLongArrayRegion(output,0,std::min<jsize>(env->GetArrayLength(output),16),values);
+}

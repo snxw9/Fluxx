@@ -9,6 +9,7 @@
 #include <atomic>
 #include <mutex>
 #include <map>
+#include <set>
 #include "text/text_renderer.h"
 
 
@@ -84,10 +85,25 @@ public:
     // count, atlas upload CPU (ns), tier-change calls, prepared-glyph placement lookups (layouts re-resolved).
     enum Stage : size_t { WorkFenceWait, BatchRecord, BatchSubmitWait, PresentFenceWait, Acquire, PresentRecord,
         PresentSubmit, PresentIdleWait, GpuBatch, GpuPresent, Batches, Frames,
-        TextLayers, MeshBuild, CollectPack, Collects, AtlasUpload, TierChanges, PlacementLookups, MergedFlushes, StageCount };
+        TextLayers, MeshBuild, CollectPack, Collects, AtlasUpload, TierChanges, PlacementLookups, MergedFlushes,
+        // MP2.2 (diagnostic only, appended): raster/video layer imports (new AHardwareBuffer in a slot) and their CPU ns
+        // (pipeline creation included), slot pipeline / YCbCr conversion creations and ns, slot evictions, raster draws
+        // staged, draws whose slot kept its buffer (no import), vkQueueSubmit call ns and fence-wait ns inside submitWork
+        // (batches and readback), readback (submit + wait) ns, RGBA->YUV CPU ns, layout transitions recorded. With the
+        // probe on (setProbe): distinct AHardwareBuffer ids seen since the probe was enabled, and the hits a per-buffer
+        // import cache of 4 / 8 / 16 / 32 / unbounded entries (LRU by id) would have had, out of IdSamples imports.
+        Imports, ImportNs, PipelineCreates, PipelineNs, Conversions, SlotEvictions, RasterDraws, SameBuffer,
+        QueueSubmitNs, FenceWaitNs, ReadbackNs, YuvNs, Transitions,
+        IdsDistinct, Hit4, Hit8, Hit16, Hit32, HitAll, IdSamples, StageCount };
     void frameStages(int64_t* out, size_t count) {
+        mStages[IdsDistinct] = static_cast<int64_t>(mSeenIds.size());
         for (size_t i = 0; i < count && i < StageCount; ++i) out[i] = mStages[i];
         std::fill(std::begin(mStages), std::end(mStages), 0);
+    }
+    // MP2.2: test-only buffer-id probe (off by default; enabling clears the id history). First pipeline creations' ns.
+    void setProbe(bool on) { mProbe = on; mSeenIds.clear(); mRecentIds.clear(); }
+    void pipelineTimes(int64_t* out, size_t count) {
+        for (size_t i = 0; i < count; ++i) out[i] = i < mPipelineTimes.size() ? mPipelineTimes[i] : -1;
     }
     bool proofSurface(ANativeWindow* window, int width, int height);
     void proofRepack();
@@ -159,6 +175,11 @@ private:
     VkCommandBuffer mWorkCommand = VK_NULL_HANDLE;
     VkFence mWorkFence = VK_NULL_HANDLE;
     int64_t mStages[StageCount]{};
+    bool mProbe = false;
+    std::set<uint64_t> mSeenIds;
+    std::vector<uint64_t> mRecentIds; // most recent first, at most 32
+    std::vector<int64_t> mPipelineTimes; // ns of this session's first 16 slot pipeline creations
+    void probeBuffer(AHardwareBuffer* buffer);
     VkQueryPool mTimestamps = VK_NULL_HANDLE; // 0/1: batch begin/end, 2/3: present blit begin/end.
     double mTimestampPeriodNs = 0;
     uint64_t mTimestampMask = 0;
