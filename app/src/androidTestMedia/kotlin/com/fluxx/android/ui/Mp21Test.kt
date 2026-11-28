@@ -107,13 +107,17 @@ class Mp21Test : Mp12Base() {
             val win = w.frames.filter { it[0] in (cut.atUs - windowUs)..(cut.atUs + windowUs) }
             val wiv = win.zipWithNext { a, b -> (b[2] - a[2]) / 1e6 }
             val maxIv = wiv.maxOrNull() ?: Double.NaN
-            val active = w.clock.firstOrNull { it[3] >= cut.atUs }?.get(0)
-            val shown = w.frames.firstOrNull { it[0] >= cut.atUs }?.get(2)
+            // "Active": the preview starts rendering the first frame at or after the cut (it rounds the clock to the nearest
+            // frame, so this is about half a frame before the heard clock reaches the cut).
+            val firstFrame = w.frames.firstOrNull { it[0] >= cut.atUs }
+            val active = firstFrame?.get(1)
+            val shown = firstFrame?.get(2)
             val k = key(cut.uri)
             // The first decoder request that produced a frame of the new clip (its source range), and the open before it.
-            val first = w.decoder.firstOrNull { (ns, e) -> ns >= w.t0 && e.startsWith("frame $k ") &&
+            // Only this cut's own requests: from the frame 3 s before it (an earlier clip may use the same source range).
+            val since = maxOf(w.t0, w.frames.firstOrNull { it[0] >= cut.atUs - 3_000_000 }?.get(2) ?: w.t0)
+            val first = w.decoder.firstOrNull { (ns, e) -> ns >= since && e.startsWith("frame $k ") &&
                 (field(e, "t")?.toLongOrNull() ?: -1) in cut.inUs until (cut.inUs + minOf(cut.durUs, 400_000)) }
-            val since = (active ?: shown ?: w.t0) - 4_000_000_000L
             val open = w.decoder.lastOrNull { (ns, e) -> e.startsWith("open $k ") && ns >= since && ns <= (first?.first ?: Long.MAX_VALUE) }
             val usAll = first?.second?.let { field(it, "us")?.toDoubleOrNull() }?.div(1000) ?: Double.NaN
             val seekMs = first?.second?.let { field(it, "seekus")?.toDoubleOrNull() }?.div(1000) ?: Double.NaN
@@ -128,7 +132,18 @@ class Mp21Test : Mp12Base() {
 
     private fun f0(v: Double) = if (v.isNaN()) "-" else "%.0f".format(v)
 
+    /** Raw lines (key MP21RAW) for offline analysis: frames (time us, render start / presented ms from t0) and decoder events. */
+    private fun raw(label: String, w: Window) {
+        val tag = label.substringBefore(' ')
+        w.frames.chunked(40).forEach { ch -> Mp12Bench.say("MP21RAW", "$tag F " + ch.joinToString(" ") { "${it[0]}/${"%.1f".format((it[1] - w.t0) / 1e6)}/${"%.1f".format((it[2] - w.t0) / 1e6)}" }) }
+        w.decoder.filter { it.first >= w.t0 && (it.second.startsWith("open ") || it.second.startsWith("close ") || (it.second.startsWith("frame ") && !it.second.contains("how=cached"))) }
+            .chunked(12).forEach { ch -> Mp12Bench.say("MP21RAW", "$tag D " + ch.joinToString(" | ") { "${"%.1f".format((it.first - w.t0) / 1e6)} ${it.second}" }) }
+        w.probes.filter { it.first >= w.t0 && it.second.startsWith("warm") }.chunked(12)
+            .forEach { ch -> Mp12Bench.say("MP21RAW", "$tag W " + ch.joinToString(" | ") { "${"%.1f".format((it.first - w.t0) / 1e6)} ${it.second}" }) }
+    }
+
     private fun report(label: String, w: Window, results: List<CutResult>, frameUs: Long) {
+        raw(label, w)
         val iv = w.frames.zipWithNext { a, b -> (b[2] - a[2]) / 1e6 }
         val frameMs = frameUs / 1000.0
         val fr = results.map { it.freezeMs }.filter { !it.isNaN() }

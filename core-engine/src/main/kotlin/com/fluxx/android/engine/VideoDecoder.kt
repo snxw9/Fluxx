@@ -37,6 +37,9 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
     val pixelAspect: Float
     val width: Int
     val height: Int
+    /** MP2.1 B2: the track's MIME type ("video/avc"), with the size the decoder class a warm-up is measured in. */
+    val mime: String
+    val decoderClass: String get() = "$mime ${width}x$height"
     /** The number of decoded frames kept (bounded by memory). */
     val cacheFrames: Int
     private val cache: FrameCache<Image>
@@ -55,6 +58,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
             } ?: error("This file has no video track")
             extractor.selectTrack(track)
             val format = extractor.getTrackFormat(track)
+            mime = requireNotNull(format.getString(MediaFormat.KEY_MIME))
             width = format.getInteger(MediaFormat.KEY_WIDTH)
             height = format.getInteger(MediaFormat.KEY_HEIGHT)
             val geometry = VideoGeometry.from(format)
@@ -134,6 +138,14 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
             throw e
         }
     }
+
+    /**
+     * MP2.1 B2: whether a request for [timeUs] is cheap here: the cache proves its frame, or the decoder stands at most
+     * [DecoderPlan.CHEAP_FORWARD_US] before it (decodes on, no seek). A warm decoder positioned for a cut answers yes for
+     * its target; the previous clip's decoder of the same source, standing elsewhere, answers no (it would seek).
+     */
+    fun cheapFor(timeUs: Long): Boolean = cache.exact(timeUs) != null ||
+        (outPos >= 0 && !outputEnded && timeUs >= outPos && timeUs - outPos <= DecoderPlan.CHEAP_FORWARD_US)
 
     // MP1 B1: the scrub rule (ScrubFloor) over this decoder's own seek / sync / decode steps.
     private var scrubCancel: () -> Boolean = { false }

@@ -67,6 +67,8 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
                 var settle=false
                 if(!playing) {
                     if(approximateShown) settle=withTimeoutOrNull(ScrubPolicy.SETTLE_MS) { changes.receive() } == null
+                    // MP2.1: paused with a warm decoder held: wake to release it after its 3 s delay (no frame is drawn).
+                    else if(renderer.warmHeld) { if(withTimeoutOrNull(500) { changes.receive() } == null) { renderer.warmIdle(); continue } }
                     else changes.receive()
                 } else changes.tryReceive()
                 val epoch=generation.get()
