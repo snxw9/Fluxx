@@ -82,7 +82,9 @@ class Mp23GoldenTest {
                         if (done) break
                         Thread.sleep(500)
                     }
-                    report("MP23 golden: strips built in %.1f s; coverage ${layers.joinToString { l -> "%.1f %%".format(100 * ScrubStrips.testCoverage(context, l.asset!!.uri!!, l.timing.sourceInUs, l.timing.sourceInUs + dur, l.asset!!.durationUs!!)) }}".format((System.nanoTime() - t0) / 1e9))
+                    val builtS = (System.nanoTime() - t0) / 1e9
+                    val coverage = layers.joinToString { l -> String.format(java.util.Locale.ROOT, "%.1f", 100 * ScrubStrips.testCoverage(context, l.asset!!.uri!!, l.timing.sourceInUs, l.timing.sourceInUs + dur, l.asset!!.durationUs!!)) + " percent" }
+                    report("MP23 golden: strips built in " + String.format(java.util.Locale.ROOT, "%.1f", builtS) + " s; coverage " + coverage)
                     on.playing = true
                     for (k in 0 until 60L) compare(rate.frameTimeUs(k), "playback")
                     on.playing = false

@@ -120,7 +120,8 @@ object StripPixels {
      * Writes [outW] x [outH] opaque ARGB pixels of the crop ([cl], [ct], [cw], [ch]) into [out]. Luma is the mean of the
      * four corners of each output pixel's source block (less shimmer than one sample), chroma one sample at its centre.
      * [high] is added to every byte index (1 for P010: the high byte of each 16-bit sample). BT.709 limited range unless
-     * [bt601] / [fullRange] (the stream's colour aspects).
+     * [bt601] / [fullRange] (the stream's colour aspects). The rows it needs are bulk-copied out of the planes first (one
+     * sample read per ByteBuffer call cost ~100 ms per 480 px picture on the A16; the copies cost a few ms).
      */
     fun toArgb(y: ByteBuffer, yRow: Int, yPix: Int, u: ByteBuffer, v: ByteBuffer, uvRow: Int, uvPix: Int,
                cl: Int, ct: Int, cw: Int, ch: Int, outW: Int, outH: Int, out: IntArray, high: Int = 0,
@@ -130,26 +131,46 @@ object StripPixels {
         // R = Y + a*Cr; G = Y - b*Cb - c*Cr; B = Y + d*Cb.
         val a = (if (bt601) 1.402f else 1.5748f) * kc; val d = (if (bt601) 1.772f else 1.8556f) * kc
         val b = (if (bt601) 0.344136f else 0.187324f) * kc; val c = (if (bt601) 0.714136f else 0.468124f) * kc
-        val yLimit = y.limit(); val uLimit = u.limit(); val vLimit = v.limit()
-        for (oy2 in 0 until outH) {
-            val sy0 = ct + (oy2.toLong() * ch / outH).toInt()
-            val sy1 = (ct + ((oy2 + 1).toLong() * ch / outH).toInt() - 1).coerceAtLeast(sy0)
-            val syc = ct + ((2L * oy2 + 1) * ch / (2L * outH)).toInt()
-            for (ox in 0 until outW) {
-                val sx0 = cl + (ox.toLong() * cw / outW).toInt()
-                val sx1 = (cl + ((ox + 1).toLong() * cw / outW).toInt() - 1).coerceAtLeast(sx0)
-                val sxc = cl + ((2L * ox + 1) * cw / (2L * outW)).toInt()
-                fun luma(x: Int, row: Int): Int { val i = row * yRow + x * yPix + high; return if (i < yLimit) y.get(i).toInt() and 255 else 0 }
-                val l = (luma(sx0, sy0) + luma(sx1, sy0) + luma(sx0, sy1) + luma(sx1, sy1) + 2) shr 2
-                val ci = (syc shr 1) * uvRow + (sxc shr 1) * uvPix + high
-                val cb = (if (ci < uLimit) u.get(ci).toInt() and 255 else 128) - 128
-                val cr = (if (ci < vLimit) v.get(ci).toInt() and 255 else 128) - 128
-                val yy = (l - oy) * ky
-                val r = (yy + a * cr + .5f).toInt().coerceIn(0, 255)
-                val g = (yy - b * cb - c * cr + .5f).toInt().coerceIn(0, 255)
-                val bl = (yy + d * cb + .5f).toInt().coerceIn(0, 255)
-                out[oy2 * outW + ox] = (255 shl 24) or (r shl 16) or (g shl 8) or bl
-            }
+        // Per output column: the byte offsets (within a row) of its two luma samples and its chroma sample.
+        val x0 = IntArray(outW); val x1 = IntArray(outW); val xc = IntArray(outW)
+        for (ox in 0 until outW) {
+            val s0 = cl + (ox.toLong() * cw / outW).toInt()
+            val s1 = (cl + ((ox + 1).toLong() * cw / outW).toInt() - 1).coerceAtLeast(s0)
+            val sc = cl + ((2L * ox + 1) * cw / (2L * outW)).toInt()
+            x0[ox] = s0 * yPix + high; x1[ox] = s1 * yPix + high; xc[ox] = (sc shr 1) * uvPix + high
         }
+        val yLen = x1.maxOrNull()!! + 1; val cLen = xc.maxOrNull()!! + 1
+        val r0 = ByteArray(yLen); val r1 = ByteArray(yLen); val ru = ByteArray(cLen); val rv = ByteArray(cLen)
+        val yPos = y.position(); val uPos = u.position(); val vPos = v.position()
+        try {
+            var last0 = -1; var last1 = -1; var lastC = -1
+            for (oy2 in 0 until outH) {
+                val sy0 = ct + (oy2.toLong() * ch / outH).toInt()
+                val sy1 = (ct + ((oy2 + 1).toLong() * ch / outH).toInt() - 1).coerceAtLeast(sy0)
+                val syc = (ct + ((2L * oy2 + 1) * ch / (2L * outH)).toInt()) shr 1
+                if (sy0 != last0) { row(y, sy0 * yRow, r0); last0 = sy0 }
+                if (sy1 != last1) { row(y, sy1 * yRow, r1); last1 = sy1 }
+                if (syc != lastC) { row(u, syc * uvRow, ru); row(v, syc * uvRow, rv); lastC = syc }
+                val base = oy2 * outW
+                for (ox in 0 until outW) {
+                    val i0 = x0[ox]; val i1 = x1[ox]
+                    val l = ((r0[i0].toInt() and 255) + (r0[i1].toInt() and 255) + (r1[i0].toInt() and 255) + (r1[i1].toInt() and 255) + 2) shr 2
+                    val cb = (ru[xc[ox]].toInt() and 255) - 128
+                    val cr = (rv[xc[ox]].toInt() and 255) - 128
+                    val yy = (l - oy) * ky
+                    val rr = (yy + a * cr + .5f).toInt().coerceIn(0, 255)
+                    val gg = (yy - b * cb - c * cr + .5f).toInt().coerceIn(0, 255)
+                    val bb = (yy + d * cb + .5f).toInt().coerceIn(0, 255)
+                    out[base + ox] = (255 shl 24) or (rr shl 16) or (gg shl 8) or bb
+                }
+            }
+        } finally { y.position(yPos); u.position(uPos); v.position(vPos) }
+    }
+
+    /** Bulk-copies [dst].size bytes of [buf] from [offset] (bytes past the plane's end read as mid-grey). */
+    private fun row(buf: ByteBuffer, offset: Int, dst: ByteArray) {
+        val n = (buf.limit() - offset).coerceIn(0, dst.size)
+        if (n > 0) { buf.position(offset); buf.get(dst, 0, n) }
+        if (n < dst.size) java.util.Arrays.fill(dst, n, dst.size, 128.toByte())
     }
 }
