@@ -68,6 +68,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
     val stripWantsTick: Boolean get() = stripBuilder?.wantsTick == true
     /** MP2.3: strip counters (runs, pictures, seeks, blocked, failed, closed paused, cancelled) and in-RAM bytes; null without a strip. */
     internal fun stripCounts(): LongArray? = stripBuilder?.counts?.let { it.copyOf() + longArrayOf(stripFrames?.bytes ?: 0L) }
+    /** MP2.3: each layer's last scrub request (source µs): the direction of the finger. Cleared when a frame is not a scrub frame. */
+    private val scrubLastUs = HashMap<Long, Long>()
     /** The last frame rendered completely: its time (decode-behind works only on it). */
     private var completeFrameUs = -1L
     private var completeFrameProject: ProjectDocument? = null
@@ -853,6 +855,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         }
         // MP2.3: a Play press stops the strip builder at once (it only runs while the preview is paused and idle).
         if (playing) stripBuilder?.cancel()
+        if (!approximateFrames && scrubLastUs.isNotEmpty()) scrubLastUs.clear()
         if (stripTrim) { stripTrim = false; stripFrames?.clear() }
         // Between frames: nothing is staged and the previous frame's GPU work has completed (submitWork waits on its fence).
         releaseHidden(project, timeUs)
@@ -993,10 +996,15 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 val key=layerKeys[layer.id] ?: return@forEachActive
                 // MP2.3 B2: a fast sweep shows the source's strip picture at or before the target (no decoder seek per
                 // target); the exact frame follows 120 ms after the last move. Not covered there: the bounded decode below.
-                // Where the open decoder is cheap for the target (its cache proves the frame, or it stands at most 200 ms
-                // before it: a slow forward sweep, the first steps back from a pause) it keeps serving it at full size,
-                // so it stays current and the exact frame needs no seek when the finger stops.
-                if(approximateFrames && stripFrames != null && decoders[key]?.decoder?.cheapFor(sourceTimeUs) != true) {
+                // The open decoder keeps serving targets it reaches without a seek, at full size as before, so it stays
+                // current and the exact frame needs no seek when the finger stops: moving FORWARD, anything it decodes on
+                // to within its GOP (the bounded decode, as before MP2.3: in order with the finger); moving backward only
+                // what its cache proves or it stands at most 200 ms before (cheapFor): there the bounded decode would walk
+                // forward while the finger goes back (MP2.3's out-of-order frames).
+                val forward=approximateFrames && stripFrames != null && sourceTimeUs >= (scrubLastUs[layer.id] ?: Long.MAX_VALUE)
+                if(approximateFrames) scrubLastUs[layer.id]=sourceTimeUs
+                val open=if(approximateFrames && stripFrames != null) decoders[key]?.decoder else null
+                if(approximateFrames && stripFrames != null && open?.let { if(forward) it.scrubWithoutSeek(sourceTimeUs) else it.cheapFor(sourceTimeUs) } != true) {
                     val probe=MediaProbes.events
                     val lookup=if(probe != null) System.nanoTime() else 0L
                     val hit=stripFrames.frame(uri,sourceTimeUs)

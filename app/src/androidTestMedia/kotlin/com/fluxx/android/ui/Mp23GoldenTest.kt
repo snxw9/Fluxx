@@ -109,6 +109,11 @@ class Mp23GoldenTest {
                         on.playing = false
                     }
                     val strips = events.count { it.startsWith("strip-frame") }
+                    // The cost of showing a strip picture: lookup + (disk: read, JPEG decode, upload) on the render thread.
+                    for (how in listOf("disk", "ram")) {
+                        val us = events.filter { it.startsWith("strip-frame") && it.contains(" how=$how ") }.mapNotNull { Mp1Bench.field(it, "us")?.toDoubleOrNull() }
+                        if (us.isNotEmpty()) report("MP23 golden: strip picture shown from $how: ${us.size} times, " + String.format(java.util.Locale.ROOT, "p50 %.2f p95 %.2f max %.2f ms", Aud2Bench.pct(us, .5) / 1000, Aud2Bench.pct(us, .95) / 1000, us.maxOrNull()!! / 1000))
+                    }
                     val behind = events.filter { it.startsWith("behind ") }
                     val behindDecoded = behind.sumOf { Mp1Bench.field(it, "decoded")?.toIntOrNull() ?: 0 }
                     report("MP23 golden: $compared frames compared (playback, exact frames after sweeps, steps back after decode-behind), $differ differ; " +

@@ -197,6 +197,18 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
         return decoded
     }
 
+    /**
+     * MP2.3 B2: whether a scrub request for [timeUs] needs no seek here: the cache proves its floor frame, or the decoder
+     * stands at or before it and can decode forward to it ([ScrubFloor]'s own forward condition: within
+     * [DecoderPlan.SEEK_AHEAD_US], or in the sync frame's GOP it already reached). Such requests keep the bounded decode
+     * (as before MP2.3); only the ones that would seek are served by the scrub strip.
+     */
+    fun scrubWithoutSeek(timeUs: Long): Boolean {
+        if (cache.floorExact(timeUs) != null || firstFrame(timeUs) != null) return true
+        if (outPos < 0 || outputEnded || timeUs < outPos) return false
+        return timeUs - outPos <= DecoderPlan.SEEK_AHEAD_US || prevSync(timeUs) <= outPos
+    }
+
     /** MP2.1: the stream's first picture, when [timeUs] lies before it and it is cached (the nearest-frame answer). */
     private fun firstFrame(timeUs: Long): Image? = if (firstFramePts >= 0 && timeUs < firstFramePts) cache.exact(firstFramePts) else null
 
