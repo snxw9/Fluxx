@@ -1,0 +1,2 @@
+STATE=Mp21GoldenTest start: low_power=0 plugged=AC level=80 percent temperature=37.2C screen=Awake keyguard=unlocked
+MP21=MP21 golden: 360 frames compared (12 cuts incl. 4 to VP9, 1 re-entry), 0 differ; warm-ups started 12, ready 12, used 12, released unused 0, failed 0, blocked 8, frame waited 0

@@ -1,0 +1,18 @@
+STATE=Mp22GoldenTest start: low_power=0 plugged=AC level=80 percent temperature=36.8C screen=Awake keyguard=unlocked
+MP22=device: low_power=0 plugged=AC level=80 percent temperature=36.8C screen=Awake keyguard=unlocked
+MP22=golden export 'distinct N=1': 4 frames, byte-identical; staged-image violations so far 0
+MP22=golden export 'distinct N=2': 4 frames, byte-identical; staged-image violations so far 0
+MP22=golden export 'distinct N=4': 4 frames, byte-identical; staged-image violations so far 0
+MP22=golden export 'distinct N=6': 2 frames, byte-identical; staged-image violations so far 0
+MP22=golden export 'distinct N=8': 2 frames, byte-identical; staged-image violations so far 0
+MP22=golden export 'shared N=1': 4 frames, byte-identical; staged-image violations so far 0
+MP22=golden export 'shared N=2': 4 frames, byte-identical; staged-image violations so far 0
+MP22=golden export 'shared N=4': 4 frames, byte-identical; staged-image violations so far 0
+MP22=golden export 'shared N=6': 4 frames, byte-identical; staged-image violations so far 0
+MP22=golden export 'shared N=8': 4 frames, byte-identical; staged-image violations so far 0
+MP22=golden export 'two layers of one source 40 ms apart, with a backward seek': 8 frames, byte-identical; staged-image violations so far 0
+MP22=golden export 'mixed: image, solid, text, opacity, shared pair and a distinct layer': 3 frames, byte-identical; staged-image violations so far 0
+MP22=golden export 'VP9 1440p distinct N=2': 3 frames, byte-identical; staged-image violations so far 0
+MP22=golden export 'VP9 1440p shared N=2 (40 ms apart)': 3 frames, byte-identical; staged-image violations so far 0
+MP22=golden export 'cancelled frame, then the next': NOT cancelled; next frame byte-identical to a clean render
+MP22=golden result: 54 frames compared, 0 different; staged-image violations 0; 43 s: PASS

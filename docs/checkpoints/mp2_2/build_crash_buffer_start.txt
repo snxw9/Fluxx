@@ -1,0 +1,55 @@
+--------- beginning of crash
+11-28 19:07:13.560  1177  1177 I libpq_sec: mtk-brm-commit-id:3e77ea451f1a71888ad80a98485c672035cc7ad1
+11-28 19:07:13.561  1177  1177 I libpq_sec: mtk-brm-change-id:Ib1c3b731a9b51136b91c0bd8ac5bd2334dc84c52
+11-28 19:07:13.561  1177  1177 I libpq_sec: mtk-brm-merge-id:none
+11-28 19:07:13.771  1272  1272 I libpq_sec: mtk-brm-commit-id:3e77ea451f1a71888ad80a98485c672035cc7ad1
+11-28 19:07:13.771  1272  1272 I libpq_sec: mtk-brm-change-id:Ib1c3b731a9b51136b91c0bd8ac5bd2334dc84c52
+11-28 19:07:13.771  1272  1272 I libpq_sec: mtk-brm-merge-id:none
+11-28 19:07:13.777  1272  1272 I libaal_sec: mtk-brm-commit-id:ee3cbd8e51cd2c4281ebb8ca418849a8d1881433
+11-28 19:07:13.777  1272  1272 I libaal_sec: mtk-brm-change-id:Ifc4b37ff1ca2d1b45034d745e4864deb7334a8c2
+11-28 19:07:13.777  1272  1272 I libaal_sec: mtk-brm-merge-id:none
+11-28 19:07:13.787  1226  1226 I liboemcrypto: mtk-brm-commit-id:4e674735538ead3f9c24fe0a93c5bfaed0abeca5
+11-28 19:07:13.787  1226  1226 I liboemcrypto: mtk-brm-change-id:I0a37dc33f1be1a110f3b4e3d59125f0dce795416
+11-28 19:07:13.788  1226  1226 I liboemcrypto: mtk-brm-merge-id:none
+11-28 19:07:14.010  1178  1178 I libpq_sec: mtk-brm-commit-id:3e77ea451f1a71888ad80a98485c672035cc7ad1
+11-28 19:07:14.010  1178  1178 I libpq_sec: mtk-brm-change-id:Ib1c3b731a9b51136b91c0bd8ac5bd2334dc84c52
+11-28 19:07:14.010  1178  1178 I libpq_sec: mtk-brm-merge-id:none
+11-28 19:07:14.049  1236  1300 I meow_lib: mtk-brm-commit-id:52c9a73aaa3262db858156a4e6d61d6981a50cca
+11-28 19:07:14.049  1236  1300 I meow_lib: mtk-brm-change-id:I8f1714af0c8f09e69f657b1cd28e5836cb35e02f
+11-28 19:07:14.049  1236  1300 I meow_lib: mtk-brm-merge-id:none
+11-28 19:07:14.092  1236  1300 I libpq_sec: mtk-brm-commit-id:3e77ea451f1a71888ad80a98485c672035cc7ad1
+11-28 19:07:14.092  1236  1300 I libpq_sec: mtk-brm-change-id:Ib1c3b731a9b51136b91c0bd8ac5bd2334dc84c52
+11-28 19:07:14.092  1236  1300 I libpq_sec: mtk-brm-merge-id:none
+11-28 19:07:14.093  1236  1300 I libged  : mtk-brm-commit-id:a67f513ab621b7016b5d40f68121dadd9d33070c
+11-28 19:07:14.093  1236  1300 I libged  : mtk-brm-change-id:I1b149db109479aa820f7011cb0d955fc74f73de6
+11-28 19:07:14.093  1236  1300 I libged  : mtk-brm-merge-id:none
+11-28 19:07:14.701  1200  1200 I libpq_sec: mtk-brm-commit-id:3e77ea451f1a71888ad80a98485c672035cc7ad1
+11-28 19:07:14.702  1200  1200 I libpq_sec: mtk-brm-change-id:Ib1c3b731a9b51136b91c0bd8ac5bd2334dc84c52
+11-28 19:07:14.702  1200  1200 I libpq_sec: mtk-brm-merge-id:none
+11-28 19:07:16.100  1429  1429 I thermal_core: mtk-brm-commit-id:855e5a06ebf80d92519b1953a198d035c7591489
+11-28 19:07:16.100  1429  1429 I thermal_core: mtk-brm-change-id:Ib8db633b7669bb9942420bf18c9d4bde1f2a62e6
+11-28 19:07:16.100  1429  1429 I thermal_core: mtk-brm-merge-id:none
+11-28 19:07:16.175  1161  1161 I meow_lib: mtk-brm-commit-id:52c9a73aaa3262db858156a4e6d61d6981a50cca
+11-28 19:07:16.175  1161  1161 I meow_lib: mtk-brm-change-id:I8f1714af0c8f09e69f657b1cd28e5836cb35e02f
+11-28 19:07:16.175  1161  1161 I meow_lib: mtk-brm-merge-id:none
+11-28 19:07:16.205  1161  1161 I libpq_sec: mtk-brm-commit-id:3e77ea451f1a71888ad80a98485c672035cc7ad1
+11-28 19:07:16.205  1161  1161 I libpq_sec: mtk-brm-change-id:Ib1c3b731a9b51136b91c0bd8ac5bd2334dc84c52
+11-28 19:07:16.205  1161  1161 I libpq_sec: mtk-brm-merge-id:none
+11-28 19:07:16.658  1482  1482 I emdlogger: mtk-brm-commit-id:none
+11-28 19:07:16.659  1482  1482 I emdlogger: mtk-brm-change-id:none
+11-28 19:07:16.659  1482  1482 I emdlogger: mtk-brm-merge-id:none
+11-28 19:07:27.907  1162  1162 I meow_lib: mtk-brm-commit-id:52c9a73aaa3262db858156a4e6d61d6981a50cca
+11-28 19:07:27.907  1162  1162 I meow_lib: mtk-brm-change-id:I8f1714af0c8f09e69f657b1cd28e5836cb35e02f
+11-28 19:07:27.907  1162  1162 I meow_lib: mtk-brm-merge-id:none
+11-28 19:07:28.035  1162  1162 I libpq_sec: mtk-brm-commit-id:3e77ea451f1a71888ad80a98485c672035cc7ad1
+11-28 19:07:28.035  1162  1162 I libpq_sec: mtk-brm-change-id:Ib1c3b731a9b51136b91c0bd8ac5bd2334dc84c52
+11-28 19:07:28.035  1162  1162 I libpq_sec: mtk-brm-merge-id:none
+11-28 19:07:56.978  3370  3370 I libpq_sec: mtk-brm-commit-id:3e77ea451f1a71888ad80a98485c672035cc7ad1
+11-28 19:07:56.978  3370  3370 I libpq_sec: mtk-brm-change-id:Ib1c3b731a9b51136b91c0bd8ac5bd2334dc84c52
+11-28 19:07:56.979  3370  3370 I libpq_sec: mtk-brm-merge-id:none
+11-28 19:43:26.015 21823 21823 I libpq_sec: mtk-brm-commit-id:3e77ea451f1a71888ad80a98485c672035cc7ad1
+11-28 19:43:26.015 21823 21823 I libpq_sec: mtk-brm-change-id:Ib1c3b731a9b51136b91c0bd8ac5bd2334dc84c52
+11-28 19:43:26.015 21823 21823 I libpq_sec: mtk-brm-merge-id:none
+11-28 19:43:26.120 21823 21823 I meow_lib: mtk-brm-commit-id:52c9a73aaa3262db858156a4e6d61d6981a50cca
+11-28 19:43:26.121 21823 21823 I meow_lib: mtk-brm-change-id:I8f1714af0c8f09e69f657b1cd28e5836cb35e02f
+11-28 19:43:26.121 21823 21823 I meow_lib: mtk-brm-merge-id:none

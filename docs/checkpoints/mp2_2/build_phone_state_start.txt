@@ -1,0 +1,7 @@
+== BUILD PASS: recorded Sat Nov 28 20:17:06 WCAST 2026: low_power=1 stay_on=0 timeout=600000 (originals, restore these)
+session set Sat Nov 28 20:17:12 WCAST 2026: low_power=0 stay_on=15 timeout=600000
+  AC powered: true
+  level: 80
+  temperature: 369
+    isKeyguardShowing=false
+  mWakefulness=Awake

@@ -1,0 +1,10 @@
+STATE=Mp22RenderTest start: low_power=0 plugged=AC level=80 percent temperature=37.1C screen=Awake keyguard=unlocked
+MP22=device: low_power=0 plugged=AC level=80 percent temperature=37.1C screen=Awake keyguard=unlocked; build benchmark (not debuggable); API 36
+MP22=part: cold (saved pipeline cache IGNORED)
+MP22=pipeline cache file before: 4850 bytes
+MP22=typical: '〈INTERSTELLAR ✨〉My Hero Academia〈AMV⧸EDI' video/avc 1920x1080 30.0 fps 60.0 s
+MP22=cold preview session: created in 132.95 ms (native init 86.29 ms, warm-up 44.79 ms); cache load state 4 (0 no file, 1 used, 2 bad header, 3 too big, 4 ignored, 5 rejected), loaded 0 bytes; first frame 518.94 ms (decode 310.07, import 19.45, of which pipeline 60.44); pipeline creation times ms 44.76,15.68 (the first is the RGBA warm-up)
+MP22=cold preview: frames 2-5 ms 20.26,15.69,28.60,16.81
+MP22=pipeline cache file after the preview session closed: 4850 bytes
+MP22=cold export renderer (same process, after the preview session): created 30.40 ms (warm-up 11.32 ms), cache load state 4, loaded 0 bytes; first frame 472.20 ms; pipeline creation times ms 11.27,12.02
+MP22=pipeline cache file at the end: 4850 bytes

@@ -1,0 +1,43 @@
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp22RenderTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.fluxx.android.ui.Mp22RenderTest:
+INSTRUMENTATION_STATUS: test=measure
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp22RenderTest start: low_power=0 plugged=AC level=80 percent temperature=36.7C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=device: low_power=0 plugged=AC level=80 percent temperature=36.7C screen=Awake keyguard=unlocked; build benchmark (not debuggable); API 36
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=part: cold (saved pipeline cache used)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=pipeline cache file before: 4850 bytes
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=typical: '〈INTERSTELLAR ✨〉My Hero Academia〈AMV⧸EDI' video/avc 1920x1080 30.0 fps 60.0 s
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=cold preview session: created in 44.15 ms (native init 15.50 ms, warm-up 0.52 ms); cache load state 1 (0 no file, 1 used, 2 bad header, 3 too big, 4 ignored, 5 rejected), loaded 4850 bytes; first frame 428.86 ms (decode 323.96, import 1.39, of which pipeline 0.89); pipeline creation times ms 0.48,0.41 (the first is the RGBA warm-up)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=cold preview: frames 2-5 ms 11.02,10.50,24.92,10.07
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=pipeline cache file after the preview session closed: 4850 bytes
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=cold export renderer (same process, after the preview session): created 20.27 ms (warm-up 0.73 ms), cache load state 1, loaded 4850 bytes; first frame 442.88 ms; pipeline creation times ms 0.69,0.61
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=pipeline cache file at the end: 4850 bytes
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp22RenderTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=measure
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 2.407
+
+OK (1 test)
+
+
+INSTRUMENTATION_CODE: -1

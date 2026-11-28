@@ -20,3 +20,33 @@ Sat Nov 28 19:02:10 WCAST 2026: Snxw approved in session: pm grant com.fluxx.and
 == end g-Mp1CullGoldenTest rc=0 wall=39s fluxx-crash-lines=0 Sat Nov 28 19:36:48 WCAST 2026 | OK (1 test) 
 == g-Mp21Test-a7 com.fluxx.android.ui.Mp21Test#a7ExportIdentity Sat Nov 28 19:36:58 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 385 
 == end g-Mp21Test-a7 rc=0 wall=201s fluxx-crash-lines=0 Sat Nov 28 19:40:20 WCAST 2026 | OK (1 test) 
+== c-Mp22GoldenTest com.fluxx.android.ui.Mp22GoldenTest Sat Nov 28 20:18:05 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 368 
+== end c-Mp22GoldenTest rc=0 wall=52s fluxx-crash-lines=0 Sat Nov 28 20:18:57 WCAST 2026 | FAILURES!!! Tests run: 1,  Failures: 1 
+== c2-Mp22GoldenTest com.fluxx.android.ui.Mp22GoldenTest Sat Nov 28 20:20:04 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 365 
+== end c2-Mp22GoldenTest rc=0 wall=91s fluxx-crash-lines=0 Sat Nov 28 20:21:37 WCAST 2026 | OK (1 test) 
+== c-Mp1CullGoldenTest com.fluxx.android.ui.Mp1CullGoldenTest Sat Nov 28 20:21:48 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 370 
+== end c-Mp1CullGoldenTest rc=0 wall=52s fluxx-crash-lines=0 Sat Nov 28 20:22:42 WCAST 2026 | OK (1 test) 
+== c-Mp21GoldenTest com.fluxx.android.ui.Mp21GoldenTest Sat Nov 28 20:22:42 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 372 
+== end c-Mp21GoldenTest rc=0 wall=85s fluxx-crash-lines=0 Sat Nov 28 20:24:09 WCAST 2026 | OK (1 test) 
+== c-Mp23GoldenTest com.fluxx.android.ui.Mp23GoldenTest Sat Nov 28 20:24:09 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 374 
+== end c-Mp23GoldenTest rc=0 wall=80s fluxx-crash-lines=0 Sat Nov 28 20:25:31 WCAST 2026 | OK (1 test) 
+== c-Mp21Test-a7 com.fluxx.android.ui.Mp21Test#a7ExportIdentity Sat Nov 28 20:25:39 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 373 
+== end c-Mp21Test-a7 rc=0 wall=161s fluxx-crash-lines=0 Sat Nov 28 20:28:22 WCAST 2026 | OK (1 test) 
+== m1-preview com.fluxx.android.ui.Mp22RenderTest Sat Nov 28 20:52:34 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 366 
+== end m1-preview rc=0 wall=67s fluxx-crash-lines=0 Sat Nov 28 20:53:43 WCAST 2026 | OK (1 test) 
+== m1-export com.fluxx.android.ui.Mp22RenderTest Sat Nov 28 20:53:43 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 369 
+== end m1-export rc=0 wall=58s fluxx-crash-lines=0 Sat Nov 28 20:54:41 WCAST 2026 | OK (1 test) 
+== m1-cold-ignore com.fluxx.android.ui.Mp22RenderTest Sat Nov 28 20:54:42 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 370 
+== end m1-cold-ignore rc=0 wall=7s fluxx-crash-lines=0 Sat Nov 28 20:54:50 WCAST 2026 | OK (1 test) 
+== m1-cold-use com.fluxx.android.ui.Mp22RenderTest Sat Nov 28 20:54:50 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 370 
+== end m1-cold-use rc=0 wall=4s fluxx-crash-lines=0 Sat Nov 28 20:54:55 WCAST 2026 | OK (1 test) 
+== m2-preview com.fluxx.android.ui.Mp22RenderTest Sat Nov 28 20:54:55 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 367 
+== end m2-preview rc=0 wall=61s fluxx-crash-lines=0 Sat Nov 28 20:55:57 WCAST 2026 | OK (1 test) 
+== m2-export com.fluxx.android.ui.Mp22RenderTest Sat Nov 28 20:55:58 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 366 
+== end m2-export rc=0 wall=50s fluxx-crash-lines=0 Sat Nov 28 20:56:48 WCAST 2026 | OK (1 test) 
+== m2-cold-ignore com.fluxx.android.ui.Mp22RenderTest Sat Nov 28 20:56:49 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 370 
+== end m2-cold-ignore rc=0 wall=7s fluxx-crash-lines=0 Sat Nov 28 20:56:56 WCAST 2026 | OK (1 test) 
+== m2-cold-use com.fluxx.android.ui.Mp22RenderTest Sat Nov 28 20:56:57 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 371 
+== end m2-cold-use rc=0 wall=5s fluxx-crash-lines=0 Sat Nov 28 20:57:03 WCAST 2026 | OK (1 test) 
+== p-Mp12Project1 com.fluxx.android.ui.Mp12Project1Test#project1Playthrough Sat Nov 28 20:57:45 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 369 
+== end p-Mp12Project1 rc=0 wall=1099s fluxx-crash-lines=0 Sat Nov 28 21:16:05 WCAST 2026 | OK (1 test) 

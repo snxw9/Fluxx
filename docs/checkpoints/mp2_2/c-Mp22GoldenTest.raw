@@ -1,0 +1,113 @@
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp22GoldenTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.fluxx.android.ui.Mp22GoldenTest:
+INSTRUMENTATION_STATUS: test=narrowedFlushIsByteIdentical
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp22GoldenTest start: low_power=0 plugged=AC level=80 percent temperature=36.8C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=device: low_power=0 plugged=AC level=80 percent temperature=36.8C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'distinct N=1': 4 frames, byte-identical; staged-image violations so far 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'distinct N=2': 4 frames, byte-identical; staged-image violations so far 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'distinct N=4': 4 frames, byte-identical; staged-image violations so far 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'distinct N=6': 2 frames, byte-identical; staged-image violations so far 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'distinct N=8': 2 frames, byte-identical; staged-image violations so far 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'shared N=1': 4 frames, byte-identical; staged-image violations so far 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'shared N=2': 4 frames, byte-identical; staged-image violations so far 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'shared N=4': 4 frames, byte-identical; staged-image violations so far 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'shared N=6': 4 frames, byte-identical; staged-image violations so far 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'shared N=8': 4 frames, byte-identical; staged-image violations so far 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'two layers of one source 40 ms apart, with a backward seek': 8 frames, byte-identical; staged-image violations so far 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'mixed: image, solid, text, opacity, shared pair and a distinct layer': 3 frames, byte-identical; staged-image violations so far 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'VP9 1440p distinct N=2': 3 frames, byte-identical; staged-image violations so far 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'VP9 1440p shared N=2 (40 ms apart)': 3 frames, byte-identical; staged-image violations so far 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden export 'cancelled frame, then the next': NOT cancelled; next frame byte-identical to a clean render
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=golden result: 54 frames compared, 0 different; staged-image violations 0; 43 s: PASS
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp22GoldenTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stack=java.util.concurrent.ExecutionException: java.lang.AssertionError: the frame was not cancelled
+	at java.util.concurrent.FutureTask.report(FutureTask.java:122)
+	at java.util.concurrent.FutureTask.get(FutureTask.java:205)
+	at com.fluxx.android.ui.Mp22GoldenTest.narrowedFlushIsByteIdentical(Mp22GoldenTest.kt:181)
+	... 64 trimmed
+Caused by: java.lang.AssertionError: the frame was not cancelled
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.fluxx.android.ui.Mp22GoldenTest.cancelled(Mp22GoldenTest.kt:128)
+	at com.fluxx.android.ui.Mp22GoldenTest.narrowedFlushIsByteIdentical$lambda$5(Mp22GoldenTest.kt:173)
+	at com.fluxx.android.ui.Mp22GoldenTest$$ExternalSyntheticLambda6.run(D8$$SyntheticClass:0)
+	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:520)
+	at java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1154)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:652)
+	at java.lang.Thread.run(Thread.java:1563)
+
+INSTRUMENTATION_STATUS: stream=
+Error in narrowedFlushIsByteIdentical(com.fluxx.android.ui.Mp22GoldenTest):
+java.util.concurrent.ExecutionException: java.lang.AssertionError: the frame was not cancelled
+	at java.util.concurrent.FutureTask.report(FutureTask.java:122)
+	at java.util.concurrent.FutureTask.get(FutureTask.java:205)
+	at com.fluxx.android.ui.Mp22GoldenTest.narrowedFlushIsByteIdentical(Mp22GoldenTest.kt:181)
+	... 64 trimmed
+Caused by: java.lang.AssertionError: the frame was not cancelled
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.fluxx.android.ui.Mp22GoldenTest.cancelled(Mp22GoldenTest.kt:128)
+	at com.fluxx.android.ui.Mp22GoldenTest.narrowedFlushIsByteIdentical$lambda$5(Mp22GoldenTest.kt:173)
+	at com.fluxx.android.ui.Mp22GoldenTest$$ExternalSyntheticLambda6.run(D8$$SyntheticClass:0)
+	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:520)
+	at java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1154)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:652)
+	at java.lang.Thread.run(Thread.java:1563)
+
+INSTRUMENTATION_STATUS: test=narrowedFlushIsByteIdentical
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: stream=
+
+Time: 47.807
+There was 1 failure:
+1) narrowedFlushIsByteIdentical(com.fluxx.android.ui.Mp22GoldenTest)
+java.util.concurrent.ExecutionException: java.lang.AssertionError: the frame was not cancelled
+	at java.util.concurrent.FutureTask.report(FutureTask.java:122)
+	at java.util.concurrent.FutureTask.get(FutureTask.java:205)
+	at com.fluxx.android.ui.Mp22GoldenTest.narrowedFlushIsByteIdentical(Mp22GoldenTest.kt:181)
+	... 64 trimmed
+Caused by: java.lang.AssertionError: the frame was not cancelled
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.fluxx.android.ui.Mp22GoldenTest.cancelled(Mp22GoldenTest.kt:128)
+	at com.fluxx.android.ui.Mp22GoldenTest.narrowedFlushIsByteIdentical$lambda$5(Mp22GoldenTest.kt:173)
+	at com.fluxx.android.ui.Mp22GoldenTest$$ExternalSyntheticLambda6.run(D8$$SyntheticClass:0)
+	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:520)
+	at java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1154)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:652)
+	at java.lang.Thread.run(Thread.java:1563)
+
+FAILURES!!!
+Tests run: 1,  Failures: 1
+
+
+INSTRUMENTATION_CODE: -1

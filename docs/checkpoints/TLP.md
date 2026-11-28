@@ -70,10 +70,11 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). The wo
   - Backward sweeps at 1x-8x on H.264, VP9, HEVC and AV1: 0 frames out of order, 0 ahead (baseline up to 23 of 28 out of order, frames up to 8.7 s behind); first step back after a pause 10-33 ms; strip 3.8-16.2 MB per minute of source.
   - Exact frames, playback and export byte-identical (golden 179 frames, export digests unchanged); Project 1 peak PSS 414 MB, plays to the end.
   - See `docs/checkpoints/MP2_3.md`.
-- **MP2.2 (branch `mp22`, from `master` `b778e1f`; NOT merged into `master`): render-path investigation (no fix implemented).**
-  - The per-video flush, the per-frame import and the >4-layer slot churn were confirmed in the code and measured on the A16 (benchmark variant, two runs).
-  - Flush upper bound (skipped, distinct decoders): preview N=4 15-28 ms (23-41%), N=2 3-6 ms; byte-identical. Export: the CPU RGBA-to-YUV conversion is ~180 ms of every 1080p frame.
-  - Only test-only counters, a test-only switch and an exporter test hook were added. Golden PASS, export digests unchanged, JVM 802 / 0.
+- **MP2.2 (branch `mp22`, from `master` `b778e1f`; NOT merged into `master`, Snxw tests on the phone first): render path: investigation, then three changes.**
+  - B1: Kotlin flushes before a decode only when that decoder already has an image staged. Export renderer at 4 distinct layers: 26.5% / 25.2% faster; preview p95 -14 ms; byte-identical (`Mp22GoldenTest`, 108 frames, 0 staged-image violations).
+  - B2: the export readback moved to cached host memory. RGBA-to-YUV conversion went from ~180 to 14-23 ms per 1080p frame; a 30-frame export from ~10 s to ~5 s; bytes identical.
+  - B3: saved Vulkan pipeline cache plus RGBA warm-up. In a fresh process, pipelines dropped from 45-123 + 15 ms to under 1 ms; first frame ~70 ms faster.
+  - Goldens and `a7` digests unchanged; JVM 811 / 0; Project 1 played to the end, PSS 376 MB, MemAvailable min 449 MB.
   - See `docs/checkpoints/MP2_2.md`.
 - **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1, TLP.2, TLP.3 and TL3 (phone test lists at the end of each section).
 
