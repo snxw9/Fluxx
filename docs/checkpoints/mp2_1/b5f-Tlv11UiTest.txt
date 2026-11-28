@@ -1,0 +1,19 @@
+current=1
+test=layerBarKeyDraggedIntoTheEdgeSeeksToItsNewTime
+current=1
+test=layerBarKeyDraggedIntoTheEdgeSeeksToItsNewTime
+current=2
+test=twirlRowKeyDragThatNeverReachesTheEdgeDoesNotSeek
+current=2
+test=twirlRowKeyDragThatNeverReachesTheEdgeDoesNotSeek
+current=3
+test=twirlRowKeyDraggedIntoTheEdgeSeeksToItsNewTime
+current=3
+test=twirlRowKeyDraggedIntoTheEdgeSeeksToItsNewTime
+current=4
+test=layerBarKeyDragThatNeverReachesTheEdgeDoesNotSeek
+current=4
+test=layerBarKeyDragThatNeverReachesTheEdgeDoesNotSeek
+INSTRUMENTATION_RESULT: stream=
+OK (4 tests)
+INSTRUMENTATION_CODE: -1

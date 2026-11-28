@@ -210,9 +210,17 @@ fun TimelineView(
      */
     playing: Boolean = false,
     playbackClock: ((Long) -> Long?)? = null,
+    /**
+     * MP2.1 B3: the live playback position (UI state; the editor state's playhead is not observed per frame while playing).
+     * Read only in draw / layout phases, small scopes and event handlers, so the timeline does not recompose per frame.
+     */
+    livePlayheadUs: androidx.compose.runtime.State<Long>? = null,
     modifier: Modifier = Modifier
 ) {
     val comp = project.composition
+    // MP2.1 B3: the playhead NOW (live while playing): for event handlers and draw phases, never read in composition.
+    val nowPlaying = rememberUpdatedState(playing); val nowPlayhead = rememberUpdatedState(playheadUs)
+    val nowUs = remember(livePlayheadUs) { { if (nowPlaying.value) livePlayheadUs?.value ?: nowPlayhead.value else nowPlayhead.value } }
     val context = LocalContext.current
     val selectedLayer = comp.layers.firstOrNull { it.id == selectedLayerId }
     // TEXT UI 8: one anchored marker popover (description + COMPACT picker), no dialog, no buttons.
@@ -252,7 +260,7 @@ fun TimelineView(
     val markerOnBar = markerSession?.ref?.let { MarkerEditing.drawnOnBar(project, it) } ?: true
     fun tapMarker(owner: Long?, marker: Marker) {
         val anchor = comp.layers.firstOrNull { it.id == owner }?.resolvedKeyframeAnchorUs ?: 0L
-        if (comp.frameRate.nearestFrame(playheadUs) == comp.frameRate.nearestFrame(Math.addExact(anchor, marker.timeUs))) {
+        if (comp.frameRate.nearestFrame(nowUs()) == comp.frameRate.nearestFrame(Math.addExact(anchor, marker.timeUs))) {
             onMarkerAction(if (owner == null) EditorAction.DeleteCompositionMarker(marker.id)
                 else EditorAction.DeleteLayerMarker(owner, marker.id))
         } else onMarkerSelect(owner, marker)
@@ -266,7 +274,7 @@ fun TimelineView(
             }
             else -> MarkerEditing.LAYER_DEFAULT
         }
-        when (val result = MarkerEditing.playhead(project, selectedLayer, playheadUs, hold, defaultColor)) {
+        when (val result = MarkerEditing.playhead(project, selectedLayer, nowUs(), hold, defaultColor)) {
             MarkerEditing.PlayheadResult.OutsideLayer ->
                 android.widget.Toast.makeText(context, "Playhead outside selected layer", android.widget.Toast.LENGTH_SHORT).show()
             is MarkerEditing.PlayheadResult.Remove -> onMarkerAction(result.action)
@@ -446,7 +454,8 @@ fun TimelineView(
             // TL3.1 A3: stable parameters, so twirl rows SKIP recomposition on scroll / playhead frames (the playhead is read
             // in their draw phase; the callbacks are remembered and forward to the latest ones).
             val playheadState = rememberUpdatedState(playheadUs)
-            val playheadReader = remember { { playheadState.value } }
+            // MP2.1 B3: live while playing (read in the rows' draw phase).
+            val playheadReader = remember { { nowUs() } }
             val setTwirlPopover = remember { { p: TwirlPopover? -> twirlPopover = p } }
             val setDragInfo = remember { { d: com.fluxx.android.editor.TimelineDragInfo? -> dragInfo = d; reportDrag(d) } }
             val latestBegin by rememberUpdatedState(beginEdit); val latestPreviewG by rememberUpdatedState(onPreviewGesture)
@@ -500,6 +509,19 @@ fun TimelineView(
                         return@LaunchedEffect
                     }
                     hScroll.jumpTo(playheadUs.coerceIn(0L, durationUs))
+                }
+            }
+
+            // MP2.1 B3: while playing, follow the heard clock every UI frame. The editor state's playhead no longer changes per
+            // frame (it would recompose everything that reads it), so the effect above runs at play / stop / seek only.
+            LaunchedEffect(playing, durationUs) {
+                if (!playing) return@LaunchedEffect
+                while (true) {
+                    androidx.compose.runtime.withFrameNanos { }
+                    if (!editing && !pinching && !returning && !hScroll.isScrollInProgress) {
+                        val heard = latestClock?.invoke(System.nanoTime() + TimelineFollow.LEAD_NS)
+                        if (heard != null) hScroll.jumpTo(TimelineFollow.centreFor(heard, durationUs))
+                    }
                 }
             }
 
@@ -702,10 +724,12 @@ fun TimelineView(
             // 2. Stationary Fixed-Center Playhead (pinned at exact 50% horizontal center of the screen)
             StationaryTimelinePlayhead(
                 playheadUs = playheadUs,
+                // MP2.1 B3: while playing, the pill reads the live position itself (only it recomposes per frame).
+                livePlayheadUs = livePlayheadUs.takeIf { playing },
                 startTimecodeUs = comp.startTimecodeUs,
                 columnPx = centerPx,
                 frameRate = comp.frameRate,
-                marker = Markers.active(project, selectedLayer, playheadUs),
+                markerAt = { t -> Markers.active(project, selectedLayer, t) },
                 playheadPopover = if (markerOnBar) null else markerPopover,
                 onTap = { playheadMarker(false) },
                 onHold = { playheadMarker(true) },
@@ -1516,15 +1540,20 @@ private fun TimelineClipRow(
 @Composable
 private fun StationaryTimelinePlayhead(
     playheadUs: Long,
+    livePlayheadUs: androidx.compose.runtime.State<Long>?,
     startTimecodeUs: Long,
     columnPx: Int,
     frameRate: FrameRate,
-    marker: Marker?,
+    markerAt: (Long) -> Marker?,
     onTap: () -> Unit,
     onHold: () -> Unit,
     playheadPopover: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    if (TimelineProbe.enabled) SideEffect { TimelineProbe.playheadCompositions.incrementAndGet() }
+    // MP2.1 B3: the readout's frame and marker change once per composition frame while playing: only this scope re-runs.
+    val shownUs = livePlayheadUs?.value ?: playheadUs
+    val marker = markerAt(shownUs)
     val tint = marker?.let { Color(it.colorArgb) } ?: Highlight
     val tap by rememberUpdatedState(onTap)
     val hold by rememberUpdatedState(onHold)
@@ -1564,7 +1593,7 @@ private fun StationaryTimelinePlayhead(
         ) {
             Text(
                 // TL1: the frame on screen (floor), counted from the composition's start frame.
-                text = TimeFormat.formatPlayhead(playheadUs, startTimecodeUs, frameRate),
+                text = TimeFormat.formatPlayhead(shownUs, startTimecodeUs, frameRate),
                 color = tint,
                 fontSize = 10.sp,
                 lineHeight = 12.sp,

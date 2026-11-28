@@ -20,6 +20,13 @@ object MediaWorkPolicy {
     /** A background job over [job] (source µs or frames) is cancelled when it no longer overlaps the used [scope]. */
     fun cancel(job: LongRange, scope: List<LongRange>): Boolean = scope.none { job.first <= it.last && it.first <= job.last }
 
+    /**
+     * MP2.1 B2: a warm-up (opening / positioning a decoder for an upcoming cut or re-entry) never takes time from a LATE
+     * current frame, unless its own deadline is within [WARM_URGENT_US] (then missing it costs more than one late frame).
+     */
+    const val WARM_URGENT_US = 300_000L
+    fun warmMayRun(currentFrameLate: Boolean, untilDeadlineUs: Long): Boolean = !currentFrameLate || untilDeadlineUs <= WARM_URGENT_US
+
     /** A decode at [runAt] is PLAYBACK work while a reader needs it: within [leadFrames] of [demandFrame] (-1: no reader). */
     fun urgent(runAt: Long, demandFrame: Long, leadFrames: Long): Boolean = demandFrame >= 0 && runAt < demandFrame + leadFrames
 }

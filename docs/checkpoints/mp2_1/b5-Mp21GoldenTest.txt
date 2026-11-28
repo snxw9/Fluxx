@@ -1,0 +1,9 @@
+current=1
+test=warmUpIsPixelIdentical
+STATE=Mp21GoldenTest start: low_power=0 plugged=AC level=80 percent temperature=37.5C screen=Awake keyguard=unlocked
+MP21=MP21 golden: 360 frames compared (12 cuts incl. 4 to VP9, 1 re-entry), 0 differ; warm-ups started 12, ready 12, used 12, released unused 0, failed 0, blocked 3, frame waited 0
+current=1
+test=warmUpIsPixelIdentical
+INSTRUMENTATION_RESULT: stream=
+OK (1 test)
+INSTRUMENTATION_CODE: -1

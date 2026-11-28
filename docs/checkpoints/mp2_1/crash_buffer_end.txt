@@ -1,0 +1,7 @@
+--------- beginning of crash
+11-27 22:28:51.141  1907  1911 I libpq_sec: mtk-brm-commit-id:3e77ea451f1a71888ad80a98485c672035cc7ad1
+11-27 22:28:51.141  1907  1911 I libpq_sec: mtk-brm-change-id:Ib1c3b731a9b51136b91c0bd8ac5bd2334dc84c52
+11-27 22:28:51.141  1907  1911 I libpq_sec: mtk-brm-merge-id:none
+11-27 22:28:51.316  1907  1911 I meow_lib: mtk-brm-commit-id:52c9a73aaa3262db858156a4e6d61d6981a50cca
+11-27 22:28:51.316  1907  1911 I meow_lib: mtk-brm-change-id:I8f1714af0c8f09e69f657b1cd28e5836cb35e02f
+11-27 22:28:51.316  1907  1911 I meow_lib: mtk-brm-merge-id:none

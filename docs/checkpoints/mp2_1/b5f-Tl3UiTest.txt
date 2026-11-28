@@ -1,0 +1,31 @@
+current=1
+test=theArrowWithTheSheetOpenClosesItAndALayerTapCollapsesAndOpensIt
+current=1
+test=theArrowWithTheSheetOpenClosesItAndALayerTapCollapsesAndOpensIt
+current=2
+test=aNameTapSelectsEveryKeyOfThePropertyAndAgainDeselects
+current=2
+test=aNameTapSelectsEveryKeyOfThePropertyAndAgainDeselects
+current=3
+test=theColourBarShowsAndAddingAKeyKeepsItsLook
+current=3
+test=theColourBarShowsAndAddingAKeyKeepsItsLook
+current=4
+test=keyGesturesInTwirlRowsOnePopoverAndKeyModeSurvivesTheTransition
+current=4
+test=keyGesturesInTwirlRowsOnePopoverAndKeyModeSurvivesTheTransition
+current=5
+test=aLayerWithAudioGetsTheAudioRowFirstAndItsPeaks
+current=5
+test=aLayerWithAudioGetsTheAudioRowFirstAndItsPeaks
+current=6
+test=theArrowExpandsOnlyKeyedRowsAndTheDGrowsWithNames
+current=6
+test=theArrowExpandsOnlyKeyedRowsAndTheDGrowsWithNames
+current=7
+test=bulkValueEditsChangeTheSamePropertyOnAllSelectedLayersOnly
+current=7
+test=bulkValueEditsChangeTheSamePropertyOnAllSelectedLayersOnly
+INSTRUMENTATION_RESULT: stream=
+OK (7 tests)
+INSTRUMENTATION_CODE: -1

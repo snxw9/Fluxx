@@ -45,6 +45,8 @@ fun CompositionPreview(
     previewController: PreviewController?,
     previewMessage: String?,
     playheadUs: Long = 0L,
+    /** MP2.1 B3: the live playback position while playing (read in the overlay's draw phase and at tap time); null paused. */
+    livePlayheadUs: androidx.compose.runtime.State<Long>? = null,
     selectedLayerId: Long? = null,
     /** TLP.1: the focused Animate-tab address (a selector in it shows the selector coverage box). */
     focusedSelector: com.fluxx.android.editor.AnimatorTrackAddress? = null,
@@ -226,6 +228,7 @@ fun CompositionPreview(
                         }
                         .pointerInput(comp.layers, playheadUs, selectedLayerId, textHitMetrics) {
                             fun selectText(point: androidx.compose.ui.geometry.Offset,word: Boolean) {
+                                val playheadUs = livePlayheadUs?.value ?: playheadUs // MP2.1 B3: the time at the tap
                                 val layer=comp.layers.firstOrNull { it.id==selectedLayerId && it.type==LayerType.TEXT } ?: return
                                 val metrics=textHitMetrics[layer.id] ?: return
                                 val local=playheadUs-layer.resolvedKeyframeAnchorUs
@@ -240,6 +243,7 @@ fun CompositionPreview(
                             }
                             detectTapGestures(onLongPress={selectText(it,false)},onDoubleTap={selectText(it,true)},onTap={ tap ->
                                 if(currentSelection!=null) { onTextSelection(null);return@detectTapGestures }
+                                val playheadUs = livePlayheadUs?.value ?: playheadUs // MP2.1 B3: the time at the tap
                                 if (onSelectLayer != null) {
                                     // Find active visible layers at current playhead position
                                     val activeLayers = comp.layers.filter { layer ->
@@ -280,7 +284,7 @@ fun CompositionPreview(
                 ) {
                     if (!eyedropperActive) PreviewLayerOverlay(project,
                         comp.layers.firstOrNull { it.id == selectedLayerId }, playheadUs,
-                        mediaRepository, viewSettings, anchorMode, focusedSelector)
+                        mediaRepository, viewSettings, anchorMode, focusedSelector, livePlayheadUs)
                     val selectedText=comp.layers.firstOrNull { it.id==selectedLayerId && it.type==LayerType.TEXT }
                     val selectedMetrics=selectedText?.let { textHitMetrics[it.id] }
                     if(!eyedropperActive && selectedText!=null && selectedMetrics!=null && textSelection!=null && !textSelection.collapsed)

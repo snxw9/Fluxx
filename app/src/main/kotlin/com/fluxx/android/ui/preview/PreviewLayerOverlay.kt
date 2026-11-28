@@ -33,7 +33,9 @@ private data class OverlaySource(val width: Int, val height: Int, val rotation: 
 internal fun PreviewLayerOverlay(project: ProjectDocument, selected: CompositionLayer?, playheadUs: Long,
     repository: MediaRepository?, settings: ViewSettings, anchorMode: Boolean,
     /** TLP.1: the focused Animate-tab address; with a selector in it the layer box becomes the selector box. */
-    focusedSelector: AnimatorTrackAddress? = null) {
+    focusedSelector: AnimatorTrackAddress? = null,
+    /** MP2.1 B3: the live playback position while playing, read in the draw phase (the box follows without recomposing). */
+    livePlayheadUs: androidx.compose.runtime.State<Long>? = null) {
     val comp = project.composition
     val context = LocalContext.current
     val textSource = selected?.text?.source?.evaluateDocument(playheadUs - selected.resolvedKeyframeAnchorUs) ?: TextSourceDocument("")
@@ -92,6 +94,7 @@ internal fun PreviewLayerOverlay(project: ProjectDocument, selected: Composition
                 drawLine(TextSecondary.copy(alpha = .4f), Offset(0f, size.height * i / 3), Offset(size.width, size.height * i / 3), 1f, pathEffect = dash)
             }
         }
+        val playheadUs = livePlayheadUs?.value ?: playheadUs // MP2.1 B3: draw-phase read while playing
         val layer = selected?.takeIf { it.visible && it.timing.isActive(playheadUs) } ?: return@Canvas
         val transform = layer.evaluatedTransform(playheadUs)
         val rw = layer.referenceWidth.takeIf { it > 0 } ?: comp.width

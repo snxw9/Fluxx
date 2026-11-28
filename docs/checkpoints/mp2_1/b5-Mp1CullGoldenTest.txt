@@ -1,0 +1,5 @@
+current=1
+test=cullingIsPixelIdentical
+STATE=Mp1CullGoldenTest start: low_power=0 plugged=AC level=80 percent temperature=37.0C screen=Awake keyguard=unlocked
+INSTRUMENTATION_RESULT: shortMsg=Process crashed.
+INSTRUMENTATION_CODE: 0

@@ -19,6 +19,12 @@ object PreviewFrames {
     @Volatile var testPlayback: ((String) -> Unit)? = null
     /** AUD2: TEST-ONLY clock reads: (now ns, head frames, timestamp valid, position us). Null in the app. */
     @Volatile var testClock: ((Long, Long, Boolean, Long) -> Unit)? = null
+    /**
+     * MP2.1 B0: TEST-ONLY render calls of the preview loop: (reason, frame time us). Reasons: "frame" (a new frame time),
+     * "redraw" (the same frame time again after a generation change reset the last drawn time), "settle" (the exact frame
+     * after an approximate scrub frame), "tier" (the renderer's sharp-tier redraw of a settled frame). Null in the app.
+     */
+    @Volatile var testRender: ((String, Long) -> Unit)? = null
 }
 
 /**

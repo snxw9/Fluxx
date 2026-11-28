@@ -45,6 +45,8 @@ import com.fluxx.android.ui.theme.*
 import com.fluxx.android.ui.timeline.TimelineView
 import com.fluxx.android.ui.timeline.TimelineInspectorAnchorHeight
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -113,7 +115,10 @@ fun EditorScreen(
     val displayedState = editor.displayedState
     val project = displayedState.project
     val composition = project.composition
-    val playheadUs = displayedState.playheadUs
+    // MP2.1 B3: read at each use. In composition: the playhead when this composition ran (while playing the screen is NOT
+    // recomposed per frame; per-frame consumers read editor.playbackPosition themselves). In an event handler: the live
+    // position (the editor state's playhead follows playback without being observed).
+    val playheadUs by remember(editor) { LivePlayhead(editor) }
     val selectedLayer = displayedState.selectedLayer
     var textSelection by rememberSaveable(selectedLayer?.id,saver=Saver<MutableState<TextSelectionRange?>,IntArray>(
         save={it.value?.let {r->intArrayOf(r.start,r.end)} ?: intArrayOf(-1,-1)},
@@ -133,7 +138,15 @@ fun EditorScreen(
     val previewStateFlow = remember(previewController) {
         previewController?.state ?: MutableStateFlow(PreviewState())
     }
-    val previewState by previewStateFlow.collectAsState()
+    // MP2.1 B3: only what the screen shows of the preview's state. Its positionUs changes every frame while playing and,
+    // collected whole, recomposed the entire editor once per frame.
+    val previewPlaying by remember(previewStateFlow) { previewStateFlow.map { it.playing }.distinctUntilChanged() }.collectAsState(previewStateFlow.value.playing)
+    val previewStatusMessage by remember(previewStateFlow) { previewStateFlow.map { it.message }.distinctUntilChanged() }.collectAsState(previewStateFlow.value.message)
+    // MP2.1 B3: the editor keeps position reports out of its observed state while this preview plays.
+    DisposableEffect(editor) {
+        editor.playbackRunning = { latestPreview?.state?.value?.playing == true }
+        onDispose { editor.playbackRunning = { false } }
+    }
     val exportState by ExportService.state.collectAsState()
 
     var mediaInfoEntry by remember { mutableStateOf<MediaRepository.Entry?>(null) }
@@ -344,8 +357,8 @@ fun EditorScreen(
             val layer = editor.state.selectedLayer; val clip = editor.keyClipboard
             if (layer != null && clip != null) applyKeys(KeyEdits.paste(editor.state.project, layer, target, clip, editor.state.playheadUs), target)
         })
-    LaunchedEffect(selectedLayer?.id, inspectorSheetVisible, previewState.playing) {
-        if (!inspectorSheetVisible || selectedLayer?.id != eyedropperLayerId || previewState.playing) eyedropperLayerId=null
+    LaunchedEffect(selectedLayer?.id, inspectorSheetVisible, previewPlaying) {
+        if (!inspectorSheetVisible || selectedLayer?.id != eyedropperLayerId || previewPlaying) eyedropperLayerId=null
     }
     LaunchedEffect(eyedropperLayerId,previewController) {
         sampledColor=null
@@ -518,8 +531,9 @@ fun EditorScreen(
                     },
                     project = project,
                     previewController = previewController,
-                    previewMessage = previewMessage ?: previewState.message,
+                    previewMessage = previewMessage ?: previewStatusMessage,
                     playheadUs = playheadUs,
+                    livePlayheadUs = editor.playbackPosition.takeIf { previewPlaying },
                     selectedLayerId = displayedState.selectedLayerId,
                     // TLP.1: a focused animator selector (or one of its Range fields) shows its coverage box.
                     focusedSelector = focusedAnimatorTrack?.takeIf { it.selectorId != null && isInspectorOpen },
@@ -544,7 +558,7 @@ fun EditorScreen(
                 Box(Modifier.fillMaxWidth().testTag("editor-action-bar-strip")) {
                 EditorActionBar(
                     hasTimelineContent = project.composition.resolvedDurationUs > 0,
-                    isPlaying = previewState.playing,
+                    isPlaying = previewPlaying,
                     canUndo = editor.canUndo,
                     canRedo = editor.canRedo,
                     hasClipboard = editor.hasCopiedLayer,
@@ -584,7 +598,7 @@ fun EditorScreen(
                     },
                     onPlayPauseToggle = {
                         textEditor.finish {
-                            if (previewState.playing) {
+                            if (previewPlaying) {
                                 previewController?.pause()
                                 // TL1: rest on the frame that was on screen (floor). Read live state (never a captured value);
                                 // the seek starts a new controller generation, so older position reports are dropped (no echo).
@@ -655,8 +669,9 @@ fun EditorScreen(
                     project = project,
                     mediaRepository = mediaRepository,
                     playheadUs = playheadUs,
+                    livePlayheadUs = editor.playbackPosition,
                     // AUD2 B1: the timeline follows the heard playback clock while playing.
-                    playing = previewState.playing,
+                    playing = previewPlaying,
                     playbackClock = remember(previewController) { previewController?.let { pc -> { ns: Long -> pc.playbackPositionAt(ns) } } },
                     selectedLayerId = displayedState.selectedLayerId,
                     inspectorVisible = isInspectorOpen,
@@ -1000,7 +1015,9 @@ fun EditorScreen(
                         compositionWidth = editor.state.project.composition.width,
                         compositionHeight = editor.state.project.composition.height,
                         compositionDurationUs = editor.state.project.composition.durationUs,
-                        playheadUs = playheadUs,
+                        // MP2.1 B3: an open inspector shows the values at the live playback position (this scope only
+                        // recomposes per frame while playing with the sheet open: its values change).
+                        playheadUs = if (previewPlaying) editor.playbackPosition.value else playheadUs,
                         onPropertyFocus = {
                             // Inspector reports focus from SideEffect; only a real focus transition
                             // should clear selection/cancel gestures, never every recomposition.
@@ -1272,4 +1289,9 @@ fun EditorScreenPreview() {
             onOpenExportedVideo = {}
         )
     }
+}
+
+/** MP2.1 B3: the editor's playhead read at each use (live in event handlers; while playing not observed per frame). */
+private class LivePlayhead(private val editor: EditorViewModel) : State<Long> {
+    override val value: Long get() = editor.displayedState.playheadUs
 }

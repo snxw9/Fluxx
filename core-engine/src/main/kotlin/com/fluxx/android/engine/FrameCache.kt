@@ -137,6 +137,8 @@ object DecoderPlan {
     const val CACHE_BYTES = 16L * 1024 * 1024
     /** While scrubbing ([approximate]), at most this many frames are decoded per request (the rest continues next time). */
     const val APPROX_DECODE_FRAMES = 4
+    /** MP2.1 B2: a request this far ahead of the last decoded frame decodes on cheaply (a few frames, no seek). */
+    const val CHEAP_FORWARD_US = 200_000L
 
     /**
      * MP1.2 H6: a stretch of samples the codec takes but never turns into a picture (one 1440x1080 AVC file on the A16 has

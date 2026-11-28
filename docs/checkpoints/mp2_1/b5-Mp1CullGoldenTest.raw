@@ -1,0 +1,12 @@
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp1CullGoldenTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.fluxx.android.ui.Mp1CullGoldenTest:
+INSTRUMENTATION_STATUS: test=cullingIsPixelIdentical
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp1CullGoldenTest start: low_power=0 plugged=AC level=80 percent temperature=37.0C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: shortMsg=Process crashed.
+INSTRUMENTATION_CODE: 0

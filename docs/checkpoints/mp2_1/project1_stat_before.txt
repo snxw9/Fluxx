@@ -1,0 +1,7 @@
+  File: files/projects/Project 1.fluxx
+  Size: 9256	 Blocks: 24	 IO Blocks: 512	 regular file
+Device: fe43h/65091d	 Inode: 1700658	 Links: 1	 Device type: 0,0
+Access: (0600/-rw-------)	Uid: (10352/ u0_a352)	Gid: (10352/ u0_a352)
+Access: 2026-11-28 02:39:15.979539917 +0100
+Modify: 2026-11-28 02:39:15.979539917 +0100
+Change: 2026-11-28 02:39:15.983539917 +0100

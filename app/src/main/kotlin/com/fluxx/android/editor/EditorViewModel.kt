@@ -2,15 +2,41 @@ package com.fluxx.android.editor
 
 import android.net.Uri
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.lifecycle.ViewModel
 import com.fluxx.android.media.MediaRepository
 import com.fluxx.android.model.*
 
 class EditorViewModel : ViewModel() {
-    var state by mutableStateOf(EditorState())
-        private set
+    private var stored by mutableStateOf(EditorState())
+    /**
+     * MP2.1 B3: the playback position, UI state only (never in undo history, never saved). While the preview plays, its
+     * per-frame position reports go HERE instead of replacing [state] (which recomposed everything that reads the editor
+     * state, about once per frame). Per-frame consumers (the timeline follow and playhead readout, the twirl rows' key
+     * highlight, the preview overlay, an open inspector) read it in their draw / layout phase or a small scope.
+     */
+    val playbackPosition: androidx.compose.runtime.State<Long> get() = livePlayhead
+    private val livePlayhead = mutableLongStateOf(0L)
+    /** Set by the editor screen: whether its preview is playing now (asked when a position report arrives). */
+    var playbackRunning: () -> Boolean = { false }
+    /** [stored]'s playhead is behind [livePlayhead] (reports arrived while playing). */
+    private var playheadLive = false
+    /**
+     * The editor state. While playing, its playhead is the live playback position, read WITHOUT observation: an event
+     * handler (undo, split, pause) sees the true position, while a composition that read the state is not invalidated by
+     * every frame. Reports after playback stops (the pause frame, the end) write it as a Seek, as before MP2.1.
+     */
+    var state: EditorState
+        get() {
+            val s = stored
+            if (!playheadLive) return s
+            val live = Snapshot.withoutReadObservation { livePlayhead.longValue }
+            return if (live == s.playheadUs) s else s.copy(playheadUs = live)
+        }
+        private set(value) { playheadLive = false; stored = value; livePlayhead.longValue = value.playheadUs }
     var transientState by mutableStateOf<EditorState?>(null)
         private set
     val displayedState get() = transientState ?: state
@@ -202,7 +228,13 @@ class EditorViewModel : ViewModel() {
     }
 
     /** Playback progress does not commit project edits or terminate a drag. */
-    fun reportPosition(timeUs: Long) { state=EditorReducer.reduce(state,EditorAction.Seek(timeUs)) }
+    fun reportPosition(timeUs: Long) {
+        if (playbackRunning()) {
+            // MP2.1 B3: the same time a Seek would set (frame times; 0 for an empty composition), kept out of [stored].
+            livePlayhead.longValue = EditorReducer.reduce(stored, EditorAction.Seek(timeUs)).playheadUs
+            playheadLive = true
+        } else state=EditorReducer.reduce(state,EditorAction.Seek(timeUs))
+    }
     fun beginGesture() { gestureSerial++;gestureBase=state;gestureAction=null;transientState=state }
     /** Static edits keep SetTransform unchanged; animated channels auto-key at the gesture's playhead. */
     fun editTransform(id: Long, value: Transform, preview: Boolean = false) {

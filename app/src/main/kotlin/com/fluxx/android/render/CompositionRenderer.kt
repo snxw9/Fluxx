@@ -16,7 +16,9 @@ import java.util.concurrent.CancellationException
 class CompositionRenderer(private val context: Context, private val repository: MediaRepository,
     surface: Surface? = null, width: Int = 1, height: Int = 1,
     /** TLP T2: the clock for releasing hidden layers' decoders / textures after [DelayedRelease.DEFAULT_DELAY_MS] (injectable). */
-    releaseClock: () -> Long = { android.os.SystemClock.uptimeMillis() }) : Closeable {
+    releaseClock: () -> Long = { android.os.SystemClock.uptimeMillis() },
+    /** MP2.1 B2: warm decoders ahead of cuts and re-entries while playing. Preview only (export keeps its own rotation). */
+    warmUp: Boolean = surface != null) : Closeable {
     private val interactive = surface != null
     val session = RenderBridge.create(surface,width,height,context.assets).also { check(it != 0L) { "Vulkan rendering is unavailable" } }
     private val lowRam = context.getSystemService(android.app.ActivityManager::class.java).isLowRamDevice
@@ -52,19 +54,142 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private val rasterRelease = DelayedRelease<String>(clock = releaseClock)
     private var wantedDecoders = emptySet<String>()
     private var wantedRasters = emptySet<String>()
+
+    // ---- MP2.1 B2: warm-ups ---------------------------------------------------------------------------------------
+    /** Decoders opened and positioned ahead of cuts and re-entries ([UpcomingUse] plans, [WarmPool] holds). Null in export. */
+    private val warm: WarmPool<VideoDecoder>? = if (!warmUp) null else WarmPool(
+        ops = object : WarmPool.Ops<VideoDecoder> {
+            override fun open(uri: String) = VideoDecoder(context, Uri.parse(uri))
+            override fun position(decoder: VideoDecoder, sourceUs: Long, cancelled: () -> Boolean) { decoder.frameAt(sourceUs, cancelled) }
+            override fun close(decoder: VideoDecoder) = decoder.close()
+            override fun bytes(decoder: VideoDecoder) = DecoderKeys.decoderBytes(decoder.width, decoder.height, decoder.cacheFrames)
+            override fun decoderClass(decoder: VideoDecoder) = decoder.decoderClass
+        },
+        export = false, executor = WARM_EXECUTOR, releaseClock = releaseClock,
+        gate = { w, cancelled -> warmGate(w, cancelled) },
+        tid = { android.os.Process.myTid() },
+        boost = { tid, on -> runCatching { android.os.Process.setThreadPriority(tid,
+            if (on) android.os.Process.THREAD_PRIORITY_DISPLAY else android.os.Process.THREAD_PRIORITY_BACKGROUND) } },
+        events = { MediaProbes.events }, label = MediaProbes::key)
+    /** Sources due back within the warm horizon: kept from the 3 s hidden release (the last plan's keepUris). */
+    private var warmKeep = emptySet<String>()
+    // The current frame's start (0 between frames), interval and playback position: the warm-up gate reads them.
+    @Volatile private var frameStartNs = 0L
+    @Volatile private var frameIntervalNs = 33_333_333L
+    @Volatile private var frameUs = 0L
+    @Volatile private var frameWallNs = 0L
+    /** MP2.1: warm-up counters (started, ready, used, released unused, failed, blocked budget, blocked cap, waits); null in export. */
+    internal fun warmCounts(): LongArray? = warm?.counts?.copyOf()
+    /** MP2.1: a warm decoder is held (the paused preview calls [warmIdle] so the 3 s release still happens). */
+    val warmHeld: Boolean get() = (warm?.count ?: 0) > 0
+    /** MP2.1: housekeeping without a frame (paused): unwanted warm decoders go after their delay. */
+    fun warmIdle() { warm?.frame(false, { error("not planned while paused") }) { null } }
+
+    private fun warmGate(w: UpcomingUse.Warm, cancelled: () -> Boolean) {
+        while (!cancelled()) {
+            val start = frameStartNs; val now = System.nanoTime()
+            val late = start != 0L && now - start > frameIntervalNs
+            val nowUs = frameUs + (now - frameWallNs) / 1000
+            if (MediaWorkPolicy.warmMayRun(late, w.deadlineUs - nowUs)) return
+            Thread.sleep(2)
+        }
+    }
+
+    private var warmClipsFor: ProjectDocument? = null
+    private var warmClips: List<UpcomingUse.Clip> = emptyList()
+    private var warmLayers: Map<Long, CompositionLayer> = emptyMap()
+    /** Upcoming clips' visibility at their own start (the culling test, once per clip and project). */
+    private val visibleAtStart = HashMap<Long, Boolean>()
+    /** Culled layers: how far ahead the culling test has been read, and the first visible time found (-1: none yet). */
+    private class ReturnScan(var to: Long, var found: Long)
+    private val returnScans = HashMap<Long, ReturnScan>()
+    private var warmLastUs = -1L
+
+    /** Once per frame, after this frame's decoder keys are known: plan and start warm-ups (preview playback only). */
+    private fun warmFrame(project: ProjectDocument, timeUs: Long) {
+        val pool = warm ?: return
+        if (warmClipsFor !== project) {
+            warmClipsFor = project; visibleAtStart.clear(); returnScans.clear()
+            val layers = project.composition.layers.filter { it.visible && it.type == LayerType.VIDEO && it.timing.durationUs != null && it.asset?.uri != null }
+            warmLayers = layers.associateBy { it.id }
+            warmClips = layers.mapNotNull { l ->
+                val uri = l.asset!!.uri!!
+                val info = runCatching { repository.video(uri) }.getOrNull() ?: return@mapNotNull null
+                UpcomingUse.Clip(l.id, uri, l.timing.startUs, l.timing.endUs!!, l.timing.sourceInUs, "${info.mime} ${info.width}x${info.height}",
+                    DecoderKeys.decoderBytes(info.width, info.height, DecoderPlan.cacheFrames(info.width, info.height)))
+            }
+        }
+        if (timeUs < warmLastUs) returnScans.clear() // a jump back: scan again
+        warmLastUs = timeUs
+        pool.frame(playing, { warmInput(project, timeUs, pool) }) { key -> flush(); decoders.remove(key)?.decoder }
+        warmKeep = pool.lastPlan.keepUris
+    }
+
+    private fun warmInput(project: ProjectDocument, timeUs: Long, pool: WarmPool<VideoDecoder>): UpcomingUse.Input {
+        val reach = timeUs + Culling.WARM_LOOKAHEAD_US + UpcomingUse.MAX_HORIZON_US
+        val hidden = HashSet<Long>(); val returns = HashMap<Long, Long>()
+        for (c in warmClips) {
+            val layer = warmLayers[c.layerId] ?: continue
+            if (c.startUs > timeUs && c.startUs <= timeUs + UpcomingUse.MAX_HORIZON_US) {
+                if (!visibleAtStart.getOrPut(c.layerId) { videoVisibleAt(project, layer, c.uri, c.startUs) }) hidden += c.layerId
+            } else if (c.activeAt(timeUs) && videoCull[c.layerId] == CULL_COLD && layer.animTransform.isAnyAnimated()) {
+                returnAt(project, layer, c, timeUs, reach)?.let { returns[c.layerId] = it }
+            }
+        }
+        val open = decoders.entries.map { (k, e) -> UpcomingUse.Open(k, DecoderKeys.uri(k), e.bytes, k in frameKeys) }
+        return UpcomingUse.Input(timeUs, true, warmClips, returns, hidden, open, pool.warming(), decoderBudget, decoderSlots, pool::costUs)
+    }
+
+    /**
+     * When a cold-culled layer becomes visible again: the renderer's own culling test ([videoVisibleAt]) read ahead from
+     * where the 0.5 s look-ahead ends, [RETURN_SCAN_STEPS] frame steps per frame, remembered between frames (so each frame
+     * adds about one test per culled animated layer). The culling rules and the evaluator are unchanged.
+     */
+    private fun returnAt(project: ProjectDocument, layer: CompositionLayer, c: UpcomingUse.Clip, timeUs: Long, reach: Long): Long? {
+        val from = timeUs + Culling.WARM_LOOKAHEAD_US
+        val scan = returnScans.getOrPut(c.layerId) { ReturnScan(from, -1) }
+        if (scan.found in 0..timeUs) { scan.found = -1; scan.to = from }
+        if (scan.found < 0 && scan.to < from) scan.to = from
+        var steps = 0
+        while (scan.found < 0 && scan.to < minOf(reach, c.endUs) && steps < RETURN_SCAN_STEPS) {
+            scan.to += cullStepUs; steps++
+            if (scan.to < c.endUs && videoVisibleAt(project, layer, c.uri, scan.to)) scan.found = scan.to
+        }
+        return scan.found.takeIf { it > timeUs }
+    }
+
+    /**
+     * At a cut or re-entry: the layer takes its warm decoder (positioned, its first frame cached) instead of opening or
+     * seeking now. The decoder already under [key] keeps the layer when it can serve [sourceUs] cheaply (the warm one is
+     * then dropped); otherwise it closes (the previous clip of the same source, standing elsewhere).
+     */
+    private fun handoff(layerId: Long, key: String, uri: String, sourceUs: Long) {
+        val pool = warm ?: return
+        if (!pool.has(layerId)) return
+        val current = decoders[key]
+        if (current != null && current.decoder.cheapFor(sourceUs)) { pool.discard(layerId); return }
+        val d = pool.take(layerId) { it.cheapFor(sourceUs) } ?: return
+        if (current != null) { flush(); decoders.remove(key); current.decoder.close() }
+        decoders[key] = DecoderEntry(d, repository.video(uri))
+    }
+
     private fun releaseHidden(project: ProjectDocument, timeUs: Long) {
+        // MP2.1: onTrimMemory releases every warm decoder the plan does not want at once (with the idle ones below).
+        if (trimmed && decoders.isEmpty()) { trimmed = false; warm?.trim() }
         // MP1.2: decoders of clips that are over (no layer of the source active now or within the warm window): closed now
         // while playing, before this frame opens the next clip's; paused, all but the most recent go now (DecoderRetention).
         if (decoders.isNotEmpty()) {
             DecoderRetention.nearUris(project.composition.layers, timeUs, Culling.WARM_LOOKAHEAD_US, nearUris)
             heldKeys.clear(); heldKeys.addAll(decoders.keys)
             val wasTrimmed = trimmed; trimmed = false
+            if (wasTrimmed) warm?.trim()
             for (key in DecoderRetention.closeNow(heldKeys, nearUris, !interactive || playing, wasTrimmed)) { flush(); decoders.remove(key)?.decoder?.close() }
         }
         // AUD2 B4: decoders are keyed per URI and per distinct source time ("uri#k"); release those of hidden URIs.
         // MP1 B3: a source whose every layer was cold-culled last frame counts as unwanted too (released after the delay).
         // MP1.2: so does an idle one kept while paused.
-        val wantedKeys = decoders.keys.filter { DecoderKeys.uri(it).let { u -> u in wantedDecoders && u !in culledUris && u in nearUris } }.toSet()
+        // MP2.1: a source due back within the warm horizon is kept (the planner's keepUris), however long it was culled.
+        val wantedKeys = decoders.keys.filter { DecoderKeys.uri(it).let { u -> u in wantedDecoders && (u !in culledUris && u in nearUris || u in warmKeep) } }.toSet()
         for (key in decoderRelease.due(decoders.keys.toList(), wantedKeys)) { flush(); decoders.remove(key)?.decoder?.close() }
         for (key in rasterRelease.due(images.keys.toList(), wantedRasters)) { flush(); images.remove(key)?.buffer?.close() }
     }
@@ -410,12 +535,18 @@ class CompositionRenderer(private val context: Context, private val repository: 
         decoders[key]?.let { return it.decoder }
         val info = repository.video(uri)
         val needs = DecoderKeys.decoderBytes(info.width, info.height, DecoderPlan.cacheFrames(info.width, info.height))
-        fun overBudget() = decoders.values.sumOf { it.bytes } + needs > decoderBudget
-        while (decoders.isNotEmpty() && (decoders.size >= decoderSlots || overBudget() ||
-            decoders.values.count { it.info.mime == info.mime } >= info.maxInstances)) if (!evictDecoder()) break
-        if (decoders.size >= decoderSlots) return null // Preview only: export always frees a slot above.
+        // MP2.1: warm decoders count against the cap and the budget; the current frame wins (they are dropped first).
+        fun warmCount() = warm?.count ?: 0
+        fun held() = decoders.size + warmCount()
+        fun overBudget() = decoders.values.sumOf { it.bytes } + (warm?.bytes ?: 0L) + needs > decoderBudget
+        while ((decoders.isNotEmpty() || warmCount() > 0) && (held() >= decoderSlots || overBudget() ||
+            decoders.values.count { it.info.mime == info.mime } >= info.maxInstances)) {
+            if (warm?.dropForRoom() == true) continue
+            if (decoders.isEmpty() || !evictDecoder()) break
+        }
+        if (held() >= decoderSlots) return null // Preview only: export always frees a slot above.
         // MP1.2: the preview leaves a layer out rather than open a decoder past the memory budget (lmkd kills the app there).
-        if (interactive && decoders.isNotEmpty() && overBudget()) return null
+        if (interactive && (decoders.isNotEmpty() || warmCount() > 0) && overBudget()) return null
         var opened: VideoDecoder? = null
         try { opened = VideoDecoder(context,Uri.parse(uri)) }
         catch (e: Exception) {
@@ -579,7 +710,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 val limit = if (tierFetcher.inFlight > 0) importedDeadline else deadline
                 if (System.nanoTime() >= limit) break
                 if (RenderBridge.awaitTextTiers(session, 8) == 0) {
-                    if (!cancelled()) { renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled); PreviewFrames.presented() }
+                    if (!cancelled()) { PreviewFrames.testRender?.invoke("tier", timeUs); renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled); PreviewFrames.presented() }
                     return
                 }
             }
@@ -587,6 +718,14 @@ class CompositionRenderer(private val context: Context, private val repository: 
     }
 
     private fun renderTarget(project: ProjectDocument, timeUs: Long, targetWidth: Int, targetHeight: Int,
+        cancelled: () -> Boolean) {
+        // MP2.1: the warm-up gate pauses while this frame runs late.
+        val now = System.nanoTime()
+        frameUs = timeUs; frameWallNs = now; frameStartNs = now
+        try { renderFrame(project, timeUs, targetWidth, targetHeight, cancelled) } finally { frameStartNs = 0L }
+    }
+
+    private fun renderFrame(project: ProjectDocument, timeUs: Long, targetWidth: Int, targetHeight: Int,
         cancelled: () -> Boolean) {
         lastFrameApproximate = false
         TextIdlePrewarm.frameRendered(System.nanoTime()) // TEXT PERF 10: idle prewarm stays paused while frames render.
@@ -678,7 +817,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         // within 0.5 s (then it keeps decoding, undrawn: "warm"). Its transform is still evaluated, here and below.
         frameVideo.clear(); videoCull.clear(); culledUris.clear(); liveUris.clear()
         if (neededFor !== project) { needed = RenderDependencies.needed(project); neededFor = project }
-        if (comp.frameRate != cullRate) { cullRate = comp.frameRate; cullStepUs = comp.frameRate.let { it.frameTimeUs(1) - it.frameTimeUs(0) } }
+        if (comp.frameRate != cullRate) { cullRate = comp.frameRate; cullStepUs = comp.frameRate.let { it.frameTimeUs(1) - it.frameTimeUs(0) }; frameIntervalNs = cullStepUs * 1000 }
         requireNotNull(plan).forEachActive(timeUs) { layer,_,sourceTimeUs,_ ->
             if (layer.type == LayerType.VIDEO) layer.asset?.uri?.let { uri ->
                 val state = videoCullState(project, layer, uri, timeUs)
@@ -692,6 +831,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         frameOrder.clear(); for (v in frameVideo) layerKeys[v.first]?.let { if (it !in frameOrder) frameOrder += it }
         drawnKeys.clear()
         layersWithoutDecoder = layerKeys.values.count { it == null }
+        warmFrame(project, timeUs)
         requireNotNull(plan).forEachActive(timeUs) { layer,localTimeUs,sourceTimeUs,_ ->
             if (cancelled()) throw CancellationException("Superseded frame")
             val isAnim = layer.animTransform.isAnyAnimated()
@@ -744,11 +884,17 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 if(cull == CULL_COLD) return@forEachActive
                 // AUD2 B4: over the decoder cap the layer is left out of this frame; the others keep playing.
                 val key=layerKeys[layer.id] ?: return@forEachActive
+                // MP2.1 B2: a cut / re-entry takes its warm decoder (first frame already decoded).
+                handoff(layer.id,key,uri,sourceTimeUs)
+                val opening=warm != null && key !in decoders && !approximateFrames
+                val openStart=if(opening) System.nanoTime() else 0L
                 val decoder=decoder(key,uri) ?: run { layersWithoutDecoder++; return@forEachActive }
                 // A source reused by several clips may need a seek; finish earlier uses before advancing it.
                 flush()
                 // AUD2 B2: while scrubbing, a bounded decode (the nearest cached / sync frame); the exact frame follows.
                 val image=decoder.frameAt(sourceTimeUs,cancelled,interactive && approximateFrames)
+                // MP2.1: a decoder opened by the frame itself: its open + seek + first frame feeds the warm horizon.
+                if(opening) warm?.measured(decoder.decoderClass,(System.nanoTime()-openStart)/1000)
                 if(decoder.lastApproximate) lastFrameApproximate=true
                 drawnKeys += key
                 val crop=image.cropRect
@@ -836,6 +982,11 @@ class CompositionRenderer(private val context: Context, private val repository: 
         /** One background thread for imported-font tier fetches across renderers (worker calls are serialised anyway). */
         private val TIER_EXECUTOR=java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable,"fluxx-imported-tiers").apply { isDaemon=true;priority=Thread.NORM_PRIORITY-1 } }
+        /** MP2.1: one background thread opens and positions warm decoders (one at a time, across preview renderers). */
+        private val WARM_EXECUTOR=java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+            Thread({ MediaWork.background { runnable.run() } },"fluxx-warm").apply { isDaemon=true } }
+        /** MP2.1: culling-test steps read ahead per frame for a culled animated layer's return. */
+        private const val RETURN_SCAN_STEPS=8
         /** Export rounds for deferred tier keys (each worker reply is <= 8 MiB / 20 s). */
         private const val EXPORT_TIER_ROUNDS=8
         /** Shared default: a `{ false }` default argument allocates a new lambda on every call (F1 zero-allocation window). */
@@ -846,6 +997,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         // Native teardown waits for GPU completion before producers return their Images.
         synchronized(tierLock) { closed=true;RenderBridge.destroy(session) }
         if (interactive) { TextLayerErrors.clear(); context.applicationContext.unregisterComponentCallbacks(trimCallbacks) }
+        warm?.close()
         decoders.values.forEach { it.decoder.close() }; decoders.clear()
         images.values.forEach { it.buffer.close() }; images.clear()
     }
