@@ -338,6 +338,22 @@ extern "C" JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_pip
     reinterpret_cast<VulkanRenderer*>(session)->pipelineTimes(values,16);
     env->SetLongArrayRegion(output,0,std::min<jsize>(env->GetArrayLength(output),16),values);
 }
+// MP2.2 B3: the shared pipeline cache file (set before sessions are created) and its save (owner thread). B2/B3 info
+// accessors are test-only diagnostics.
+extern "C" JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_pipelineCacheFile(JNIEnv* env,jobject,jstring path,jboolean ignoreSaved) {
+    if(!path) { VulkanRenderer::setPipelineCacheFile("",false); return; }
+    const char* chars=env->GetStringUTFChars(path,nullptr);
+    VulkanRenderer::setPipelineCacheFile(chars ? chars : "",ignoreSaved);
+    if(chars) env->ReleaseStringUTFChars(path,chars);
+}
+extern "C" JNIEXPORT jboolean JNICALL Java_com_fluxx_android_engine_RenderBridge_savePipelineCache(JNIEnv*,jobject,jlong session) {
+    return reinterpret_cast<VulkanRenderer*>(session)->savePipelineCache();
+}
+extern "C" JNIEXPORT void JNICALL Java_com_fluxx_android_engine_RenderBridge_pipelineCacheInfo(JNIEnv* env,jobject,jlong session,jlongArray output) {
+    int64_t values[5]{};
+    reinterpret_cast<VulkanRenderer*>(session)->pipelineCacheInfo(values);
+    env->SetLongArrayRegion(output,0,std::min<jsize>(env->GetArrayLength(output),5),values);
+}
 extern "C" JNIEXPORT jstring JNICALL Java_com_fluxx_android_engine_RenderBridge_memoryInfo(JNIEnv* env,jobject,jlong session) {
     return env->NewStringUTF(reinterpret_cast<VulkanRenderer*>(session)->memoryInfo().c_str());
 }

@@ -102,11 +102,23 @@ public:
     }
     // MP2.2: test-only buffer-id probe (off by default; enabling clears the id history). First pipeline creations' ns.
     void setProbe(bool on) { mProbe = on; mSeenIds.clear(); mRecentIds.clear(); }
-    // MP2.2 B2: the device's memory types and the readback type chosen (diagnostic text).
-    std::string memoryInfo() const { return mMemoryInfo; }
     void pipelineTimes(int64_t* out, size_t count) {
         for (size_t i = 0; i < count; ++i) out[i] = i < mPipelineTimes.size() ? mPipelineTimes[i] : -1;
     }
+    // MP2.2 B3: the process-wide pipeline cache file (preview and export sessions share it). Set before a session is
+    // created; ignoreSaved is test-only (load nothing, still save).
+    static void setPipelineCacheFile(const std::string& path, bool ignoreSaved);
+    // Writes the cache (temp file + rename) when pipelines were created since the last save. Owner thread only.
+    bool savePipelineCache();
+    // MP2.2: loaded bytes, load state (PipelineCacheLoad), last saved bytes (negative: over the cap, not written),
+    // warm-up ns, init ns.
+    enum PipelineCacheLoad : int64_t { CacheNoFile = 0, CacheUsed = 1, CacheBadHeader = 2, CacheTooBig = 3, CacheIgnored = 4,
+        CacheRejected = 5, CacheNoPath = 6 };
+    void pipelineCacheInfo(int64_t* out) const {
+        out[0] = mCacheLoadedBytes; out[1] = mCacheLoad; out[2] = mCacheSavedBytes; out[3] = mWarmupNs; out[4] = mInitNs;
+    }
+    // MP2.2 B2: the device's memory types and the readback type chosen (diagnostic text).
+    std::string memoryInfo() const { return mMemoryInfo; }
     bool proofSurface(ANativeWindow* window, int width, int height);
     void proofRepack();
     bool proofPixels(uint8_t* output, size_t capacity);
@@ -182,7 +194,11 @@ private:
     std::vector<uint64_t> mRecentIds; // most recent first, at most 32
     std::vector<int64_t> mPipelineTimes; // ns of this session's first 16 slot pipeline creations
     void probeBuffer(AHardwareBuffer* buffer);
-    // MP2.2 B2 state.
+    // MP2.2 B3 / B2 state.
+    std::vector<uint8_t> loadPipelineCacheFile();
+    void warmUpPipelines();
+    bool mPipelineCacheDirty = false;
+    int64_t mCacheLoadedBytes = 0, mCacheLoad = CacheNoPath, mCacheSavedBytes = 0, mWarmupNs = 0, mInitNs = 0;
     bool mReadbackCoherent = true;
     std::string mMemoryInfo;
     VkQueryPool mTimestamps = VK_NULL_HANDLE; // 0/1: batch begin/end, 2/3: present blit begin/end.

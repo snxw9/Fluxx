@@ -12,6 +12,8 @@
 #include <android/trace.h>
 #include <chrono>
 #include <dlfcn.h>
+#include <unistd.h>
+#include <cstdio>
 
 namespace {
 // TEXT PERF 10: monotonic ns for the frame stage profile, and a Perfetto/atrace section scope.
@@ -52,9 +54,21 @@ bool VulkanRenderer::init(ANativeWindow* window, AAssetManager* assetManager) {
 
     if (!selectPhysicalDevice()) { cleanup(); return false; }
         if (!createDevice()) { cleanup(); return false; }
-        VkPipelineCacheCreateInfo cacheInfo{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
-        if (vkCreatePipelineCache(mDevice, &cacheInfo, nullptr, &mPipelineCache) != VK_SUCCESS) { cleanup(); return false; }
+        const int64_t initStart = nowNs();
+        {   // MP2.2 B3: start from the saved cache when its header matches this device; otherwise (or on any error) empty.
+            const std::vector<uint8_t> saved = loadPipelineCacheFile();
+            VkPipelineCacheCreateInfo cacheInfo{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
+            cacheInfo.initialDataSize = saved.size(); cacheInfo.pInitialData = saved.empty() ? nullptr : saved.data();
+            if (vkCreatePipelineCache(mDevice, &cacheInfo, nullptr, &mPipelineCache) != VK_SUCCESS) {
+                mPipelineCache = VK_NULL_HANDLE;
+                if (saved.empty()) { cleanup(); return false; }
+                mCacheLoad = CacheRejected; mCacheLoadedBytes = 0;
+                VkPipelineCacheCreateInfo empty{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
+                if (vkCreatePipelineCache(mDevice, &empty, nullptr, &mPipelineCache) != VK_SUCCESS) { cleanup(); return false; }
+            }
+        }
         if (!createOffscreenTarget()) { cleanup(); return false; }
+        warmUpPipelines();
         if (window && !createSwapchain()) { cleanup(); return false; }
         if (!createCommandPool()) { cleanup(); return false; }
         if (window && !createCommandBuffers()) { cleanup(); return false; }
@@ -81,6 +95,7 @@ bool VulkanRenderer::init(ANativeWindow* window, AAssetManager* assetManager) {
         }
 
         mInitialized = true;
+        mInitNs = nowNs() - initStart;
         LOGI("VulkanRenderer initialized successfully");
         return true;
     } catch (const std::exception& e) {
@@ -295,7 +310,7 @@ void VulkanRenderer::cleanup() {
         mCommandPool = VK_NULL_HANDLE;
     }
     if (mDevice != VK_NULL_HANDLE) {
-        if (mPipelineCache) vkDestroyPipelineCache(mDevice,mPipelineCache,nullptr);
+        if (mPipelineCache) { savePipelineCache(); vkDestroyPipelineCache(mDevice,mPipelineCache,nullptr); }
         mPipelineCache=VK_NULL_HANDLE;
         vkDestroyDevice(mDevice, nullptr);
         mDevice = VK_NULL_HANDLE;
@@ -943,7 +958,7 @@ bool VulkanRenderer::createVideoPipelineOnce(VideoLayerState& layer, VkAndroidHa
     // MP2.2: diagnostic only. Counted when a slot builds its conversion + sampler + layouts + pool + pipeline.
     struct PipelineTimer { VulkanRenderer& r; int64_t start=nowNs(); ~PipelineTimer() {
         const int64_t ns=nowNs()-start; r.mStages[PipelineNs]+=ns; ++r.mStages[PipelineCreates];
-        if (r.mPipelineTimes.size()<16) r.mPipelineTimes.push_back(ns); } } pipelineTimer{*this};
+        if (r.mPipelineTimes.size()<16) r.mPipelineTimes.push_back(ns); r.mPipelineCacheDirty=true; } } pipelineTimer{*this};
     if (formatProps.format != VK_FORMAT_R8G8B8A8_UNORM && formatProps.format != VK_FORMAT_R8G8B8A8_SRGB) ++mStages[Conversions];
 
     if (layer.mYcbcrConversion != VK_NULL_HANDLE) {
@@ -1347,7 +1362,7 @@ bool VulkanRenderer::beginFrame(int width, int height, int presentationWidth, in
     return true;
 }
 int64_t VulkanRenderer::upsertText(const std::string& font, const std::string& utf8,bool ligatures) {
-    if(!mText) mText=std::make_unique<fluxx::text::TextRenderer>(mPhysicalDevice,mDevice,mOffscreenRenderPass,mPipelineCache,mAssetManager,mTextMaxPages);
+    if(!mText) { mText=std::make_unique<fluxx::text::TextRenderer>(mPhysicalDevice,mDevice,mOffscreenRenderPass,mPipelineCache,mAssetManager,mTextMaxPages); mPipelineCacheDirty=true; }
     if(mNextTextHandle==INT64_MAX) throw std::runtime_error("Text layout handles exhausted");
     auto layout=mText->layout(font,utf8,ligatures);
     const int64_t handle=mNextTextHandle++; mTextLayouts.emplace(handle,std::move(layout)); return handle;
@@ -1358,14 +1373,14 @@ void VulkanRenderer::releaseText(int64_t handle) {
     mTextLayouts.erase(handle); mPreparedTextHandles.clear();
 }
 int64_t VulkanRenderer::upsertStyledText(const std::string& font,const fluxx::text::StyledInput& input,bool ligatures) {
-    if(!mText) mText=std::make_unique<fluxx::text::TextRenderer>(mPhysicalDevice,mDevice,mOffscreenRenderPass,mPipelineCache,mAssetManager,mTextMaxPages);
+    if(!mText) { mText=std::make_unique<fluxx::text::TextRenderer>(mPhysicalDevice,mDevice,mOffscreenRenderPass,mPipelineCache,mAssetManager,mTextMaxPages); mPipelineCacheDirty=true; }
     if(mNextTextHandle==INT64_MAX) throw std::runtime_error("Text layout handles exhausted");
     auto layout=mText->styledLayout(font,input,ligatures);
     const int64_t handle=mNextTextHandle++;mTextLayouts.emplace(handle,std::move(layout));return handle;
 }
 int64_t VulkanRenderer::upsertPreparedText(const uint8_t* bytes,size_t length) {
     auto layout=fluxx::text::decodePreparedText(bytes,length);
-    if(!mText) mText=std::make_unique<fluxx::text::TextRenderer>(mPhysicalDevice,mDevice,mOffscreenRenderPass,mPipelineCache,mAssetManager,mTextMaxPages);
+    if(!mText) { mText=std::make_unique<fluxx::text::TextRenderer>(mPhysicalDevice,mDevice,mOffscreenRenderPass,mPipelineCache,mAssetManager,mTextMaxPages); mPipelineCacheDirty=true; }
     if(mNextTextHandle==INT64_MAX) throw std::runtime_error("Text layout handles exhausted");
     const int64_t handle=mNextTextHandle++;mTextLayouts.emplace(handle,std::move(layout));return handle;
 }
@@ -1805,4 +1820,80 @@ std::vector<uint8_t> VulkanRenderer::takeTextTierRequests() {
 size_t VulkanRenderer::supplyTextTierGlyphs(const uint8_t* bytes,size_t length) {
     if(!mText) return 0;
     return mText->supplyTierGlyphs(fluxx::text::decodeTierReply(bytes,length));
+}
+
+// ---- MP2.2 B3: the saved pipeline cache --------------------------------------------------------------------------
+namespace {
+std::mutex gCacheFileLock;
+std::string gCacheFile;
+bool gCacheIgnoreSaved = false;
+constexpr size_t kCacheCapBytes = 4u * 1024u * 1024u;
+}
+void VulkanRenderer::setPipelineCacheFile(const std::string& path, bool ignoreSaved) {
+    std::lock_guard<std::mutex> lock(gCacheFileLock); gCacheFile = path; gCacheIgnoreSaved = ignoreSaved;
+}
+// Reads the file and checks the Vulkan header against this device: header size and version, vendor, device and
+// pipelineCacheUUID. Anything missing, stale, oversized or malformed gives an empty vector (an empty cache).
+std::vector<uint8_t> VulkanRenderer::loadPipelineCacheFile() {
+    std::string path; bool ignore;
+    { std::lock_guard<std::mutex> lock(gCacheFileLock); path = gCacheFile; ignore = gCacheIgnoreSaved; }
+    mCacheLoadedBytes = 0;
+    if (path.empty()) { mCacheLoad = CacheNoPath; return {}; }
+    if (ignore) { mCacheLoad = CacheIgnored; return {}; }
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) { mCacheLoad = CacheNoFile; return {}; }
+    std::vector<uint8_t> data;
+    if (fseek(f, 0, SEEK_END) == 0) {
+        const long size = ftell(f);
+        if (size > 0 && static_cast<size_t>(size) <= kCacheCapBytes && fseek(f, 0, SEEK_SET) == 0) {
+            data.resize(static_cast<size_t>(size));
+            if (fread(data.data(), 1, data.size(), f) != data.size()) data.clear();
+        } else if (size > 0) mCacheLoad = CacheTooBig;
+    }
+    fclose(f);
+    if (mCacheLoad == CacheTooBig) return {};
+    VkPhysicalDeviceProperties device; vkGetPhysicalDeviceProperties(mPhysicalDevice, &device);
+    auto u32 = [&](size_t at) { uint32_t v; std::memcpy(&v, data.data() + at, 4); return v; };
+    const bool ok = data.size() >= 16 + VK_UUID_SIZE && u32(0) >= 16 + VK_UUID_SIZE && u32(0) <= data.size() &&
+        u32(4) == VK_PIPELINE_CACHE_HEADER_VERSION_ONE && u32(8) == device.vendorID && u32(12) == device.deviceID &&
+        std::memcmp(data.data() + 16, device.pipelineCacheUUID, VK_UUID_SIZE) == 0;
+    if (!ok) { mCacheLoad = CacheBadHeader; LOGW("Saved pipeline cache does not match this device; starting empty"); return {}; }
+    mCacheLoad = CacheUsed; mCacheLoadedBytes = static_cast<int64_t>(data.size());
+    return data;
+}
+// Owner thread only (session teardown, and the paused preview's idle housekeeping). Written to a temp file of its own,
+// then renamed over the shared file, so a reader never sees a partial file and two sessions never interleave writes.
+bool VulkanRenderer::savePipelineCache() {
+    if (!mPipelineCache || !mPipelineCacheDirty) return false;
+    std::string path; { std::lock_guard<std::mutex> lock(gCacheFileLock); path = gCacheFile; }
+    if (path.empty()) return false;
+    mPipelineCacheDirty = false;
+    size_t size = 0;
+    if (vkGetPipelineCacheData(mDevice, mPipelineCache, &size, nullptr) != VK_SUCCESS || size == 0) return false;
+    if (size > kCacheCapBytes) { mCacheSavedBytes = -static_cast<int64_t>(size); LOGW("Pipeline cache %zu bytes over the cap; not saved", size); return false; }
+    std::vector<uint8_t> data(size);
+    const VkResult got = vkGetPipelineCacheData(mDevice, mPipelineCache, &size, data.data());
+    if ((got != VK_SUCCESS && got != VK_INCOMPLETE) || size == 0) return false;
+    data.resize(size);
+    std::ostringstream temp; temp << path << ".tmp." << getpid() << "." << reinterpret_cast<uintptr_t>(this);
+    FILE* f = fopen(temp.str().c_str(), "wb");
+    if (!f) return false;
+    const bool written = fwrite(data.data(), 1, data.size(), f) == data.size() && fflush(f) == 0 && fsync(fileno(f)) == 0;
+    fclose(f);
+    if (!written || rename(temp.str().c_str(), path.c_str()) != 0) { remove(temp.str().c_str()); return false; }
+    mCacheSavedBytes = static_cast<int64_t>(data.size());
+    return true;
+}
+// At session creation, before any frame: the one slot pipeline whose format needs no decoded frame (RGBA: images,
+// solids, strip pictures), built and dropped so the driver and the cache hold it. Video pipelines need the external
+// YCbCr format of the first decoded buffer, so they cannot be warmed here (the saved cache covers them).
+void VulkanRenderer::warmUpPipelines() {
+    const int64_t start = nowNs();
+    VideoLayerState scratch{};
+    VkAndroidHardwareBufferFormatPropertiesANDROID rgba{};
+    rgba.sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID;
+    rgba.format = VK_FORMAT_R8G8B8A8_UNORM;
+    if (!createVideoPipelineOnce(scratch, rgba)) LOGW("Pipeline warm-up failed (not fatal)");
+    cleanupVideoPipeline(scratch);
+    mWarmupNs = nowNs() - start;
 }

@@ -22,6 +22,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
     /** MP2.3: the scrub strip (fast sweeps) and its background builder, and decode-behind while paused. Preview only. */
     scrubStrip: Boolean = surface != null) : Closeable {
     private val interactive = surface != null
+    // MP2.2 B3: every session loads (and later saves) the shared pipeline cache file in cacheDir.
+    init { RenderBridge.usePipelineCacheDir(context.cacheDir) }
     val session = RenderBridge.create(surface,width,height,context.assets).also { check(it != 0L) { "Vulkan rendering is unavailable" } }
     private val lowRam = context.getSystemService(android.app.ActivityManager::class.java).isLowRamDevice
     // AUD2 B4: the cap on simultaneous video decoders (code constants; beyond it the lowest layers are left out).
@@ -1187,6 +1189,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
         private val NEVER_CANCELLED: () -> Boolean = { false }
     }
     fun resize(width: Int,height: Int) = RenderBridge.resize(session,width,height)
+    /** MP2.2 B3: saves the pipeline cache when pipelines were created since the last save. Render thread, between frames. */
+    fun savePipelineCache(): Boolean = !closed && RenderBridge.savePipelineCache(session)
     override fun close() {
         // Native teardown waits for GPU completion before producers return their Images.
         synchronized(tierLock) { closed=true;RenderBridge.destroy(session) }

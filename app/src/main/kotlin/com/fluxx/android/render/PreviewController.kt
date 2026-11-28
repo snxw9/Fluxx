@@ -75,6 +75,8 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
                         try {
                             renderer.decodeBehind(idleProject,lastShownTime) { closed || playing || generation.get()!=idleEpoch }
                             if(generation.get()==idleEpoch) renderer.stripTick(idleProject,lastShownTime)
+                            // MP2.2 B3: paused and idle: keep new pipelines on disk (a killed process keeps them). Never while playing.
+                            if(generation.get()==idleEpoch && !playing) runCatching { renderer.savePipelineCache() }
                         } catch(e: java.util.concurrent.CancellationException) { if(closed) break }
                         catch(e: Exception) { android.util.Log.w("Fluxx","Idle decode skipped",e) }
                         continue

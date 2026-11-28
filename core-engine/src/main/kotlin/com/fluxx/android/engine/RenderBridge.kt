@@ -53,9 +53,33 @@ object RenderBridge {
     external fun probe(session: Long, on: Boolean)
     /** MP2.2, test-only: this session's first 16 slot pipeline creation times (ns; -1 = none yet). */
     external fun pipelineTimes(session: Long, out: LongArray)
+    /**
+     * MP2.2 B3: the pipeline cache file every later session loads (header-checked) and saves (temp file + rename).
+     * [ignoreSaved] is test-only: start empty, still save.
+     */
+    external fun pipelineCacheFile(path: String?, ignoreSaved: Boolean)
+    /** MP2.2 B3: saves the session's pipeline cache if pipelines were created since the last save. Owner thread only. */
+    external fun savePipelineCache(session: Long): Boolean
+    /** MP2.2, test-only: (loaded bytes, load state, last saved bytes, warm-up ns, init ns); states in [PipelineCacheLoad]. */
+    external fun pipelineCacheInfo(session: Long, out: LongArray)
     /** MP2.2, test-only: the device's memory types and the readback type chosen (after the first readback). */
     external fun memoryInfo(session: Long): String
+
+    @Volatile private var cachePath: String? = null
+    /** MP2.2 B3: points every session at one cache file in [cacheDir] (once per process; before the first session). */
+    @Synchronized fun usePipelineCacheDir(cacheDir: java.io.File) {
+        if (cachePath != null) return
+        val path = java.io.File(cacheDir, PIPELINE_CACHE_FILE).path
+        pipelineCacheFile(path, testIgnoreSavedPipelineCache); cachePath = path
+    }
+    const val PIPELINE_CACHE_FILE = "vk_pipeline_cache.bin"
+    /** MP2.2, TEST-ONLY (default false, the app never sets it): sessions created from now on ignore the saved file (they still save). */
+    @Volatile var testIgnoreSavedPipelineCache = false
+        @Synchronized set(value) { field = value; cachePath?.let { pipelineCacheFile(it, value) } }
 }
+
+/** MP2.2: [RenderBridge.pipelineCacheInfo] load states (VulkanRenderer::PipelineCacheLoad). */
+object PipelineCacheLoad { const val NO_FILE = 0L; const val USED = 1L; const val BAD_HEADER = 2L; const val TOO_BIG = 3L; const val IGNORED = 4L; const val REJECTED = 5L; const val NO_PATH = 6L }
 
 /** MP2.2: indices of [RenderBridge.frameStages] (VulkanRenderer::Stage). */
 object NativeStage {

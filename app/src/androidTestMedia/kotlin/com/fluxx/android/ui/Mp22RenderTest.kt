@@ -196,133 +196,117 @@ class Mp22RenderTest {
         return s!! to size
     }
 
+
+    /** Alternated blocks: flush-always (the behaviour before MP2.2 B1) against the narrowed flush. */
+    private fun alternate(case: String, run: (Int, Boolean) -> List<Row>, export: Boolean) {
+        val old = ArrayList<Row>(); val narrow = ArrayList<Row>(); val blocks = ArrayList<String>()
+        for ((b, always) in listOf(true, false, true, false).withIndex()) {
+            CompositionRenderer.testFlushAlways = always
+            val rows = run(b, always)
+            (if (always) old else narrow).addAll(rows); blocks += (if (always) "always " else "narrowed ") + f1(pct(rows.map { it.ms[0] }, .5))
+        }
+        CompositionRenderer.testFlushAlways = false
+        summary("$case flush-always (before B1)", old, export)
+        summary("$case narrowed (B1)", narrow, export)
+        val a = pct(old.map { it.ms[0] }, .5); val b = pct(narrow.map { it.ms[0] }, .5)
+        report("$case: total p50 ${f1(a)} -> ${f1(b)} ms (${f1(a - b)} ms, ${"%.1f".format(100 * (a - b) / a)}%), p95 ${f1(pct(old.map { it.ms[0] }, .95))} -> ${f1(pct(narrow.map { it.ms[0] }, .95))}; flushes/frame ${f1(old.map { it.counts[0].toDouble() }.average())} -> ${f1(narrow.map { it.counts[0].toDouble() }.average())}; blocks p50 ${blocks.joinToString(" ")}")
+    }
+
     @Test fun measure() {
         val state = TestDeviceState.record(javaClass.simpleName)
         report("device: $state; build ${if (com.fluxx.android.BuildConfig.DEBUG) "DEBUG (debuggable)" else "benchmark (not debuggable)"}; API ${android.os.Build.VERSION.SDK_INT}")
+        // -e mp22part preview | export | cold (each in its own process); cold also takes -e mp22cache ignore | use.
+        val args = InstrumentationRegistry.getArguments()
+        val part = args.getString("mp22part") ?: "preview"
+        val ignoreCache = args.getString("mp22cache") == "ignore"
+        report("part: $part${if (part == "cold") " (saved pipeline cache ${if (ignoreCache) "IGNORED" else "used"})" else ""}")
+        // B3 cold start: set before the first session of this process.
+        if (part == "cold") RenderBridge.testIgnoreSavedPipelineCache = ignoreCache
+        val cacheFile = File(context.cacheDir, RenderBridge.PIPELINE_CACHE_FILE)
+        report("pipeline cache file before: ${if (cacheFile.exists()) "${cacheFile.length()} bytes" else "none"}")
         val repo = MediaRepository(context)
         val typical = source(repo, "%${Aud2Bench.TYPICAL_ID}%")
         assumeTrue("MP22: the typical H.264 file was not found", typical != null)
         val s = typical!!
         report("typical: '${s.name.take(40)}' ${s.info.mime} ${s.info.width}x${s.info.height} ${s.info.frameRate} fps ${(s.info.durationUs ?: 0) / 1e6} s")
-        val vp9 = source(repo, "${Aud1Bench.PREFIX}%")
-        val (surf, size) = surface()
-        report("surface ${size.first}x${size.second}")
         val worker = Executors.newSingleThreadExecutor { Thread(it, "mp22-render") }
-        // -e mp22part preview | export: one part per run (the A16 restarted once when the export part followed the
-        // preview part in one run: its hardware encoder hung). Default: both.
-        val part = InstrumentationRegistry.getArguments().getString("mp22part") ?: "all"
-        report("part: $part")
         CompositionRenderer.testProbe = true
         try {
-            if (part != "export") worker.submit {
-                val wall0 = System.nanoTime()
-                CompositionRenderer(context, repo, surf, size.first, size.second).use { r ->
-                    // Pipeline cold start: the first frames of this process's first renderer.
-                    val cold = scene(s, 1, true, 8_000_000L)
-                    val coldRows = ArrayList<Row>()
-                    RenderBridge.probe(r.session, true); r.playing = true
-                    for (i in 0 until 5) { val t0 = System.nanoTime(); r.renderPreview(cold, rate.frameTimeUs(i.toLong()), PreviewResolution.FULL); coldRows += sample(r, System.nanoTime() - t0) }
-                    val times = LongArray(16); RenderBridge.pipelineTimes(r.session, times)
-                    report("cold start (fresh process, first preview renderer): first 5 frames total ms ${coldRows.joinToString(",") { f1(it.ms[0]) }}; pipeline ms ${coldRows.joinToString(",") { f1(it.ms[3]) }}; pipelines ${coldRows.sumOf { it.counts[7] }}; pipeline creation times ${times.filter { it >= 0 }.joinToString(",") { "%.2f".format(it / 1e6) }} ms")
-                    report("temperature ${temp()}")
-                    for (distinct in listOf(true, false)) for (count in listOf(1, 2, 4, 6, 8)) {
-                        cool()
-                        preview(r, "preview ${if (distinct) "distinct" else "shared"} N=$count [${temp()}]", scene(s, count, distinct, 8_000_000L))
-                    }
-                    // Flush upper bound: the per-video flush skipped (test-only switch), distinct, N <= 4, alternated.
-                    for (count in listOf(1, 2, 4)) {
-                        cool()
-                        val pj = scene(s, count, true, 13_000_000L)
-                        val blocks = ArrayList<Pair<Boolean, List<Row>>>()
-                        var from = 0
-                        for ((b, skip) in listOf(false, true, false, true).withIndex()) {
-                            CompositionRenderer.testSkipVideoFlush = skip
-                            blocks += skip to preview(r, "fub", pj, warm = if (b == 0) 30 else 10, frames = 75, from = from, settle = b == 0, keep = false)
-                            from += (if (b == 0) 30 else 10) + 75
+            when (part) {
+                "cold" -> {
+                    val (surf, size) = surface()
+                    worker.submit {
+                        val info = LongArray(5); val times = LongArray(16)
+                        val t0 = System.nanoTime()
+                        val r = CompositionRenderer(context, repo, surf, size.first, size.second)
+                        val created = System.nanoTime() - t0
+                        RenderBridge.pipelineCacheInfo(r.session, info)
+                        val project = scene(s, 1, true, 4_000_000L)
+                        r.playing = true
+                        val t1 = System.nanoTime(); r.renderPreview(project, 0, PreviewResolution.FULL); val first = System.nanoTime() - t1
+                        val firstRow = sample(r, first)
+                        RenderBridge.pipelineTimes(r.session, times)
+                        report("cold preview session: created in ${f1(created / 1e6)} ms (native init ${f1(info[4] / 1e6)} ms, warm-up ${f1(info[3] / 1e6)} ms); cache load state ${info[1]} (0 no file, 1 used, 2 bad header, 3 too big, 4 ignored, 5 rejected), loaded ${info[0]} bytes; first frame ${f1(first / 1e6)} ms (decode ${f1(firstRow.ms[1])}, import ${f1(firstRow.ms[2])}, of which pipeline ${f1(firstRow.ms[3])}); pipeline creation times ms ${times.filter { it >= 0 }.joinToString(",") { "%.2f".format(it / 1e6) }} (the first is the RGBA warm-up)")
+                        val later = (1 until 5).map { i -> val ti = System.nanoTime(); r.renderPreview(project, rate.frameTimeUs(i.toLong()), PreviewResolution.FULL); (System.nanoTime() - ti) / 1e6 }
+                        report("cold preview: frames 2-5 ms ${later.joinToString(",") { f1(it) }}")
+                        r.close()
+                        report("pipeline cache file after the preview session closed: ${if (cacheFile.exists()) "${cacheFile.length()} bytes" else "none"}")
+                        // An export renderer (offscreen) in the same process: its own device, the file as saved now.
+                        val e0 = System.nanoTime()
+                        CompositionRenderer(context, repo).use { er ->
+                            val ec = System.nanoTime() - e0
+                            RenderBridge.pipelineCacheInfo(er.session, info)
+                            val e1 = System.nanoTime(); er.render(project, 0); val ef = System.nanoTime() - e1
+                            RenderBridge.pipelineTimes(er.session, times)
+                            report("cold export renderer (same process, after the preview session): created ${f1(ec / 1e6)} ms (warm-up ${f1(info[3] / 1e6)} ms), cache load state ${info[1]}, loaded ${info[0]} bytes; first frame ${f1(ef / 1e6)} ms; pipeline creation times ms ${times.filter { it >= 0 }.joinToString(",") { "%.2f".format(it / 1e6) }}")
                         }
-                        CompositionRenderer.testSkipVideoFlush = false
-                        val off = blocks.filter { !it.first }.flatMap { it.second }; val on = blocks.filter { it.first }.flatMap { it.second }
-                        summary("preview flush-bound N=$count per-video flush ON (as today)", off, false)
-                        summary("preview flush-bound N=$count per-video flush SKIPPED", on, false)
-                        val a = pct(off.map { it.ms[0] }, .5); val b = pct(on.map { it.ms[0] }, .5)
-                        val a95 = pct(off.map { it.ms[0] }, .95); val b95 = pct(on.map { it.ms[0] }, .95)
-                        report("preview flush-bound N=$count: total p50 ${f1(a)} -> ${f1(b)} ms (${f1(a - b)} ms, ${"%.1f".format(100 * (a - b) / a)}%), p95 ${f1(a95)} -> ${f1(b95)} ms; blocks p50 ${blocks.joinToString(" ") { (sk, rw) -> (if (sk) "skip " else "on ") + f1(pct(rw.map { it.ms[0] }, .5)) }}; [${temp()}]")
-                    }
-                    // Cut sequence: 8 one-second clips back to back (in-points 5 s apart), paced at 30 fps, warm-ups on.
+                        report("pipeline cache file at the end: ${if (cacheFile.exists()) "${cacheFile.length()} bytes" else "none"}")
+                    }.get(5, TimeUnit.MINUTES)
+                }
+                "preview" -> {
+                    val (surf, size) = surface()
+                    worker.submit {
+                        CompositionRenderer(context, repo, surf, size.first, size.second).use { r ->
+                            for ((count, distinct) in listOf(2 to true, 4 to true, 4 to false)) {
+                                cool()
+                                val pj = scene(s, count, distinct, 13_000_000L)
+                                var from = 0
+                                alternate("preview ${if (distinct) "distinct" else "shared (control)"} N=$count [${temp()}]", { b, _ ->
+                                    val warm = if (b == 0) 30 else 10
+                                    preview(r, "block", pj, warm = warm, frames = 75, from = from, settle = b == 0, keep = false).also { from += warm + 75 }
+                                }, false)
+                            }
+                        }
+                    }.get(20, TimeUnit.MINUTES)
+                }
+                "export" -> {
+                    // Export renderer (render + copyYuv as the exporter runs them, no encoder): distinct N=4, alternated.
                     cool()
-                    val cuts = project(8_000_000L, (0 until 8).map { c -> CompositionLayer(101L + c, LayerType.VIDEO, name = "cut-$c", zOrder = 10,
-                        timing = ClipTiming(c * 1_000_000L, 2_000_000L + c * 5_000_000L, 1_000_000L),
-                        asset = AssetReference("mp22-cut-$c", s.uri, access = MediaAccess.AVAILABLE, durationUs = s.info.durationUs)) })
-                    val warmBefore = r.warmCounts()?.copyOf()
-                    val cutRows = preview(r, "preview cut sequence (all frames)", cuts, warm = 0, frames = 239, from = 0, paced = true)
-                    val warmAfter = r.warmCounts()
-                    val cutAt = (1 until 8).map { it * fps }.toSet()
-                    summary("preview cut sequence: the 7 cut frames", cutRows.filterIndexed { i, _ -> i in cutAt }, false)
-                    summary("preview cut sequence: the frame after each cut", cutRows.filterIndexed { i, _ -> i - 1 in cutAt }, false)
-                    summary("preview cut sequence: other frames", cutRows.filterIndexed { i, _ -> i !in cutAt && i - 1 !in cutAt }, false)
-                    report("preview cut sequence: warm counts (started, ready, used, released unused, failed, blocked budget, blocked cap, waits) ${warmBefore?.joinToString(",")} -> ${warmAfter?.joinToString(",")}")
-                    // VP9 worst case: preview, distinct, N = 1, 2, 4.
-                    if (vp9 != null) {
-                        report("vp9: '${vp9.name.take(40)}' ${vp9.info.mime} ${vp9.info.width}x${vp9.info.height} ${(vp9.info.durationUs ?: 0) / 1e6} s")
-                        for (count in listOf(1, 2, 4)) { cool(); preview(r, "preview VP9-worst distinct N=$count [${temp()}]", scene(vp9, count, true, 8_000_000L)) }
-                    } else report("vp9 worst case SKIPPED: file not found")
-                    RenderBridge.pipelineTimes(r.session, times)
-                    report("preview renderer pipeline creation times over the run (first 16) ${times.filter { it >= 0 }.joinToString(",") { "%.2f".format(it / 1e6) }} ms")
-                }
-                report("preview part wall ${"%.0f".format((System.nanoTime() - wall0) / 1e9)} s")
-            }.get(40, TimeUnit.MINUTES)
-            if (part == "preview") return
-
-            // Export: the real exporter (its own renderer, offscreen readback, encoder), 30 frames (fewer where slow).
-            val wall1 = System.nanoTime()
-            for (distinct in listOf(true, false)) for (count in listOf(1, 2, 4, 6, 8)) {
-                cool()
-                val frames = if (distinct && count >= 6) 15 else 30
-                export("export ${if (distinct) "distinct" else "shared"} N=$count ($frames frames) [${temp()}]", scene(s, count, distinct, frames * 1_000_000L / fps))
-            }
-            // Flush upper bound in export: the export renderer (offscreen render + copyYuv, as the exporter runs them, but
-            // without the encoder: fewer hardware encoder sessions after the A16's encoder hang), alternated blocks of 15
-            // frames within one renderer, and byte identity on the export renderer's readback.
-            for (count in listOf(1, 2, 4)) {
-                cool()
-                val pj = scene(s, count, true, 3_000_000L)
-                val off = ArrayList<Row>(); val on = ArrayList<Row>()
-                val y = ByteBuffer.allocateDirect(1920 * 1080); val u = ByteBuffer.allocateDirect(1920 * 1080 / 4); val v = ByteBuffer.allocateDirect(1920 * 1080 / 4)
-                CompositionRenderer(context, repo).use { er ->
-                    for (i in 0 until 10) { er.render(pj, rate.frameTimeUs(i.toLong())); RenderBridge.copyYuv(er.session, y, u, v, 1920, 960, 960, 1, 1) }
-                    drain(er); RenderBridge.probe(er.session, true)
-                    var frame = 10
-                    for (skip in listOf(false, true, false, true)) {
-                        CompositionRenderer.testSkipVideoFlush = skip
-                        repeat(15) {
-                            val t0 = System.nanoTime(); er.render(pj, rate.frameTimeUs((frame++).toLong())); val t1 = System.nanoTime()
-                            check(RenderBridge.copyYuv(er.session, y, u, v, 1920, 960, 960, 1, 1)) { "readback failed" }
-                            (if (skip) on else off).add(sample(er, t1 - t0, longArrayOf(t1 - t0, System.nanoTime() - t1, 0, 0)))
-                        }
+                    val pj = scene(s, 4, true, 4_000_000L)
+                    val y = ByteBuffer.allocateDirect(1920 * 1080); val u = ByteBuffer.allocateDirect(1920 * 1080 / 4); val v = ByteBuffer.allocateDirect(1920 * 1080 / 4)
+                    CompositionRenderer(context, repo).use { er ->
+                        for (i in 0 until 10) { er.render(pj, rate.frameTimeUs(i.toLong())); RenderBridge.copyYuv(er.session, y, u, v, 1920, 960, 960, 1, 1) }
+                        report("readback memory: ${RenderBridge.memoryInfo(er.session)}")
+                        drain(er); RenderBridge.probe(er.session, true)
+                        var frame = 10
+                        alternate("export-renderer distinct N=4 [no encoder] [${temp()}]", { _, _ ->
+                            (0 until 15).map {
+                                val t0 = System.nanoTime(); er.render(pj, rate.frameTimeUs((frame++).toLong())); val t1 = System.nanoTime()
+                                check(RenderBridge.copyYuv(er.session, y, u, v, 1920, 960, 960, 1, 1)) { "readback failed" }
+                                sample(er, t1 - t0, longArrayOf(t1 - t0, System.nanoTime() - t1, 0, 0))
+                            }
+                        }, true)
+                    }
+                    // Real exports: readback and conversion (shared N=1, 4), and the 8-distinct control (15 frames).
+                    for ((count, distinct, frames) in listOf(Triple(1, false, 30), Triple(4, false, 30), Triple(8, true, 15))) {
+                        cool()
+                        export("export ${if (distinct) "distinct" else "shared"} N=$count ($frames frames) [${temp()}]", scene(s, count, distinct, frames * 1_000_000L / fps))
                     }
                 }
-                CompositionRenderer.testSkipVideoFlush = false
-                summary("export-renderer flush-bound N=$count per-video flush ON (as today) [no encoder]", off, true)
-                summary("export-renderer flush-bound N=$count per-video flush SKIPPED [no encoder]", on, true)
-                val a = pct(off.map { it.ms[0] }, .5); val b = pct(on.map { it.ms[0] }, .5)
-                report("export flush-bound N=$count: render p50 ${f1(a)} -> ${f1(b)} ms (${f1(a - b)} ms, ${"%.1f".format(100 * (a - b) / a)}%), p95 ${f1(pct(off.map { it.ms[0] }, .95))} -> ${f1(pct(on.map { it.ms[0] }, .95))}; flushes/frame ${f1(off.map { it.counts[0].toDouble() }.average())} -> ${f1(on.map { it.counts[0].toDouble() }.average())}")
-                val w = 640; val h = 360
-                val small = scene(s, count, true, 1_000_000L).let { it.copy(composition = it.composition.copy(width = w, height = h)) }
-                var same = 0; var total = 0
-                CompositionRenderer(context, repo).use { ra -> CompositionRenderer(context, repo).use { rb ->
-                    for (i in 0 until 20) {
-                        val t = rate.frameTimeUs(i.toLong())
-                        CompositionRenderer.testSkipVideoFlush = false; ra.render(small, t); val da = readback(ra, w, h)
-                        CompositionRenderer.testSkipVideoFlush = true; rb.render(small, t); val db = readback(rb, w, h)
-                        CompositionRenderer.testSkipVideoFlush = false
-                        total++; if (da == db) same++
-                    }
-                } }
-                report("flush-bound identity N=$count: $same of $total frames byte-identical (640x360 export-renderer readback, flush on vs skipped)")
             }
-            report("export part wall ${"%.0f".format((System.nanoTime() - wall1) / 1e9)} s; end temperature ${temp()}")
         } finally {
-            CompositionRenderer.testSkipVideoFlush = false; CompositionRenderer.testProbe = false; CompositionExporter.testFrame = null
+            CompositionRenderer.testFlushAlways = false; CompositionRenderer.testProbe = false; CompositionExporter.testFrame = null
+            RenderBridge.testIgnoreSavedPipelineCache = false
             worker.shutdownNow()
         }
     }
