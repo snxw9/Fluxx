@@ -192,8 +192,16 @@ class Mp23ScrubTest : Mp12Base() {
         }
         val lastMove = steps.last()[0]
         val finalUs = steps.last()[1]
+        // Settled: the exact frame of the last target, or its proven floor frame with nothing newer for 400 ms (a forward
+        // sweep's floor frame is the exact one: no settle render follows it). At most 8 s.
         val until = System.nanoTime() + 8_000_000_000L
-        while (System.nanoTime() < until && shown(lastMove).none { it.frameUs == finalUs && it.kind == "exact" }) pump(100)
+        while (System.nanoTime() < until) {
+            val fr = shown(lastMove).filter { it.frameUs == finalUs }
+            if (fr.any { it.kind == "exact" }) break
+            val lastPresent = rec.frames.lastOrNull()?.get(2) ?: 0L
+            if (fr.any { it.kind == "floor" } && System.nanoTime() - lastPresent > 400_000_000L) break
+            pump(100)
+        }
         pump(300)
         // The first step repeats the start position (the redraw of the frame already on screen): not a new frame.
         return Run(t0, lastMove, steps, shown(t0).dropWhile { it.frameUs == steps.first()[1] && steps.size > 1 }, dir)
@@ -208,7 +216,8 @@ class Mp23ScrubTest : Mp12Base() {
             val target = s.inUs + f[0]
             val e = ev.lastOrNull { (ns, line) -> ns in f[1]..f[2] && Mp1Bench.field(line, "t")?.toLongOrNull() == target } ?: return@mapNotNull null
             val how = Mp1Bench.field(e.second, "how") ?: ""
-            val kind = if (e.second.startsWith("strip-frame")) "strip" else if (how.startsWith("floor")) "floor" else "exact"
+            // floor: the proven floor frame (ScrubFloor's exact floor); approx: a nearer cached / sync frame (bounded decode).
+            val kind = if (e.second.startsWith("strip-frame")) "strip" else if (how == "floor") "floor" else if (how.startsWith("floor")) "approx" else "exact"
             Shown(f[0], f[1], f[2], target, Mp1Bench.field(e.second, "shown")?.toLongOrNull() ?: -1, kind)
         }
     }
@@ -233,14 +242,19 @@ class Mp23ScrubTest : Mp12Base() {
         val finger = moving.maxOfOrNull { f -> val st = r.steps.lastOrNull { it[0] <= f.presentNs } ?: r.steps.first()
             kotlin.math.abs(s.inUs + st[1] - f.shown) / 1000.0 } ?: Double.NaN
         val spanS = (r.lastMove - r.t0) / 1e9
-        val first = r.frames.firstOrNull()?.let { (it.presentNs - r.t0) / 1e6 } ?: Double.NaN
+        val firstMove = r.steps.getOrNull(1)?.get(0) ?: r.t0
+        val first = r.frames.firstOrNull()?.let { (it.presentNs - firstMove) / 1e6 } ?: Double.NaN
         val finalUs = r.steps.last()[1]
-        val exact = r.frames.firstOrNull { it.presentNs > r.lastMove && it.frameUs == finalUs && it.kind == "exact" }?.let { (it.presentNs - r.lastMove) / 1e6 } ?: Double.NaN
+        val atFinal = r.frames.filter { it.presentNs >= r.lastMove && it.frameUs == finalUs }
+        // The exact frame, or (no settle render followed it) the proven floor frame shown last at the final target.
+        val exactFrame = atFinal.firstOrNull { it.kind == "exact" } ?: atFinal.lastOrNull { it.kind == "floor" }
+        val exact = exactFrame?.let { (it.presentNs - r.lastMove) / 1e6 } ?: Double.NaN
         val kinds = moving.groupingBy { it.kind }.eachCount()
-        out("${s.label} | $case: ${r.steps.size} moves, ${moving.size} frames shown (strip ${kinds["strip"] ?: 0}, floor ${kinds["floor"] ?: 0}, exact ${kinds["exact"] ?: 0}); " +
+        out("${s.label} | $case: ${r.steps.size} moves, ${moving.size} frames shown (strip ${kinds["strip"] ?: 0}, floor ${kinds["floor"] ?: 0}, approx ${kinds["approx"] ?: 0}, exact ${kinds["exact"] ?: 0}); " +
             "out of order $ooo; ahead of target $ahead (exact-rule frames ahead $aheadExact); worst lag behind target ${f0(lag)} ms, behind finger ${f0(finger)} ms; " +
-            "rate %.1f fps; first frame ${f0(first)} ms after the first move; exact frame ${f0(exact)} ms after the last move; strip share %.0f %%".format(
+            "rate %.1f fps; first frame ${f0(first)} ms after the first move; exact frame ${f0(exact)} ms${if (exactFrame?.kind == "floor") " (floor)" else ""} after the last move; strip share %.0f %%".format(
                 if (spanS > 0) moving.size / spanS else Double.NaN, if (moving.isEmpty()) 0.0 else 100.0 * (kinds["strip"] ?: 0) / moving.size))
+        raw("${s.label} | $case S first move %.0f ms, last move %.0f ms, final target ${finalUs / 1000} ms".format((r.steps.getOrNull(1)?.get(0)?.minus(r.t0) ?: 0) / 1e6, (r.lastMove - r.t0) / 1e6))
         r.frames.chunked(30).forEach { ch -> raw("${s.label} | $case F " + ch.joinToString(" ") { "${it.frameUs / 1000}/${it.kind[0]}/${(it.shown - s.inUs) / 1000}/${"%.0f".format((it.presentNs - r.t0) / 1e6)}" }) }
     }
 
@@ -276,6 +290,6 @@ class Mp23ScrubTest : Mp12Base() {
         val r = run(stepUs, -1, settled = false) { _, el -> if (el > 1000) null else (stepUs - el * 1000).coerceAtLeast(0) to 16L }
         report("short backward sweep 1x (1 s) after the pause at ${paused / 1000} ms", r)
         out("${s.label} | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): " +
-            r.frames.take(6).joinToString(", ") { "${f0((it.presentNs - r.t0) / 1e6)}/${it.kind}/${f0((it.target - it.shown) / 1000.0)}" })
+            r.frames.take(6).joinToString(", ") { "${f0((it.presentNs - (r.steps.getOrNull(1)?.get(0) ?: r.t0)) / 1e6)}/${it.kind}/${f0((it.target - it.shown) / 1000.0)}" })
     }
 }
