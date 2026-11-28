@@ -76,6 +76,25 @@ class FrameCache<T>(val capacity: Int, private val onEvict: (T) -> Unit) {
         return if (b.run == endedRun && b.seq == lastSeqOfRun(b.run)) b.item else null
     }
 
+    /**
+     * MP2.3 B2: how many cached frames at or before [t], from its floor frame back, are consecutive in one run (each the
+     * frame decoded just before the next): the backward steps from [t] the cache answers without a decode. 0 when the floor
+     * frame is not proven ([floorExact]).
+     */
+    fun runBefore(t: Long): Int {
+        if (floorExact(t) == null) return 0
+        var i = entries.indexOfLast { it.pts <= t }
+        var n = 1
+        while (i > 0) {
+            val b = entries[i - 1]; val a = entries[i]
+            if (b.run != a.run || b.seq + 1 != a.seq) break
+            n++; i--
+        }
+        return n
+    }
+    /** MP2.3 B2: the smallest cached pts (Long.MAX_VALUE when empty). */
+    fun firstPts(): Long = entries.firstOrNull()?.pts ?: Long.MAX_VALUE
+
     /** Whether the newest frame of the current run lies at or after [t] (a forward decode has reached it). */
     fun lastPts(): Long = entries.filter { it.run == run }.maxByOrNull { it.seq }?.pts ?: Long.MIN_VALUE
 

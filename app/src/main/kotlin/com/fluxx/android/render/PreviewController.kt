@@ -62,14 +62,33 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
             renderer=CompositionRenderer(app,repository,surface,width,height)
             samplingRenderer=renderer
             var approximateShown=false
+            // MP2.3: an exact frame was shown while paused: once idle for BEHIND_IDLE_MS, decode behind it (then tick the strip builder).
+            var behindDue=false
             while(isActive && !closed) {
                 // AUD2 B2: after an approximate scrub frame, the exact frame follows once no request came for SETTLE_MS.
                 var settle=false
                 if(!playing) {
                     if(approximateShown) settle=withTimeoutOrNull(ScrubPolicy.SETTLE_MS) { changes.receive() } == null
+                    else if(behindDue && withTimeoutOrNull(ScrubPolicy.BEHIND_IDLE_MS) { changes.receive() } == null) {
+                        behindDue=false
+                        val idleEpoch=generation.get(); val idleProject=project
+                        try {
+                            renderer.decodeBehind(idleProject,lastShownTime) { closed || playing || generation.get()!=idleEpoch }
+                            if(generation.get()==idleEpoch) renderer.stripTick(idleProject,lastShownTime)
+                        } catch(e: java.util.concurrent.CancellationException) { if(closed) break }
+                        catch(e: Exception) { android.util.Log.w("Fluxx","Idle decode skipped",e) }
+                        continue
+                    }
                     // MP2.1: paused with a warm decoder held: wake to release it after its 3 s delay (no frame is drawn).
-                    else if(renderer.warmHeld) { if(withTimeoutOrNull(500) { changes.receive() } == null) { renderer.warmIdle(); continue } }
-                    else changes.receive()
+                    // MP2.3: likewise while the strip builder has work (it is planned here, on the render thread).
+                    else if(!behindDue && (renderer.warmHeld || renderer.stripWantsTick)) {
+                        if(withTimeoutOrNull(500) { changes.receive() } == null) {
+                            renderer.warmIdle()
+                            runCatching { renderer.stripTick(project,lastShownTime) }
+                            continue
+                        }
+                    }
+                    else if(!behindDue) changes.receive()
                 } else changes.tryReceive()
                 val epoch=generation.get()
                 val snapshot=project
@@ -135,6 +154,7 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
                         renderer.playing=playing // MP1.2: decoders of clips that ended close at the cut
                         renderer.renderPreview(snapshot,frameTime,quality,cancel)
                         approximateShown=!playing && renderer.lastFrameApproximate
+                        behindDue=!playing && !approximateShown && !cancel()
                         if(!cancel()) {
                             lastDrawTime=frameTime;lastShownTime=frameTime
                             position(epoch,if (playing) frameTime else requestedUs);status(epoch,null)
