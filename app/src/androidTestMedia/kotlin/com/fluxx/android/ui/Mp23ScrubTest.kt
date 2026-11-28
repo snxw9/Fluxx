@@ -260,12 +260,17 @@ class Mp23ScrubTest : Mp12Base() {
 
     // ---- the first backward step after a pause --------------------------------------------------------------------------
     /**
-     * Play 2 s, pause (the app's toggle: rest on the floor frame), wait 1 s; step one frame back (the exact frame's time);
+     * Play (once the frames really move, 2 s more), pause (the app's toggle: rest on the floor frame), wait until the
+     * decoder is idle (600 ms without a request); step one frame back (the exact frame's time);
      * then a short backward sweep at 1x for 1 s from there: the first new frame after its first move and the next 5.
      */
     private fun pauseStep(atUs: Long) {
         seek(atUs); pump(1500)
+        clearAll()
         main.runOnMainSync { editor.dispatch(EditorAction.SelectMarker(null)); c.play() }
+        // Real playback: wait (at most 10 s) until the presented frames have moved 1 s past the start, then play 2 s more.
+        val playUntil = System.nanoTime() + 10_000_000_000L
+        while (System.nanoTime() < playUntil && (rec.frames.lastOrNull()?.get(0) ?: 0) < atUs + 1_000_000) pump(100)
         pump(2000)
         clearAll()
         main.runOnMainSync {
@@ -273,11 +278,17 @@ class Mp23ScrubTest : Mp12Base() {
             val shownUs = rate.frameTimeUs(rate.floorFrame(editor.state.playheadUs))
             if (shownUs != editor.state.playheadUs) { editor.dispatch(EditorAction.Seek(shownUs)); c.seek(editor.state.playheadUs) }
         }
-        pump(1000)
-        val behind = rec.decoder.toList().filter { it.second.startsWith("behind") }
+        // Idle: no decoder request for 600 ms (the paused frame settled, decode-behind done), at most 8 s.
+        val idleUntil = System.nanoTime() + 8_000_000_000L
+        pump(400)
+        while (System.nanoTime() < idleUntil && System.nanoTime() - (rec.decoder.lastOrNull()?.first ?: 0L) < 600_000_000L) pump(100)
+        val behind = rec.decoder.toList().filter { it.second.startsWith("behind") } + probes.toList().filter { it.second.startsWith("behind") }
         var paused = 0L; main.runOnMainSync { paused = editor.state.playheadUs }
+        raw("${s.label} | pause trail " + (rec.decoder.toList() + probes.toList().filter { it.second.startsWith("behind") || it.second.startsWith("strip-") })
+            .sortedBy { it.first }.filter { !it.second.contains("how=cached") }.joinToString(" | ") { it.second.take(160) })
+        raw("${s.label} | pause renders " + renders.toList().joinToString(" ") { "${it.second}@${it.third / 1000}" })
         clearAll()
-        val stepAt = System.nanoTime(); val stepUs = paused - frameUs
+        val stepAt = System.nanoTime(); val stepUs = rate.frameTimeUs(rate.nearestFrame(paused) - 1)
         seek(stepUs)
         val until = System.nanoTime() + 3_000_000_000L
         while (System.nanoTime() < until && shown(stepAt).none { it.frameUs == stepUs && it.kind == "exact" }) frame()
@@ -285,6 +296,7 @@ class Mp23ScrubTest : Mp12Base() {
         val exactMs = shown(stepAt).firstOrNull { it.frameUs == stepUs && it.kind == "exact" }?.let { (it.presentNs - stepAt) / 1e6 } ?: Double.NaN
         out("${s.label} | first backward step after a pause at ${paused / 1000} ms: one frame back -> exact frame ${f0(exactMs)} ms (first shown ${step?.kind ?: "-"}); " +
             "decode-behind at the pause: ${behind.size}${behind.joinToString("") { " [" + it.second.substringAfter(' ').substringAfter(' ') + "]" }}")
+        raw("${s.label} | pause step D " + rec.decoder.toList().filter { it.first >= stepAt && it.second.startsWith("frame $key ") }.take(6).joinToString(" | ") { "${"%.1f".format((it.first - stepAt) / 1e6)} ${it.second.substringAfter(' ').substringAfter(' ')}" })
         pump(400)
         clearAll()
         val r = run(stepUs, -1, settled = false) { _, el -> if (el > 1000) null else (stepUs - el * 1000).coerceAtLeast(0) to 16L }

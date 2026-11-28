@@ -175,7 +175,10 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
         val want = cacheFrames - 1
         val have = cache.runBefore(timeUs)
         // Enough frames cached already, or the run reaches the stream's first picture (nothing lies before it).
-        if (have >= want || (have > 0 && firstFramePts >= 0 && cache.firstPts() <= firstFramePts)) return 0
+        if (have >= want || (have > 0 && firstFramePts >= 0 && cache.firstPts() <= firstFramePts)) {
+            probe?.invoke("behind-skip $probeKey t=$timeUs had=$have want=$want cache=${cache.ptsList().joinToString(",")}")
+            return 0
+        }
         var sync = prevSync(timeUs)
         // Fewer frames than wanted between that sync frame and the playhead: start one GOP earlier.
         if (timeUs - sync < want * frameUs && sync > streamStartUs.coerceAtLeast(0)) sync = prevSync(sync - 1)

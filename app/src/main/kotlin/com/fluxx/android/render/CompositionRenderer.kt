@@ -208,7 +208,10 @@ class CompositionRenderer(private val context: Context, private val repository: 
      * playhead, so the first backward steps are cache hits. Nothing is drawn. Cancellable by any new request.
      */
     fun decodeBehind(project: ProjectDocument, timeUs: Long, cancelled: () -> Boolean) {
-        if (strips == null || completeFrameProject !== project || completeFrameUs != timeUs) return
+        if (strips == null || completeFrameProject !== project || completeFrameUs != timeUs) {
+            MediaProbes.events?.invoke("behind-not-run t=$timeUs complete=$completeFrameUs same=${completeFrameProject === project}")
+            return
+        }
         behindRunning = true
         try {
             val done = HashSet<String>()
@@ -990,7 +993,10 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 val key=layerKeys[layer.id] ?: return@forEachActive
                 // MP2.3 B2: a fast sweep shows the source's strip picture at or before the target (no decoder seek per
                 // target); the exact frame follows 120 ms after the last move. Not covered there: the bounded decode below.
-                if(approximateFrames && stripFrames != null) {
+                // Where the open decoder is cheap for the target (its cache proves the frame, or it stands at most 200 ms
+                // before it: a slow forward sweep, the first steps back from a pause) it keeps serving it at full size,
+                // so it stays current and the exact frame needs no seek when the finger stops.
+                if(approximateFrames && stripFrames != null && decoders[key]?.decoder?.cheapFor(sourceTimeUs) != true) {
                     val probe=MediaProbes.events
                     val lookup=if(probe != null) System.nanoTime() else 0L
                     val hit=stripFrames.frame(uri,sourceTimeUs)
