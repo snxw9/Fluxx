@@ -272,7 +272,7 @@ class Mp23ScrubTest : Mp12Base() {
         val playUntil = System.nanoTime() + 10_000_000_000L
         while (System.nanoTime() < playUntil && (rec.frames.lastOrNull()?.get(0) ?: 0) < atUs + 1_000_000) pump(100)
         pump(2000)
-        clearAll()
+        val pauseAt = System.nanoTime()
         main.runOnMainSync {
             if (c.state.value.playing) c.pause()
             val shownUs = rate.frameTimeUs(rate.floorFrame(editor.state.playheadUs))
@@ -282,10 +282,10 @@ class Mp23ScrubTest : Mp12Base() {
         val idleUntil = System.nanoTime() + 8_000_000_000L
         pump(400)
         while (System.nanoTime() < idleUntil && System.nanoTime() - (rec.decoder.lastOrNull()?.first ?: 0L) < 600_000_000L) pump(100)
-        val behind = rec.decoder.toList().filter { it.second.startsWith("behind") } + probes.toList().filter { it.second.startsWith("behind") }
+        val behind = rec.decoder.toList().filter { it.first >= pauseAt && it.second.startsWith("behind") } + probes.toList().filter { it.first >= pauseAt && it.second.startsWith("behind") }
         var paused = 0L; main.runOnMainSync { paused = editor.state.playheadUs }
-        raw("${s.label} | pause trail " + (rec.decoder.toList() + probes.toList().filter { it.second.startsWith("behind") || it.second.startsWith("strip-") })
-            .sortedBy { it.first }.filter { !it.second.contains("how=cached") }.joinToString(" | ") { it.second.take(160) })
+        raw("${s.label} | pause trail (from Play) " + (rec.decoder.toList() + probes.toList().filter { it.second.startsWith("behind") || it.second.startsWith("strip-") || it.second.startsWith("warm") })
+            .sortedBy { it.first }.filter { !it.second.contains("how=cached") && !(it.second.startsWith("frame ") && it.second.contains("seek=-1") && it.first < pauseAt) }.joinToString(" | ") { "${"%.0f".format((it.first - pauseAt) / 1e6)} ${it.second.take(150)}" })
         raw("${s.label} | pause renders " + renders.toList().joinToString(" ") { "${it.second}@${it.third / 1000}" })
         clearAll()
         val stepAt = System.nanoTime(); val stepUs = rate.frameTimeUs(rate.nearestFrame(paused) - 1)

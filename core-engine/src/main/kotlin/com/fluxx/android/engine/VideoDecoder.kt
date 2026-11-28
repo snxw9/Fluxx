@@ -174,8 +174,10 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
         val start = SystemClock.elapsedRealtimeNanos()
         val want = cacheFrames - 1
         val have = cache.runBefore(timeUs)
-        // Enough frames cached already, or the run reaches the stream's first picture (nothing lies before it).
-        if (have >= want || (have > 0 && firstFramePts >= 0 && cache.firstPts() <= firstFramePts)) {
+        // Only when the frame before the playhead is NOT cached (DecoderPlan.BEHIND_RUN_BELOW): a run that a request then
+        // cancels half-way has evicted cached frames for nothing (on the A16 an MKV sync seek landed a GOP early and a step
+        // back that was a cache hit took 1.5-2.5 s). Also not when the run reaches the stream's first picture.
+        if (have >= minOf(want, DecoderPlan.BEHIND_RUN_BELOW) || (have > 0 && firstFramePts >= 0 && cache.firstPts() <= firstFramePts)) {
             probe?.invoke("behind-skip $probeKey t=$timeUs had=$have want=$want cache=${cache.ptsList().joinToString(",")}")
             return 0
         }

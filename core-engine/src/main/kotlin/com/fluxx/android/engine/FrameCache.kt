@@ -156,6 +156,12 @@ object DecoderPlan {
     const val CACHE_BYTES = 16L * 1024 * 1024
     /** While scrubbing ([approximate]), at most this many frames are decoded per request (the rest continues next time). */
     const val APPROX_DECODE_FRAMES = 4
+    /**
+     * MP2.3 B2: decode-behind runs only while fewer than this many frames (the playhead's own included) are cached as one
+     * run up to the playhead ([FrameCache.runBefore]): with the frame before it cached, the first step back is already a
+     * hit, and a run cancelled half-way would only evict what is there.
+     */
+    const val BEHIND_RUN_BELOW = 2
     /** MP2.1 B2: a request this far ahead of the last decoded frame decodes on cheaply (a few frames, no seek). */
     const val CHEAP_FORWARD_US = 200_000L
 

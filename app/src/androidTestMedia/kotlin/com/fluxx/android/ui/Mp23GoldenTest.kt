@@ -95,8 +95,12 @@ class Mp23GoldenTest {
                     // A fast backward sweep (8x: 8 frames per step) and a forward one, then their exact frames.
                     k = 540; while (k > 200) { scrub(rate.frameTimeUs(k)); k -= 8 }; compare(rate.frameTimeUs(k), "exact after a fast backward sweep")
                     while (k < 420) { scrub(rate.frameTimeUs(k)); k += 4 }; compare(rate.frameTimeUs(k), "exact after a forward sweep")
-                    // Pause: decode-behind, then steps back (cache hits on ON, decodes on OFF), then playback again.
-                    for (pause in listOf(300L, 451L)) {
+                    // A pause right on a sync frame of the H.264 source after a jump (only it and the next frame are cached, so
+                    // decode-behind decodes the GOP before it), and two ordinary pauses; then steps back (cache hits on ON,
+                    // decodes on OFF) and playback again.
+                    val syncPause = syncFrame(typical.first, 20_000_000L + 15_000_000L, 20_000_000L + 18_000_000L)?.let { rate.nearestFrame(it - 20_000_000L) }
+                    if (syncPause != null) { compare(rate.frameTimeUs(syncPause - 150), "jump"); compare(rate.frameTimeUs(syncPause), "paused frame on a sync frame") }
+                    for (pause in listOfNotNull(syncPause, 300L, 451L)) {
                         compare(rate.frameTimeUs(pause), "paused frame")
                         on.decodeBehind(project, rate.frameTimeUs(pause)) { false }
                         for (s in 1..6) compare(rate.frameTimeUs(pause - s), "step back after decode-behind")
@@ -115,6 +119,23 @@ class Mp23GoldenTest {
                 }
             }
         } finally { MediaProbes.events = null; VideoDecoder.testEvents = null }
+    }
+
+    /** The first sync sample time of [uri]'s video in [fromUs, toUs] whose sample before it is not a sync sample, or null. */
+    private fun syncFrame(uri: String, fromUs: Long, toUs: Long): Long? {
+        val ex = android.media.MediaExtractor()
+        try {
+            ex.setDataSource(context, android.net.Uri.parse(uri), null)
+            val t = (0 until ex.trackCount).first { ex.getTrackFormat(it).getString(android.media.MediaFormat.KEY_MIME)!!.startsWith("video/") }
+            ex.selectTrack(t); ex.seekTo(fromUs, android.media.MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+            var prevSync = true
+            while (ex.sampleTime in 0..toUs) {
+                val sync = ex.sampleFlags and android.media.MediaExtractor.SAMPLE_FLAG_SYNC != 0
+                if (sync && !prevSync && ex.sampleTime >= fromUs && ex.sampleTime % 33_333L < 1000) return ex.sampleTime
+                prevSync = sync; ex.advance()
+            }
+            return null
+        } finally { ex.release() }
     }
 
     private fun read(r: CompositionRenderer): Triple<ByteBuffer, ByteBuffer, ByteBuffer> {
