@@ -54,6 +54,7 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
         var preparingShown=false
         var validated:ProjectDocument?=null
         var lastDrawTime=-1L
+        var lastShownTime=-1L // MP2.1 B0 probe: the last frame time presented (survives the generation reset of lastDrawTime)
         var lastGeneration=-1L
         var lastRequestGeneration=-1L
         var renderedSize=SurfaceSize(width,height)
@@ -127,12 +128,13 @@ class PreviewController(context: Context, surface: Surface, width: Int, height: 
                     val frameTime=if(time>=duration) duration else rate.frameTimeUs(frame)
                     if(settle) lastDrawTime=-1
                     if(lastDrawTime!=frameTime) {
+                        PreviewFrames.testRender?.invoke(if(settle) "settle" else if(frameTime==lastShownTime) "redraw" else "frame",frameTime)
                         renderer.approximateFrames=!playing && !settle && scrubbing
                         renderer.playing=playing // MP1.2: decoders of clips that ended close at the cut
                         renderer.renderPreview(snapshot,frameTime,quality,cancel)
                         approximateShown=!playing && renderer.lastFrameApproximate
                         if(!cancel()) {
-                            lastDrawTime=frameTime
+                            lastDrawTime=frameTime;lastShownTime=frameTime
                             position(epoch,if (playing) frameTime else requestedUs);status(epoch,null)
                         }
                     }

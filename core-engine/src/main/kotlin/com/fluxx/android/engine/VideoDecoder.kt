@@ -45,6 +45,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
     private val probeKey = uri.toString().hashCode().toUInt().toString(16)
 
     init {
+        val openStart = SystemClock.elapsedRealtimeNanos()
         var frames = 3
         var made: FrameCache<Image>? = null
         try {
@@ -69,7 +70,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
                 codec = it
                 it.configure(format, reader!!.surface, null, 0); it.start()
             }
-            testEvents?.invoke("open $probeKey ${width}x$height cache=$frames codec=${codec?.name}")
+            testEvents?.invoke("open $probeKey ${width}x$height cache=$frames codec=${codec?.name} openus=${(SystemClock.elapsedRealtimeNanos() - openStart) / 1000}")
         } catch (e: Exception) {
             testEvents?.invoke("open-failed $probeKey ${e.javaClass.simpleName}: ${e.message}")
             releaseAll(made); throw e
@@ -83,11 +84,12 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
         val probeStart = if (probe != null) SystemClock.elapsedRealtimeNanos() else 0L
         val probeFrom = outPos
         var probeSeek = -1L
+        var seekNs = 0L
         var decoded = 0
         var how = "decode"
         lastApproximate = false; held = false
         // MP1 A3: shown= is the pts of the frame returned (the scrub display rule compares it with the target t=).
-        fun log(kind: String, shown: Image? = null) = probe?.invoke("$kind $probeKey t=$timeUs from=$probeFrom seek=$probeSeek decoded=$decoded how=$how us=${(SystemClock.elapsedRealtimeNanos() - probeStart) / 1000} shown=${shown?.let { it.timestamp / 1000 } ?: -1}")
+        fun log(kind: String, shown: Image? = null) = probe?.invoke("$kind $probeKey t=$timeUs from=$probeFrom seek=$probeSeek decoded=$decoded how=$how us=${(SystemClock.elapsedRealtimeNanos() - probeStart) / 1000} seekus=${seekNs / 1000} shown=${shown?.let { it.timestamp / 1000 } ?: -1}")
         try {
             if (approximate) {
                 // MP1 B1: scrubbing shows the nearest decoded frame AT OR BEFORE the target (bounded work), never a later one.
@@ -111,8 +113,10 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
                 return (cache.exact(timeUs) ?: requireNotNull(cache.nearest(timeUs)) { "The decoder returned no video frames" }.second).also { log("frame", it) }
             }
             if (action == DecoderPlan.Action.SEEK) {
+                val seekStart = if (probe != null) SystemClock.elapsedRealtimeNanos() else 0L
                 if (sync == Long.MIN_VALUE) sync = prevSync(timeUs)
                 seek(sync); probeSeek = sync
+                if (probe != null) seekNs = SystemClock.elapsedRealtimeNanos() - seekStart
             }
             // Decode forward until a frame after the target exists (the nearest-frame rule needs both neighbours).
             // MP1.2: also when nothing is cached yet: a target before the first frame (Project 1 clip 17: first frame at

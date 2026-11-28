@@ -579,7 +579,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 val limit = if (tierFetcher.inFlight > 0) importedDeadline else deadline
                 if (System.nanoTime() >= limit) break
                 if (RenderBridge.awaitTextTiers(session, 8) == 0) {
-                    if (!cancelled()) { renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled); PreviewFrames.presented() }
+                    if (!cancelled()) { PreviewFrames.testRender?.invoke("tier", timeUs); renderTarget(project, timeUs, previewTargetWidth, previewTargetHeight, cancelled); PreviewFrames.presented() }
                     return
                 }
             }
