@@ -1,0 +1,14 @@
+== b0-Mp21Test com.fluxx.android.ui.Mp21Test Sat Nov 28 03:04:23 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 376 
+== end b0-Mp21Test rc=0 wall=1103s fluxx-crash-lines=0 Sat Nov 28 03:22:47 WCAST 2026 | OK (7 tests) 
+== b0r2-Mp21Test com.fluxx.android.ui.Mp21Test Sat Nov 28 03:23:57 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 383 
+== end b0r2-Mp21Test rc=0 wall=1073s fluxx-crash-lines=0 Sat Nov 28 03:41:51 WCAST 2026 | OK (7 tests) 
+== b0-Mp11S1 com.fluxx.android.ui.Mp11ImportStressTest#s1LongSourceAlone Sat Nov 28 03:41:51 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 377 
+== end b0-Mp11S1 rc=0 wall=106s fluxx-crash-lines=0 Sat Nov 28 03:43:38 WCAST 2026 | OK (1 test) 
+== b5-Mp21GoldenTest com.fluxx.android.ui.Mp21GoldenTest Sat Nov 28 03:47:43 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 375 
+== end b5-Mp21GoldenTest rc=0 wall=119s fluxx-crash-lines=0 Sat Nov 28 03:49:42 WCAST 2026 | OK (1 test) 
+== b5-Mp21Test com.fluxx.android.ui.Mp21Test Sat Nov 28 03:49:43 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 370 
+== end b5-Mp21Test rc=0 wall=1100s fluxx-crash-lines=0 Sat Nov 28 04:08:04 WCAST 2026 | OK (7 tests) 
+== b5-Mp12Project1 com.fluxx.android.ui.Mp12Project1Test#project1Playthrough Sat Nov 28 04:08:05 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 374 
+== end b5-Mp12Project1 rc=0 wall=1098s fluxx-crash-lines=0 Sat Nov 28 04:26:24 WCAST 2026 | OK (1 test) 
+== b5-Mp12Matrix com.fluxx.android.ui.Mp12MixedSequenceTest Sat Nov 28 04:26:25 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 364 
+== ABORTED b5-Mp12Matrix (earlier after-APK; replaced by the first-frame fix build) Sat Nov 28 04:28:19 WCAST 2026

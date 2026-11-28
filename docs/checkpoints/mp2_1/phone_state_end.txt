@@ -1,0 +1,2 @@
+Sat Nov 28 03:43:08 WCAST 2026
+restored (paused session): low_power=1 stay_on=0 timeout=600000
