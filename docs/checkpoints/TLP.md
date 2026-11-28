@@ -59,6 +59,12 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). The wo
   - Waveforms appear in 0.4–0.95 s cold at any length (the 50-minute file took 541 s before) and 66–200 ms warm, built from the playhead outward and read from the PCM cache when it holds the audio.
   - The edit-list MP4s' ~21 ms waveform offset is gone: the waveform now uses playback's placement.
   - See `docs/checkpoints/TLV1_1.md`.
+- **MP2.1 (branch `mp2`, from `master` `6d7cde9`; NOT merged into `master`): cuts, re-entry and UI frame cost.**
+  - While playing, decoders are opened and positioned ahead of cuts and re-entries (UpcomingUse + WarmPool), inside the MP1.2 budget and cap.
+  - Cut freeze, worst: non-contiguous 840 -> 143 ms, alternating H.264/VP9 1718 -> 160 ms; every Project 1 cut under 100 ms.
+  - The playback position is UI state while playing: timeline recompositions in 5 s 122 -> 1, clip rows 1342 -> 33, UI frame p95 38 -> 16 ms (test clock).
+  - Project 1 peak PSS 425 MB (MP1.2: 306), MemAvailable min 585 MB, plays to the end. The re-entry 1.5x target was missed (scene jitter floor). No excess presented frames on current code.
+  - See `docs/checkpoints/MP2_1.md`.
 - **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1, TLP.2, TLP.3 and TL3 (phone test lists at the end of each section).
 
 ## T0. Selection architecture (written before the code)

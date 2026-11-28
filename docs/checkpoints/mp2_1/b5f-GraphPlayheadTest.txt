@@ -1,0 +1,35 @@
+current=1
+test=liveValueTypedValueAndLibraryDragsKeepThePlayhead
+current=1
+test=liveValueTypedValueAndLibraryDragsKeepThePlayhead
+current=2
+test=playheadOnAKeyframe
+current=2
+test=playheadOnAKeyframe
+current=3
+test=valueGraphEditsKeepThePlayheadAndADoubleTapSeeksOnce
+current=3
+test=valueGraphEditsKeepThePlayheadAndADoubleTapSeeksOnce
+current=4
+test=speedGraphEditsKeepThePlayhead
+current=4
+test=speedGraphEditsKeepThePlayhead
+current=5
+test=playheadOnMarkers
+current=5
+test=playheadOnMarkers
+current=6
+test=transformGraphEditsKeepThePlayhead
+current=6
+test=transformGraphEditsKeepThePlayhead
+current=7
+test=nextOntoAKeyframeThenDrag
+current=7
+test=nextOntoAKeyframeThenDrag
+current=8
+test=animatorOffsetGraphEditsKeepThePlayhead
+current=8
+test=animatorOffsetGraphEditsKeepThePlayhead
+INSTRUMENTATION_RESULT: stream=
+OK (8 tests)
+INSTRUMENTATION_CODE: -1

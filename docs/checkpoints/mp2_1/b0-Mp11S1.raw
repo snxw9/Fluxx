@@ -1,0 +1,59 @@
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp11ImportStressTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.fluxx.android.ui.Mp11ImportStressTest:
+INSTRUMENTATION_STATUS: test=s1LongSourceAlone
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp11ImportStressTest start: low_power=0 plugged=AC level=80 percent temperature=37.7C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1: 23-char name, 5.02 GB, content://media/external/video/media/1001714724
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: before: Java Heap 17.0 MB, Native Heap 18.1 MB, Graphics 50.9 MB, Private Other 5.1 MB, System 24.3 MB, TOTAL PSS 166.0 MB, TOTAL RSS 244.0 MB; threads 51, fds 197, decoders opened 0 closed 0; jobs in flight: thumbnails 0, peaks 0, PCM runs 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: batch 1/1 (1 clips) returned in 206 ms; composition 3018.3 s; timeline content 1019767 px at the default zoom (Compose limit 262143)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: main-thread messages over 50 ms during the add: 1 | 296 ms Handler (android.os.Handler) {ee5907f} androidx.test.espresso.util.concurrent.ListenableFutureTask@aff684c[Not completed]: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: 1 clips added in 206 ms (layers now 1); UI frames during the add n=4 p50=9.0 p95=270.4 p99=270.4 max=270.4 ms, over 100 ms 2; undo depth 1
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: +10 s: PSS 224 MB (Java 15, native 21, graphics 96); threads 62, fds 369, decoders opened 1 closed 0; jobs in flight: thumbnails 0, peaks 0, PCM runs 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: +20 s: PSS 223 MB (Java 15, native 21, graphics 96); threads 62, fds 369, decoders opened 1 closed 0; jobs in flight: thumbnails 0, peaks 0, PCM runs 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: +30 s: PSS 221 MB (Java 15, native 21, graphics 96); threads 62, fds 369, decoders opened 1 closed 0; jobs in flight: thumbnails 0, peaks 0, PCM runs 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: +40 s: PSS 222 MB (Java 15, native 22, graphics 96); threads 62, fds 369, decoders opened 1 closed 0; jobs in flight: thumbnails 0, peaks 0, PCM runs 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: +50 s: PSS 222 MB (Java 15, native 22, graphics 96); threads 62, fds 369, decoders opened 1 closed 0; jobs in flight: thumbnails 0, peaks 0, PCM runs 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: +60 s: PSS 222 MB (Java 15, native 22, graphics 96); threads 62, fds 369, decoders opened 1 closed 0; jobs in flight: thumbnails 0, peaks 0, PCM runs 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: observation UI frames n=0 p50=NaN p95=NaN p99=NaN max=NaN ms, over 100 ms 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: UI frames while playing n=0 p50=NaN p95=NaN p99=NaN max=NaN ms, over 100 ms 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: play from 0: first frame 299 ms, first sound 1226 ms, 416 frames in 15 s, status ''
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: after (twirl open 15 s): Java Heap 12.0 MB, Native Heap 8.8 MB, Graphics 96.0 MB, Private Other 5.0 MB, System 42.8 MB, TOTAL PSS 198.6 MB, TOTAL RSS 267.7 MB; threads 66, fds 411, decoders opened 1 closed 0; jobs in flight: thumbnails 0, peaks 0, PCM runs 1
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: PSS before 166 / peak 226 / after 199 MB; graphics before 51 / peak 96 / after 96 MB
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP11=s1 50-minute file: RESULT no crash
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp11ImportStressTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=s1LongSourceAlone
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 100.362
+
+OK (1 test)
+
+
+INSTRUMENTATION_CODE: -1

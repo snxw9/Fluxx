@@ -1,0 +1,15 @@
+current=1
+test=dButtonGeometryStatesAndFade
+current=1
+test=dButtonGeometryStatesAndFade
+current=2
+test=selectionModeEntryTapRulesAndExit
+current=2
+test=selectionModeEntryTapRulesAndExit
+current=3
+test=backExitsAndOddEvenReplaceTheSelection
+current=3
+test=backExitsAndOddEvenReplaceTheSelection
+INSTRUMENTATION_RESULT: stream=
+OK (3 tests)
+INSTRUMENTATION_CODE: -1

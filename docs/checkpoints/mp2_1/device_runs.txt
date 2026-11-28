@@ -12,3 +12,28 @@
 == end b5-Mp12Project1 rc=0 wall=1098s fluxx-crash-lines=0 Sat Nov 28 04:26:24 WCAST 2026 | OK (1 test) 
 == b5-Mp12Matrix com.fluxx.android.ui.Mp12MixedSequenceTest Sat Nov 28 04:26:25 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 364 
 == ABORTED b5-Mp12Matrix (earlier after-APK; replaced by the first-frame fix build) Sat Nov 28 04:28:19 WCAST 2026
+== end b5-Mp12Matrix rc=0 wall=147s fluxx-crash-lines=0 Sat Nov 28 04:28:53 WCAST 2026 | 
+== b5-Mp1CullGoldenTest com.fluxx.android.ui.Mp1CullGoldenTest Sat Nov 28 04:28:54 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 370 
+== b5f-Mp21GoldenTest com.fluxx.android.ui.Mp21GoldenTest Sat Nov 28 04:28:59 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 370 
+== end b5-Mp1CullGoldenTest rc=0 wall=8s fluxx-crash-lines=0 Sat Nov 28 04:29:02 WCAST 2026 | 
+== end b5f-Mp21GoldenTest rc=0 wall=113s fluxx-crash-lines=0 Sat Nov 28 04:30:54 WCAST 2026 | OK (1 test) 
+== b5f-Mp21Test com.fluxx.android.ui.Mp21Test Sat Nov 28 04:30:55 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 364 
+== end b5f-Mp21Test rc=0 wall=1092s fluxx-crash-lines=0 Sat Nov 28 04:49:08 WCAST 2026 | OK (7 tests) 
+== b5f-Mp12Project1 com.fluxx.android.ui.Mp12Project1Test#project1Playthrough Sat Nov 28 04:49:09 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 378 
+== end b5f-Mp12Project1 rc=0 wall=1100s fluxx-crash-lines=0 Sat Nov 28 05:07:30 WCAST 2026 | OK (1 test) 
+== b5f-Mp12Matrix com.fluxx.android.ui.Mp12MixedSequenceTest Sat Nov 28 05:07:30 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 367 
+== end b5f-Mp12Matrix rc=0 wall=432s fluxx-crash-lines=0 Sat Nov 28 05:14:43 WCAST 2026 | OK (6 tests) 
+== b5f-Mp1CullGoldenTest com.fluxx.android.ui.Mp1CullGoldenTest Sat Nov 28 05:14:44 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 365 
+== end b5f-Mp1CullGoldenTest rc=0 wall=45s fluxx-crash-lines=0 Sat Nov 28 05:15:30 WCAST 2026 | OK (1 test) 
+== b5f-TimeAuditTest com.fluxx.android.ui.TimeAuditTest Sat Nov 28 05:15:31 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 367 
+== end b5f-TimeAuditTest rc=0 wall=139s fluxx-crash-lines=0 Sat Nov 28 05:17:50 WCAST 2026 | OK (7 tests) 
+== b5f-GraphPlayheadTest com.fluxx.android.ui.GraphPlayheadTest Sat Nov 28 05:17:51 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 363 
+== end b5f-GraphPlayheadTest rc=0 wall=94s fluxx-crash-lines=0 Sat Nov 28 05:19:25 WCAST 2026 | OK (8 tests) 
+== b5f-Tl3UiTest com.fluxx.android.ui.Tl3UiTest Sat Nov 28 05:19:26 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 366 
+== end b5f-Tl3UiTest rc=0 wall=40s fluxx-crash-lines=0 Sat Nov 28 05:20:07 WCAST 2026 | OK (7 tests) 
+== b5f-Tl31UiTest com.fluxx.android.ui.Tl31UiTest Sat Nov 28 05:20:08 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 368 
+== end b5f-Tl31UiTest rc=0 wall=59s fluxx-crash-lines=0 Sat Nov 28 05:21:08 WCAST 2026 | OK (10 tests) 
+== b5f-Tlv11UiTest com.fluxx.android.ui.Tlv11UiTest Sat Nov 28 05:21:08 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 361 
+== end b5f-Tlv11UiTest rc=0 wall=30s fluxx-crash-lines=0 Sat Nov 28 05:21:39 WCAST 2026 | OK (4 tests) 
+== b5f-TlpUiTest com.fluxx.android.ui.TlpUiTest Sat Nov 28 05:21:39 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 365 
+== end b5f-TlpUiTest rc=0 wall=21s fluxx-crash-lines=0 Sat Nov 28 05:22:00 WCAST 2026 | OK (3 tests) 

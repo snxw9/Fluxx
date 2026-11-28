@@ -327,7 +327,7 @@ class Mp21Test : Mp12Base() {
                 }
                 try { ui = uiFrames(compose.activity.window) { play(); pump(5000); pause() } }
                 finally { android.os.Looper.getMainLooper().setMessageLogging(null) }
-                out("a5 UI cost run $run (30 clips, timeline + preview, 5 s of playback): timeline compositions ${TimelineProbe.viewCompositions.get()}, clip-row compositions ${TimelineProbe.rowCompositions.get()}; " +
+                out("a5 UI cost run $run (30 clips, timeline + preview, 5 s of playback): timeline compositions ${TimelineProbe.viewCompositions.get()}, clip-row compositions ${TimelineProbe.rowCompositions.get()}, playhead pill compositions ${TimelineProbe.playheadCompositions.get()}; " +
                     "UI frames ${ui.size} p50 %.1f p95 %.1f p99 %.1f max %.1f ms; main thread %.0f ms busy in $messages messages, worst %.1f ms".format(
                         Aud2Bench.pct(ui, .5), Aud2Bench.pct(ui, .95), Aud2Bench.pct(ui, .99), ui.maxOrNull() ?: 0.0, total / 1e6, worst / 1e6))
                 pump(800)
