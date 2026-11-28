@@ -1,0 +1,33 @@
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv11TilesTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.fluxx.android.ui.Tlv11TilesTest:
+INSTRUMENTATION_STATUS: test=a2TheLastTileFillsToTheClipsRealEndAndTheFirstStartsAtItsRealStart
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Tlv11TilesTest start: low_power=0 plugged=AC level=80 percent temperature=36.1C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11=short clip (end inside): box 776.0 px, tile 135.0 px, full 776.3 px, lead 0.0 px; 6 tiles drawn, first Tile(index=0, x=0.0, width=135.0), last Tile(index=5, x=675.0, width=101.25)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11=long clip at its start (end cut by the window): box 1755.0 px, tile 135.0 px, full 20274.0 px, lead 0.0 px; 13 tiles drawn, first Tile(index=0, x=0.0, width=135.0), last Tile(index=12, x=1620.0, width=135.0)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11=long clip at its end (start far before the window): box 1509.0 px, tile 135.0 px, full 20274.0 px, lead 18765.0 px; 12 tiles drawn, first Tile(index=139, x=0.0, width=135.0), last Tile(index=150, x=1485.0, width=23.9625)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11=long clip at its end, 77 dp/s: box 1264.0 px, tile 135.0 px, full 13009.1 px, lead 11745.1 px; 10 tiles drawn, first Tile(index=87, x=0.0, width=135.0), last Tile(index=96, x=1215.0, width=49.12594)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv11TilesTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=a2TheLastTileFillsToTheClipsRealEndAndTheFirstStartsAtItsRealStart
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 11.996
+
+OK (1 test)
+
+
+INSTRUMENTATION_CODE: -1

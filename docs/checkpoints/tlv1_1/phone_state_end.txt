@@ -1,0 +1,5 @@
+end Sat Nov 28 02:19:46 WCAST 2026
+--- Project 1 (after)
+9256 2026-11-28 00:53:37.987539540 +0100
+crash buffer lines: 7, fluxx lines: 0
+restored: low_power=1 stay_on=0 timeout=600000

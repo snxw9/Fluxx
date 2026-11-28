@@ -1,0 +1,12 @@
+found at Sat Nov 28 01:35:29 WCAST 2026: low_power=1 stay_on_while_plugged_in=0 screen_off_timeout=600000 (read above)
+  AC powered: true
+  USB powered: false
+  level: 80
+  temperature: 359
+  mWakefulness=Awake
+    mShowingDream=false mDreamingLockscreen=false
+    isKeyguardShowing=false
+--- Project 1 (before)
+9256 2026-11-28 00:53:37.987539540 +0100
+--- session: stayon true, timeout 600000, low_power 0
+now low_power=0 stay_on=15

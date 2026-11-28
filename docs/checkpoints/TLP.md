@@ -53,6 +53,12 @@ Branch `tlp`, created from `master` at `2377a83` (after the graph merge). The wo
   - No zoom ceiling: frame-level zoom (2400 dp/s, 225 px per frame at 30 fps on the A16) at 50 minutes and 3 hours.
   - The widest timeline node is 2160 px instead of 200,000, and the node count does not grow with length.
   - See `docs/checkpoints/TLV1.md`.
+- **TLV1.1 (branch `tlv`; NOT merged into `master`): fixes from Snxw's phone test of TLV1.**
+  - A key drag that auto-scrolled the timeline now seeks the playhead to the key on release (the ease-back with no seek was TL3.1's design, not a regression).
+  - The last thumbnail tile fills to the clip's real end.
+  - Waveforms appear in 0.4–0.95 s cold at any length (the 50-minute file took 541 s before) and 66–200 ms warm, built from the playhead outward and read from the PCM cache when it holds the audio.
+  - The edit-list MP4s' ~21 ms waveform offset is gone: the waveform now uses playback's placement.
+  - See `docs/checkpoints/TLV1_1.md`.
 - **Tests and phone acceptance:** the latest results are in each section's Tests list. Phone acceptance is pending for TLP, TLP.1, TLP.2, TLP.3 and TL3 (phone test lists at the end of each section).
 
 ## T0. Selection architecture (written before the code)
