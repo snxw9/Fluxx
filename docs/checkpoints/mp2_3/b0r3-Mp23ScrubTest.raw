@@ -1,0 +1,959 @@
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=
+com.fluxx.android.ui.Mp23ScrubTest:
+INSTRUMENTATION_STATUS: test=b01H264Typical
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp23ScrubTest start: low_power=0 plugged=AC level=65 percent temperature=38.3C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical): '〈INTERSTELLAR ✨〉My Hero Academia' avc 1920x1080 30.00 fps, 60.0 s; clip: source 0.0-60.0 s
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical): state low_power=0 plugged=AC level=65 percent temperature=38.3C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical): GOP 329 sync frames in 1800 samples; sync interval p50 33 max 3667 ms (1.0 frames p50)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical): strip: not in this build
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | slow backward (1 frame / 100 ms): 30 moves, 29 frames shown (strip 0, floor 3, approx 25, exact 1); out of order 24; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 4033 ms, behind finger 4033 ms; rate 9.1 fps; first frame 15 ms after the first move; exact frame 9 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | slow backward (1 frame / 100 ms) S first move 109 ms, last move 3186 ms, final target 58033 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | slow backward (1 frame / 100 ms) F 58966/e/58966/124 58933/f/58933/236 58900/f/58900/342 58866/a/54833/519 58833/a/54966/578 58800/a/55100/685 58766/a/55233/819 58733/a/55366/921 58700/a/55500/1037 58666/a/55633/1152 58633/a/55766/1258 58600/a/55900/1376 58566/a/56033/1476 58533/a/56166/1587 58500/a/56300/1683 58466/a/56433/1815 58433/a/56566/1923 58400/a/56700/2072 58366/a/56833/2163 58333/a/56966/2255 58300/a/57100/2360 58266/a/57233/2471 58233/a/57366/2571 58200/a/57500/2684 58166/a/57633/2793 58133/a/57766/2936 58100/a/57900/3018 58066/a/58033/3126 58033/f/58033/3195
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | backward 1x (3000 ms): 56 moves, 2 frames shown (strip 0, floor 1, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 0 ms; rate 0.7 fps; first frame 15 ms after the first move; exact frame 552 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | backward 1x (3000 ms) S first move 21 ms, last move 3003 ms, final target 56000 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | backward 1x (3000 ms) F 58966/e/58966/37 58933/f/58933/90 56000/a/54833/3112 56000/e/56000/3556
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | forward 1x (3000 ms): 55 moves, 35 frames shown (strip 0, floor 31, approx 3, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 100 ms, behind finger 100 ms; rate 11.8 fps; first frame 23 ms after the first move; exact frame 51 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | forward 1x (3000 ms) S first move 28 ms, last move 2973 ms, final target 3966 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | forward 1x (3000 ms) F 1033/e/1033/52 1366/a/1266/409 1433/a/1400/489 1500/f/1500/539 1566/f/1566/581 1600/f/1600/623 1666/f/1666/732 1733/f/1733/790 1833/f/1833/855 1900/f/1900/927 1933/f/1933/960 2000/f/2000/1074 2066/f/2066/1098 2133/f/2133/1157 2166/f/2166/1226 2500/a/2466/1547 2566/f/2566/1627 2633/f/2633/1658 2766/f/2766/1807 2833/f/2833/1863 2900/f/2900/1917 2933/f/2933/1968 3100/f/3100/2133 3166/f/3166/2183 3200/f/3200/2237 3266/f/3266/2302 3333/f/3333/2356 3366/f/3366/2399 3433/f/3433/2471 3500/f/3500/2524
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | forward 1x (3000 ms) F 3533/f/3533/2555 3566/f/3566/2640 3633/f/3633/2664 3700/f/3700/2717 3733/f/3733/2748 3966/f/3966/3024
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | backward 2x (3000 ms): 73 moves, 6 frames shown (strip 0, floor 3, approx 2, exact 1); out of order 2; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 367 ms, behind finger 300 ms; rate 2.0 fps; first frame 9 ms after the first move; exact frame 1004 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | backward 2x (3000 ms) S first move 23 ms, last move 2991 ms, final target 53033 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | backward 2x (3000 ms) F 58966/e/58966/32 55200/a/54833/1941 55133/a/54966/1971 55033/f/55033/2003 54966/f/54966/2032 54800/f/54800/2138 53033/a/51833/3518 53033/e/53033/3995
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | forward 2x (3000 ms): 72 moves, 62 frames shown (strip 0, floor 59, approx 2, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 133 ms, behind finger 200 ms; rate 20.7 fps; first frame 26 ms after the first move; exact frame 23 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | forward 2x (3000 ms) S first move 23 ms, last move 2990 ms, final target 6966 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | forward 2x (3000 ms) F 1033/e/1033/49 1166/f/1166/123 1233/f/1233/145 1333/f/1333/188 1400/f/1400/233 1500/f/1500/276 1566/f/1566/313 1666/f/1666/360 1733/f/1733/391 1833/f/1833/433 1900/f/1900/471 2000/f/2000/520 2066/f/2066/568 2133/f/2133/601 2233/f/2233/652 2300/f/2300/691 2400/f/2400/731 2466/f/2466/774 2566/f/2566/811 2633/f/2633/867 2800/f/2800/936 2900/f/2900/979 2966/f/2966/1016 3066/f/3066/1070 3133/f/3133/1086 3233/f/3233/1150 3300/f/3300/1186 3400/f/3400/1235 3500/f/3500/1284 3600/f/3600/1331
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | forward 2x (3000 ms) F 3666/f/3666/1369 3766/f/3766/1432 3866/f/3866/1466 3966/f/3966/1519 4066/f/4066/1568 4166/f/4166/1606 4233/f/4233/1645 4400/f/4400/1732 4500/f/4500/1774 4566/f/4566/1813 4633/f/4633/1864 4733/f/4733/1895 4833/f/4833/1946 5166/f/5166/2125 5266/f/5266/2155 5333/f/5333/2195 5433/f/5433/2250 5533/f/5533/2296 5600/f/5600/2328 5700/f/5700/2383 5800/f/5800/2420 5866/f/5866/2451 6266/a/6133/2670 6333/a/6266/2703 6400/f/6400/2724 6466/f/6466/2768 6566/f/6566/2807 6633/f/6633/2847 6733/f/6733/2910 6800/f/6800/2932
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | forward 2x (3000 ms) F 6900/f/6900/2979 6966/f/6966/3014
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | backward 4x (3000 ms): 73 moves, 6 frames shown (strip 0, floor 3, approx 2, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 67 ms, behind finger 67 ms; rate 2.0 fps; first frame 27 ms after the first move; exact frame 431 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | backward 4x (3000 ms) S first move 24 ms, last move 2977 ms, final target 47100 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | backward 4x (3000 ms) F 58933/e/58933/51 54966/a/54933/1046 54800/f/54800/1054 54333/f/54333/1198 52000/a/51933/1782 51866/f/51866/1792 47100/f/47100/3408
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | forward 4x (3000 ms): 78 moves, 54 frames shown (strip 0, floor 0, approx 53, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 600 ms, behind finger 733 ms; rate 18.0 fps; first frame 23 ms after the first move; exact frame 254 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | forward 4x (3000 ms) S first move 22 ms, last move 3003 ms, final target 13000 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | forward 4x (3000 ms) F 1066/e/1066/45 1266/a/1233/104 1466/a/1366/149 1633/a/1500/187 1833/a/1633/242 1966/a/1766/274 2133/a/1900/318 2300/a/2033/347 2433/a/2166/392 2600/a/2300/425 2766/a/2433/487 2933/a/2566/519 3100/a/2700/570 3266/a/2833/596 3433/a/2966/636 3600/a/3100/680 3733/a/3233/710 3866/a/3366/743 4033/a/3500/789 4200/a/3633/820 4366/a/3766/877 4500/a/3900/902 6400/a/6233/1390 6600/a/6366/1440 6766/a/6500/1470 6933/a/6633/1513 7066/a/6766/1543 7233/a/6900/1584 7366/a/7033/1615 7533/a/7166/1656
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | forward 4x (3000 ms) F 7666/a/7300/1700 7833/a/7433/1738 8000/a/7566/1784 8166/a/7700/1845 8400/a/7833/1881 8566/a/7966/1925 8700/a/8100/1968 8833/a/8233/1997 9600/a/9366/2177 9733/a/9500/2216 9900/a/9633/2249 10100/a/9766/2297 10233/a/9900/2332 10633/a/10166/2438 10800/a/10300/2486 10933/a/10433/2513 11100/a/10566/2553 11233/a/10700/2592 11366/a/10833/2625 11533/a/10966/2663 11833/a/11233/2740 12566/a/12266/2918 12700/a/12400/2949 12833/a/12533/2986 13000/a/12666/3045 13000/e/13000/3257
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | backward 8x (3000 ms): 81 moves, 2 frames shown (strip 0, floor 2, approx 0, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 0 ms; rate 0.7 fps; first frame 517 ms after the first move; exact frame 485 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | backward 8x (3000 ms) S first move 21 ms, last move 2997 ms, final target 35033 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | backward 8x (3000 ms) F 54833/f/54833/539 51733/f/51733/921 35033/a/34500/3155 35033/e/35033/3482
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | forward 8x (3000 ms): 79 moves, 13 frames shown (strip 0, floor 0, approx 12, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 1967 ms, behind finger 1967 ms; rate 4.4 fps; first frame 42 ms after the first move; exact frame 825 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | forward 8x (3000 ms) S first move 20 ms, last move 2963 ms, final target 24700 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | forward 8x (3000 ms) F 1133/e/1133/62 1533/a/1300/99 1833/a/1433/139 2133/a/1566/171 2433/a/1700/203 2700/a/1833/237 3033/a/1966/276 3300/a/2100/316 3600/a/2233/345 3866/a/2366/397 4166/a/2500/424 4433/a/2633/466 4733/a/2766/499 24700/a/24333/3566 24700/e/24700/3788
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | first backward step after a pause at 31333 ms: one frame back -> exact frame 15 ms (first shown exact); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | short backward sweep 1x (1 s) after the pause at 31333 ms: 29 moves, 12 frames shown (strip 0, floor 9, approx 2, exact 1); out of order 2; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 300 ms, behind finger 300 ms; rate 12.2 fps; first frame 25 ms after the first move; exact frame 8 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | short backward sweep 1x (1 s) after the pause at 31333 ms S first move 21 ms, last move 981 ms, final target 30333 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | short backward sweep 1x (1 s) after the pause at 31333 ms F 31266/e/31266/46 31166/f/31166/170 31133/f/31133/186 31100/f/31100/221 31066/f/31066/260 30933/f/30933/395 30833/f/30833/475 30733/f/30733/592 30433/a/30133/906 30400/a/30266/933 30366/f/30366/970 30333/f/30333/989
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 25/exact/0, 149/floor/0, 165/floor/0, 200/floor/0, 239/floor/0, 373/floor/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | first backward step after a pause at 46866 ms: one frame back -> exact frame 12 ms (first shown exact); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | short backward sweep 1x (1 s) after the pause at 46866 ms: 28 moves, 2 frames shown (strip 0, floor 1, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 0 ms; rate 2.0 fps; first frame 22 ms after the first move; exact frame 494 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | short backward sweep 1x (1 s) after the pause at 46866 ms S first move 25 ms, last move 997 ms, final target 45833 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | short backward sweep 1x (1 s) after the pause at 46866 ms F 46800/e/46800/47 46600/f/46600/246 45833/a/44633/1135 45833/e/45833/1491
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 22/exact/0, 220/floor/0, 1109/approx/1200, 1466/exact/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p30 (typical) | back-and-forth 2x every 400 ms (4000 ms): 110 moves, 49 frames shown (strip 0, floor 45, approx 4, exact 0); out of order 2; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 233 ms, behind finger 300 ms; rate 12.3 fps; first frame 778 ms after the first move; exact frame 21 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | back-and-forth 2x every 400 ms (4000 ms) S first move 19 ms, last move 3991 ms, final target 29966 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | back-and-forth 2x every 400 ms (4000 ms) F 29933/a/29700/797 30000/a/29833/832 29933/f/29933/858 29866/f/29866/877 29600/f/29600/1017 29533/f/29533/1050 29766/a/29600/1522 29966/f/29966/1645 29866/f/29866/1673 29633/f/29633/1829 29533/f/29533/1840 29233/f/29233/2030 29300/f/29300/2069 29366/f/29366/2110 29433/f/29433/2139 29500/f/29500/2179 29566/f/29566/2206 29633/f/29633/2246 29733/f/29733/2300 29800/f/29800/2331 29866/f/29866/2366 29966/f/29966/2428 29933/f/29933/2442 29866/f/29866/2480 29533/f/29533/2653 29266/a/29233/2825 29233/f/29233/2832 29300/f/29300/2881 29400/f/29400/2933 29466/f/29466/2962
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p30 (typical) | back-and-forth 2x every 400 ms (4000 ms) F 29566/f/29566/3018 29633/f/29633/3054 29733/f/29733/3098 29833/f/29833/3140 29900/f/29900/3178 29966/f/29966/3216 29933/f/29933/3245 29866/f/29866/3288 29233/f/29233/3623 29233/f/29233/3629 29300/f/29300/3682 29366/f/29366/3718 29466/f/29466/3760 29566/f/29566/3811 29633/f/29633/3845 29733/f/29733/3894 29800/f/29800/3939 29900/f/29900/3976 29966/f/29966/4013
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=b01H264Typical
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=b02H264Long24
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp23ScrubTest start: low_power=0 plugged=AC level=66 percent temperature=38.3C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal): 'ALL THE MONEY - NARUTO (AMV⧸Edit' avc 1920x1080 24.00 fps, 60.0 s; clip: source 0.0-60.0 s
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal): state low_power=0 plugged=AC level=66 percent temperature=38.3C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal): GOP 396 sync frames in 1438 samples; sync interval p50 42 max 2669 ms (1.0 frames p50)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal): strip: not in this build
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | slow backward (1 frame / 100 ms): 30 moves, 24 frames shown (strip 0, floor 20, approx 3, exact 1); out of order 2; ahead of target 0 (exact-rule frames ahead 1); worst lag behind target 359 ms, behind finger 359 ms; rate 7.2 fps; first frame 15 ms after the first move; exact frame 155 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | slow backward (1 frame / 100 ms) S first move 113 ms, last move 3312 ms, final target 57750 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | slow backward (1 frame / 100 ms) F 58916/e/58933/127 58875/f/58850/255 58791/a/58767/482 58750/f/58725/573 58708/f/58683/693 58666/f/58641/811 58625/f/58600/924 58583/f/58558/1115 58541/f/58516/1146 58500/f/58475/1260 58416/a/58058/1581 58375/a/58224/1625 58333/f/58308/1752 58291/f/58266/1849 58250/f/58224/1968 58208/f/58183/2080 58125/f/58099/2311 58083/f/58058/2411 58041/f/58016/2529 58000/f/57974/2649 57916/f/57891/2985 57875/f/57849/2999 57791/f/57766/3233 57750/f/57724/3326 57750/e/57766/3467
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | backward 1x (3000 ms): 85 moves, 47 frames shown (strip 0, floor 42, approx 5, exact 0); out of order 3; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 235 ms, behind finger 194 ms; rate 15.8 fps; first frame 56 ms after the first move; exact frame 158 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | backward 1x (3000 ms) S first move 22 ms, last move 2980 ms, final target 56000 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | backward 1x (3000 ms) F 58916/f/58892/78 58875/f/58850/111 58750/a/58725/233 58708/f/58683/241 58708/f/58683/272 58666/f/58641/312 58625/f/58600/346 58583/f/58558/378 58541/f/58516/480 58500/f/58475/490 58333/a/58183/638 58291/f/58266/679 58291/f/58266/694 58250/f/58224/731 58208/f/58183/767 58166/f/58141/798 58083/f/58058/914 58041/f/58016/923 58000/f/57974/956 58000/f/57974/989 57958/f/57932/1028 57708/f/57682/1267 57666/f/57640/1290 57625/f/57599/1336 57375/f/57348/1605 57250/f/57223/1746 57083/f/57057/1900 57041/f/57015/1931 57000/f/56973/1963 56958/f/56931/1998
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | backward 1x (3000 ms) F 56875/f/56848/2114 56750/a/56514/2240 56708/a/56681/2267 56708/f/56681/2280 56666/f/56639/2310 56625/f/56598/2346 56583/f/56556/2375 56583/f/56556/2410 56416/f/56389/2558 56375/f/56347/2585 56250/a/56139/2750 56208/f/56181/2772 56166/f/56139/2801 56125/f/56097/2828 56125/f/56097/2856 56083/f/56056/2895 56000/f/55972/2999 56000/e/56014/3138
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | forward 1x (3000 ms): 77 moves, 74 frames shown (strip 0, floor 74, approx 0, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 41 ms, behind finger 82 ms; rate 24.8 fps; first frame 71 ms after the first move; exact frame 147 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | forward 1x (3000 ms) S first move 24 ms, last move 2982 ms, final target 3958 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | forward 1x (3000 ms) F 1083/f/1042/95 1125/f/1084/137 1125/f/1084/156 1166/f/1126/220 1208/f/1167/250 1250/f/1209/279 1291/f/1251/306 1333/f/1292/347 1333/f/1292/361 1375/f/1334/410 1416/f/1376/445 1458/f/1418/473 1458/f/1418/488 1541/f/1501/571 1583/f/1543/611 1625/f/1584/637 1666/f/1626/679 1666/f/1626/693 1708/f/1668/750 1750/f/1710/784 1791/f/1751/816 1833/f/1793/868 1875/f/1835/898 1916/f/1876/926 1958/f/1918/970 1958/f/1918/992 2000/f/1960/1046 2041/f/2002/1082 2083/f/2043/1115 2125/f/2085/1159
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | forward 1x (3000 ms) F 2166/f/2127/1213 2208/f/2168/1247 2250/f/2210/1295 2291/f/2252/1341 2333/f/2293/1384 2375/f/2335/1426 2458/f/2419/1472 2500/f/2460/1514 2541/f/2502/1555 2583/f/2544/1611 2625/f/2585/1656 2666/f/2627/1685 2708/f/2669/1735 2750/f/2711/1774 2791/f/2752/1820 2833/f/2794/1877 2875/f/2836/1901 2916/f/2877/1947 2958/f/2919/1997 3000/f/2961/2035 3041/f/3003/2065 3083/f/3044/2115 3125/f/3086/2158 3166/f/3128/2193 3208/f/3169/2221 3250/f/3211/2272 3291/f/3253/2319 3333/f/3294/2362 3375/f/3336/2392 3416/f/3378/2434
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | forward 1x (3000 ms) F 3458/f/3420/2483 3500/f/3461/2529 3541/f/3503/2556 3583/f/3545/2602 3625/f/3586/2645 3666/f/3628/2680 3708/f/3670/2722 3750/f/3712/2769 3791/f/3753/2808 3833/f/3795/2851 3875/f/3837/2885 3916/f/3878/2923 3958/f/3920/2961 3958/f/3920/2988 3958/e/3962/3129
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | backward 2x (3000 ms): 82 moves, 22 frames shown (strip 0, floor 15, approx 6, exact 1); out of order 3; ahead of target 0 (exact-rule frames ahead 1); worst lag behind target 279 ms, behind finger 279 ms; rate 7.3 fps; first frame 24 ms after the first move; exact frame 253 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | backward 2x (3000 ms) S first move 23 ms, last move 2998 ms, final target 52958 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | backward 2x (3000 ms) F 58916/e/58933/48 58583/f/58558/212 58541/f/58516/222 58291/a/58141/390 58208/f/58183/414 58125/f/58099/433 57625/f/57599/673 57000/f/56973/988 56625/a/56514/1206 56541/f/56514/1220 56458/f/56431/1254 56041/f/56014/1471 55541/a/55430/1743 55500/f/55472/1762 55416/f/55388/1784 54875/a/54763/2083 54791/f/54763/2098 54708/f/54679/2133 54208/a/53928/2420 54125/a/54095/2454 54041/f/54012/2466 54000/f/53970/2502 52958/a/52719/3060 52958/e/52969/3251
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | forward 2x (3000 ms): 84 moves, 81 frames shown (strip 0, floor 80, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 1); worst lag behind target 41 ms, behind finger 122 ms; rate 27.1 fps; first frame 32 ms after the first move; exact frame 172 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | forward 2x (3000 ms) S first move 23 ms, last move 2985 ms, final target 6958 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | forward 2x (3000 ms) F 1041/e/1042/55 1125/f/1084/84 1208/f/1167/123 1250/f/1209/157 1333/f/1292/191 1416/f/1376/236 1458/f/1418/257 1541/f/1501/290 1583/f/1543/325 1666/f/1626/360 1750/f/1710/394 1791/f/1751/416 1875/f/1835/457 1916/f/1876/488 2000/f/1960/525 2083/f/2043/568 2125/f/2085/591 2208/f/2168/627 2250/f/2210/653 2333/f/2293/699 2416/f/2377/737 2458/f/2419/752 2541/f/2502/803 2625/f/2585/835 2666/f/2627/861 2791/f/2752/926 2875/f/2836/959 2958/f/2919/1001 3000/f/2961/1035 3083/f/3044/1080
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | forward 2x (3000 ms) F 3166/f/3128/1106 3250/f/3211/1147 3333/f/3294/1208 3375/f/3336/1237 3458/f/3420/1264 3541/f/3503/1304 3625/f/3586/1352 3791/f/3753/1439 3875/f/3837/1477 4000/f/3962/1535 4083/f/4045/1582 4166/f/4129/1612 4250/f/4212/1654 4333/f/4295/1696 4416/f/4379/1745 4500/f/4462/1774 4541/f/4504/1808 4625/f/4587/1834 4708/f/4671/1875 4750/f/4713/1900 4833/f/4796/1948 4916/f/4879/1987 5000/f/4963/2029 5083/f/5046/2079 5166/f/5130/2100 5208/f/5171/2132 5291/f/5255/2178 5375/f/5338/2222 5458/f/5422/2261 5541/f/5505/2303
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | forward 2x (3000 ms) F 5625/f/5588/2333 5708/f/5672/2379 5750/f/5714/2403 5833/f/5797/2442 5916/f/5880/2483 6000/f/5964/2522 6083/f/6047/2568 6166/f/6131/2594 6208/f/6172/2623 6291/f/6256/2661 6333/f/6297/2690 6416/f/6381/2734 6458/f/6423/2751 6541/f/6506/2784 6583/f/6548/2811 6666/f/6631/2842 6708/f/6673/2880 6750/f/6715/2902 6833/f/6798/2941 6875/f/6840/2964 6958/f/6923/3004 6958/e/6965/3158
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | backward 4x (3000 ms): 83 moves, 10 frames shown (strip 0, floor 9, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 1); worst lag behind target 36 ms, behind finger 36 ms; rate 3.4 fps; first frame 24 ms after the first move; exact frame 260 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | backward 4x (3000 ms) S first move 22 ms, last move 2980 ms, final target 47041 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | backward 4x (3000 ms) F 58875/e/58892/46 55375/f/55346/931 54708/f/54679/1086 54583/f/54554/1121 53958/f/53928/1277 52666/f/52635/1589 52041/f/52010/1754 48958/f/48923/2520 48291/f/48256/2686 47833/f/47797/2819 47041/f/47005/3092 47041/e/47047/3240
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | forward 4x (3000 ms): 86 moves, 80 frames shown (strip 0, floor 77, approx 2, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 1); worst lag behind target 40 ms, behind finger 204 ms; rate 27.0 fps; first frame 28 ms after the first move; exact frame 192 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | forward 4x (3000 ms) S first move 19 ms, last move 2968 ms, final target 12875 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | forward 4x (3000 ms) F 1083/e/1084/47 1250/f/1209/100 1375/f/1334/121 1500/f/1459/165 1666/f/1626/200 1791/f/1751/226 1916/f/1876/256 2041/f/2002/293 2166/f/2127/326 2333/f/2293/365 2458/f/2419/394 2583/f/2544/425 2750/f/2711/472 2875/f/2836/494 3000/f/2961/519 3125/f/3086/561 3250/f/3211/585 3375/f/3336/619 3500/f/3461/666 3666/f/3628/693 3791/f/3753/732 3916/f/3878/750 4041/f/4004/788 4166/f/4129/832 4333/f/4295/874 4500/f/4462/906 4625/f/4587/925 4750/f/4713/959 4875/f/4838/988 5000/f/4963/1018
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | forward 4x (3000 ms) F 5125/f/5088/1062 5250/f/5213/1108 5416/f/5380/1143 5583/f/5547/1176 5708/f/5672/1203 5875/f/5839/1266 6041/f/6006/1294 6208/f/6172/1338 6333/f/6297/1360 6500/f/6464/1410 6666/f/6631/1446 6833/f/6798/1502 7000/f/6965/1530 7166/f/7132/1586 7333/f/7298/1605 7458/f/7424/1649 7583/f/7549/1671 7708/f/7674/1701 7833/f/7799/1745 7958/f/7924/1771 8083/f/8049/1796 8208/f/8174/1839 8375/f/8341/1880 8541/f/8508/1927 8708/f/8675/1969 8875/f/8842/2011 9000/f/8967/2043 9375/a/9342/2117 9500/f/9467/2164 9625/f/9592/2185
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | forward 4x (3000 ms) F 9750/f/9718/2225 9916/f/9884/2265 10083/f/10051/2299 10208/f/10176/2325 10333/f/10301/2353 10458/f/10427/2393 10583/f/10552/2414 10708/f/10677/2450 10833/f/10802/2484 10916/f/10885/2502 11041/f/11011/2535 11291/a/11261/2617 11666/f/11636/2694 11791/f/11761/2725 11916/f/11886/2763 12083/f/12053/2819 12250/f/12220/2853 12416/f/12387/2884 12541/f/12512/2916 12708/f/12679/2966 12875/f/12846/3011 12875/e/12887/3160
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | backward 8x (3000 ms): 88 moves, 8 frames shown (strip 0, floor 6, approx 2, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 88 ms, behind finger 306 ms; rate 2.7 fps; first frame 139 ms after the first move; exact frame 336 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | backward 8x (3000 ms) S first move 18 ms, last move 2977 ms, final target 35166 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | backward 8x (3000 ms) F 58000/f/57974/157 56375/f/56347/376 54583/f/54554/558 52000/f/51968/906 41791/a/41750/2175 40708/f/40707/2304 39541/f/39539/2457 37041/a/36953/2774 35166/a/35035/3134 35166/e/35160/3313
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | forward 8x (3000 ms): 86 moves, 3 frames shown (strip 0, floor 0, approx 2, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 1); worst lag behind target 373 ms, behind finger 665 ms; rate 1.0 fps; first frame 18 ms after the first move; exact frame 349 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | forward 8x (3000 ms) S first move 21 ms, last move 3000 ms, final target 25000 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | forward 8x (3000 ms) F 1125/e/1126/40 1708/a/1459/124 2000/a/1626/169 25000/a/24816/3181 25000/e/24983/3349
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | first backward step after a pause at 31833 ms: one frame back -> exact frame - ms (first shown -); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | short backward sweep 1x (1 s) after the pause at 31833 ms: 32 moves, 18 frames shown (strip 0, floor 16, approx 2, exact 0); out of order 1; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 261 ms, behind finger 261 ms; rate 18.1 fps; first frame 63 ms after the first move; exact frame 259 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | short backward sweep 1x (1 s) after the pause at 31833 ms S first move 21 ms, last move 997 ms, final target 30791 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | short backward sweep 1x (1 s) after the pause at 31833 ms F 31708/f/31698/84 31708/f/31698/107 31583/f/31573/221 31583/f/31573/233 31416/f/31406/382 31416/f/31406/402 31375/f/31364/437 31333/f/31322/475 31291/f/31281/500 31291/f/31281/527 31083/a/30822/749 31041/a/30989/780 31000/f/30989/791 31000/f/30989/819 30958/f/30947/860 30916/f/30905/895 30875/f/30864/927 30875/f/30864/945 30791/a/30780/1106 30791/e/30780/1255
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 63/floor/10, 86/floor/10, 200/floor/10, 212/floor/10, 361/floor/10, 381/floor/10
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | first backward step after a pause at 46875 ms: one frame back -> exact frame - ms (first shown -); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | short backward sweep 1x (1 s) after the pause at 46875 ms: 32 moves, 11 frames shown (strip 0, floor 11, approx 0, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 38 ms, behind finger 38 ms; rate 11.2 fps; first frame 51 ms after the first move; exact frame 151 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | short backward sweep 1x (1 s) after the pause at 46875 ms S first move 19 ms, last move 985 ms, final target 45833 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | short backward sweep 1x (1 s) after the pause at 46875 ms F 46791/f/46755/70 46625/f/46588/256 46500/f/46463/355 46458/f/46421/369 46458/f/46421/397 46416/f/46379/442 46375/f/46337/476 46125/f/46087/755 45916/f/45879/941 45875/f/45837/966 45833/f/45795/999 45833/e/45837/1136
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 51/floor/37, 237/floor/37, 336/floor/37, 350/floor/37, 378/floor/37, 423/floor/37
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=H.264 1080p24 (Seal) | back-and-forth 2x every 400 ms (4000 ms): 114 moves, 69 frames shown (strip 0, floor 68, approx 0, exact 1); out of order 2; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 13 ms, behind finger 95 ms; rate 17.3 fps; first frame 29 ms after the first move; exact frame 29 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | back-and-forth 2x every 400 ms (4000 ms) S first move 23 ms, last move 3999 ms, final target 30000 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | back-and-forth 2x every 400 ms (4000 ms) F 29958/e/29946/52 29250/f/29237/446 29291/f/29279/474 29458/f/29446/548 29500/f/29487/570 29583/f/29571/606 29625/f/29612/637 29708/f/29696/678 29791/f/29779/704 29833/f/29821/733 29916/f/29904/770 29958/f/29946/801 30000/f/29988/835 29916/f/29904/854 29875/f/29863/888 29291/f/29279/1197 29208/f/29195/1208 29250/f/29237/1237 29291/f/29279/1263 29375/f/29362/1304 29416/f/29404/1332 29500/f/29487/1363 29541/f/29529/1391 29625/f/29612/1440 29666/f/29654/1450 29750/f/29738/1495 29791/f/29779/1517 29875/f/29863/1558 29916/f/29904/1583 30000/f/29988/1628
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | back-and-forth 2x every 400 ms (4000 ms) F 29916/f/29904/1666 29250/f/29237/1998 29208/f/29195/2012 29250/f/29237/2044 29333/f/29320/2089 29375/f/29362/2119 29458/f/29446/2165 29500/f/29487/2195 29583/f/29571/2225 29666/f/29654/2258 29750/f/29738/2296 29833/f/29821/2337 29916/f/29904/2393 30000/f/29988/2418 29916/f/29904/2448 29250/f/29237/2808 29208/f/29195/2820 29291/f/29279/2867 29375/f/29362/2915 29458/f/29446/2959 29541/f/29529/2994 29583/f/29571/3025 29666/f/29654/3075 29750/f/29738/3112 29833/f/29821/3152 29916/f/29904/3199 30000/f/29988/3233 29916/f/29904/3254 29250/f/29237/3623 29208/f/29195/3635
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=H.264 1080p24 (Seal) | back-and-forth 2x every 400 ms (4000 ms) F 29291/f/29279/3671 29375/f/29362/3707 29458/f/29446/3744 29500/f/29487/3789 29666/f/29654/3867 29750/f/29738/3908 29833/f/29821/3946 29916/f/29904/3998 30000/f/29988/4028
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=b02H264Long24
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=b03Vp9Worst
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp23ScrubTest start: low_power=0 plugged=AC level=66 percent temperature=38.4C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case): 'Calc - Is There Someone Else？.mk' x-vnd.on2.vp9 1920x1440 20.00 fps, 122.8 s; clip: source 0.0-122.8 s
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case): state low_power=0 plugged=AC level=66 percent temperature=38.4C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case): GOP 38 sync frames in 2455 samples; sync interval p50 2950 max 5300 ms (59.0 frames p50)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case): strip: not in this build
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | slow backward (1 frame / 100 ms): 30 moves, 27 frames shown (strip 0, floor 6, approx 20, exact 1); out of order 20; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 2900 ms, behind finger 2900 ms; rate 8.3 fps; first frame 15 ms after the first move; exact frame 15 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | slow backward (1 frame / 100 ms) S first move 113 ms, last move 3245 ms, final target 120300 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | slow backward (1 frame / 100 ms) F 121700/e/121700/128 121650/f/121650/243 121550/a/118650/510 121500/a/118850/611 121450/a/119050/727 121400/a/119250/843 121350/a/119450/950 121300/a/119650/1082 121250/a/119850/1181 121200/a/120050/1298 121150/a/120250/1401 121100/a/120450/1548 121050/a/120650/1639 121000/a/120850/1734 120950/f/120950/1826 120900/f/120900/1915 120850/f/120850/2027 120750/a/118750/2299 120700/a/118950/2397 120650/a/119150/2510 120600/a/119350/2621 120550/a/119550/2729 120500/a/119750/2845 120450/a/119950/2957 120400/a/120150/3071 120350/f/120350/3183 120300/f/120300/3260
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | backward 1x (3000 ms): 95 moves, 2 frames shown (strip 0, floor 2, approx 0, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 0 ms; rate 0.7 fps; first frame 79 ms after the first move; exact frame 74 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | backward 1x (3000 ms) S first move 24 ms, last move 2997 ms, final target 118750 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | backward 1x (3000 ms) F 121650/f/121650/102 121650/f/121650/123 118750/f/118750/3070
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | forward 1x (3000 ms): 84 moves, 81 frames shown (strip 0, floor 81, approx 0, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 50 ms; rate 27.0 fps; first frame 70 ms after the first move; exact frame 34 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | forward 1x (3000 ms) S first move 24 ms, last move 2996 ms, final target 4000 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | forward 1x (3000 ms) F 1050/f/1050/94 1150/f/1150/153 1150/f/1150/178 1200/f/1200/223 1250/f/1250/242 1250/f/1250/271 1300/f/1300/323 1350/f/1350/344 1350/f/1350/372 1400/f/1400/442 1450/f/1450/451 1450/f/1450/478 1500/f/1500/527 1550/f/1550/544 1550/f/1550/572 1600/f/1600/631 1650/f/1650/641 1650/f/1650/670 1700/f/1700/738 1750/f/1750/755 1750/f/1750/776 1800/f/1800/830 1850/f/1850/845 1850/f/1850/871 1900/f/1900/938 1950/f/1950/952 1950/f/1950/981 2000/f/2000/1036 2050/f/2050/1049 2050/f/2050/1081
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | forward 1x (3000 ms) F 2100/f/2100/1159 2150/f/2150/1173 2200/f/2200/1237 2250/f/2250/1254 2250/f/2250/1283 2300/f/2300/1336 2350/f/2350/1347 2350/f/2350/1375 2400/f/2400/1444 2450/f/2450/1458 2500/f/2500/1526 2500/f/2500/1533 2550/f/2550/1579 2600/f/2600/1642 2650/f/2650/1657 2700/f/2700/1712 2700/f/2700/1730 2750/f/2750/1773 2800/f/2800/1826 2850/f/2850/1850 2850/f/2850/1880 2900/f/2900/1933 2950/f/2950/1958 2950/f/2950/1985 3000/f/3000/2046 3050/f/3050/2061 3100/f/3100/2110 3100/f/3100/2123 3150/f/3150/2160 3200/f/3200/2221
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | forward 1x (3000 ms) F 3200/f/3200/2230 3250/f/3250/2281 3300/f/3300/2344 3350/f/3350/2358 3400/f/3400/2417 3400/f/3400/2427 3450/f/3450/2468 3500/f/3500/2526 3550/f/3550/2544 3550/f/3550/2576 3600/f/3600/2647 3650/f/3650/2662 3700/f/3700/2733 3750/f/3750/2753 3750/f/3750/2777 3800/f/3800/2858 3850/f/3850/2878 3900/f/3900/2920 3900/f/3900/2934 3950/f/3950/2973 4000/f/4000/3030
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | backward 2x (3000 ms): 95 moves, 5 frames shown (strip 0, floor 4, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 0 ms; rate 1.7 fps; first frame 16 ms after the first move; exact frame 937 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | backward 2x (3000 ms) S first move 29 ms, last move 2985 ms, final target 115800 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | backward 2x (3000 ms) F 121700/e/121700/44 118650/f/118650/1564 118600/f/118600/1604 117050/f/117050/2386 117000/f/117000/2400 115800/a/113450/3110 115800/e/115800/3921
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | forward 2x (3000 ms): 84 moves, 74 frames shown (strip 0, floor 73, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 100 ms; rate 24.9 fps; first frame 30 ms after the first move; exact frame 37 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | forward 2x (3000 ms) S first move 23 ms, last move 2967 ms, final target 6950 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | forward 2x (3000 ms) F 1050/e/1050/53 1150/f/1150/110 1200/f/1200/125 1300/f/1300/181 1350/f/1350/191 1400/f/1400/237 1500/f/1500/268 1550/f/1550/291 1600/f/1600/344 1700/f/1700/384 1750/f/1750/392 1800/f/1800/441 1900/f/1900/467 1950/f/1950/490 2000/f/2000/550 2100/f/2100/578 2150/f/2150/590 2200/f/2200/635 2300/f/2300/668 2350/f/2350/687 2400/f/2400/739 2500/f/2500/765 2550/f/2550/793 2600/f/2600/846 2700/f/2700/873 2750/f/2750/887 2800/f/2800/921 2850/f/2850/944 2900/f/2900/993 3000/f/3000/1023
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | forward 2x (3000 ms) F 3050/f/3050/1043 3100/f/3100/1088 3200/f/3200/1125 3250/f/3250/1146 3400/f/3400/1231 3500/f/3500/1299 3600/f/3600/1344 3650/f/3650/1353 3750/f/3750/1416 3800/f/3800/1428 3950/f/3950/1498 4050/f/4050/1555 4100/f/4100/1574 4300/f/4300/1668 4350/f/4350/1693 4450/f/4450/1767 4500/f/4500/1780 4600/f/4600/1855 4700/f/4700/1892 4750/f/4750/1906 5000/f/5000/2011 5050/f/5050/2074 5150/f/5150/2106 5200/f/5200/2125 5350/f/5350/2192 5400/f/5400/2242 5500/f/5500/2277 5550/f/5550/2301 5750/f/5750/2408 5800/f/5800/2417
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | forward 2x (3000 ms) F 5850/f/5850/2473 5950/f/5950/2506 6000/f/6000/2518 6050/f/6050/2573 6150/f/6150/2598 6200/f/6200/2619 6300/f/6300/2694 6350/f/6350/2704 6500/f/6500/2770 6650/f/6650/2839 6700/f/6700/2884 6800/f/6800/2936 6850/f/6850/2946 6950/f/6950/3004
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | backward 4x (3000 ms): 96 moves, 3 frames shown (strip 0, floor 2, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 100 ms; rate 1.0 fps; first frame 24 ms after the first move; exact frame 338 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | backward 4x (3000 ms) S first move 23 ms, last move 2977 ms, final target 109850 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | backward 4x (3000 ms) F 121650/e/121650/48 116950/f/116950/1233 116850/f/116850/1245 109850/a/109200/3090 109850/e/109850/3315
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | forward 4x (3000 ms): 92 moves, 90 frames shown (strip 0, floor 89, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 150 ms; rate 30.2 fps; first frame 32 ms after the first move; exact frame 25 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | forward 4x (3000 ms) S first move 22 ms, last move 2981 ms, final target 12900 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | forward 4x (3000 ms) F 1100/e/1100/55 1250/f/1250/94 1400/f/1400/123 1500/f/1500/148 1650/f/1650/189 1750/f/1750/207 1850/f/1850/239 2000/f/2000/279 2100/f/2100/309 2250/f/2250/345 2400/f/2400/388 2650/f/2650/453 2850/f/2850/488 2950/f/2950/506 3050/f/3050/538 3200/f/3200/573 3300/f/3300/601 3450/f/3450/633 3550/f/3550/658 3650/f/3650/682 3800/f/3800/730 3900/f/3900/752 4050/f/4050/790 4150/f/4150/815 4300/f/4300/844 4450/f/4450/884 4550/f/4550/910 4650/f/4650/936 4800/f/4800/967 4900/f/4900/991
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | forward 4x (3000 ms) F 5000/f/5000/1028 5100/f/5100/1051 5250/f/5250/1088 5350/f/5350/1115 5500/f/5500/1150 5600/f/5600/1171 5700/f/5700/1201 5850/f/5850/1241 6000/f/6000/1266 6100/f/6100/1299 6200/f/6200/1329 6350/f/6350/1363 6450/f/6450/1395 6600/f/6600/1430 6700/f/6700/1453 6850/f/6850/1493 7000/f/7000/1531 7100/f/7100/1551 7250/f/7250/1596 7350/f/7350/1627 7500/f/7500/1649 7650/f/7650/1684 7750/f/7750/1714 7900/f/7900/1750 8000/f/8000/1779 8150/f/8150/1823 8300/f/8300/1857 8400/f/8400/1887 8550/f/8550/1924 8700/f/8700/1961
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | forward 4x (3000 ms) F 8850/f/8850/2002 9000/f/9000/2038 9150/f/9150/2071 9300/f/9300/2098 9400/f/9400/2133 9550/f/9550/2168 9650/f/9650/2191 9800/f/9800/2241 9950/f/9950/2269 10100/f/10100/2303 10250/f/10250/2341 10400/f/10400/2389 10550/f/10550/2418 10700/f/10700/2447 10850/f/10850/2491 10950/f/10950/2522 11100/f/11100/2558 11250/f/11250/2595 11400/f/11400/2628 11550/f/11550/2663 11650/f/11650/2696 11800/f/11800/2733 11950/f/11950/2768 12100/f/12100/2798 12200/f/12200/2831 12350/f/12350/2877 12500/f/12500/2913 12650/f/12650/2941 12800/f/12800/2980 12900/f/12900/3006
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | backward 8x (3000 ms): 101 moves, 5 frames shown (strip 0, floor 5, approx 0, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 300 ms; rate 1.7 fps; first frame 411 ms after the first move; exact frame 1434 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | backward 8x (3000 ms) S first move 20 ms, last move 2985 ms, final target 97900 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | backward 8x (3000 ms) F 118450/f/118450/430 113350/f/113350/1082 109050/f/109050/1607 103150/f/103150/2367 98100/f/98100/2982 97900/a/92950/3076 97900/e/97900/4419
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | forward 8x (3000 ms): 95 moves, 1 frames shown (strip 0, floor 0, approx 1, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 1000 ms, behind finger 1250 ms; rate 0.3 fps; first frame 330 ms after the first move; exact frame 383 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | forward 8x (3000 ms) S first move 24 ms, last move 2992 ms, final target 24900 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | forward 8x (3000 ms) F 3500/a/2500/353 24900/a/24150/3119 24900/e/24900/3374
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | first backward step after a pause at 63200 ms: one frame back -> exact frame 11 ms (first shown exact); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | short backward sweep 1x (1 s) after the pause at 63200 ms: 34 moves, 9 frames shown (strip 0, floor 9, approx 0, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 0 ms; rate 9.1 fps; first frame 68 ms after the first move; exact frame 1792 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | short backward sweep 1x (1 s) after the pause at 63200 ms S first move 21 ms, last move 994 ms, final target 62150 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | short backward sweep 1x (1 s) after the pause at 63200 ms F 63100/f/63100/90 62700/f/62700/479 62650/f/62650/506 62650/f/62650/532 62600/f/62600/567 62500/f/62500/695 62450/f/62450/711 62400/f/62400/741 62400/f/62400/768 62150/a/57350/1098 62150/e/62150/2785
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 68/floor/0, 458/floor/0, 485/floor/0, 511/floor/0, 546/floor/0, 673/floor/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | first backward step after a pause at 93850 ms: one frame back -> exact frame 17 ms (first shown exact); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | short backward sweep 1x (1 s) after the pause at 93850 ms: 33 moves, 8 frames shown (strip 0, floor 8, approx 0, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 50 ms; rate 8.0 fps; first frame 677 ms after the first move; exact frame 11 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | short backward sweep 1x (1 s) after the pause at 93850 ms S first move 23 ms, last move 1003 ms, final target 92800 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | short backward sweep 1x (1 s) after the pause at 93850 ms F 93100/f/93100/700 93100/f/93100/719 93050/f/93050/750 93050/f/93050/775 92900/f/92900/933 92850/f/92850/948 92850/f/92850/977 92800/f/92800/1014
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 677/floor/0, 695/floor/0, 727/floor/0, 751/floor/0, 910/floor/0, 925/floor/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1920x1440 20 fps (worst case) | back-and-forth 2x every 400 ms (4000 ms): 125 moves, 18 frames shown (strip 0, floor 17, approx 0, exact 1); out of order 2; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 0 ms; rate 4.5 fps; first frame 20 ms after the first move; exact frame 11 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | back-and-forth 2x every 400 ms (4000 ms) S first move 25 ms, last move 3982 ms, final target 61350 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1920x1440 20 fps (worst case) | back-and-forth 2x every 400 ms (4000 ms) F 61350/e/61350/46 61300/f/61300/764 61350/f/61350/793 61400/f/61400/824 61350/f/61350/855 61350/f/61350/1599 61400/f/61400/1621 61350/f/61350/1659 61300/f/61300/2383 61400/f/61400/2410 61350/f/61350/2440 61300/f/61300/2476 61300/f/61300/3156 61350/f/61350/3200 61350/f/61350/3229 61300/f/61300/3281 61300/f/61300/3965 61350/f/61350/3993
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=b03Vp9Worst
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=b04Vp91080
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp23ScrubTest start: low_power=0 plugged=AC level=67 percent temperature=38.5C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal): 'DECONSTRUCTION ⧸⧸ Naruto AMV⧸Edi' x-vnd.on2.vp9 1920x1080 23.00 fps, 60.0 s; clip: source 0.0-60.0 s
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal): state low_power=0 plugged=AC level=67 percent temperature=38.5C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal): GOP 10 sync frames in 1439 samples; sync interval p50 6256 max 6257 ms (143.9 frames p50)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal): strip: not in this build
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | slow backward (1 frame / 100 ms): 30 moves, 23 frames shown (strip 0, floor 0, approx 23, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 8573 ms, behind finger 8573 ms; rate 7.3 fps; first frame 212 ms after the first move; exact frame 2621 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | slow backward (1 frame / 100 ms) S first move 104 ms, last move 3156 ms, final target 57782 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | slow backward (1 frame / 100 ms) F 58956/a/50384/316 58913/a/50384/418 58826/a/50384/637 58782/a/50384/754 58739/a/50384/875 58695/a/50384/982 58608/a/50384/1202 58521/a/50384/1414 58478/a/50384/1504 58434/a/50384/1616 58391/a/50384/1730 58347/a/50384/1839 58304/a/50384/1948 58260/a/50384/2053 58217/a/50384/2162 58173/a/50384/2264 58130/a/50384/2368 58086/a/50384/2495 58043/a/50384/2603 58000/a/50384/2705 57956/a/50384/2821 57913/a/50384/2933 57826/a/50384/3146 57782/a/50384/3264 57782/e/57766/5778
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | backward 1x (3000 ms): 94 moves, 10 frames shown (strip 0, floor 1, approx 9, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 6298 ms, behind finger 6298 ms; rate 3.4 fps; first frame 76 ms after the first move; exact frame 3630 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | backward 1x (3000 ms) S first move 24 ms, last move 2967 ms, final target 56086 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | backward 1x (3000 ms) F 58956/f/58934/101 56347/a/50050/2706 56347/a/50050/2727 56304/a/50050/2763 56260/a/50050/2799 56217/a/50050/2834 56173/a/50050/2868 56130/a/50050/2905 56130/a/50050/2941 56086/a/50050/2976 56086/e/56098/6597
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | forward 1x (3000 ms): 81 moves, 78 frames shown (strip 0, floor 78, approx 0, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 41 ms, behind finger 59 ms; rate 26.2 fps; first frame 80 ms after the first move; exact frame 197 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | forward 1x (3000 ms) S first move 26 ms, last move 2972 ms, final target 3956 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | forward 1x (3000 ms) F 1086/f/1084/105 1086/f/1084/117 1130/f/1126/170 1173/f/1168/202 1217/f/1210/230 1217/f/1210/249 1260/f/1251/303 1304/f/1293/333 1347/f/1335/359 1347/f/1335/372 1391/f/1376/434 1434/f/1418/456 1434/f/1418/468 1478/f/1460/514 1521/f/1502/556 1565/f/1543/589 1565/f/1543/599 1608/f/1585/643 1652/f/1627/682 1695/f/1668/708 1739/f/1710/761 1739/f/1710/769 1782/f/1752/825 1826/f/1793/867 1869/f/1835/893 1913/f/1877/932 1956/f/1919/974 2000/f/1960/1010 2043/f/2002/1050 2086/f/2085/1103
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | forward 1x (3000 ms) F 2086/f/2085/1117 2130/f/2127/1176 2173/f/2169/1212 2217/f/2211/1257 2260/f/2252/1296 2304/f/2294/1325 2347/f/2336/1368 2391/f/2377/1415 2434/f/2419/1441 2434/f/2419/1468 2521/f/2503/1561 2565/f/2544/1602 2608/f/2586/1635 2652/f/2628/1687 2695/f/2669/1714 2739/f/2711/1760 2782/f/2753/1799 2826/f/2794/1831 2826/f/2794/1855 2869/f/2836/1912 2913/f/2878/1945 2956/f/2920/1984 3000/f/2961/2022 3043/f/3003/2061 3086/f/3086/2122 3130/f/3128/2147 3173/f/3170/2180 3173/f/3170/2204 3217/f/3212/2264 3260/f/3253/2298
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | forward 1x (3000 ms) F 3304/f/3295/2343 3347/f/3337/2382 3391/f/3378/2417 3434/f/3420/2452 3478/f/3462/2485 3521/f/3504/2531 3521/f/3504/2554 3565/f/3545/2609 3608/f/3587/2654 3652/f/3629/2699 3695/f/3670/2725 3739/f/3712/2763 3782/f/3754/2800 3826/f/3795/2849 3869/f/3837/2888 3913/f/3879/2917 3913/f/3879/2943 3956/f/3921/3005 3956/e/3962/3169
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | backward 2x (3000 ms): 95 moves, 26 frames shown (strip 0, floor 3, approx 23, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 1543 ms, behind finger 1543 ms; rate 8.7 fps; first frame 1333 ms after the first move; exact frame 2841 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | backward 2x (3000 ms) S first move 25 ms, last move 2997 ms, final target 53043 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | backward 2x (3000 ms) F 56347/a/54805/1357 56304/a/54805/1377 56260/a/54805/1408 56173/a/54805/1441 56130/a/54805/1475 56043/a/54805/1501 56000/a/54805/1531 55913/a/54805/1567 55869/a/54805/1605 55782/a/54805/1641 55695/a/54805/1674 55652/a/54805/1713 55565/a/54805/1750 55478/a/54805/1792 55434/a/54805/1827 55347/a/54805/1868 55260/a/54805/1903 55217/a/54805/1938 55130/a/54805/1963 55086/a/54805/1999 55000/a/54805/2034 54913/a/54805/2068 54869/a/54805/2104 54782/f/54763/2147 54695/f/54680/2183 54652/f/54638/2219 53043/a/43919/3103 53043/e/53053/5838
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | forward 2x (3000 ms): 88 moves, 87 frames shown (strip 0, floor 86, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 41 ms, behind finger 71 ms; rate 29.2 fps; first frame 20 ms after the first move; exact frame 151 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | forward 2x (3000 ms) S first move 22 ms, last move 2978 ms, final target 6956 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | forward 2x (3000 ms) F 1043/e/1043/42 1130/f/1126/84 1173/f/1168/120 1260/f/1251/162 1347/f/1335/200 1434/f/1418/245 1478/f/1460/260 1565/f/1543/296 1608/f/1585/325 1695/f/1668/361 1739/f/1710/392 1826/f/1793/439 1869/f/1835/459 1956/f/1919/488 2000/f/1960/520 2086/f/2085/562 2130/f/2127/592 2217/f/2211/623 2260/f/2252/653 2347/f/2336/684 2391/f/2377/718 2478/f/2461/761 2565/f/2544/805 2608/f/2586/819 2652/f/2628/858 2739/f/2711/892 2782/f/2753/921 2869/f/2836/969 2956/f/2920/996 3000/f/2961/1028
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | forward 2x (3000 ms) F 3086/f/3086/1076 3173/f/3170/1108 3217/f/3212/1128 3260/f/3253/1158 3347/f/3337/1204 3434/f/3420/1243 3521/f/3504/1272 3565/f/3545/1301 3608/f/3587/1338 3695/f/3670/1391 3782/f/3754/1421 3869/f/3837/1446 3913/f/3879/1482 4000/f/3962/1529 4086/f/4046/1568 4173/f/4171/1604 4217/f/4213/1637 4304/f/4296/1682 4391/f/4379/1718 4478/f/4463/1751 4521/f/4505/1787 4608/f/4588/1834 4695/f/4671/1872 4782/f/4755/1926 4826/f/4796/1947 4913/f/4880/1984 5000/f/4963/2026 5086/f/5047/2064 5130/f/5130/2099 5217/f/5214/2131
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | forward 2x (3000 ms) F 5260/f/5255/2156 5347/f/5339/2200 5391/f/5380/2226 5478/f/5464/2264 5521/f/5506/2289 5608/f/5589/2325 5652/f/5631/2350 5739/f/5714/2396 5826/f/5797/2435 5869/f/5839/2458 5956/f/5923/2504 6000/f/5964/2531 6086/f/6048/2566 6130/f/6089/2591 6217/f/6215/2634 6304/f/6298/2666 6347/f/6339/2689 6391/f/6381/2723 6478/f/6465/2764 6521/f/6506/2785 6608/f/6590/2820 6652/f/6631/2843 6695/f/6673/2873 6782/f/6757/2905 6826/f/6798/2934 6913/f/6882/2966 6956/f/6923/2992 6956/e/6965/3129
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | backward 4x (3000 ms): 98 moves, 32 frames shown (strip 0, floor 2, approx 30, exact 0); out of order 6; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 6249 ms, behind finger 6249 ms; rate 10.7 fps; first frame 72 ms after the first move; exact frame 2549 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | backward 4x (3000 ms) S first move 20 ms, last move 2982 ms, final target 47130 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | backward 4x (3000 ms) F 58826/a/56807/93 58695/a/56973/125 58565/a/57140/151 58434/a/57307/186 58260/a/57474/226 58086/a/57641/270 57956/a/57808/300 57826/f/57808/315 57695/f/57682/342 50043/a/43794/2262 49956/a/43794/2285 49826/a/43794/2312 49739/a/43794/2339 49608/a/43794/2365 49521/a/43794/2394 49391/a/43794/2421 49304/a/43794/2448 49173/a/43794/2483 49043/a/43794/2516 48913/a/43794/2561 48739/a/43794/2582 48652/a/43794/2614 48478/a/43794/2650 48347/a/43794/2693 48173/a/43794/2725 48043/a/43794/2768 47913/a/43794/2804 47739/a/43794/2842 47565/a/43794/2882 47434/a/43794/2926
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | backward 4x (3000 ms) F 47260/a/43794/2961 47130/a/43794/2999 47130/e/47131/5531
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | forward 4x (3000 ms): 85 moves, 80 frames shown (strip 0, floor 75, approx 4, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 40 ms, behind finger 212 ms; rate 26.9 fps; first frame 45 ms after the first move; exact frame 174 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | forward 4x (3000 ms) S first move 25 ms, last move 2975 ms, final target 12869 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | forward 4x (3000 ms) F 1086/e/1084/70 1565/f/1543/171 1695/f/1668/203 1826/f/1793/248 2000/f/1960/277 2130/f/2127/309 2260/f/2252/341 2391/f/2377/372 2521/f/2503/409 2652/f/2628/433 2782/f/2753/470 2913/f/2878/510 3043/f/3003/534 3173/f/3170/568 3260/f/3253/589 3391/f/3378/631 3521/f/3504/663 3652/f/3629/697 3782/f/3754/715 3913/f/3879/757 4043/f/4004/784 4130/f/4129/811 4434/f/4421/894 4608/f/4588/945 4913/f/4880/1011 5043/f/5005/1038 5173/f/5172/1083 5347/f/5339/1121 5478/f/5464/1163 5652/f/5631/1192
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | forward 4x (3000 ms) F 5782/f/5756/1228 5913/f/5881/1252 6043/f/6006/1284 6173/f/6173/1339 6347/f/6339/1371 6521/f/6506/1413 6652/f/6631/1435 6782/f/6757/1471 6913/f/6882/1505 7043/f/7007/1541 7217/a/7215/1587 7347/f/7340/1627 7521/f/7507/1669 7695/f/7674/1706 7826/f/7799/1733 8000/f/7966/1783 8086/f/8049/1800 8217/f/8216/1849 8391/f/8383/1886 8521/f/8508/1909 8652/f/8633/1944 8826/f/8800/1994 8956/f/8925/2025 9130/f/9092/2072 9304/a/9301/2111 9434/f/9426/2154 9565/f/9551/2177 9695/f/9676/2207 9869/f/9843/2257 10000/f/9968/2287
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | forward 4x (3000 ms) F 10173/f/10135/2328 10304/f/10302/2365 10434/f/10427/2398 10608/f/10594/2427 10739/f/10719/2460 10869/f/10844/2500 11043/f/11011/2554 11173/f/11136/2588 11347/a/11344/2627 11478/f/11470/2655 11608/f/11595/2680 11739/f/11720/2714 11869/f/11845/2748 12000/f/11970/2780 12173/f/12137/2827 12347/a/12345/2870 12434/f/12429/2905 12608/f/12596/2934 12739/f/12722/2964 12869/f/12847/2998 12869/e/12888/3150
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | backward 8x (3000 ms): 92 moves, 25 frames shown (strip 0, floor 1, approx 24, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 6293 ms, behind finger 6293 ms; rate 8.3 fps; first frame 364 ms after the first move; exact frame 3346 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | backward 8x (3000 ms) S first move 26 ms, last move 3000 ms, final target 35043 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | backward 8x (3000 ms) F 56086/a/55222/390 55869/a/55222/407 55652/a/55222/445 55391/a/55222/475 55086/f/55055/519 50086/a/43794/1138 49826/a/43794/1167 49521/a/43794/1206 49217/a/43794/1241 48913/a/43794/1282 48608/a/43794/1322 48304/a/43794/1359 48043/a/43794/1395 47739/a/43794/1433 47434/a/43794/1466 47173/a/43794/1515 46826/a/43794/1546 46521/a/43794/1586 46173/a/43794/1626 45913/a/43794/1662 45565/a/43794/1704 45260/a/43794/1749 45000/a/43794/1777 44695/a/43794/1817 44347/a/43794/1854 35043/a/25150/3086 35043/e/35035/6346
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | forward 8x (3000 ms): 95 moves, 7 frames shown (strip 0, floor 0, approx 6, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 838 ms, behind finger 838 ms; rate 2.3 fps; first frame 39 ms after the first move; exact frame 2918 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | forward 8x (3000 ms) S first move 22 ms, last move 2996 ms, final target 24956 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | forward 8x (3000 ms) F 1130/e/1126/61 1565/a/1335/113 2086/a/1668/173 2347/a/1835/204 2608/a/2002/234 2869/a/2169/261 3173/a/2336/297 24956/a/12638/3071 24956/e/24942/5915
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | first backward step after a pause at 30043 ms: one frame back -> exact frame 317 ms (first shown exact); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | short backward sweep 1x (1 s) after the pause at 30043 ms: 32 moves, 3 frames shown (strip 0, floor 3, approx 0, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 8 ms, behind finger 8 ms; rate 3.1 fps; first frame 72 ms after the first move; exact frame 3272 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | short backward sweep 1x (1 s) after the pause at 30043 ms S first move 23 ms, last move 973 ms, final target 29043 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | short backward sweep 1x (1 s) after the pause at 30043 ms F 29913/f/29905/95 29913/f/29905/121 29869/f/29863/164 29043/a/18894/1064 29043/e/29029/4245
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 72/floor/8, 99/floor/8, 141/floor/7, 1041/approx/10149, 4222/exact/14
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | first backward step after a pause at 46782 ms: one frame back -> exact frame 23 ms (first shown exact); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | short backward sweep 1x (1 s) after the pause at 46782 ms: 34 moves, 1 frames shown (strip 0, floor 1, approx 0, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 24 ms, behind finger 24 ms; rate 1.0 fps; first frame 59 ms after the first move; exact frame 2826 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | short backward sweep 1x (1 s) after the pause at 46782 ms S first move 22 ms, last move 992 ms, final target 45739 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | short backward sweep 1x (1 s) after the pause at 46782 ms F 46695/f/46672/81 45739/a/37663/1106 45739/e/45754/3818
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 59/floor/24, 1083/approx/8076, 3796/exact/-15
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=VP9 1080p (Seal) | back-and-forth 2x every 400 ms (4000 ms): 119 moves, 62 frames shown (strip 0, floor 19, approx 43, exact 0); out of order 7; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 4471 ms, behind finger 4384 ms; rate 15.5 fps; first frame 90 ms after the first move; exact frame 3484 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | back-and-forth 2x every 400 ms (4000 ms) S first move 20 ms, last move 3995 ms, final target 30043 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | back-and-forth 2x every 400 ms (4000 ms) F 29913/a/25442/110 29826/a/25609/142 29782/a/25776/173 29695/a/25943/194 29652/a/26109/231 29956/a/28737/794 29652/f/29613/1015 29608/f/29571/1045 29521/f/29488/1083 29521/f/29488/1352 29565/f/29530/1380 29652/f/29613/1416 29739/a/29655/1454 29782/a/29655/1488 29869/a/29655/1527 29956/a/29655/1565 30043/a/29655/1604 30000/a/29655/1642 29913/a/29655/1679 29826/a/29655/1717 29739/a/29655/1753 29695/a/29655/1789 29608/f/29571/1824 29565/f/29530/1862 29521/f/29488/2153 29565/f/29530/2180 29652/f/29613/2217 29739/a/29655/2256 29782/a/29655/2290 29869/a/29655/2326
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | back-and-forth 2x every 400 ms (4000 ms) F 29956/a/29655/2367 30043/a/29655/2403 30000/a/29655/2441 29913/a/29655/2479 29826/a/29655/2517 29782/a/29655/2550 29695/a/29655/2585 29608/f/29571/2625 29565/f/29530/2672 29521/f/29488/2965 29608/f/29571/2991 29695/a/29655/3031 29739/a/29655/3061 29826/a/29655/3098 29913/a/29655/3136 29956/a/29655/3175 30043/a/29655/3214 29956/a/29655/3249 29913/a/29655/3283 29826/a/29655/3324 29739/a/29655/3359 29695/a/29655/3398 29608/f/29571/3439 29521/f/29488/3479 29565/f/29530/3778 29652/f/29613/3805 29695/a/29655/3841 29782/a/29655/3874 29826/a/29655/3904 29869/a/29655/3933
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=VP9 1080p (Seal) | back-and-forth 2x every 400 ms (4000 ms) F 29956/a/29655/3974 30043/a/29655/4015 30043/e/30030/7479
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=b04Vp91080
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=b05HevcLong
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp23ScrubTest start: low_power=0 plugged=AC level=67 percent temperature=38.7C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00): 'Project 3 [F85C683].mp4' hevc 1920x1080 30.00 fps, 3018.3 s; clip: source 1200.0-1260.0 s
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00): state low_power=0 plugged=AC level=67 percent temperature=38.7C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00): GOP 61 sync frames in 1801 samples; sync interval p50 1000 max 1000 ms (30.0 frames p50)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00): strip: not in this build
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | slow backward (1 frame / 100 ms): 30 moves, 27 frames shown (strip 0, floor 16, approx 11, exact 0); out of order 11; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 600 ms, behind finger 600 ms; rate 8.5 fps; first frame 157 ms after the first move; exact frame 98 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | slow backward (1 frame / 100 ms) S first move 111 ms, last move 3168 ms, final target 58033 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | slow backward (1 frame / 100 ms) F 58933/a/58333/269 58900/a/58466/383 58866/a/58600/491 58833/a/58733/602 58800/f/58800/713 58766/f/58766/799 58733/f/58733/908 58700/f/58700/1018 58666/a/58100/1196 58633/a/58233/1258 58600/a/58366/1371 58566/a/58500/1491 58533/f/58533/1582 58500/f/58500/1662 58466/f/58466/1773 58433/f/58433/1881 58400/a/58100/2056 58366/a/58233/2120 58333/f/58333/2222 58300/f/58300/2305 58266/f/58266/2410 58233/f/58233/2518 58200/a/58100/2704 58166/f/58166/2755 58133/f/58133/2846 58100/f/58100/2965 58066/f/58066/3084 58033/f/58033/3266
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | backward 1x (3000 ms): 95 moves, 46 frames shown (strip 0, floor 27, approx 19, exact 0); out of order 6; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 867 ms, behind finger 867 ms; rate 15.3 fps; first frame 83 ms after the first move; exact frame 14 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | backward 1x (3000 ms) S first move 23 ms, last move 3002 ms, final target 56000 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | backward 1x (3000 ms) F 58933/a/58066/105 58900/a/58066/123 58866/a/58066/156 58833/a/58066/187 58800/a/58066/220 58766/a/58066/241 58733/a/58066/271 58700/a/58066/302 58666/a/58066/340 58633/a/58066/377 58600/a/58066/418 58566/a/58066/452 58533/a/58066/480 58500/a/58066/511 58466/a/58100/567 58433/a/58233/599 58366/f/58366/633 58333/f/58333/666 58333/f/58333/691 58300/f/58300/731 58266/f/58266/749 58233/f/58233/783 58166/f/58166/880 58133/f/58133/891 58100/f/58100/919 58066/f/58066/955 57433/a/57166/1584 57433/a/57300/1605 57400/f/57400/1641 57366/f/57366/1655
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | backward 1x (3000 ms) F 57333/f/57333/1694 57166/f/57166/1855 57133/f/57133/1875 57100/f/57100/1912 57066/f/57066/1948 57000/f/57000/2047 56400/a/56266/2647 56333/f/56333/2680 56333/f/56333/2689 56300/f/56300/2724 56266/f/56266/2758 56233/f/56233/2796 56100/f/56100/2915 56066/f/56066/2944 56033/f/56033/2976 56000/f/56000/3015
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 1x (3000 ms): 85 moves, 84 frames shown (strip 0, floor 83, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 67 ms; rate 28.3 fps; first frame 18 ms after the first move; exact frame 22 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 1x (3000 ms) S first move 21 ms, last move 2970 ms, final target 3966 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 1x (3000 ms) F 1033/e/1033/39 1066/f/1066/70 1100/f/1100/122 1133/f/1133/132 1166/f/1166/176 1166/f/1166/193 1200/f/1200/229 1233/f/1233/272 1266/f/1266/288 1300/f/1300/331 1333/f/1333/349 1366/f/1366/409 1400/f/1400/423 1433/f/1433/468 1466/f/1466/476 1500/f/1500/524 1533/f/1533/542 1566/f/1566/593 1600/f/1600/609 1633/f/1633/658 1666/f/1666/678 1700/f/1700/713 1700/f/1700/726 1733/f/1733/759 1766/f/1766/809 1800/f/1800/820 1833/f/1833/861 1866/f/1866/874 1900/f/1900/934 1933/f/1933/950
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 1x (3000 ms) F 1966/f/1966/996 2000/f/2000/1015 2033/f/2033/1066 2066/f/2066/1086 2100/f/2100/1148 2133/f/2133/1166 2166/f/2166/1216 2233/f/2233/1252 2266/f/2266/1277 2300/f/2300/1336 2333/f/2333/1351 2366/f/2366/1409 2400/f/2400/1427 2466/f/2466/1501 2500/f/2500/1513 2533/f/2533/1571 2566/f/2566/1590 2600/f/2600/1649 2633/f/2633/1665 2666/f/2666/1708 2700/f/2700/1728 2766/f/2766/1803 2800/f/2800/1815 2833/f/2833/1871 2866/f/2866/1887 2900/f/2900/1935 2933/f/2933/1960 2966/f/2966/2029 3033/f/3033/2064 3066/f/3066/2077
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 1x (3000 ms) F 3100/f/3100/2129 3133/f/3133/2151 3166/f/3166/2203 3200/f/3200/2221 3233/f/3233/2283 3266/f/3266/2296 3333/f/3333/2364 3366/f/3366/2380 3400/f/3400/2441 3433/f/3433/2455 3466/f/3466/2499 3500/f/3500/2523 3533/f/3533/2587 3600/f/3600/2621 3633/f/3633/2643 3666/f/3666/2701 3700/f/3700/2716 3733/f/3733/2777 3766/f/3766/2797 3800/f/3800/2856 3866/f/3866/2888 3900/f/3900/2904 3933/f/3933/2962 3966/f/3966/2992
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | backward 2x (3000 ms): 96 moves, 32 frames shown (strip 0, floor 24, approx 8, exact 0); out of order 6; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 367 ms, behind finger 300 ms; rate 10.7 fps; first frame 340 ms after the first move; exact frame 30 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | backward 2x (3000 ms) S first move 19 ms, last move 2980 ms, final target 53033 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | backward 2x (3000 ms) F 58333/f/58333/360 58300/f/58300/367 58233/f/58233/397 58066/f/58066/487 58000/f/58000/510 57433/a/57200/818 57366/a/57333/845 57300/f/57300/855 57266/f/57266/891 57033/f/57033/1013 56400/a/56200/1341 56333/f/56333/1372 56266/f/56266/1381 56200/f/56200/1417 56033/f/56033/1519 55400/a/55233/1824 55366/f/55366/1852 55300/f/55300/1860 55233/f/55233/1891 55033/f/55033/1997 54466/a/54100/2300 54400/a/54233/2326 54333/f/54333/2354 54300/f/54300/2367 54233/f/54233/2400 54033/f/54033/2493 53400/a/53133/2834 53333/a/53266/2857 53266/f/53266/2869 53233/f/53233/2907
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | backward 2x (3000 ms) F 53166/f/53166/2937 53033/f/53033/3010
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 2x (3000 ms): 99 moves, 93 frames shown (strip 0, floor 92, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 67 ms; rate 31.0 fps; first frame 36 ms after the first move; exact frame 24 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 2x (3000 ms) S first move 20 ms, last move 3000 ms, final target 7000 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 2x (3000 ms) F 1033/e/1033/56 1100/f/1100/78 1166/f/1166/104 1233/f/1233/136 1266/f/1266/151 1400/f/1400/227 1433/f/1433/239 1566/f/1566/324 1633/f/1633/349 1700/f/1700/375 1766/f/1766/410 1833/f/1833/457 1900/f/1900/484 1966/f/1966/516 2033/f/2033/549 2100/f/2100/586 2200/f/2200/623 2266/f/2266/651 2333/f/2333/692 2366/f/2366/706 2433/f/2433/758 2500/f/2500/780 2566/f/2566/816 2633/f/2633/849 2700/f/2700/876 2766/f/2766/920 2833/f/2833/946 2900/f/2900/983 2966/f/2966/1017 3033/f/3033/1049
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 2x (3000 ms) F 3100/f/3100/1083 3166/f/3166/1120 3266/f/3266/1155 3300/f/3300/1167 3366/f/3366/1204 3433/f/3433/1232 3466/f/3466/1249 3533/f/3533/1292 3600/f/3600/1310 3633/f/3633/1331 3700/f/3700/1368 3733/f/3733/1380 3800/f/3800/1422 3866/f/3866/1445 3900/f/3900/1468 3966/f/3966/1512 4033/f/4033/1538 4100/f/4100/1566 4166/f/4166/1600 4233/f/4233/1638 4266/f/4266/1650 4333/f/4333/1701 4400/f/4400/1726 4466/f/4466/1751 4533/f/4533/1788 4566/f/4566/1799 4633/f/4633/1850 4700/f/4700/1872 4766/f/4766/1904 4833/f/4833/1939
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 2x (3000 ms) F 4900/f/4900/1968 4966/f/4966/1997 5000/f/5000/2019 5166/f/5166/2106 5200/f/5200/2115 5266/f/5266/2161 5333/f/5333/2182 5366/f/5366/2202 5433/f/5433/2248 5466/f/5466/2262 5533/f/5533/2301 5600/f/5600/2328 5633/f/5633/2339 5700/f/5700/2383 5766/f/5766/2407 5800/f/5800/2419 5933/f/5933/2481 5966/f/5966/2499 6033/f/6033/2548 6066/f/6066/2557 6133/f/6133/2603 6200/f/6200/2623 6266/f/6266/2644 6300/f/6300/2668 6366/f/6366/2712 6433/f/6433/2731 6466/f/6466/2752 6600/f/6600/2844 6666/f/6666/2881 6766/f/6766/2920
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 2x (3000 ms) F 6833/f/6833/2954 6933/f/6933/3003 7000/f/7000/3025
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | backward 4x (3000 ms): 95 moves, 25 frames shown (strip 0, floor 17, approx 8, exact 0); out of order 2; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 300 ms, behind finger 167 ms; rate 8.4 fps; first frame 189 ms after the first move; exact frame 8 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | backward 4x (3000 ms) S first move 20 ms, last move 2981 ms, final target 47066 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | backward 4x (3000 ms) F 58300/a/58233/209 58166/f/58166/221 57200/f/57200/470 57066/f/57066/497 56300/a/56233/707 56200/f/56200/716 55400/a/55100/939 55266/a/55233/963 55133/f/55133/976 54533/a/54433/1142 54400/f/54400/1158 54300/f/54300/1187 54000/f/54000/1270 53166/f/53166/1477 52233/f/52233/1736 52100/f/52100/1747 51100/f/51100/1997 50133/f/50133/2232 49233/a/49166/2483 49100/f/49100/2493 48300/a/48166/2712 48200/f/48200/2727 47333/a/47200/2943 47200/f/47200/2957 47066/f/47066/2989
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 4x (3000 ms): 94 moves, 90 frames shown (strip 0, floor 55, approx 34, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 167 ms, behind finger 300 ms; rate 30.1 fps; first frame 45 ms after the first move; exact frame 233 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 4x (3000 ms) S first move 24 ms, last move 2988 ms, final target 12933 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 4x (3000 ms) F 1100/e/1100/69 1266/f/1266/95 1400/f/1400/134 1533/f/1533/159 1666/f/1666/193 1766/f/1766/218 1900/f/1900/249 2000/f/2000/267 2100/f/2100/302 2233/f/2233/333 2333/f/2333/364 2466/f/2466/384 2566/f/2566/419 2700/f/2700/455 2800/f/2800/473 2933/f/2933/517 3066/f/3066/541 3166/f/3166/582 3333/f/3333/614 3433/f/3433/642 3566/f/3566/662 3666/f/3666/695 3800/f/3800/723 3900/f/3900/743 4000/f/4000/779 4100/f/4100/801 4233/f/4233/841 4333/f/4333/867 4466/f/4466/890 4566/f/4566/914
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 4x (3000 ms) F 4700/f/4700/945 4833/f/4833/990 4933/f/4933/1011 5066/f/5066/1050 5200/f/5200/1076 5300/f/5300/1101 5400/f/5400/1123 5500/f/5500/1155 5600/f/5600/1180 5733/f/5733/1208 5833/f/5833/1238 5933/f/5933/1263 6066/f/6066/1291 6200/f/6200/1328 6333/f/6333/1358 6466/f/6466/1401 6600/f/6600/1440 6733/f/6733/1473 6866/f/6866/1506 7000/f/7000/1542 7166/f/7166/1572 7533/f/7533/1661 7666/f/7666/1711 7800/f/7800/1747 7966/f/7966/1781 8100/f/8100/1811 8266/a/8233/1858 8400/a/8366/1889 8533/a/8500/1918 8700/a/8633/1948
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 4x (3000 ms) F 8800/a/8766/1985 8933/a/8900/2009 9200/a/9166/2080 9333/a/9300/2114 9466/a/9433/2150 9633/a/9566/2191 9766/a/9700/2224 9933/a/9833/2266 10066/a/9966/2296 10200/a/10100/2343 10366/a/10233/2367 10466/a/10366/2404 10633/a/10500/2443 10766/a/10633/2485 10900/a/10766/2511 11033/a/10900/2542 11166/a/11033/2572 11300/a/11166/2603 11400/a/11300/2631 11533/a/11433/2677 11700/a/11566/2705 11800/a/11700/2744 11966/a/11833/2770 12100/a/11966/2814 12266/a/12100/2844 12366/a/12233/2885 12533/a/12366/2911 12633/a/12500/2949 12800/a/12633/2988 12933/a/12766/3024
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 4x (3000 ms) F 12933/e/12933/3221
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | backward 8x (3000 ms): 99 moves, 17 frames shown (strip 0, floor 15, approx 2, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 233 ms, behind finger 300 ms; rate 5.7 fps; first frame 116 ms after the first move; exact frame 42 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | backward 8x (3000 ms) S first move 21 ms, last move 2988 ms, final target 35100 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | backward 8x (3000 ms) F 58233/f/58233/137 57066/f/57066/256 56200/f/56200/376 55133/f/55133/508 54233/f/54233/628 53100/f/53100/754 50066/f/50066/1144 49200/f/49200/1255 47066/f/47066/1531 46066/f/46066/1650 45333/a/45100/1745 45000/f/45000/1762 44100/f/44100/1892 42200/f/42200/2137 40200/f/40200/2395 39133/f/39133/2520 36166/a/36133/2892 35100/f/35100/3030
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 8x (3000 ms): 93 moves, 25 frames shown (strip 0, floor 0, approx 24, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 700 ms, behind finger 967 ms; rate 8.4 fps; first frame 53 ms after the first move; exact frame 293 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 8x (3000 ms) S first move 23 ms, last move 2975 ms, final target 24800 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | forward 8x (3000 ms) F 1166/e/1166/76 1800/a/1466/134 2533/a/2133/235 2800/a/2266/270 6600/a/6133/745 7633/a/7200/868 7900/a/7333/900 8866/a/8266/1017 9900/a/9266/1153 10666/a/10133/1251 10966/a/10266/1285 12566/a/12166/1487 13600/a/13233/1610 13833/a/13366/1642 14833/a/14300/1766 15900/a/15366/1909 16733/a/16166/2005 18733/a/18266/2249 19466/a/19233/2343 19700/a/19366/2378 20533/a/20233/2488 21833/a/21333/2645 22900/a/22333/2775 23733/a/23233/2886 24800/a/24300/3012 24800/e/24800/3268
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | first backward step after a pause at 31733 ms: one frame back -> exact frame 14 ms (first shown exact); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | short backward sweep 1x (1 s) after the pause at 31733 ms: 36 moves, 12 frames shown (strip 0, floor 10, approx 1, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 33 ms, behind finger 33 ms; rate 12.1 fps; first frame 14 ms after the first move; exact frame 340 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | short backward sweep 1x (1 s) after the pause at 31733 ms S first move 19 ms, last move 988 ms, final target 30700 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | short backward sweep 1x (1 s) after the pause at 31733 ms F 31666/e/31666/33 31400/a/31366/349 31333/f/31333/365 31333/f/31333/387 31300/f/31300/419 31266/f/31266/445 31233/f/31233/472 31133/f/31133/587 31100/f/31100/609 31066/f/31066/636 31033/f/31033/712 31000/f/31000/719 30700/a/30100/1068 30700/e/30700/1328
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 14/exact/0, 331/approx/33, 346/floor/0, 369/floor/0, 401/floor/0, 426/floor/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | first backward step after a pause at 46933 ms: one frame back -> exact frame 14 ms (first shown exact); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | short backward sweep 1x (1 s) after the pause at 46933 ms: 33 moves, 13 frames shown (strip 0, floor 10, approx 2, exact 1); out of order 2; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 233 ms, behind finger 233 ms; rate 13.0 fps; first frame 22 ms after the first move; exact frame 363 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | short backward sweep 1x (1 s) after the pause at 46933 ms S first move 24 ms, last move 997 ms, final target 45900 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | short backward sweep 1x (1 s) after the pause at 46933 ms F 46866/e/46866/46 46433/a/46200/487 46433/a/46333/512 46400/f/46400/527 46366/f/46366/545 46333/f/46333/575 46300/f/46300/605 46200/f/46200/728 46166/f/46166/738 46133/f/46133/769 46100/f/46100/803 46033/f/46033/893 46000/f/46000/904 45900/a/45100/1071 45900/e/45900/1360
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 22/exact/0, 463/approx/233, 488/approx/100, 504/floor/0, 521/floor/0, 552/floor/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1080p30 (50-minute file, 60 s at 20:00) | back-and-forth 2x every 400 ms (4000 ms): 125 moves, 84 frames shown (strip 0, floor 78, approx 6, exact 0); out of order 6; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 233 ms, behind finger 167 ms; rate 21.2 fps; first frame 317 ms after the first move; exact frame 30 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | back-and-forth 2x every 400 ms (4000 ms) S first move 23 ms, last move 3971 ms, final target 29933 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | back-and-forth 2x every 400 ms (4000 ms) F 29400/a/29166/340 29333/a/29300/363 29266/f/29266/377 29200/f/29200/407 29233/f/29233/436 29300/f/29300/466 29366/f/29366/510 29433/f/29433/544 29500/f/29500/565 29533/f/29533/586 29600/f/29600/637 29666/f/29666/661 29733/f/29733/690 29800/f/29800/724 29866/f/29866/749 29900/f/29900/769 29966/f/29966/810 29966/f/29966/819 29933/f/29933/852 29866/f/29866/890 29366/a/29200/1145 29300/f/29300/1169 29266/f/29266/1182 29200/f/29200/1214 29266/f/29266/1248 29333/f/29333/1288 29400/f/29400/1341 29500/f/29500/1371 29566/f/29566/1404 29600/f/29600/1413
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | back-and-forth 2x every 400 ms (4000 ms) F 29666/f/29666/1463 29733/f/29733/1489 29800/f/29800/1526 29866/f/29866/1549 29900/f/29900/1570 29966/f/29966/1620 29966/f/29966/1628 29900/f/29900/1661 29400/a/29200/1937 29333/f/29333/1962 29266/f/29266/1980 29200/f/29200/2010 29266/f/29266/2043 29333/f/29333/2077 29400/f/29400/2137 29466/f/29466/2168 29533/f/29533/2195 29600/f/29600/2215 29666/f/29666/2248 29700/f/29700/2274 29833/f/29833/2339 29900/f/29900/2389 29966/f/29966/2410 29966/f/29966/2431 29900/f/29900/2464 29866/f/29866/2488 29400/a/29200/2744 29266/f/29266/2781 29200/f/29200/2817 29266/f/29266/2853
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1080p30 (50-minute file, 60 s at 20:00) | back-and-forth 2x every 400 ms (4000 ms) F 29333/f/29333/2887 29433/f/29433/2955 29500/f/29500/2978 29566/f/29566/3018 29633/f/29633/3048 29700/f/29700/3082 29800/f/29800/3134 29866/f/29866/3159 29933/f/29933/3187 30000/f/30000/3229 29933/f/29933/3247 29333/a/29300/3565 29266/f/29266/3580 29200/f/29200/3616 29266/f/29266/3650 29333/f/29333/3701 29433/f/29433/3742 29500/f/29500/3775 29566/f/29566/3815 29633/f/29633/3843 29700/f/29700/3885 29800/f/29800/3939 29866/f/29866/3968 29933/f/29933/4000
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=b05HevcLong
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=b06HevcSeal
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp23ScrubTest start: low_power=0 plugged=AC level=67 percent temperature=38.7C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal): 'Video by gusa.ae [DAzVUZTKqua].m' hevc 1440x1080 30.00 fps, 15.3 s; clip: source 0.0-15.3 s
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal): state low_power=0 plugged=AC level=67 percent temperature=38.7C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal): GOP 16 sync frames in 459 samples; sync interval p50 1000 max 1000 ms (30.0 frames p50)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal): strip: not in this build
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | slow backward (1 frame / 100 ms): 30 moves, 28 frames shown (strip 0, floor 18, approx 9, exact 1); out of order 7; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 867 ms, behind finger 833 ms; rate 8.8 fps; first frame 13 ms after the first move; exact frame 18 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | slow backward (1 frame / 100 ms) S first move 105 ms, last move 3196 ms, final target 13333 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | slow backward (1 frame / 100 ms) F 14266/e/14266/118 14233/f/14233/221 14200/f/14200/323 14166/f/14166/448 14133/a/14100/639 14100/f/14100/645 14066/f/14066/769 14033/f/14033/883 14000/f/14000/983 13966/a/13100/1194 13933/a/13233/1239 13900/a/13366/1350 13866/a/13500/1448 13833/a/13633/1565 13800/a/13766/1675 13766/f/13766/1762 13733/f/13733/1889 13700/f/13700/1994 13666/f/13666/2099 13633/f/13633/2205 13600/f/13600/2306 13533/a/13200/2561 13500/a/13333/2673 13466/f/13466/2776 13433/f/13433/2862 13400/f/13400/2970 13366/f/13366/3091 13333/f/13333/3213
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | backward 1x (3000 ms): 100 moves, 28 frames shown (strip 0, floor 27, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 33 ms; rate 9.4 fps; first frame 16 ms after the first move; exact frame 7 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | backward 1x (3000 ms) S first move 23 ms, last move 2981 ms, final target 11333 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | backward 1x (3000 ms) F 14266/e/14266/39 14233/f/14233/82 14200/f/14200/119 14166/f/14166/148 14066/f/14066/284 14033/f/14033/295 14000/f/14000/325 13333/f/13333/991 13300/f/13300/1004 13266/f/13266/1035 13233/f/13233/1064 13200/f/13200/1099 13066/f/13066/1256 13033/f/13033/1282 13000/f/13000/1317 12400/f/12400/1934 12366/f/12366/1942 12333/f/12333/1980 12300/f/12300/2013 12266/f/12266/2049 12233/f/12233/2090 12100/f/12100/2198 12100/f/12100/2223 12066/f/12066/2252 12033/f/12033/2287 12000/f/12000/2301 11366/f/11366/2975 11333/f/11333/2988
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | forward 1x (3000 ms): 103 moves, 6 frames shown (strip 0, floor 5, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 0 ms; rate 2.0 fps; first frame 22 ms after the first move; exact frame 1327 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | forward 1x (3000 ms) S first move 20 ms, last move 2985 ms, final target 4000 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | forward 1x (3000 ms) F 1033/e/1033/42 1066/f/1066/68 1100/f/1100/104 1133/f/1133/147 1166/f/1166/179 1200/f/1200/206 4000/f/4000/4312
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | backward 2x (3000 ms): 96 moves, 20 frames shown (strip 0, floor 16, approx 3, exact 1); out of order 3; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 267 ms, behind finger 200 ms; rate 6.7 fps; first frame 20 ms after the first move; exact frame 210 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | backward 2x (3000 ms) S first move 23 ms, last move 2989 ms, final target 8333 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | backward 2x (3000 ms) F 14266/e/14266/43 14166/f/14166/88 13366/a/13100/499 13300/a/13233/522 13266/f/13266/547 13200/f/13200/564 13133/f/13133/593 12166/f/12166/1071 12100/f/12100/1104 12033/f/12033/1142 11366/a/11166/1507 11300/f/11300/1538 11233/f/11233/1549 11166/f/11166/1587 10166/f/10166/2108 10100/f/10100/2116 10033/f/10033/2145 9200/f/9200/2591 9133/f/9133/2605 9066/f/9066/2627 8333/a/8166/3038 8333/e/8333/3200
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | forward 2x (3000 ms): 91 moves, 39 frames shown (strip 0, floor 37, approx 1, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 33 ms, behind finger 67 ms; rate 13.1 fps; first frame 18 ms after the first move; exact frame 942 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | forward 2x (3000 ms) S first move 19 ms, last move 2974 ms, final target 6933 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | forward 2x (3000 ms) F 1033/e/1033/37 1100/f/1100/80 1166/f/1166/109 1233/f/1233/138 1300/f/1300/171 1366/f/1366/206 1433/f/1433/231 1500/f/1500/264 1533/f/1533/282 1600/f/1600/342 1666/f/1666/365 1733/f/1733/385 1800/f/1800/437 1866/f/1866/459 1933/f/1933/483 2000/f/2000/514 2033/f/2033/531 2500/a/2466/782 2633/f/2633/847 2700/f/2700/872 2766/f/2766/902 2833/f/2833/940 2900/f/2900/962 2933/f/2933/988 3000/f/3000/1039 3066/f/3066/1059 3266/f/3266/1165 3333/f/3333/1196 3400/f/3400/1242 3500/f/3500/1274
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | forward 2x (3000 ms) F 3566/f/3566/1311 3633/f/3633/1344 3700/f/3700/1377 3766/f/3766/1414 3833/f/3833/1453 3900/f/3900/1490 4000/f/4000/1528 4066/f/4066/1560 4133/f/4133/1587 6933/a/6100/3252 6933/e/6933/3916
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | backward 4x (3000 ms): 99 moves, 18 frames shown (strip 0, floor 15, approx 2, exact 1); out of order 1; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 233 ms, behind finger 233 ms; rate 6.0 fps; first frame 12 ms after the first move; exact frame 261 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | backward 4x (3000 ms) S first move 22 ms, last move 2997 ms, final target 2333 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | backward 4x (3000 ms) F 14233/e/14233/34 13033/f/13033/328 12233/a/12200/549 12100/f/12100/560 11200/f/11200/801 11100/f/11100/812 10066/f/10066/1080 9166/f/9166/1306 9066/f/9066/1321 8233/f/8233/1550 8133/f/8133/1560 7333/a/7100/1776 7200/f/7200/1803 7066/f/7066/1816 6100/f/6100/2084 5066/f/5066/2345 4000/f/4000/2593 3000/f/3000/2846 2333/a/2100/3049 2333/e/2333/3258
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | forward 4x (3000 ms): 102 moves, 83 frames shown (strip 0, floor 65, approx 17, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 167 ms, behind finger 267 ms; rate 27.7 fps; first frame 30 ms after the first move; exact frame 183 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | forward 4x (3000 ms) S first move 23 ms, last move 2997 ms, final target 13000 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | forward 4x (3000 ms) F 1066/e/1066/54 1400/a/1366/135 1533/a/1500/168 1666/a/1633/194 1800/a/1766/232 1900/f/1900/260 2133/f/2133/311 2266/f/2266/346 2400/f/2400/367 2500/f/2500/389 2600/f/2600/424 2733/f/2733/459 2833/f/2833/489 2966/f/2966/514 3066/f/3066/543 3200/f/3200/575 3300/f/3300/600 3400/f/3400/632 3533/f/3533/659 3633/f/3633/687 3766/f/3766/714 3866/f/3866/752 4000/f/4000/779 4133/f/4133/815 4233/f/4233/842 4400/f/4400/877 4500/f/4500/910 4633/f/4633/931 4733/f/4733/970 4966/f/4966/1025
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | forward 4x (3000 ms) F 5100/f/5100/1052 5200/f/5200/1084 5333/f/5333/1109 5733/f/5733/1215 5866/f/5866/1256 6000/f/6000/1283 6133/f/6133/1317 6266/f/6266/1344 6400/f/6400/1378 6500/f/6500/1399 6600/f/6600/1428 6733/f/6733/1451 6833/f/6833/1484 6966/f/6966/1514 7100/f/7100/1554 7200/f/7200/1571 7300/f/7300/1596 7400/f/7400/1628 7533/f/7533/1655 7633/f/7633/1685 7733/f/7733/1705 7833/f/7833/1737 8100/f/8100/1810 8233/f/8233/1850 8366/f/8366/1883 8900/f/8900/2008 9033/f/9033/2058 9233/a/9166/2083 9333/a/9300/2119 9500/a/9433/2151
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | forward 4x (3000 ms) F 9833/f/9833/2238 9966/f/9966/2259 10066/f/10066/2294 10166/f/10166/2313 10266/f/10266/2342 10366/f/10366/2365 10500/f/10500/2402 10600/f/10600/2435 10733/f/10733/2468 10966/f/10966/2512 11066/f/11066/2550 11200/f/11200/2575 11300/f/11300/2597 11700/a/11533/2705 11800/a/11666/2734 11933/a/11800/2756 12033/a/11933/2792 12133/a/12066/2810 12266/a/12200/2838 12366/a/12333/2864 12766/a/12700/2973 12866/a/12833/2994 13000/a/12966/3021 13000/e/13000/3180
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | backward 8x (1662 ms): 57 moves, 3 frames shown (strip 0, floor 3, approx 0, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 0 ms; rate 1.8 fps; first frame 527 ms after the first move; exact frame 55 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | backward 8x (1662 ms) S first move 22 ms, last move 1660 ms, final target 1033 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | backward 8x (1662 ms) F 10000/f/10000/549 8000/f/8000/802 2066/f/2066/1568 1033/f/1033/1715
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | forward 8x (1662 ms): 57 moves, 8 frames shown (strip 0, floor 0, approx 7, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 667 ms, behind finger 867 ms; rate 4.8 fps; first frame 43 ms after the first move; exact frame 258 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | forward 8x (1662 ms) S first move 23 ms, last move 1660 ms, final target 14266 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | forward 8x (1662 ms) F 1166/e/1166/66 3700/a/3166/375 3933/a/3300/402 4900/a/4266/517 6833/a/6300/764 8733/a/8266/1001 12900/a/12233/1516 13766/a/13233/1627 14266/a/14100/1735 14266/e/14266/1918
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | first backward step after a pause at 9366 ms: one frame back -> exact frame 18 ms (first shown exact); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | short backward sweep 1x (1 s) after the pause at 9366 ms: 34 moves, 8 frames shown (strip 0, floor 7, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 0 ms; rate 8.0 fps; first frame 11 ms after the first move; exact frame 36 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | short backward sweep 1x (1 s) after the pause at 9366 ms S first move 24 ms, last move 994 ms, final target 8333 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | short backward sweep 1x (1 s) after the pause at 9366 ms F 9300/e/9300/34 9266/f/9266/92 9100/f/9100/252 9066/f/9066/269 9033/f/9033/298 9033/f/9033/320 9000/f/9000/351 8333/f/8333/1031
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 11/exact/0, 68/floor/0, 229/floor/0, 245/floor/0, 274/floor/0, 296/floor/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | first backward step after a pause at 13266 ms: one frame back -> exact frame 12 ms (first shown exact); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | short backward sweep 1x (1 s) after the pause at 13266 ms: 34 moves, 9 frames shown (strip 0, floor 7, approx 1, exact 1); out of order 1; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 133 ms, behind finger 100 ms; rate 9.0 fps; first frame 17 ms after the first move; exact frame 9 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | short backward sweep 1x (1 s) after the pause at 13266 ms S first move 22 ms, last move 999 ms, final target 12233 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | short backward sweep 1x (1 s) after the pause at 13266 ms F 13200/e/13200/39 13166/f/13166/84 13133/f/13133/118 13000/f/13000/250 12366/a/12233/908 12333/f/12333/940 12300/f/12300/949 12266/f/12266/978 12233/f/12233/1008
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 17/exact/0, 62/floor/0, 96/floor/0, 228/floor/0, 886/approx/133, 918/floor/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=HEVC 1440x1080 30 fps (Seal) | back-and-forth 2x every 400 ms (4000 ms): 120 moves, 67 frames shown (strip 0, floor 41, approx 25, exact 1); out of order 4; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 500 ms, behind finger 500 ms; rate 16.9 fps; first frame 16 ms after the first move; exact frame 412 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | back-and-forth 2x every 400 ms (4000 ms) S first move 23 ms, last move 3975 ms, final target 7600 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | back-and-forth 2x every 400 ms (4000 ms) F 7633/e/7633/39 7533/f/7533/88 7133/f/7133/295 7066/f/7066/317 7066/f/7066/524 7133/f/7133/554 7200/f/7200/578 7500/a/7400/746 7566/a/7533/783 7633/f/7633/812 7666/f/7666/818 7600/f/7600/847 7533/f/7533/877 7200/f/7200/1065 7133/f/7133/1077 7066/f/7066/1109 7100/f/7100/1333 7166/f/7166/1363 7233/f/7233/1397 7300/a/7233/1458 7600/f/7600/1594 7666/f/7666/1608 7600/f/7600/1638 7533/f/7533/1674 7166/f/7166/1861 7100/f/7100/1890 7066/f/7066/2108 7100/f/7100/2136 7166/f/7166/2166 7233/f/7233/2200
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | back-and-forth 2x every 400 ms (4000 ms) F 7600/a/7433/2405 7666/a/7566/2442 7600/f/7600/2466 7533/f/7533/2481 7466/f/7466/2516 7133/f/7133/2685 7066/f/7066/2718 7000/f/7000/2753 7033/f/7033/2907 7100/f/7100/2930 7166/f/7166/2966 7233/a/7166/3018 7333/a/7166/3054 7400/a/7166/3091 7466/a/7166/3126 7533/a/7166/3160 7600/a/7166/3197 7666/a/7166/3228 7600/a/7166/3263 7533/a/7166/3300 7466/a/7166/3334 7366/a/7166/3371 7300/a/7166/3405 7233/a/7166/3441 7166/f/7166/3459 7100/f/7100/3498 7033/f/7033/3534 7000/f/7000/3683 7066/f/7066/3710 7133/f/7133/3750
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=HEVC 1440x1080 30 fps (Seal) | back-and-forth 2x every 400 ms (4000 ms) F 7200/a/7166/3796 7266/a/7166/3830 7333/a/7166/3866 7400/a/7166/3898 7466/a/7166/3931 7533/a/7166/3964 7600/a/7166/3996 7600/e/7600/4387
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=b06HevcSeal
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=b07Av1Small
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp23ScrubTest start: low_power=0 plugged=AC level=68 percent temperature=38.9C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal): 'Brent Rambo [ORIGINAL] [Ir7UmJ_f' av01 640x480 30.00 fps, 11.8 s; clip: source 0.0-11.8 s
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal): state low_power=0 plugged=AC level=68 percent temperature=38.9C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal): GOP 3 sync frames in 352 samples; sync interval p50 2633 max 4800 ms (79.0 frames p50)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal): strip: not in this build
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | slow backward (1 frame / 100 ms): 30 moves, 28 frames shown (strip 0, floor 3, approx 24, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 5700 ms, behind finger 5700 ms; rate 8.8 fps; first frame 15 ms after the first move; exact frame 632 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | slow backward (1 frame / 100 ms) S first move 104 ms, last move 3181 ms, final target 9800 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | slow backward (1 frame / 100 ms) F 10733/e/10733/119 10700/f/10700/240 10666/f/10633/348 10633/f/10633/451 10600/a/4900/635 10566/a/4900/763 10533/a/4900/870 10500/a/4900/992 10466/a/4900/1083 10433/a/4900/1193 10400/a/4900/1292 10366/a/4900/1399 10333/a/4900/1529 10300/a/4900/1633 10266/a/4900/1750 10233/a/4900/1842 10200/a/4900/1946 10166/a/4900/2040 10133/a/4900/2161 10100/a/4900/2280 10066/a/4900/2381 10033/a/4900/2479 10000/a/4900/2595 9966/a/4900/2691 9933/a/4900/2794 9900/a/4900/2905 9866/a/4900/3012 9833/a/4900/3120 9800/a/4900/3250 9800/e/9800/3814
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | backward 1x (3000 ms): 103 moves, 4 frames shown (strip 0, floor 3, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 34 ms, behind finger 34 ms; rate 1.3 fps; first frame 14 ms after the first move; exact frame 516 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | backward 1x (3000 ms) S first move 24 ms, last move 2986 ms, final target 7766 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | backward 1x (3000 ms) F 10733/e/10733/38 10700/f/10700/78 10666/f/10633/111 10633/f/10633/144 7766/a/4900/3042 7766/e/7767/3501
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | forward 1x (3000 ms): 88 moves, 86 frames shown (strip 0, floor 85, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 34 ms, behind finger 34 ms; rate 28.7 fps; first frame 16 ms after the first move; exact frame 39 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | forward 1x (3000 ms) S first move 23 ms, last move 2995 ms, final target 4000 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | forward 1x (3000 ms) F 1033/e/1033/39 1066/f/1033/73 1100/f/1100/134 1133/f/1133/162 1166/f/1133/175 1200/f/1200/216 1233/f/1233/246 1266/f/1233/266 1266/f/1233/294 1300/f/1300/350 1366/f/1333/375 1366/f/1333/395 1433/f/1433/455 1466/f/1433/461 1466/f/1433/493 1500/f/1500/538 1533/f/1533/566 1566/f/1533/587 1600/f/1600/633 1633/f/1633/658 1666/f/1633/675 1700/f/1700/734 1733/f/1733/757 1766/f/1733/773 1800/f/1800/831 1833/f/1833/855 1866/f/1833/870 1900/f/1900/919 1900/f/1900/925 1933/f/1933/971
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | forward 1x (3000 ms) F 1966/f/1933/991 2000/f/2000/1046 2066/f/2033/1075 2100/f/2100/1120 2133/f/2133/1147 2166/f/2133/1168 2200/f/2200/1233 2233/f/2233/1254 2266/f/2233/1283 2300/f/2300/1342 2333/f/2333/1376 2366/f/2333/1391 2400/f/2400/1448 2466/f/2433/1473 2500/f/2500/1524 2533/f/2533/1557 2566/f/2533/1579 2600/f/2600/1635 2633/f/2633/1658 2666/f/2633/1680 2700/f/2700/1739 2733/f/2733/1771 2766/f/2733/1788 2800/f/2800/1854 2833/f/2833/1870 2900/f/2900/1911 2933/f/2933/1941 2966/f/2933/1970 3000/f/3000/2026 3033/f/3033/2048
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | forward 1x (3000 ms) F 3066/f/3033/2074 3100/f/3100/2135 3133/f/3133/2161 3166/f/3133/2180 3200/f/3200/2233 3233/f/3233/2261 3266/f/3233/2285 3300/f/3300/2344 3333/f/3333/2365 3366/f/3333/2392 3400/f/3400/2453 3466/f/3433/2479 3500/f/3500/2520 3533/f/3533/2552 3566/f/3533/2573 3600/f/3600/2632 3633/f/3633/2657 3666/f/3633/2679 3700/f/3700/2738 3733/f/3733/2765 3766/f/3733/2785 3800/f/3800/2848 3833/f/3833/2865 3866/f/3833/2891 3966/f/3933/2970 4000/f/4000/3033
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | backward 2x (3000 ms): 99 moves, 19 frames shown (strip 0, floor 4, approx 14, exact 1); out of order 12; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 4533 ms, behind finger 4533 ms; rate 6.4 fps; first frame 16 ms after the first move; exact frame 622 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | backward 2x (3000 ms) S first move 24 ms, last move 2981 ms, final target 4800 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | backward 2x (3000 ms) F 10733/e/10733/40 10633/f/10633/83 7466/a/5067/1687 7400/a/5200/1713 7333/a/5333/1739 7266/a/5467/1777 7200/a/5600/1806 7133/a/5733/1841 7066/a/5867/1868 7000/a/6000/1905 6966/a/6133/1936 6866/a/6267/1972 6800/a/6400/2004 6766/a/6533/2039 6700/a/6667/2068 6633/f/6633/2081 6566/f/6533/2118 6500/f/6500/2149 4800/a/267/3001 4800/e/4800/3604
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | forward 2x (3000 ms): 87 moves, 84 frames shown (strip 0, floor 83, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 34 ms, behind finger 100 ms; rate 28.3 fps; first frame 19 ms after the first move; exact frame 30 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | forward 2x (3000 ms) S first move 22 ms, last move 2971 ms, final target 6933 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | forward 2x (3000 ms) F 1033/e/1033/41 1133/f/1133/104 1200/f/1200/136 1266/f/1233/153 1300/f/1300/175 1366/f/1333/207 1500/f/1500/274 1566/f/1533/298 1666/f/1633/350 1733/f/1733/407 1800/f/1800/430 1866/f/1833/460 1933/f/1933/506 2033/f/2033/537 2100/f/2100/560 2133/f/2133/590 2200/f/2200/638 2266/f/2233/656 2333/f/2333/702 2400/f/2400/732 2433/f/2433/749 2533/f/2533/788 2566/f/2533/800 2666/f/2633/860 2733/f/2733/893 2800/f/2800/927 2866/f/2833/958 2933/f/2933/1007 3000/f/3000/1027 3066/f/3033/1040
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | forward 2x (3000 ms) F 3100/f/3100/1081 3200/f/3200/1129 3266/f/3233/1149 3333/f/3333/1204 3400/f/3400/1236 3500/f/3500/1272 3566/f/3533/1296 3633/f/3633/1344 3700/f/3700/1375 3766/f/3733/1404 3833/f/3833/1468 3933/f/3933/1500 4000/f/4000/1526 4066/f/4033/1554 4133/f/4133/1601 4200/f/4200/1626 4266/f/4233/1664 4366/f/4333/1713 4433/f/4433/1752 4500/f/4500/1787 4566/f/4533/1813 4666/f/4633/1864 4733/f/4733/1897 4800/f/4800/1920 4866/f/4833/1946 4933/f/4933/1993 5000/f/5000/2018 5066/f/5033/2055 5133/f/5133/2107 5200/f/5200/2138
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | forward 2x (3000 ms) F 5266/f/5233/2158 5333/f/5333/2205 5400/f/5400/2235 5500/f/5500/2276 5566/f/5533/2298 5633/f/5633/2354 5700/f/5700/2385 5766/f/5733/2412 5866/f/5833/2469 5933/f/5933/2502 6000/f/6000/2525 6066/f/6033/2557 6133/f/6133/2610 6233/f/6233/2642 6300/f/6300/2673 6366/f/6333/2700 6433/f/6433/2755 6500/f/6500/2785 6566/f/6533/2805 6633/f/6633/2857 6733/f/6733/2903 6800/f/6800/2927 6866/f/6833/2952 6933/f/6933/3001
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | backward 4x (2442 ms): 81 moves, 47 frames shown (strip 0, floor 4, approx 42, exact 1); out of order 22; ahead of target 0 (exact-rule frames ahead 1); worst lag behind target 4467 ms, behind finger 4467 ms; rate 19.4 fps; first frame 11 ms after the first move; exact frame 193 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | backward 4x (2442 ms) S first move 25 ms, last move 2429 ms, final target 1066 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | backward 4x (2442 ms) F 10666/e/10667/36 7433/a/4800/844 7333/a/4800/874 7200/a/4800/903 7100/a/4800/929 7000/a/4800/961 6866/a/4800/994 6766/a/4800/1025 6633/a/4800/1054 6500/a/4800/1092 6333/a/4800/1128 6233/a/4800/1155 6066/a/4800/1194 5966/a/4800/1222 5800/a/4800/1258 5666/a/4800/1287 5566/a/4800/1317 5466/a/4800/1345 5366/a/4800/1366 5266/a/4900/1406 5100/a/5033/1440 5000/f/5000/1450 4900/f/4900/1476 4600/a/133/1576 4433/a/267/1615 4300/a/400/1645 4200/a/533/1676 3900/a/800/1745 3800/a/933/1772 3600/a/1067/1820
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | backward 4x (2442 ms) F 3466/a/1200/1845 3366/a/1333/1878 3266/a/1467/1907 3133/a/1600/1933 3033/a/1733/1969 2800/a/2000/2019 2700/a/2133/2037 2600/a/2267/2063 2500/a/2400/2098 2366/f/2333/2108 2233/f/2233/2143 1700/a/233/2301 1566/a/367/2327 1433/a/500/2356 1333/a/633/2391 1200/a/767/2421 1066/a/900/2455 1066/e/1067/2622
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | forward 4x (2442 ms): 77 moves, 73 frames shown (strip 0, floor 35, approx 37, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 1); worst lag behind target 100 ms, behind finger 234 ms; rate 30.0 fps; first frame 24 ms after the first move; exact frame 201 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | forward 4x (2442 ms) S first move 23 ms, last move 2433 ms, final target 10733 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | forward 4x (2442 ms) F 1066/e/1067/47 1500/a/1433/165 1633/a/1567/190 1733/a/1700/214 1866/a/1833/233 1966/f/1933/272 2100/f/2100/298 2200/f/2200/325 2300/f/2300/350 2433/f/2433/389 2566/f/2533/408 2700/f/2700/445 2800/f/2800/475 2900/f/2900/497 3033/f/3033/548 3166/f/3133/574 3300/f/3300/610 3433/a/3433/637 3566/f/3533/671 3700/f/3700/702 3833/a/3833/738 3966/f/3933/769 4066/f/4033/793 4200/f/4200/822 4300/f/4300/852 4433/f/4433/885 4533/f/4533/902 4633/f/4633/947 4766/f/4733/972 4900/f/4900/1013
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | forward 4x (2442 ms) F 5033/a/5033/1042 5166/f/5133/1078 5300/f/5300/1107 5433/a/5433/1136 5566/f/5533/1175 5700/f/5700/1197 5800/f/5800/1228 5933/f/5933/1267 6066/f/6033/1289 6166/f/6133/1318 6400/f/6400/1382 6533/f/6533/1408 6666/f/6633/1440 6766/f/6733/1472 6933/a/6900/1515 7066/a/7033/1551 7233/a/7167/1592 7366/a/7300/1619 7500/a/7433/1656 7633/a/7567/1693 7766/a/7700/1732 7900/a/7833/1771 8066/a/7967/1800 8200/a/8100/1831 8333/a/8233/1857 8433/a/8367/1894 8600/a/8500/1928 8733/a/8633/1959 8866/a/8767/1992 8966/a/8900/2026
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | forward 4x (2442 ms) F 9133/a/9033/2061 9266/a/9167/2094 9366/a/9300/2126 9500/a/9433/2158 9633/a/9567/2197 9800/a/9700/2232 9933/a/9833/2265 10066/a/9967/2299 10200/a/10100/2335 10333/a/10233/2368 10466/a/10367/2400 10600/a/10500/2425 10733/a/10633/2465 10733/e/10733/2634
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | backward 8x (1221 ms): 40 moves, 21 frames shown (strip 0, floor 1, approx 19, exact 1); out of order 17; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 4634 ms, behind finger 4400 ms; rate 17.5 fps; first frame 12 ms after the first move; exact frame 315 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | backward 8x (1221 ms) S first move 19 ms, last move 1202 ms, final target 1166 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | backward 8x (1221 ms) F 10633/e/10633/31 7166/a/5067/486 6933/a/5200/516 6700/a/5333/540 6366/a/5467/572 6100/a/5600/605 5866/a/5733/632 5666/f/5633/645 4766/a/133/783 4533/a/267/809 4333/a/400/831 4100/a/533/856 3866/a/667/884 3666/a/800/910 3433/a/933/942 3200/a/1067/970 3000/a/1200/1006 2733/a/1333/1039 2466/a/1467/1074 2200/a/1600/1100 1866/a/1733/1152 1166/a/167/1256 1166/e/1167/1518
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | forward 8x (1221 ms): 43 moves, 16 frames shown (strip 0, floor 0, approx 15, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 1566 ms, behind finger 1566 ms; rate 13.4 fps; first frame 5 ms after the first move; exact frame 755 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | forward 8x (1221 ms) S first move 19 ms, last move 1197 ms, final target 10566 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | forward 8x (1221 ms) F 1133/e/1133/24 1366/a/1300/72 1600/a/1433/99 1800/a/1567/123 2033/a/1700/162 2266/a/1833/187 2566/a/1967/224 2900/a/2100/262 3133/a/2233/293 3400/a/2367/321 3600/a/2500/348 3833/a/2633/376 4033/a/2767/408 4266/a/2900/432 4500/a/3033/464 4733/a/3167/502 10566/a/4900/1258 10566/e/10567/1952
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | first backward step after a pause at 7700 ms: one frame back -> exact frame - ms (first shown -); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | short backward sweep 1x (1 s) after the pause at 7700 ms: 35 moves, 2 frames shown (strip 0, floor 1, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 0 ms; rate 2.0 fps; first frame 16 ms after the first move; exact frame 783 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | short backward sweep 1x (1 s) after the pause at 7700 ms S first move 22 ms, last move 995 ms, final target 6666 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | short backward sweep 1x (1 s) after the pause at 7700 ms F 7633/e/7633/38 7600/f/7600/75 6666/a/100/1050 6666/e/6667/1778
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 16/exact/0, 53/floor/0, 1028/approx/6567, 1756/exact/-0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | first backward step after a pause at 10700 ms: one frame back -> exact frame - ms (first shown -); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | short backward sweep 1x (1 s) after the pause at 10700 ms: 35 moves, 2 frames shown (strip 0, floor 1, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 0 ms; rate 2.0 fps; first frame 15 ms after the first move; exact frame 689 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | short backward sweep 1x (1 s) after the pause at 10700 ms S first move 21 ms, last move 980 ms, final target 9700 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | short backward sweep 1x (1 s) after the pause at 10700 ms F 10633/e/10633/36 10600/f/10600/65 9700/a/4900/1058 9700/e/9700/1669
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 15/exact/0, 44/floor/0, 1037/approx/4800, 1648/exact/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 640x480 30 fps (Seal) | back-and-forth 2x every 400 ms (4000 ms): 136 moves, 18 frames shown (strip 0, floor 17, approx 0, exact 1); out of order 2; ahead of target 0 (exact-rule frames ahead 1); worst lag behind target 34 ms, behind finger 34 ms; rate 4.5 fps; first frame 12 ms after the first move; exact frame 151 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | back-and-forth 2x every 400 ms (4000 ms) S first move 24 ms, last move 3988 ms, final target 5866 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 640x480 30 fps (Seal) | back-and-forth 2x every 400 ms (4000 ms) F 5866/e/5867/36 5800/f/5800/770 5866/f/5833/808 5866/f/5833/832 5800/f/5800/873 5800/f/5800/1561 5866/f/5833/1591 5866/f/5833/1621 5800/f/5800/1658 5800/f/5800/2366 5866/f/5833/2395 5866/f/5833/2426 5800/f/5800/2467 5833/f/5833/3177 5900/f/5900/3210 5833/f/5833/3248 5800/f/5800/3970 5866/f/5833/4000 5866/e/5867/4139
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=b07Av1Small
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=b08Av11080
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp23ScrubTest start: low_power=0 plugged=AC level=68 percent temperature=39.0C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal): 'bzpy - It's Always Sunny In Phil' av01 1920x1080 30.00 fps, 137.7 s; clip: source 0.0-137.7 s
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal): state low_power=0 plugged=AC level=68 percent temperature=39.0C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal): GOP 33 sync frames in 4127 samples; sync interval p50 4434 max 7000 ms (133.0 frames p50)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal): strip: not in this build
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | slow backward (1 frame / 100 ms): 30 moves, 26 frames shown (strip 0, floor 7, approx 18, exact 1); out of order 15; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 2600 ms, behind finger 2600 ms; rate 8.2 fps; first frame 22 ms after the first move; exact frame 1651 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | slow backward (1 frame / 100 ms) S first move 112 ms, last move 3155 ms, final target 135766 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | slow backward (1 frame / 100 ms) F 136700/e/136700/134 136666/f/136633/240 136633/f/136633/335 136566/a/133967/643 136533/a/133967/761 136500/a/133967/871 136466/a/134100/903 136433/a/134233/1029 136400/a/134367/1126 136366/a/134500/1247 136333/a/134633/1351 136300/a/134767/1468 136266/a/134900/1573 136233/a/135033/1686 136200/a/135167/1791 136166/a/135300/1896 136133/a/135433/1993 136100/a/135567/2108 136066/a/135700/2203 136033/a/135833/2320 136000/a/135967/2426 135966/f/135933/2510 135933/f/135933/2615 135900/f/135900/2740 135866/f/135833/2843 135833/f/135833/2958 135766/a/129533/3299 135766/e/135767/4806
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | backward 1x (3000 ms): 79 moves, 9 frames shown (strip 0, floor 2, approx 6, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 4500 ms, behind finger 4500 ms; rate 3.0 fps; first frame 22 ms after the first move; exact frame 1439 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | backward 1x (3000 ms) S first move 21 ms, last move 2967 ms, final target 133766 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | backward 1x (3000 ms) F 136700/e/136700/43 136666/f/136633/66 136633/f/136633/101 133933/a/129433/2813 133900/a/129433/2836 133866/a/129433/2880 133833/a/129433/2911 133800/a/129433/2951 133766/a/129433/2989 133766/e/133767/4407
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | forward 1x (3000 ms): 94 moves, 93 frames shown (strip 0, floor 92, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 34 ms, behind finger 34 ms; rate 31.3 fps; first frame 19 ms after the first move; exact frame 153 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | forward 1x (3000 ms) S first move 21 ms, last move 2974 ms, final target 3966 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | forward 1x (3000 ms) F 1033/e/1033/40 1066/f/1033/70 1100/f/1100/128 1133/f/1133/149 1166/f/1133/175 1200/f/1200/227 1233/f/1233/250 1266/f/1233/263 1266/f/1233/293 1300/f/1300/331 1366/f/1333/370 1366/f/1333/386 1400/f/1400/433 1433/f/1433/450 1466/f/1433/469 1500/f/1500/519 1533/f/1533/537 1566/f/1533/568 1566/f/1533/599 1600/f/1600/634 1633/f/1633/660 1666/f/1633/680 1700/f/1700/730 1733/f/1733/749 1766/f/1733/775 1800/f/1800/825 1833/f/1833/852 1866/f/1833/885 1900/f/1900/937 1933/f/1933/964
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | forward 1x (3000 ms) F 1966/f/1933/988 2000/f/2000/1024 2033/f/2033/1047 2066/f/2033/1064 2100/f/2100/1118 2133/f/2133/1151 2166/f/2133/1181 2200/f/2200/1228 2233/f/2233/1255 2266/f/2233/1291 2300/f/2300/1342 2333/f/2333/1362 2366/f/2333/1381 2400/f/2400/1427 2433/f/2433/1451 2466/f/2433/1470 2500/f/2500/1516 2533/f/2533/1531 2533/f/2533/1558 2566/f/2533/1588 2600/f/2600/1647 2633/f/2633/1664 2666/f/2633/1695 2700/f/2700/1735 2733/f/2733/1764 2766/f/2733/1780 2800/f/2800/1824 2833/f/2833/1846 2833/f/2833/1856 2866/f/2833/1883
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | forward 1x (3000 ms) F 2900/f/2900/1927 2933/f/2933/1949 2966/f/2933/1968 3000/f/3000/2015 3033/f/3033/2058 3066/f/3033/2074 3100/f/3100/2136 3133/f/3133/2155 3200/f/3200/2206 3200/f/3200/2224 3233/f/3233/2269 3266/f/3233/2287 3300/f/3300/2331 3333/f/3333/2350 3366/f/3333/2372 3400/f/3400/2430 3433/f/3433/2456 3466/f/3433/2481 3500/f/3500/2530 3533/f/3533/2552 3566/f/3533/2570 3600/f/3600/2631 3633/f/3633/2673 3666/f/3633/2685 3700/f/3700/2745 3733/f/3733/2775 3766/f/3733/2793 3800/f/3800/2853 3833/f/3833/2871 3866/f/3833/2888
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | forward 1x (3000 ms) F 3900/f/3900/2937 3933/f/3933/2959 3966/f/3933/2985 3966/e/3967/3127
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | backward 2x (3000 ms): 78 moves, 2 frames shown (strip 0, floor 1, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 0 ms; rate 0.7 fps; first frame 19 ms after the first move; exact frame 937 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | backward 2x (3000 ms) S first move 19 ms, last move 2959 ms, final target 130833 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | backward 2x (3000 ms) F 136700/e/136700/38 136633/f/136633/67 130833/a/127900/3082 130833/e/130833/3895
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | forward 2x (3000 ms): 95 moves, 93 frames shown (strip 0, floor 92, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 34 ms, behind finger 67 ms; rate 31.3 fps; first frame 26 ms after the first move; exact frame 16 ms (floor) after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | forward 2x (3000 ms) S first move 22 ms, last move 2973 ms, final target 6933 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | forward 2x (3000 ms) F 1033/e/1033/47 1133/f/1133/96 1200/f/1200/116 1233/f/1233/147 1300/f/1300/188 1366/f/1333/208 1466/f/1433/257 1500/f/1500/282 1600/f/1600/318 1633/f/1633/341 1700/f/1700/376 1766/f/1733/411 1833/f/1833/439 1900/f/1900/466 1966/f/1933/509 2033/f/2033/547 2100/f/2100/572 2166/f/2133/593 2233/f/2233/649 2300/f/2300/669 2366/f/2333/696 2400/f/2400/722 2466/f/2433/747 2533/f/2533/788 2566/f/2533/799 2700/f/2700/871 2733/f/2733/892 2800/f/2800/932 2866/f/2833/952 2933/f/2933/986
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | forward 2x (3000 ms) F 2966/f/2933/997 3033/f/3033/1049 3100/f/3100/1075 3166/f/3133/1093 3233/f/3233/1150 3300/f/3300/1172 3366/f/3333/1191 3400/f/3400/1232 3466/f/3433/1253 3533/f/3533/1287 3566/f/3533/1296 3633/f/3633/1348 3700/f/3700/1369 3766/f/3733/1394 3800/f/3800/1439 3866/f/3833/1454 3933/f/3933/1490 4033/f/4033/1541 4100/f/4100/1572 4133/f/4133/1597 4200/f/4200/1622 4266/f/4233/1648 4300/f/4300/1692 4366/f/4333/1709 4466/f/4433/1756 4533/f/4533/1801 4600/f/4600/1823 4666/f/4633/1845 4700/f/4700/1879 4766/f/4733/1909
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | forward 2x (3000 ms) F 4833/f/4833/1962 4933/f/4933/2004 5033/f/5033/2053 5100/f/5100/2077 5166/f/5133/2102 5233/f/5233/2139 5266/f/5233/2146 5333/f/5333/2203 5400/f/5400/2225 5500/f/5500/2272 5533/f/5533/2291 5600/f/5600/2324 5666/f/5633/2359 5733/f/5733/2399 5800/f/5800/2437 5866/f/5833/2450 5966/f/5933/2504 6000/f/6000/2521 6066/f/6033/2552 6133/f/6133/2588 6166/f/6133/2598 6233/f/6233/2651 6300/f/6300/2671 6366/f/6333/2703 6433/f/6433/2735 6500/f/6500/2773 6566/f/6533/2795 6600/f/6600/2832 6700/f/6700/2875 6766/f/6733/2898
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | forward 2x (3000 ms) F 6800/f/6800/2931 6900/f/6900/2975 6933/f/6933/2990
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | backward 4x (3000 ms): 78 moves, 5 frames shown (strip 0, floor 1, approx 3, exact 1); out of order 2; ahead of target 0 (exact-rule frames ahead 1); worst lag behind target 2233 ms, behind finger 2033 ms; rate 1.7 fps; first frame 12 ms after the first move; exact frame 1455 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | backward 4x (3000 ms) S first move 20 ms, last move 2962 ms, final target 124900 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | backward 4x (3000 ms) F 136666/e/136667/32 136233/a/134000/184 135766/a/134367/295 134966/a/134867/475 134833/f/134833/489 124900/a/120033/3120 124900/e/124900/4417
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | forward 4x (3000 ms): 78 moves, 18 frames shown (strip 0, floor 0, approx 17, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 1); worst lag behind target 434 ms, behind finger 500 ms; rate 6.1 fps; first frame 28 ms after the first move; exact frame 2438 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | forward 4x (3000 ms) S first move 22 ms, last move 2956 ms, final target 12833 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | forward 4x (3000 ms) F 1066/e/1067/50 1266/a/1200/108 1533/a/1467/172 1666/a/1600/202 1866/a/1733/246 2000/a/1867/281 2100/a/2000/323 2266/a/2133/368 2466/a/2267/393 2666/a/2400/457 2866/a/2533/498 3000/a/2667/535 3100/a/2800/562 3300/a/2933/611 3433/a/3067/641 3566/a/3200/670 3766/a/3400/734 3966/a/3533/772 12833/a/4100/3112 12833/e/12833/5394
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | backward 8x (3000 ms): 75 moves, 0 frames shown (strip 0, floor 0, approx 0, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target - ms, behind finger - ms; rate 0.0 fps; first frame 3177 ms after the first move; exact frame 2870 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | backward 8x (3000 ms) S first move 20 ms, last move 2981 ms, final target 112900 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | backward 8x (3000 ms) F 112900/a/102533/3197 112900/e/112900/5852
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | forward 8x (3000 ms): 76 moves, 9 frames shown (strip 0, floor 0, approx 8, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 1); worst lag behind target 1567 ms, behind finger 1567 ms; rate 3.0 fps; first frame 36 ms after the first move; exact frame 1647 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | forward 8x (3000 ms) S first move 22 ms, last move 2995 ms, final target 24966 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | forward 8x (3000 ms) F 1166/e/1167/59 1566/a/1300/103 1800/a/1433/128 2166/a/1567/178 2433/a/1700/210 2800/a/1833/258 3066/a/1967/306 3400/a/2100/343 3800/a/2233/378 24966/a/19233/3093 24966/e/24967/4642
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | first backward step after a pause at 68866 ms: one frame back -> exact frame 14 ms (first shown exact); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | short backward sweep 1x (1 s) after the pause at 68866 ms: 28 moves, 3 frames shown (strip 0, floor 2, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 34 ms, behind finger 34 ms; rate 3.1 fps; first frame 20 ms after the first move; exact frame 2585 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | short backward sweep 1x (1 s) after the pause at 68866 ms S first move 21 ms, last move 974 ms, final target 67866 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | short backward sweep 1x (1 s) after the pause at 68866 ms F 68800/e/68800/41 68766/f/68733/75 68733/f/68733/101 67866/a/58433/1150 67866/e/67867/3560
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 20/exact/0, 54/floor/34, 80/floor/0, 1129/approx/9434, 3539/exact/-0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | first backward step after a pause at 105000 ms: one frame back -> exact frame - ms (first shown -); decode-behind at the pause: 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | short backward sweep 1x (1 s) after the pause at 105000 ms: 26 moves, 1 frames shown (strip 0, floor 0, approx 0, exact 1); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target 0 ms, behind finger 0 ms; rate 1.0 fps; first frame 16 ms after the first move; exact frame 999 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | short backward sweep 1x (1 s) after the pause at 105000 ms S first move 21 ms, last move 969 ms, final target 104000 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | short backward sweep 1x (1 s) after the pause at 105000 ms F 104933/e/104933/36 104000/a/101000/1104 104000/e/104000/1968
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): 16/exact/0, 1083/approx/3000, 1947/exact/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23=AV1 1080p30 (Seal) | back-and-forth 2x every 400 ms (4000 ms): 107 moves, 0 frames shown (strip 0, floor 0, approx 0, exact 0); out of order 0; ahead of target 0 (exact-rule frames ahead 0); worst lag behind target - ms, behind finger - ms; rate 0.0 fps; first frame 4140 ms after the first move; exact frame 2987 ms after the last move; strip share 0 %
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | back-and-forth 2x every 400 ms (4000 ms) S first move 19 ms, last move 3979 ms, final target 68833 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP23RAW=AV1 1080p30 (Seal) | back-and-forth 2x every 400 ms (4000 ms) F 68833/a/64100/4159 68833/e/68833/6966
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp23ScrubTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=8
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=b08Av11080
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 673.612
+
+OK (8 tests)
+
+
+INSTRUMENTATION_CODE: -1

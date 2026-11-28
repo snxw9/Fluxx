@@ -1,0 +1,27 @@
+--------- beginning of crash
+11-27 22:28:51.141  1907  1911 I libpq_sec: mtk-brm-commit-id:3e77ea451f1a71888ad80a98485c672035cc7ad1
+11-27 22:28:51.141  1907  1911 I libpq_sec: mtk-brm-change-id:Ib1c3b731a9b51136b91c0bd8ac5bd2334dc84c52
+11-27 22:28:51.141  1907  1911 I libpq_sec: mtk-brm-merge-id:none
+11-27 22:28:51.316  1907  1911 I meow_lib: mtk-brm-commit-id:52c9a73aaa3262db858156a4e6d61d6981a50cca
+11-27 22:28:51.316  1907  1911 I meow_lib: mtk-brm-change-id:I8f1714af0c8f09e69f657b1cd28e5836cb35e02f
+11-27 22:28:51.316  1907  1911 I meow_lib: mtk-brm-merge-id:none
+11-28 05:39:00.130 23140 23143 I libpq_sec: mtk-brm-commit-id:3e77ea451f1a71888ad80a98485c672035cc7ad1
+11-28 05:39:00.130 23140 23143 I libpq_sec: mtk-brm-change-id:Ib1c3b731a9b51136b91c0bd8ac5bd2334dc84c52
+11-28 05:39:00.130 23140 23143 I libpq_sec: mtk-brm-merge-id:none
+11-28 05:39:00.284 23140 23143 I meow_lib: mtk-brm-commit-id:52c9a73aaa3262db858156a4e6d61d6981a50cca
+11-28 05:39:00.284 23140 23143 I meow_lib: mtk-brm-change-id:I8f1714af0c8f09e69f657b1cd28e5836cb35e02f
+11-28 05:39:00.284 23140 23143 I meow_lib: mtk-brm-merge-id:none
+11-28 13:23:09.728 15550 15566 E AndroidRuntime: FATAL EXCEPTION: Instr: androidx.test.runner.AndroidJUnitRunner
+11-28 13:23:09.728 15550 15566 E AndroidRuntime: Process: com.fluxx.android.debug, PID: 15550
+11-28 13:23:09.728 15550 15566 E AndroidRuntime: java.lang.RuntimeException: Error while disconnecting UiAutomation@23c6b68[id=-1, displayId=0, flags=0]
+11-28 13:23:09.728 15550 15566 E AndroidRuntime: 	at android.app.UiAutomation.disconnect(UiAutomation.java:460)
+11-28 13:23:09.728 15550 15566 E AndroidRuntime: 	at android.app.Instrumentation.finish(Instrumentation.java:311)
+11-28 13:23:09.728 15550 15566 E AndroidRuntime: 	at androidx.test.runner.MonitoringInstrumentation.finish(MonitoringInstrumentation.java:409)
+11-28 13:23:09.728 15550 15566 E AndroidRuntime: 	at androidx.test.runner.AndroidJUnitRunner.onStart(AndroidJUnitRunner.java:476)
+11-28 13:23:09.728 15550 15566 E AndroidRuntime: 	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2683)
+11-28 13:23:09.728 15550 15566 E AndroidRuntime: Caused by: android.os.DeadObjectException
+11-28 13:23:09.728 15550 15566 E AndroidRuntime: 	at android.os.BinderProxy.transactNative(Native Method)
+11-28 13:23:09.728 15550 15566 E AndroidRuntime: 	at android.os.BinderProxy.transact(BinderProxy.java:670)
+11-28 13:23:09.728 15550 15566 E AndroidRuntime: 	at android.app.IUiAutomationConnection$Stub$Proxy.disconnect(IUiAutomationConnection.java:568)
+11-28 13:23:09.728 15550 15566 E AndroidRuntime: 	at android.app.UiAutomation.disconnect(UiAutomation.java:458)
+11-28 13:23:09.728 15550 15566 E AndroidRuntime: 	... 4 more

@@ -18,7 +18,9 @@ class CompositionRenderer(private val context: Context, private val repository: 
     /** TLP T2: the clock for releasing hidden layers' decoders / textures after [DelayedRelease.DEFAULT_DELAY_MS] (injectable). */
     releaseClock: () -> Long = { android.os.SystemClock.uptimeMillis() },
     /** MP2.1 B2: warm decoders ahead of cuts and re-entries while playing. Preview only (export keeps its own rotation). */
-    warmUp: Boolean = surface != null) : Closeable {
+    warmUp: Boolean = surface != null,
+    /** MP2.3: the scrub strip (fast sweeps) and its background builder, and decode-behind while paused. Preview only. */
+    scrubStrip: Boolean = surface != null) : Closeable {
     private val interactive = surface != null
     val session = RenderBridge.create(surface,width,height,context.assets).also { check(it != 0L) { "Vulkan rendering is unavailable" } }
     private val lowRam = context.getSystemService(android.app.ActivityManager::class.java).isLowRamDevice
@@ -37,11 +39,41 @@ class CompositionRenderer(private val context: Context, private val repository: 
     @Volatile private var trimmed = false
     private val trimCallbacks = object : android.content.ComponentCallbacks2 {
         override fun onTrimMemory(level: Int) {
-            if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) trimmed = true
+            if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) { trimmed = true; stripTrimmed() }
         }
         override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {}
-        @Deprecated("Deprecated in Java") override fun onLowMemory() { trimmed = true }
+        @Deprecated("Deprecated in Java") override fun onLowMemory() { trimmed = true; stripTrimmed() }
     }.also { if (interactive) context.applicationContext.registerComponentCallbacks(it) }
+
+    // ---- MP2.3: scrub strip, its builder, decode-behind -------------------------------------------------------------
+    private val strips: ScrubStrips? = if (scrubStrip) ScrubStrips.get(context) else null
+    /** The strip pictures uploaded for drawing (GPU buffers, [StripPolicy.RAM_BYTES]); never consulted in export. */
+    private class StripPicture(val buffer: HardwareBuffer, val width: Int, val height: Int) { val bytes get() = width.toLong() * height * 4 }
+    private val stripFrames: StripFrames<StripPicture>? = strips?.let { store ->
+        StripFrames(false, store::opened, StripPolicy.RAM_BYTES, decode = { bytes ->
+            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply {
+                inPreferredConfig = Bitmap.Config.ARGB_8888 })?.let { bmp ->
+                try { FluxxEngine.bitmapBuffer(bmp)?.let { StripPicture(it, bmp.width, bmp.height) } } finally { bmp.recycle() } }
+        }, sizeOf = { it.bytes }, onEvict = { it.buffer.close() }) }
+    // The builder's gate: the preview has rendered nothing (and decoded nothing behind) for 300 ms.
+    @Volatile private var foregroundEndNs = System.nanoTime()
+    @Volatile private var behindRunning = false
+    private val stripBuilder: StripBuilder<StripDecoder>? = strips?.let { store ->
+        StripBuilder(store.ops(), export = false, executor = STRIP_EXECUTOR,
+            mayRun = { MediaWork.mayRunBackground() && frameStartNs == 0L && !behindRunning && System.nanoTime() - foregroundEndNs >= MediaWorkPolicy.RESUME_IDLE_NS },
+            clockMs = { android.os.SystemClock.uptimeMillis() }, events = { MediaProbes.events }) }
+    @Volatile private var stripTrim = false
+    private fun stripTrimmed() { stripBuilder?.trim(); stripTrim = true }
+    /** The builder has more work: the paused preview wakes to tick it ([stripTick]). */
+    val stripWantsTick: Boolean get() = stripBuilder?.wantsTick == true
+    /** MP2.3: strip counters (runs, pictures, seeks, blocked, failed, closed paused, cancelled) and in-RAM bytes; null without a strip. */
+    internal fun stripCounts(): LongArray? = stripBuilder?.counts?.let { it.copyOf() + longArrayOf(stripFrames?.bytes ?: 0L) }
+    /** MP2.3: each layer's last scrub request (source µs): the direction of the finger. Cleared when a frame is not a scrub frame. */
+    private val scrubLastUs = HashMap<Long, Long>()
+    private val scrubForward = HashMap<Long, Boolean>()
+    /** The last frame rendered completely: its time (decode-behind works only on it). */
+    private var completeFrameUs = -1L
+    private var completeFrameProject: ProjectDocument? = null
     private val nearUris = HashSet<String>()
     private val heldKeys = ArrayList<String>()
     private data class Raster(val buffer: HardwareBuffer, val width: Int, val height: Int) {
@@ -171,6 +203,73 @@ class CompositionRenderer(private val context: Context, private val repository: 
         val d = pool.take(layerId) { it.cheapFor(sourceUs) } ?: return
         if (current != null) { flush(); decoders.remove(key); current.decoder.close() }
         decoders[key] = DecoderEntry(d, repository.video(uri))
+    }
+
+    /**
+     * MP2.3 B2: decode behind the paused frame (the preview calls it once the frame has been idle for 200 ms). For each
+     * decoder the last complete frame used, [VideoDecoder.decodeBehind] fills its cache with the frames just before the
+     * playhead, so the first backward steps are cache hits. Nothing is drawn. Cancellable by any new request.
+     */
+    fun decodeBehind(project: ProjectDocument, timeUs: Long, cancelled: () -> Boolean) {
+        if (strips == null || completeFrameProject !== project || completeFrameUs != timeUs) {
+            MediaProbes.events?.invoke("behind-not-run t=$timeUs complete=$completeFrameUs same=${completeFrameProject === project}")
+            return
+        }
+        behindRunning = true
+        try {
+            val done = HashSet<String>()
+            for ((id, _, sourceUs) in frameVideo) {
+                if (cancelled()) throw CancellationException("Superseded idle work")
+                if (videoCull[id] == CULL_COLD) continue
+                val key = layerKeys[id] ?: continue
+                if (!done.add(key)) continue
+                decoders[key]?.decoder?.decodeBehind(sourceUs, cancelled)
+            }
+        } finally { behindRunning = false; foregroundEndNs = System.nanoTime() }
+    }
+
+    /**
+     * MP2.3 B1: the paused preview's housekeeping for the strip builder (render thread): the sources of [project]'s
+     * visible video layers in order of their distance from [timeUs], each over its used range, with the room its decoder
+     * needs checked against the cap and budget here (where the pool lives).
+     */
+    fun stripTick(project: ProjectDocument, timeUs: Long) {
+        val builder = stripBuilder ?: return
+        if (stripTrim) { stripTrim = false; stripFrames?.clear() }
+        val windows = UsedRange.of(project)
+        val sources = ArrayList<Pair<Long, StripBuilder.Source>>()
+        for ((uri, w) in windows) {
+            val info = runCatching { repository.video(uri) }.getOrNull() ?: continue
+            val layers = project.composition.layers.filter { it.visible && it.type == LayerType.VIDEO && it.asset?.uri == uri && it.timing.durationUs != null }
+            val duration = info.durationUs ?: layers.mapNotNull { it.asset?.durationUs }.maxOrNull() ?: continue
+            // The layer nearest the playhead: its source time there (or at its nearer edge).
+            var best = Long.MAX_VALUE; var focus = w.first().first
+            for (l in layers) {
+                val start = l.timing.startUs; val end = l.timing.endUs ?: continue
+                val (distance, source) = when {
+                    timeUs < start -> (start - timeUs) to l.timing.sourceInUs
+                    timeUs >= end -> (timeUs - end) to (l.timing.sourceInUs + (end - start) - 1)
+                    else -> 0L to (l.timing.sourceInUs + (timeUs - start))
+                }
+                if (distance < best) { best = distance; focus = source }
+            }
+            strips?.get(uri, duration)
+            sources += best to StripBuilder.Source(uri, w, focus, duration,
+                DecoderKeys.decoderBytes(info.width, info.height, DecoderPlan.cacheFrames(info.width, info.height)), info.mime)
+        }
+        builder.tick(sources.sortedBy { it.first }.map { it.second }) { s -> stripRoom(s) }
+    }
+
+    /** Whether the builder's decoder for [s] fits now (cap, memory budget, codec instances); the reason when not. */
+    private fun stripRoom(s: StripBuilder.Source): String? {
+        val info = runCatching { repository.video(s.uri) }.getOrNull() ?: return "no-info"
+        val warmCount = warm?.count ?: 0
+        return when {
+            decoders.size + warmCount + 1 > decoderSlots -> "cap"
+            decoders.values.sumOf { it.bytes } + (warm?.bytes ?: 0L) + s.bytes > decoderBudget -> "budget"
+            decoders.values.count { it.info.mime == s.mime } + 1 > info.maxInstances -> "instances"
+            else -> null
+        }
     }
 
     private fun releaseHidden(project: ProjectDocument, timeUs: Long) {
@@ -536,17 +635,21 @@ class CompositionRenderer(private val context: Context, private val repository: 
         val info = repository.video(uri)
         val needs = DecoderKeys.decoderBytes(info.width, info.height, DecoderPlan.cacheFrames(info.width, info.height))
         // MP2.1: warm decoders count against the cap and the budget; the current frame wins (they are dropped first).
+        // MP2.3: so does the strip builder's decoder (dropped after the warm ones, before any decoder of the pool).
         fun warmCount() = warm?.count ?: 0
-        fun held() = decoders.size + warmCount()
-        fun overBudget() = decoders.values.sumOf { it.bytes } + (warm?.bytes ?: 0L) + needs > decoderBudget
-        while ((decoders.isNotEmpty() || warmCount() > 0) && (held() >= decoderSlots || overBudget() ||
-            decoders.values.count { it.info.mime == info.mime } >= info.maxInstances)) {
+        fun stripCount() = if (stripBuilder?.holding == true) 1 else 0
+        fun held() = decoders.size + warmCount() + stripCount()
+        fun overBudget() = decoders.values.sumOf { it.bytes } + (warm?.bytes ?: 0L) + (stripBuilder?.reservedBytes ?: 0L) + needs > decoderBudget
+        fun instances() = decoders.values.count { it.info.mime == info.mime } + (if (stripBuilder?.reservedMime == info.mime) 1 else 0)
+        while ((decoders.isNotEmpty() || warmCount() > 0 || stripCount() > 0) && (held() >= decoderSlots || overBudget() ||
+            instances() >= info.maxInstances)) {
             if (warm?.dropForRoom() == true) continue
+            if (stripBuilder?.dropForRoom() == true) continue
             if (decoders.isEmpty() || !evictDecoder()) break
         }
         if (held() >= decoderSlots) return null // Preview only: export always frees a slot above.
         // MP1.2: the preview leaves a layer out rather than open a decoder past the memory budget (lmkd kills the app there).
-        if (interactive && (decoders.isNotEmpty() || warmCount() > 0) && overBudget()) return null
+        if (interactive && (decoders.isNotEmpty() || warmCount() > 0 || stripCount() > 0) && overBudget()) return null
         var opened: VideoDecoder? = null
         try { opened = VideoDecoder(context,Uri.parse(uri)) }
         catch (e: Exception) {
@@ -722,7 +825,11 @@ class CompositionRenderer(private val context: Context, private val repository: 
         // MP2.1: the warm-up gate pauses while this frame runs late.
         val now = System.nanoTime()
         frameUs = timeUs; frameWallNs = now; frameStartNs = now
-        try { renderFrame(project, timeUs, targetWidth, targetHeight, cancelled) } finally { frameStartNs = 0L }
+        completeFrameProject = null
+        try {
+            renderFrame(project, timeUs, targetWidth, targetHeight, cancelled)
+            completeFrameProject = project; completeFrameUs = timeUs
+        } finally { frameStartNs = 0L; foregroundEndNs = System.nanoTime() }
     }
 
     private fun renderFrame(project: ProjectDocument, timeUs: Long, targetWidth: Int, targetHeight: Int,
@@ -747,6 +854,10 @@ class CompositionRenderer(private val context: Context, private val repository: 
             prepared=project
             wantedDecoders=RenderLayers.wantedDecoders(project); wantedRasters=RenderLayers.wantedRasters(project)
         }
+        // MP2.3: a Play press stops the strip builder at once (it only runs while the preview is paused and idle).
+        if (playing) stripBuilder?.cancel()
+        if (!approximateFrames && scrubLastUs.isNotEmpty()) { scrubLastUs.clear(); scrubForward.clear() }
+        if (stripTrim) { stripTrim = false; stripFrames?.clear() }
         // Between frames: nothing is staged and the previous frame's GPU work has completed (submitWork waits on its fence).
         releaseHidden(project, timeUs)
         val comp=project.composition
@@ -884,6 +995,37 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 if(cull == CULL_COLD) return@forEachActive
                 // AUD2 B4: over the decoder cap the layer is left out of this frame; the others keep playing.
                 val key=layerKeys[layer.id] ?: return@forEachActive
+                // MP2.3 B2: a fast sweep shows the source's strip picture at or before the target (no decoder seek per
+                // target); the exact frame follows 120 ms after the last move. Not covered there: the bounded decode below.
+                // The open decoder keeps serving targets it reaches without a seek, at full size as before, so it stays
+                // current and the exact frame needs no seek when the finger stops: moving FORWARD, anything it decodes on
+                // to within its GOP (the bounded decode, as before MP2.3: in order with the finger); moving backward only
+                // what its cache proves or it stands at most 200 ms before (cheapFor): there the bounded decode would walk
+                // forward while the finger goes back (MP2.3's out-of-order frames).
+                // An unchanged target (a redraw: several seeks in one composition frame) keeps the previous direction.
+                val forward=approximateFrames && stripFrames != null && (scrubLastUs[layer.id] ?: Long.MAX_VALUE).let { last ->
+                    if(sourceTimeUs == last) scrubForward[layer.id] == true else sourceTimeUs > last }
+                if(approximateFrames) { scrubLastUs[layer.id]=sourceTimeUs; scrubForward[layer.id]=forward }
+                val open=if(approximateFrames && stripFrames != null) decoders[key]?.decoder else null
+                if(approximateFrames && stripFrames != null && open?.let { if(forward) it.scrubWithoutSeek(sourceTimeUs) else it.cheapFor(sourceTimeUs) } != true) {
+                    val probe=MediaProbes.events
+                    val lookup=if(probe != null) System.nanoTime() else 0L
+                    val hit=stripFrames.frame(uri,sourceTimeUs)
+                    if(hit != null) {
+                        lastFrameApproximate=true
+                        probe?.invoke("strip-frame key=${MediaProbes.key(uri)} t=$sourceTimeUs shown=${hit.pts} how=${if(hit.cached) "ram" else "disk"} us=${(System.nanoTime()-lookup)/1000}")
+                        if(cull == CULL_WARM) return@forEachActive
+                        val info=repository.video(uri)
+                        val crop=cropSizes[uri]
+                        LayerGeometry.matrix(matrix,posX,posY,scaleX,scaleY,rot,comp.width,comp.height,
+                            if(crop != null) (crop ushr 32).toInt() else info.width, if(crop != null) (crop and 0xffffffffL).toInt() else info.height,
+                            info.rotation,info.pixelAspect,referenceWidth=referenceWidth,referenceHeight=referenceHeight,anchorX=layer.anchorX,anchorY=layer.anchorY)
+                        // Its own native slot: the video slot keeps its YUV pipeline for the exact frame that follows.
+                        check(RenderBridge.layer(session,layer.id xor STRIP_SLOT,hit.picture.buffer,matrix,opacity)) { "Could not composite a strip picture" }
+                        staged++
+                        return@forEachActive
+                    }
+                }
                 // MP2.1 B2: a cut / re-entry takes its warm decoder (first frame already decoded).
                 handoff(layer.id,key,uri,sourceTimeUs)
                 val opening=warm != null && key !in decoders && !approximateFrames
@@ -985,6 +1127,11 @@ class CompositionRenderer(private val context: Context, private val repository: 
         /** MP2.1: one background thread opens and positions warm decoders (one at a time, across preview renderers). */
         private val WARM_EXECUTOR=java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
             Thread({ MediaWork.background { runnable.run() } },"fluxx-warm").apply { isDaemon=true } }
+        /** MP2.3: one background thread builds scrub strips (one decoder at a time, across preview renderers). */
+        private val STRIP_EXECUTOR=java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+            Thread({ MediaWork.background { runnable.run() } },"fluxx-strip").apply { isDaemon=true } }
+        /** MP2.3: a layer's strip pictures use their own native slot (layer id with this bit flipped). */
+        private const val STRIP_SLOT=1L shl 62
         /** MP2.1: culling-test steps read ahead per frame for a culled animated layer's return. */
         private const val RETURN_SCAN_STEPS=8
         /** Export rounds for deferred tier keys (each worker reply is <= 8 MiB / 20 s). */
@@ -998,6 +1145,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         synchronized(tierLock) { closed=true;RenderBridge.destroy(session) }
         if (interactive) { TextLayerErrors.clear(); context.applicationContext.unregisterComponentCallbacks(trimCallbacks) }
         warm?.close()
+        stripBuilder?.close(); stripFrames?.clear()
         decoders.values.forEach { it.decoder.close() }; decoders.clear()
         images.values.forEach { it.buffer.close() }; images.clear()
     }

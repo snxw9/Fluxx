@@ -76,6 +76,25 @@ class FrameCache<T>(val capacity: Int, private val onEvict: (T) -> Unit) {
         return if (b.run == endedRun && b.seq == lastSeqOfRun(b.run)) b.item else null
     }
 
+    /**
+     * MP2.3 B2: how many cached frames at or before [t], from its floor frame back, are consecutive in one run (each the
+     * frame decoded just before the next): the backward steps from [t] the cache answers without a decode. 0 when the floor
+     * frame is not proven ([floorExact]).
+     */
+    fun runBefore(t: Long): Int {
+        if (floorExact(t) == null) return 0
+        var i = entries.indexOfLast { it.pts <= t }
+        var n = 1
+        while (i > 0) {
+            val b = entries[i - 1]; val a = entries[i]
+            if (b.run != a.run || b.seq + 1 != a.seq) break
+            n++; i--
+        }
+        return n
+    }
+    /** MP2.3 B2: the smallest cached pts (Long.MAX_VALUE when empty). */
+    fun firstPts(): Long = entries.firstOrNull()?.pts ?: Long.MAX_VALUE
+
     /** Whether the newest frame of the current run lies at or after [t] (a forward decode has reached it). */
     fun lastPts(): Long = entries.filter { it.run == run }.maxByOrNull { it.seq }?.pts ?: Long.MIN_VALUE
 
@@ -137,6 +156,12 @@ object DecoderPlan {
     const val CACHE_BYTES = 16L * 1024 * 1024
     /** While scrubbing ([approximate]), at most this many frames are decoded per request (the rest continues next time). */
     const val APPROX_DECODE_FRAMES = 4
+    /**
+     * MP2.3 B2: decode-behind runs only while fewer than this many frames (the playhead's own included) are cached as one
+     * run up to the playhead ([FrameCache.runBefore]): with the frame before it cached, the first step back is already a
+     * hit, and a run cancelled half-way would only evict what is there.
+     */
+    const val BEHIND_RUN_BELOW = 2
     /** MP2.1 B2: a request this far ahead of the last decoded frame decodes on cheaply (a few frames, no seek). */
     const val CHEAP_FORWARD_US = 200_000L
 

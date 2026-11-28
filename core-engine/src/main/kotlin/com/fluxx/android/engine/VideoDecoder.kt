@@ -54,6 +54,8 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
     /** The last [frameAt] returned a frame that is not the exact nearest frame (scrubbing): ask again without approximate. */
     var lastApproximate = false; private set
     private val probeKey = uri.toString().hashCode().toUInt().toString(16)
+    /** MP2.3: the track's nominal frame duration (us), 33 333 without a frame rate (decode-behind's reach). */
+    private var frameUs = 33_333L
 
     init {
         val openStart = SystemClock.elapsedRealtimeNanos()
@@ -74,6 +76,8 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
             rotation = geometry.rotation
             pixelAspect = geometry.pixelAspect
             frames = DecoderPlan.cacheFrames(width, height)
+            frameUs = format.takeIf { it.containsKey(MediaFormat.KEY_FRAME_RATE) }?.let { f ->
+                runCatching { f.getNumber(MediaFormat.KEY_FRAME_RATE)!!.toDouble() }.getOrNull() }?.takeIf { it > 1 }?.let { (1e6 / it).toLong() } ?: 33_333L
             made = FrameCache(frames) { it.close() }
             // Rotation is applied explicitly by the shared geometry contract.
             format.setInteger(MediaFormat.KEY_ROTATION, 0)
@@ -156,6 +160,54 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
      */
     fun cheapFor(timeUs: Long): Boolean = cache.exact(timeUs) != null || firstFrame(timeUs) != null ||
         (outPos >= 0 && !outputEnded && timeUs >= outPos && timeUs - outPos <= DecoderPlan.CHEAP_FORWARD_US)
+
+    /**
+     * MP2.3 B2: decode behind the paused playhead. When the cache cannot answer the [cacheFrames] - 1 frames before
+     * [timeUs] (a backward step would flush, seek to the sync frame and decode the whole GOP up to it), seek to the sync
+     * frame before them and decode forward up to [timeUs] (not past it): the cache then holds [timeUs] and the frames
+     * just before it, one run, so the first backward steps are cache hits. Frames are the decoder's own output, served by
+     * the cache's exact rule: the pictures are those a straight decode gives. Cancellable like [frameAt] (the latest
+     * request wins); returns the frames decoded (0: nothing to do).
+     */
+    fun decodeBehind(timeUs: Long, cancelled: () -> Boolean): Int {
+        val probe = testEvents
+        val start = SystemClock.elapsedRealtimeNanos()
+        val want = cacheFrames - 1
+        val have = cache.runBefore(timeUs)
+        // Only when the frame before the playhead is NOT cached (DecoderPlan.BEHIND_RUN_BELOW): a run that a request then
+        // cancels half-way has evicted cached frames for nothing (on the A16 an MKV sync seek landed a GOP early and a step
+        // back that was a cache hit took 1.5-2.5 s). Also not when the run reaches the stream's first picture.
+        if (have >= minOf(want, DecoderPlan.BEHIND_RUN_BELOW) || (have > 0 && firstFramePts >= 0 && cache.firstPts() <= firstFramePts)) {
+            probe?.invoke("behind-skip $probeKey t=$timeUs had=$have want=$want cache=${cache.ptsList().joinToString(",")}")
+            return 0
+        }
+        var sync = prevSync(timeUs)
+        // Fewer frames than wanted between that sync frame and the playhead: start one GOP earlier.
+        if (timeUs - sync < want * frameUs && sync > streamStartUs.coerceAtLeast(0)) sync = prevSync(sync - 1)
+        lastApproximate = false; held = false
+        var decoded = 0
+        try {
+            seek(sync)
+            while (!outputEnded && outPos < timeUs) { decodeNext(cancelled, timeUs) ?: break; decoded++ }
+        } catch (e: CancellationException) {
+            probe?.invoke("behind-cancelled $probeKey t=$timeUs sync=$sync decoded=$decoded us=${(SystemClock.elapsedRealtimeNanos() - start) / 1000}")
+            throw e
+        }
+        probe?.invoke("behind $probeKey t=$timeUs sync=$sync had=$have decoded=$decoded cached=${cache.runBefore(timeUs)} us=${(SystemClock.elapsedRealtimeNanos() - start) / 1000}")
+        return decoded
+    }
+
+    /**
+     * MP2.3 B2: whether a scrub request for [timeUs] needs no seek here: the cache proves its floor frame, or the decoder
+     * stands at or before it and can decode forward to it ([ScrubFloor]'s own forward condition: within
+     * [DecoderPlan.SEEK_AHEAD_US], or in the sync frame's GOP it already reached). Such requests keep the bounded decode
+     * (as before MP2.3); only the ones that would seek are served by the scrub strip.
+     */
+    fun scrubWithoutSeek(timeUs: Long): Boolean {
+        if (cache.floorExact(timeUs) != null || firstFrame(timeUs) != null) return true
+        if (outPos < 0 || outputEnded || timeUs < outPos) return false
+        return timeUs - outPos <= DecoderPlan.SEEK_AHEAD_US || prevSync(timeUs) <= outPos
+    }
 
     /** MP2.1: the stream's first picture, when [timeUs] lies before it and it is cached (the nearest-frame answer). */
     private fun firstFrame(timeUs: Long): Image? = if (firstFramePts >= 0 && timeUs < firstFramePts) cache.exact(firstFramePts) else null

@@ -1,0 +1,27 @@
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp21GoldenTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.fluxx.android.ui.Mp21GoldenTest:
+INSTRUMENTATION_STATUS: test=warmUpIsPixelIdentical
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp21GoldenTest start: low_power=0 plugged=AC level=80 percent temperature=39.4C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP21=MP21 golden: 360 frames compared (12 cuts incl. 4 to VP9, 1 re-entry), 0 differ; warm-ups started 12, ready 12, used 12, released unused 0, failed 0, blocked 0, frame waited 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp21GoldenTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=warmUpIsPixelIdentical
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 111.745
+
+OK (1 test)
+
+
+INSTRUMENTATION_CODE: -1

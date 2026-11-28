@@ -1,0 +1,1 @@
+STATE=Mp23GoldenTest start: low_power=0 plugged=AC level=70 percent temperature=39.5C screen=Awake keyguard=unlocked

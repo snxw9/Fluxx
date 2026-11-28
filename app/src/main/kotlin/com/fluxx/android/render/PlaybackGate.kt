@@ -54,5 +54,7 @@ object ScrubPolicy {
     const val GAP_NS = 250_000_000L
     /** After an approximate scrub frame, the exact frame is rendered once no request came for this long. */
     const val SETTLE_MS = 120L
+    /** MP2.3 B2: a paused, exact frame idle this long gets the frames before it decoded into the cache (decode-behind). */
+    const val BEHIND_IDLE_MS = 200L
     fun scrubbing(sinceLastSeekNs: Long) = sinceLastSeekNs in 0 until GAP_NS
 }
