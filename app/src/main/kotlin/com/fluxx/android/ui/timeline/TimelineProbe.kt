@@ -11,6 +11,8 @@ object TimelineProbe {
     @Volatile var enabled = false
     val viewCompositions = AtomicLong()
     val rowCompositions = AtomicLong()
+    /** MP2.1 B3: the playhead readout pill's recompositions (its text changes once per frame while playing). */
+    val playheadCompositions = AtomicLong()
 
     class Control(
         /** Sets the chosen zoom (dp per second); the view applies its own bounds. */
@@ -32,5 +34,5 @@ object TimelineProbe {
     /** TLV1.1 A2: a clip's thumbnail tiles as drawn (layer id, tiles in box x, box width px, tile width px), per draw. */
     @Volatile var tiles: ((Long, List<ThumbnailTiles.Tile>, Float, Float) -> Unit)? = null
 
-    fun reset() { viewCompositions.set(0); rowCompositions.set(0) }
+    fun reset() { viewCompositions.set(0); rowCompositions.set(0); playheadCompositions.set(0) }
 }
