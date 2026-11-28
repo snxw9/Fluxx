@@ -227,6 +227,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
 
     /** Flush and seek to [sync]; the decoder then stands just before it (a later target continues forward from there). */
     private fun seek(sync: Long) {
+        testAdvance?.invoke(this, "seek")
         // Every rendered output was acquired synchronously before this flush; no pending callbacks.
         codec!!.flush()
         extractor.seekTo(sync, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
@@ -252,6 +253,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
     /** Decodes the next frame into the cache; null at the end of the stream, or (MP1.2) when the last picture is held for [targetUs]. */
     private fun decodeNext(cancelled: () -> Boolean, targetUs: Long = Long.MAX_VALUE): Image? {
         if (outputEnded) return null
+        testAdvance?.invoke(this, "decode")
         val deadline = SystemClock.elapsedRealtime() + 5000
         val decoder = requireNotNull(codec)
         while (!outputEnded) {
@@ -315,6 +317,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
     }
 
     override fun close() {
+        testAdvance?.invoke(this, "close")
         testEvents?.invoke("close $probeKey")
         releaseAll(cache)
     }
@@ -325,5 +328,7 @@ class VideoDecoder(context: Context, private val uri: Uri) : Closeable {
          * "cancelled", "close"). Null in the app (nothing is built then); the benchmarks log flushes and re-creations.
          */
         @Volatile @JvmStatic var testEvents: ((String) -> Unit)? = null
+        /** MP2.2 B1, TEST-ONLY (null in the app): called before this decoder decodes, seeks or closes (the staged-image check). */
+        @Volatile @JvmStatic var testAdvance: ((VideoDecoder, String) -> Unit)? = null
     }
 }

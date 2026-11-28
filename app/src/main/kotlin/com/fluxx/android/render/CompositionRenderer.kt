@@ -295,6 +295,8 @@ class CompositionRenderer(private val context: Context, private val repository: 
     private var prepared: ProjectDocument? = null
     private var plan: FramePlan? = null
     private var staged = 0
+    /** MP2.2 B1: the decoders with an image staged since the last flush (cleared with [staged]). */
+    private val stagedDecoders = StagedDecoders()
     private val matrix = FloatArray(16)
     private val evaluatedTransform = FloatArray(6)
     private data class FixtureLayout(val source: String, val font: String, val handle: Long)
@@ -461,7 +463,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         }
         if (cancelled()) throw CancellationException("Superseded frame")
         val finishing = System.nanoTime()
-        check(RenderBridge.finish(session)); staged = 0
+        check(RenderBridge.finish(session)); staged = 0; stagedDecoders.clear()
         stageNs[STAGE_FINISH] += System.nanoTime() - finishing
         if(interactive && TextEditTimings.waitingFor(project)) TextEditTimings.frameReady(project,RenderBridge.textStats(session))
     }
@@ -612,7 +614,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         check(RenderBridge.flush(session)) { "GPU compositing failed" }
         if (probing) probeNs[PROBE_FLUSH_NS] += System.nanoTime() - flushing
         stageNs[STAGE_FLUSHES]++
-        staged = 0
+        staged = 0; stagedDecoders.clear()
     }
     /**
      * Evicts the least recently used decoder the current frame does not use. When every one is in use: the preview gives
@@ -828,10 +830,16 @@ class CompositionRenderer(private val context: Context, private val repository: 
         val now = System.nanoTime()
         frameUs = timeUs; frameWallNs = now; frameStartNs = now
         completeFrameProject = null
+        var complete = false
         try {
             renderFrame(project, timeUs, targetWidth, targetHeight, cancelled)
-            completeFrameProject = project; completeFrameUs = timeUs
-        } finally { frameStartNs = 0L; foregroundEndNs = System.nanoTime() }
+            completeFrameProject = project; completeFrameUs = timeUs; complete = true
+        } finally {
+            frameStartNs = 0L; foregroundEndNs = System.nanoTime()
+            // MP2.2 B1: a cancelled or failed frame leaves its draws staged natively; they are never submitted (the next
+            // begin drops them), so nothing counts as staged any more (B2 row 13).
+            if (!complete) { staged = 0; stagedDecoders.clear() }
+        }
     }
 
     private fun renderFrame(project: ProjectDocument, timeUs: Long, targetWidth: Int, targetHeight: Int,
@@ -864,7 +872,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         releaseHidden(project, timeUs)
         val comp=project.composition
         check(RenderBridge.begin(session,targetWidth,targetHeight,comp.width,comp.height)) { "Could not start composition frame" }
-        staged=0
+        staged=0; stagedDecoders.clear()
         val outputScale=if(comp.width>0) targetWidth.toFloat()/comp.width else 1f
         val tiering = System.nanoTime(); android.os.Trace.beginSection("fluxx.tiers")
         try { applyTextTiers(project,timeUs,outputScale) } finally { android.os.Trace.endSection() }
@@ -1034,10 +1042,10 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 val openStart=if(opening) System.nanoTime() else 0L
                 val decoder=decoder(key,uri) ?: run { layersWithoutDecoder++; return@forEachActive }
                 // A source reused by several clips may need a seek; finish earlier uses before advancing it.
-                // MP2.2: test-only switch (default off): skip this flush to measure its cost (distinct decoders only).
+                // MP2.2 B1: flush only when this decoder already has an image staged in the batch (a shared decoder):
+                // advancing it could recycle that image before it is drawn. Distinct decoders need no flush here.
                 val probing=testProbe
-                if(probing && staged > 0 && !testSkipVideoFlush) probeNs[PROBE_VIDEO_FLUSHES]++
-                if(!testSkipVideoFlush) flush()
+                if(stagedDecoders.mustFlushBefore(key,staged,testFlushAlways)) { if(probing) probeNs[PROBE_VIDEO_FLUSHES]++; flush() }
                 // AUD2 B2: while scrubbing, a bounded decode (the nearest cached / sync frame); the exact frame follows.
                 val decoding=if(probing) System.nanoTime() else 0L
                 val image=decoder.frameAt(sourceTimeUs,cancelled,interactive && approximateFrames)
@@ -1056,6 +1064,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
                 image.hardwareBuffer?.use { buffer ->
                     check(RenderBridge.layer(session,layer.id,buffer,matrix,opacity)) { "Could not import video frame" }
                 } ?: error("Decoder returned an inaccessible image")
+                stagedDecoders.staged(key,decoder)
                 if(probing) { probeNs[PROBE_LAYER_NS] += System.nanoTime()-layering; probeNs[PROBE_VIDEO_DRAWN]++ }
             } else {
                 val raster=raster(layer)
@@ -1074,6 +1083,7 @@ class CompositionRenderer(private val context: Context, private val repository: 
         val finishing=if(testProbe) System.nanoTime() else 0L
         check(RenderBridge.finish(session)) { "Could not finish composition frame" }
         if(testProbe) probeNs[PROBE_FINISH_NS] += System.nanoTime()-finishing
+        staged=0; stagedDecoders.clear()
         if(interactive && TextEditTimings.waitingFor(project)) TextEditTimings.frameReady(project,RenderBridge.textStats(session))
         staged=0
         val iterator = textLayouts.entries.iterator()
@@ -1145,8 +1155,15 @@ class CompositionRenderer(private val context: Context, private val repository: 
         const val PROBE_COUNT = 7
         /** MP2.2, test-only (default off; the app never sets it): collect [probeCounters]. */
         @Volatile @JvmStatic internal var testProbe = false
-        /** MP2.2, test-only (default off; the app never sets it): skip the flush before each video frameAt (flush upper bound). */
-        @Volatile @JvmStatic internal var testSkipVideoFlush = false
+        /** MP2.2 B1, test-only (default off; the app never sets it): flush before every video frameAt, as before MP2.2. */
+        @Volatile @JvmStatic internal var testFlushAlways = false
+        /**
+         * MP2.2 B1, test-only (default off): count every decoder decode / seek / close while it has an image staged and
+         * unflushed ([StagedDecoders.violations]).
+         */
+        @JvmStatic internal var testCheckStaged: Boolean
+            get() = StagedDecoders.checking
+            set(on) { StagedDecoders.checking = on; VideoDecoder.testAdvance = if (on) { d, what -> StagedDecoders.violation(d, what) } else null; StagedDecoders.resetViolations() }
         /** MP1 B3: a video layer's state for one frame. */
         private const val CULL_DRAW = 0
         private const val CULL_WARM = 1
