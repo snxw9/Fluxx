@@ -1,0 +1,17 @@
+reboot
+reboot
+reboot
+reboot,1795889235
+cold,powerkey,1795433633
+reboot,lpm,1794983458
+cold,powerkey,1794977605
+338.61 388.58
+0
+15
+  mWakefulness=Awake
+Failed to write while dumping service power: Broken pipe
+    isKeyguardShowing=false
+Failed to write while dumping service window: Broken pipe
+  AC powered: false
+  level: 77
+  temperature: 383

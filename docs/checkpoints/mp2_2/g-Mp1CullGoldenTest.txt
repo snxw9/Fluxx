@@ -1,0 +1,14 @@
+STATE=Mp1CullGoldenTest start: low_power=0 plugged=AC level=80 percent temperature=38.6C screen=Awake keyguard=unlocked
+MP1=B3 golden: parenting does not exist in the model: the hidden-parent scene is not applicable
+MP1=B3 golden 'scale 0, both axes': 4 frames, byte-identical; ON culled 8 layer-frames, skipped 4 video decodes, 0 warm decodes
+MP1=B3 golden 'scale 0, one axis': 4 frames, byte-identical; ON culled 8 layer-frames, skipped 4 video decodes, 0 warm decodes
+MP1=B3 golden 'fully outside (video, solid)': 4 frames, byte-identical; ON culled 8 layer-frames, skipped 4 video decodes, 0 warm decodes
+MP1=B3 golden 'opacity 0': 4 frames, byte-identical; ON culled 4 layer-frames, skipped 4 video decodes, 0 warm decodes
+MP1=B3 golden 'animating in from outside (around the entry)': 7 frames, byte-identical; ON culled 8 layer-frames, skipped 0 video decodes, 3 warm decodes
+MP1=B3 golden 'touching the edge, partly outside': 4 frames, byte-identical; ON culled 0 layer-frames, skipped 0 video decodes, 0 warm decodes
+MP1=B3 golden 'rotation 90 degrees': 4 frames, byte-identical; ON culled 0 layer-frames, skipped 0 video decodes, 0 warm decodes
+MP1=B3 golden 'text with a stroke (outside / partly in)': 4 frames, byte-identical; ON culled 8 layer-frames, skipped 0 video decodes, 0 warm decodes
+MP1=B3 golden 'text with an animator, layer outside': 4 frames, byte-identical; ON culled 0 layer-frames, skipped 0 video decodes, 0 warm decodes
+MP1=B3 golden 'stacked, with and without culled layers': 4 frames, byte-identical; ON culled 8 layer-frames, skipped 4 video decodes, 0 warm decodes
+MP1=B3 golden 'video culled for 1 s, then re-entering (every frame)': 60 frames, byte-identical; ON culled 32 layer-frames, skipped 17 video decodes, 15 warm decodes
+MP1=B3 golden result: 103 frames compared, 0 different: PASS

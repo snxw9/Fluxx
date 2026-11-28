@@ -1,0 +1,496 @@
+Drop box contents: 191 entries
+Max entries: 1000
+Low priority rate limit period: 2000 ms
+Low priority tags: {data_app_wtf, keymaster, system_server_wtf, system_app_strictmode, system_app_wtf, system_server_strictmode, data_app_strictmode, netstats}
+Searching for: SYSTEM_LAST_KMSG_1_20261128_190916_KP
+
+========================================
+2026-11-28 19:09:16 SYSTEM_LAST_KMSG_1_20261128_190916_KP (compressed text, 10333 bytes)
+isPrevious: true
+Build: samsung/a16nsxx/a16:16/BP4A.251205.006/A165FXXSBDZH6:user/release-keys
+Hardware: a16
+Revision: 4
+Bootloader: A165FXXSBDZH6
+Radio: A165FXXSBDZH3,A165FXXSBDZH3
+Kernel: Linux version 6.12.38-android16-5-abA165FXXSBDZH6-4k (kleaf@build-host) (Android (12833971, +pgo, +bolt, +lto, +mlgo, based on r536225) clang version 19.0.1 (https://android.googlesource.com/toolchain/llvm-project b3a530ec6537146650e42be89f1089e9a3588460), LLD 19.0.1) #1 SMP PREEMPT Mon Aug 24 10:07:48 UTC 2026
+
+[[TRUNCATED]]
+5 13133  1973967     9094  1576960    15708           100 hbox:interactor
+[410183.046664] [3:        kswapd0:   96] [  13143]  5013 13143  1632216     7506  1130496    11769           100 location.nsflp2
+[410183.046675] [3:        kswapd0:   96] [  13174]  1000 13174  1709478     6618  1187840    11932           100 com.sec.epdg
+[410183.046685] [3:        kswapd0:   96] [  14627] 10396 14627  8389725     7238  2207744    19439           100 lvoverseas:push
+[410183.046695] [3:        kswapd0:   96] [  19441] 10233 19441  1804715    10500  1679360    19274           100 id.gms.unstable
+[410183.046705] [3:        kswapd0:   96] [  21439] 10310 21439  2401898     9234  2228224    26996           200 .shealth:remote
+[410183.046716] [3:        kswapd0:   96] [  21914] 10062 21914  1734153     7475  1257472    16303           850 providers.media
+[410183.046726] [3:        kswapd0:   96] [  23633] 10265 23633  1660093     6857  1138688    11817           100 .adservices.api
+[410183.046736] [3:        kswapd0:   96] [  15586] 10114 15586  1820677     8194  1712128    14004           200 oid.samsungpass
+[410183.046746] [3:        kswapd0:   96] [  15643]  5278 15643  1609298     7420  1101824    11602           200 .android.authfw
+[410183.046756] [3:        kswapd0:   96] [  19509]  1013 19509   611108     1218   143360      374         -1000 v3avpud-64b
+[410183.046766] [3:        kswapd0:   96] [  28347]  1010 28347   559340      828   106496      320         -1000 wpa_supplicant
+[410183.046775] [3:        kswapd0:   96] [  28501] 10112 28501  1627008     7881  1110016    11733           100 droid.mcfserver
+[410183.046785] [3:        kswapd0:   96] [   8007]  2000  8007   537112      611    69632      160         -1000 sh
+[410183.046796] [3:        kswapd0:   96] [   8009]  2000  8009   542524      644    73728      192         -1000 installer
+[410183.046805] [3:        kswapd0:   96] [  10958] 10232 10958  1743255     8571  1458176    20869           201 s.messaging:rcs
+[410183.046815] [3:        kswapd0:   96] [  12836] 10438 12836  2256186    17795  2932736    44374           900 nthropic.claude
+[410183.046826] [3:        kswapd0:   96] [  20120] 10365 20120  2290087    41292  2682880    19938             0 com.whatsapp
+[410183.046843] [3:        kswapd0:   96] [   4942] 10063  4942  1849966    17429  1662976    16896           905 ui:edgelighting
+[410183.046869] [3:        kswapd0:   96] [  13917] 10052 13917  1621412    10292  1101824    11295           905 .provider.badge
+[410183.046880] [3:        kswapd0:   96] [  14074] 10050 14074  1780947    12453  1224704    12481           900 roid.bench.test
+[410183.046892] [3:        kswapd0:   96] [  15897]  2000 15897  1389918     8265   909312     8992         -1000 main
+[410183.046904] [3:        kswapd0:   96] [  15917] 10314 15917  1994153    21977  2105344    14056             0 x.android.bench
+[410183.046916] [3:        kswapd0:   96] [  16126] 10072 16126  1766941    11257  1257472    11728           500 cebook.services
+[410183.046925] [3:        kswapd0:   96] [  16207] 10389 16207  2459939    13556  2232320    22712           905 agram.barcelona
+[410183.046935] [3:        kswapd0:   96] [  16396] 10063 16396  1702719    11897  1433600    14197           905 id.app.routines
+[410183.046944] [3:        kswapd0:   96] [  16467] 10287 16467  2144258    13061  1728512    15999           905 ng.mtn.nextgen
+[410183.046954] [3:        kswapd0:   96] [  16540]  1000 16540  1725867    11970  1269760    12017           500 ung.android.fmm
+[410183.046965] [3:        kswapd0:   96] [  16650] 10231 16650  1646085    11217  1130496    12298           905 roid.apps.turbo
+[410183.046976] [3:        kswapd0:   96] [  16747] 10069 16747  1607546    10982  1101824    11290           905 externalstorage
+[410183.046986] [3:        kswapd0:   96] [  16808]  5026 16808  1975700    13007  1298432    14210           905 d.app.sharelive
+[410183.046995] [3:        kswapd0:   96] [  16809] 10054 16809  1921383    16120  1318912    12922             0 d.process.acore
+[410183.047005] [3:        kswapd0:   96] [  16868]  5025 16868  1812781    11113  1085440    11938           905 android.mdx.kit
+[410183.047016] [3:        kswapd0:   96] [  16901] 10106 16901  2009559    17338  1421312    14025           700 .osp.app.signin
+[410183.047026] [3:        kswapd0:   96] [  16918]  5004 16918  1841227    12259  1126400    12249           905 ung.faceservice
+[410183.047035] [3:        kswapd0:   96] [  17001] 10361 17001  1800675    13876  1286144    15842           905 ck_tile_service
+[410183.047046] [3:        kswapd0:   96] [  17041] 10107 17041  1954850    15911  1355776    12889           500 id.app.contacts
+[410183.047055] [3:        kswapd0:   96] [  17127]  5009 17127  1854781    15655  1306624    12450           700 ng.android.scpm
+[410183.047065] [3:        kswapd0:   96] [  17186] 10232 17186  1848927    30818  1564672    12514           905 .apps.messaging
+[410183.047075] [3:        kswapd0:   96] [  17187] 10111 17187  1920066    15411  1220608    11234           905 d.mobileservice
+[410183.047084] [3:        kswapd0:   96] [  17263] 10321 17263  1914980    22096  1413120    10517           905 youtube.creator
+[410183.047092] [3:        kswapd0:   96] heaviest_task_rss:system_server(1800) size:449844KB, totalram_pages:3740844KB
+[410183.047099] [3:        kswapd0:   96] mm_debug dma_buf tasks
+[410183.047104] [3:        kswapd0:   96] [  pid  ]   uid  tgid dmabufcnt dmabufsz(kb) name
+[410183.047720] [3:        kswapd0:   96] [   1170]  1041  1170         2           48 binder:1170_2
+[410183.047824] [3:        kswapd0:   96] [   1177]  1000  1177        39       222412 composer@3.4-se
+[410183.047921] [3:        kswapd0:   96] [   1178]  1046  1178       151       724576 binder:1178_2
+[410183.048022] [3:        kswapd0:   96] [   1198]  1047  1198       103         3324 SensorProviderS
+[410183.048334] [3:        kswapd0:   96] [   1242]  1000  1242        30       116980 surfaceflinger
+[410183.048783] [3:        kswapd0:   96] [   1800]  1000  1800         4        12132 system_server
+[410183.049048] [3:        kswapd0:   96] [   2580] 10063  2580        44        21456 ndroid.systemui
+[410183.049503] [3:        kswapd0:   96] [  11274] 10136 11274         6          552 id.app.launcher
+[410183.050191] [3:        kswapd0:   96] [  15917] 10314 15917       186      1400036 x.android.bench
+[410183.050616] [3:        kswapd0:   96] heaviest_task_dma_buf:x.android.bench(15917) size:1400036KB
+[410183.120289]I[7:       vdec_srv:19523] [name:spm&][SPM] system_bus wake up by  R12_SYSTIMER, timer_out = 277, r13 = 0x84006e80, debug_flag = 0xf8001800 0x40000002, r12 = 0x10000, r12_ext = 0x0, raw_sta = 0x0 0x0 0x0, idle_sta = 0x100b3, req_sta =  0x7c01000 0x182c00 0x7c000015 0x1f0000 0x0, cg_check_sta =0x0, isr = 0x0, rt_req_sta0 = 0x0 rt_req_sta1 = 0x0 rt_req_sta2 = 0xffffffff rt_req_sta3 = 0xffffffff rt_req_sta4 = 0x2c0014, raw_ext_sta = 0x4255, wake_misc = 0x390000, pcm_flag = 0x4c70502 0x0 0x4c70102 0x0, req = 0x9a,  clk_settle = 0x60fe, 
+[410183.120348]I[7:       vdec_srv:19523] [name:spm&] Pending Wakeup Sources: WLAN Timer WLAN timeout sec-battery-vbus disp_crtc0_wakelock 
+[410183.120605] [3:    kworker/3:1:12218] core_ctl: en=0 max=6|2|0 min=6|2|0 need=6|2|0 bst=0|0|0 gas=0 act=ff iso=0 f_iso=0
+[410183.157031] [4:BSOHChargingDat:23974] sm5714-charger sm5714-charger: sm5714_chg_get_property: psp=38
+[410183.164292] [2:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 215 =====
+[410183.164317] [2:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410183.164325] [2:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410183.164333] [2:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410183.164342] [2:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410183.164354] [2:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410183.164364] [2:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410183.164373] [2:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410183.164383] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0x15c thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410183.164398] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410183.164413] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410183.164424] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410183.164435] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410183.164448] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0xfffffffe 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410183.164460] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410183.164468] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410183.164478] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410183.164486] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410183.164495] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410183.164502] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410183.164510] [2:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410183.203713] [0:    kworker/0:1:14523] [connlog] irq counter=1125072 module=0x0003
+[410183.368452] [0:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 216 =====
+[410183.368477] [0:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410183.368484] [0:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410183.368492] [0:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410183.368501] [0:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410183.368619] [0:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410183.368636] [0:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410183.368646] [0:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410183.368657] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0x37a thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410183.368673] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410183.368689] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410183.368701] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410183.368712] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410183.368724] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0xfffffffe 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410183.368737] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410183.368745] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410183.368756] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410183.368765] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410183.368773] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410183.368782] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410183.368789] [0:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410183.460996] [0:   BG Thread #0:17281] dev_name = 254:0,total_blks = 167058261,skipped_blks = 0,corrupted_blks = 0, fec_correct_blks = 0
+[410183.539932] [5:  kworker/u33:3:14133] 1. mif: RX: 00 00 00 00 29 00 00 00 c1 00 d5 a4 00 00 00 00 19 00 59 ff 07 06 03 4f 63 63 1f 4f 0a 5e 01 ff
+[410183.539961] [5:  kworker/u33:3:14133] 2. mif: RX: 19 00 59 ff 07 06 03 4f 63 63 1f 4f 0a 5e 01 ff ff 0e 0e ff ff ff ff ff 00 00 00 00 00 00 00 00
+[410183.540146] [5:            ICR: 1637] 3. mif: RX: 19 00 59 ff 07 06 03 4f 63 63 1f 4f 0a 5e 01 ff ff 0e 0e ff ff ff ff ff 00 00 00 00 00 00 00 00
+[410183.572325] [0:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 217 =====
+[410183.572350] [0:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410183.572359] [0:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410183.572368] [0:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410183.572378] [0:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410183.572389] [0:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410183.572399] [0:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410183.572409] [0:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410183.572418] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0x2f4 thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410183.572435] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410183.572451] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410183.572462] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410183.572473] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410183.572487] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0xfffffffe 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410183.572498] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410183.572507] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410183.572518] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410183.572526] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410183.572535] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410183.572543] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410183.572551] [0:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410183.578937] [6:  VcodecProcess:17326] [MTK_V4L2_DVFS_QOS] vb2ops_vdec_stop_streaming(),4324: [18245][VDVFS][VDEC] stop ctrl DVFS in AP
+[410183.579668] [6:    vdec_worker:  676] [MTK_V4L2_DVFS_QOS] mtk_vdec_start_work(),4388: [18245][VDVFS][VDEC] start ctrl DVFS in AP
+[410183.632356] [1:  kworker/u32:1:31577] [SHUB] sig_motion_sensor(17) : 1ms, 0ms(453987893090246)
+[410183.632387] [1:  kworker/u32:1:31577] [SHUB] step_cnt_sensor(19) : 0 2(449149161477250) (200ms, 0ms)
+[410183.632396] [1:  kworker/u32:1:31577] [SHUB] device_orientation(27) : 20ms, 0ms(452582433110566)
+[410183.632405] [1:  kworker/u32:1:31577] [SHUB] sar_backoff_motion(54) : 1ms, 0ms(444876721483821)
+[410183.632412] [1:  kworker/u32:1:31577] [SHUB] pedometer(3), last event ts = (0)
+[410183.632419] [1:  kworker/u32:1:31577] [SHUB] activity tracker(26), last event ts = (0)
+[410183.632425] [1:  kworker/u32:1:31577] [SHUB] slocation(55), last event ts = (0)
+[410183.632430] [1:  kworker/u32:1:31577] [SHUB] sensor status check(59), last event ts = (0)
+[410183.632440] [1:  kworker/u32:1:31577] [SHUB]      debug_work_func( 132) :  (2026/11/28 18:05:55) FW(0):32258422, Sensor state: 0x70023c5a4e4026, 0x0, En: 0x400001080a0000, 0x0, Reset cnt: 0[0 : C 0(0, 0), N 0, 0, 0], Cal result : [M:P, P:N]
+[410183.664172] [6:  VcodecProcess:17110] [MTK_V4L2_DVFS_QOS] vb2ops_vdec_stop_streaming(),4324: [18243][VDVFS][VDEC] stop ctrl DVFS in AP
+[410183.665089] [4:    vdec_worker:  676] [MTK_V4L2_DVFS_QOS] mtk_vdec_start_work(),4388: [18243][VDVFS][VDEC] start ctrl DVFS in AP
+[410183.675339] [1:     hif_thread:19233] [wlan][19233]halDumpHifStats:(HAL INFO) I[0 / 17775157 0 0 0 0 0 0x0 0x0 0 39] T[1127374 1127374 1127374 / 7483902 7483724 7483723 7483901] PT[178] R[13570190 / 4662857] R2[0 0 13570215 0 0 3055307 1607518 0 0 0 0] H[0 17775156 5177151 593801 469760 258805 0 0 0 0] T_R[7483724 0 0 0 0 0 1127360 14]  R_R[13570190 4662857] Msdu[1024/1024] Tok[1/1536/0] Rfb[2102/0/0/0/0/0/0/0/2102] reg[5734173/15461448] RQCnt[0 0] MsduRpt[1731]
+[410183.678548] [6:     hif_thread:19233] [wlan][19233]wlanTxCmdDoneCb:(TX DEBUG) Add command: 00000000d235d348, 000000000a8c5077, cmd=0x81, seq=221
+[410183.679116] [0:       wificond: 1455] [wlan][1455]mtk_cfg80211_get_station:(REQ WARN) last Rx link speed
+[410183.679225] [2:     hif_thread:19233] [wlan][19233]wlanTxCmdDoneCb:(TX DEBUG) Add command: 000000001f816f24, 000000004e185654, cmd=0x85, seq=222
+[410183.679642] [1:       wificond: 1455] [wlan][1455]mtk_cfg80211_get_station:(REQ INFO) link speed=865/0, bw=0/0, BCN_rssi=-25, Raw_rssi=[BSSDesc(-26,-110)Data(-31,0)Resp(0,0)], mac:[5c:7d:**:**:**:88], idx=0,TxFail=4, TxTimeOut=0, TxOK=144361, RxOK=207948, FcsErr=0
+[410183.680790] [0:    main_thread:19232] [wlan][19232]cnmTimerStartTimerList:(CNM WARN) Invalid NextExpiredSysTime: 409885996, currentSysTime: 409886000
+[410183.680855] [0:    main_thread:19232] [wlan][19232]wlanLinkQualityMonitor:(SW4 INFO) Link Quality: Tx(rate:865, total:6513213, retry:15277, fail:6786, RTS fail:845, ACK fail:5941), Rx(rate:0, total:213886, dup:680, error:0), PER(5), Congestion(idle slot:1925281970, diff:21638, AwakeDur:1003)
+[410183.680861] [2:     hif_thread:19233] [wlan][19233]wlanTxCmdDoneCb:(TX DEBUG) Add command: 0000000062de64e1, 000000000a8c5077, cmd=0x81, seq=223
+[410183.680941] [2:     hif_thread:19233] [wlan][19233]wlanTxCmdDoneCb:(TX DEBUG) Add command: 000000007ca74fee, 000000004e185654, cmd=0x85, seq=225
+[410183.680956] [2:     hif_thread:19233] [wlan][19233]wlanTxCmdDoneCb:(TX DEBUG) Add command: 0000000095edf4a5, 0000000063924e94, cmd=0x82, seq=226
+[410183.681196] [0:       wificond: 1455] [wlan][1455]mtk_cfg80211_get_station:(REQ WARN) last Rx link speed
+[410183.681264] [0:       wificond: 1455] [wlan][1455]mtk_cfg80211_get_station:(REQ INFO) link speed=865/0, bw=0/0, BCN_rssi=-25, Raw_rssi=[BSSDesc(-26,-110)Data(-31,0)Resp(0,0)], mac:[5c:7d:**:**:**:88], idx=0,TxFail=4, TxTimeOut=0, TxOK=144361, RxOK=207948, FcsErr=0
+[410183.776420] [2:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 218 =====
+[410183.776473] [2:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410183.776486] [2:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410183.776499] [2:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410183.776515] [2:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410183.776533] [2:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410183.776548] [2:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410183.776563] [2:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410183.776580] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0x377 thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410183.776603] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410183.776626] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410183.776641] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410183.776655] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410183.776670] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0xfffffffe 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410183.776685] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410183.776696] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410183.776712] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410183.776726] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410183.776737] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410183.776746] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410183.776756] [2:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410183.888454] [4:  kworker/u32:5:15054] kernel_thermal_hint: get soc-bot0 thermal zone error
+[410183.888480] [4:  kworker/u32:5:15054] kernel_thermal_hint: get soc-smap0 thermal zone error
+[410183.888486] [4:  kworker/u32:5:15054] kernel_thermal_hint: get soc-smap1 thermal zone error
+[410183.898782] [4:     hif_thread:19233] [wlan][19233]halSetFWOwn:(HAL INFO) FW OWN:1, IntSta:0x10000002
+[410183.980289] [0:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 219 =====
+[410183.980313] [0:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410183.980321] [0:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410183.980329] [0:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410183.980338] [0:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410183.980349] [0:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410183.980360] [0:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410183.980369] [0:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410183.980381] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0x14c thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410183.980397] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410183.980412] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410183.980424] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410183.980434] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410183.980447] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0xfffffffe 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410183.980459] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410183.980467] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410183.980478] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410183.980486] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410183.980496] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410183.980504] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410183.980512] [0:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410184.154916] [3:BSOHChargingDat:23974] sm5714-charger sm5714-charger: sm5714_chg_get_property: psp=38
+[410184.184303] [2:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 220 =====
+[410184.184325] [2:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410184.184333] [2:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410184.184341] [2:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410184.184350] [2:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410184.184361] [2:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410184.184373] [2:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410184.184382] [2:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410184.184393] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0xa5 thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410184.184408] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410184.184424] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410184.184434] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410184.184445] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410184.184459] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0x0 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410184.184470] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410184.184479] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410184.184490] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410184.184498] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410184.184507] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410184.184516] [2:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410184.184523] [2:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410184.272559] [6:            iod:  648] !@ cpu-boost: status(ON), traffic_level(1), io_cpus(0xff), boosted_cpus(0xff), set_freq(2000000) 
+[410184.274014] [6:    kworker/6:1: 8505] binder: undelivered transaction 229753492, process died.
+[410184.360199] [6:     hif_thread:19233] [wlan][19233]wlanTxCmdDoneCb:(TX DEBUG) Add command: 000000004b79743b, 000000000a8c5077, cmd=0x81, seq=227
+[410184.360752] [6: wpa_supplicant:28347] [wlan][28347]mtk_cfg80211_get_station:(REQ WARN) last Rx link speed
+[410184.360783] [6: wpa_supplicant:28347] [wlan][28347]mtk_cfg80211_get_station:(REQ INFO) link speed=865/0, bw=0/0, BCN_rssi=-26, Raw_rssi=[BSSDesc(-26,-110)Data(-31,0)Resp(0,0)], mac:[5c:7d:**:**:**:88], idx=0,TxFail=4, TxTimeOut=0, TxOK=144368, RxOK=207953, FcsErr=0
+[410184.388326] [1:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 221 =====
+[410184.388352] [1:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410184.388360] [1:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410184.388369] [1:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410184.388571] [1:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410184.388594] [1:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410184.388606] [1:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410184.388616] [1:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410184.388626] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0x82 thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410184.388641] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410184.388656] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410184.388668] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410184.388678] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410184.388691] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0xfffffffe 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410184.388703] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410184.388712] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410184.388724] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410184.388733] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410184.388742] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410184.388750] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410184.388758] [1:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410184.400363] [0:    kworker/0:1:14523] focaltech_ts 7-0038: [sec_input] [FTS_TS/I]fts_print_info: tc:0 lp:0x20 pm:0x84 gm:0x02 // v:FT050B0025 // #11112 11112
+[410184.579168] [7:     hif_thread:19233] [wlan][19233]halSetFWOwn:(HAL INFO) FW OWN:1, IntSta:0x10000010
+[410184.592362] [1:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 222 =====
+[410184.592385] [1:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410184.592392] [1:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410184.592400] [1:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410184.592408] [1:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410184.592420] [1:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410184.592430] [1:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410184.593127] [1:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410184.593155] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0x6a thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410184.593172] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410184.593187] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410184.593201] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410184.593211] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410184.593224] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0xfffffffe 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410184.593236] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410184.593245] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410184.593255] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410184.593263] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410184.593272] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410184.593282] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410184.593290] [1:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410184.683506] [7:    main_thread:19232] [wlan][19232]kalPerMonUpdate:(SW4 INFO) <2007ms> Tput: 71528(0.069mbps) [12375:22:5571:23][0:0:0:0][0:0:0:0][0:0:0:0] Pending:0/256 [0:0:0:0][0:0:0:0][0:0:0:0][0:0:0:0] LQ[0,6513225,213903,21638] idle:0 lv:0 th:5 fg:0x9 TxCpu[832782,690346,907625,1406897,652093,798995,1047533,1147625] RxCpu[0,0,0,0,0,0,0,0] TxDp[ST:BS:FO:QM:DP]:8:3:0:0:20308 Tx[SQ:TI:TM:TDD:TDM]:0:7483886:7483896:0:0 TxP[0,0,0] MgmtSub[15:4:0:0:0:0:0:0:0:0:2:21:12:0:0:0] 
+[410184.683524] [7:    main_thread:19232] [wlan][19232]mddpIsSupportMcifWifi:(INIT INFO) feature: 0.
+[410184.683530] [7:    main_thread:19232] [wlan][19232]mddpIsSupportMcifWifi:(INIT INFO) feature: 0.
+[410184.683543] [7:    main_thread:19232] [wlan][19232]kalPerMonUpdate:(SW4 INFO) ndevdrp:[0:97:0:4][0:6:0:6] NAPI[17775186,0,0x110,0,0,0,0,0,0,0,0,0,0,0,0] RxReorder[0:0:0:0] RxPending[0:0:0:0] RfbTrack[0:60:10:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0] drv[RM,IL,RI,RIE,NG|RF,PA,PF,DU,DA#RT,RM,RW,RA,RB|RTO,DT,NS,IB,HS_LS,DD,ME,BD,NI|DR,TE,PE,CE,DN^FE,DE,IE,TME,CM#FB,ID,FD,NL]:15177747,0,13550055,13550055,0|25,13554927,25,25,0#13552571,4294967370,13527747,4559,129|1429,20166,1,0,0_0,692,0,25,0|19444,0,0,4,20162^0,0,0,0,4#0,0,0,0
+[410184.683587] [7:    main_thread:19232] asicFillCmdTxdInfo: 17 callbacks suppressed
+[410184.683591] [7:    main_thread:19232] [wlan][19232]asicFillCmdTxdInfo:(INIT DEBUG) TX CMD: ID[0x81] SEQ[228] SET[0] LEN[32]
+[410184.686028] [7:     hif_thread:19233] [wlan][19233]wlanTxCmdDoneCb:(TX DEBUG) Add command: 00000000ee25bed6, 000000000a8c5077, cmd=0x81, seq=228
+[410184.687868] [1:       wificond: 1455] [wlan][1455]mtk_cfg80211_get_station:(REQ WARN) last Rx link speed
+[410184.687943] [7:    main_thread:19232] [wlan][19232]asicFillCmdTxdInfo:(INIT DEBUG) TX CMD: ID[0x85] SEQ[229] SET[0] LEN[60]
+[410184.687953] [7:    main_thread:19232] [wlan][19232]cnmTimerStartTimerList:(CNM WARN) Invalid NextExpiredSysTime: 409887000, currentSysTime: 409887004
+[410184.687982] [7:    main_thread:19232] [wlan][19232]asicFillCmdTxdInfo:(INIT DEBUG) TX CMD: ID[0x7E] SEQ[230] SET[1] LEN[112]
+[410184.687988] [7:    main_thread:19232] [wlan][19232]asicFillCmdTxdInfo:(INIT DEBUG) TX CMD: ID[0x85] SEQ[231] SET[0] LEN[60]
+[410184.687991] [7:    main_thread:19232] [wlan][19232]asicFillCmdTxdInfo:(INIT DEBUG) TX CMD: ID[0x82] SEQ[232] SET[0] LEN[44]
+[410184.687995] [7:    main_thread:19232] [wlan][19232]wlanLinkQualityMonitor:(SW4 INFO) Link Quality: Tx(rate:865, total:6513225, retry:15279, fail:6788, RTS fail:845, ACK fail:5943), Rx(rate:0, total:213903, dup:680, error:0), PER(16), Congestion(idle slot:1925282693, diff:723, AwakeDur:1004)
+[410184.688001] [5:     hif_thread:19233] [wlan][19233]wlanTxCmdDoneCb:(TX DEBUG) Add command: 00000000f6c70bb1, 000000004e185654, cmd=0x85, seq=229
+[410184.688103] [5:     hif_thread:19233] [wlan][19233]wlanTxCmdDoneCb:(TX DEBUG) Add command: 00000000356f654d, 000000004e185654, cmd=0x85, seq=231
+[410184.688117] [5:     hif_thread:19233] [wlan][19233]wlanTxCmdDoneCb:(TX DEBUG) Add command: 000000006b634210, 0000000063924e94, cmd=0x82, seq=232
+[410184.689438] [7:       wificond: 1455] [wlan][1455]mtk_cfg80211_get_station:(REQ INFO) link speed=865/0, bw=0/0, BCN_rssi=-26, Raw_rssi=[BSSDesc(-26,-110)Data(-31,0)Resp(0,0)], mac:[5c:7d:**:**:**:88], idx=0,TxFail=4, TxTimeOut=0, TxOK=144369, RxOK=207954, FcsErr=0
+[410184.689889] [7:    main_thread:19232] [wlan][19232]asicFillCmdTxdInfo:(INIT DEBUG) TX CMD: ID[0x81] SEQ[233] SET[0] LEN[32]
+[410184.689943] [5:     hif_thread:19233] [wlan][19233]wlanTxCmdDoneCb:(TX DEBUG) Add command: 0000000055101f71, 000000000a8c5077, cmd=0x81, seq=233
+[410184.691328] [5:       wificond: 1455] [wlan][1455]mtk_cfg80211_get_station:(REQ WARN) last Rx link speed
+[410184.691439] [5:       wificond: 1455] [wlan][1455]mtk_cfg80211_get_station:(REQ INFO) link speed=865/0, bw=0/0, BCN_rssi=-26, Raw_rssi=[BSSDesc(-26,-110)Data(-31,0)Resp(0,0)], mac:[5c:7d:**:**:**:88], idx=0,TxFail=4, TxTimeOut=0, TxOK=144369, RxOK=207954, FcsErr=0
+[410184.710100] [7:     hif_thread:19233] [wlan][19233]halSetFWOwn:(HAL INFO) FW OWN:1, IntSta:0x10080000
+[410184.747732] [7:    main_thread:19232] [wlan][19232]asicRxGetRcpiValueFromRxv:(RX ERROR) Invalid ucRcpiValue: 255
+[410184.794223] [2:            iod:  635] !@   8,32 r 320768832 3572851324 w 27820392 346319032 d 3972225 217638920 f 4155412 2562144 iot 56224560 0 th 0 0 0 pt 0 inp 0 0 410187.108 
+[410184.795152] [2:            iod:  635] !@ 179,0 r 30528031 42526425 w 20932 10313065 d 0 0 f 0 0 iot 16934564 0 th 0 0 0 pt 0 inp 0 0 410187.109 
+[410184.796336] [5:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 223 =====
+[410184.796359] [5:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410184.796366] [5:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410184.796374] [5:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410184.796382] [5:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410184.796393] [5:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410184.796404] [5:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410184.796413] [5:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410184.796423] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0x59 thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410184.796438] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410184.796453] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410184.796463] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410184.796474] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410184.796486] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0x0 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410184.796498] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410184.796506] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410184.796516] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410184.796524] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410184.796533] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410184.796541] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410184.796549] [5:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410184.820017] [5:  kworker/u33:1:12727] 1. mif: RX: 00 00 00 00 29 00 00 00 c1 00 d6 a4 00 00 00 00 19 00 5a ff 07 06 03 4f 63 63 1f 4f 08 5e 01 ff
+[410184.820047] [5:  kworker/u33:1:12727] 2. mif: RX: 19 00 5a ff 07 06 03 4f 63 63 1f 4f 08 5e 01 ff ff 0f 0f ff ff ff ff ff 00 00 4d 00 5c 00 4e 00
+[410184.820423] [5:            ICR: 1637] 3. mif: RX: 19 00 5a ff 07 06 03 4f 63 63 1f 4f 08 5e 01 ff ff 0f 0f ff ff ff ff ff 00 00 4d 00 5c 00 4e 00
+[410185.000325] [5:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 224 =====
+[410185.000347] [5:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410185.000354] [5:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410185.000363] [5:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410185.000371] [5:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410185.000382] [5:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410185.000393] [5:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410185.000402] [5:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410185.000412] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0x16e thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410185.000427] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410185.000442] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410185.000452] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410185.000463] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410185.000476] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0xfffffffe 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410185.000487] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410185.000496] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410185.000506] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410185.000514] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410185.000523] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410185.000531] [5:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410185.000539] [5:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410185.024763] [3:    kworker/3:1:12218] binder: undelivered transaction 229637506, process died.
+[410185.024796] [3:    kworker/3:1:12218] binder: undelivered transaction 229754785, process died.
+[410185.070619] [6:    kworker/6:1: 8505] binder: undelivered transaction 229659765, process died.
+[410185.070635] [6:    kworker/6:1: 8505] binder: undelivered transaction 229660586, process died.
+[410185.070639] [6:    kworker/6:1: 8505] binder: undelivered transaction 229661079, process died.
+[410185.070642] [6:    kworker/6:1: 8505] binder: undelivered transaction 229662255, process died.
+[410185.070645] [6:    kworker/6:1: 8505] binder: undelivered transaction 229662860, process died.
+[410185.070648] [6:    kworker/6:1: 8505] binder: undelivered transaction 229663038, process died.
+[410185.070652] [6:    kworker/6:1: 8505] binder: undelivered transaction 229664313, process died.
+[410185.136292] [3:    kworker/3:1:12218] core_ctl: en=0 max=6|2|0 min=6|2|0 need=6|2|0 bst=0|0|0 gas=0 act=ff iso=0 f_iso=0
+[410185.156745] [3:BSOHChargingDat:23974] sm5714-charger sm5714-charger: sm5714_chg_get_property: psp=38
+[410185.204310] [1:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 225 =====
+[410185.204329] [1:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410185.204336] [1:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410185.204344] [1:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410185.204352] [1:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410185.204364] [1:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410185.204373] [1:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410185.204383] [1:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410185.204392] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0x6b thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410185.204408] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410185.204424] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410185.204434] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410185.204445] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410185.204458] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0xfffffffe 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410185.204470] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410185.204478] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410185.204489] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410185.204497] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410185.204506] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410185.204514] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410185.204522] [1:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410185.408310] [4:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 226 =====
+[410185.408332] [4:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410185.408339] [4:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410185.408348] [4:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410185.408357] [4:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410185.408368] [4:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410185.408378] [4:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410185.408387] [4:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410185.408397] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0x154 thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410185.408413] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410185.408428] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410185.408439] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410185.408449] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410185.408462] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0xfffffffe 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410185.408474] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410185.408482] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410185.408493] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410185.408501] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410185.408509] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410185.408518] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410185.408525] [4:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410185.612390] [0:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 227 =====
+[410185.612412] [0:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410185.612419] [0:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410185.612427] [0:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410185.612435] [0:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410185.612445] [0:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410185.612455] [0:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410185.612465] [0:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410185.612475] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0x6c thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410185.612490] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410185.612505] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410185.612516] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410185.612527] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410185.612539] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0x0 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410185.612551] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410185.612559] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410185.612570] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410185.612578] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410185.612587] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410185.612595] [0:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410185.612602] [0:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410185.690129] [6:    main_thread:19232] [wlan][19232]asicFillCmdTxdInfo:(INIT DEBUG) TX CMD: ID[0x81] SEQ[234] SET[0] LEN[32]
+[410185.690144] [6:    main_thread:19232] [wlan][19232]cnmTimerStartTimerList:(CNM WARN) Invalid NextExpiredSysTime: 409888004, currentSysTime: 409888008
+[410185.690175] [6:    main_thread:19232] [wlan][19232]asicFillCmdTxdInfo:(INIT DEBUG) TX CMD: ID[0x7E] SEQ[235] SET[1] LEN[112]
+[410185.690182] [6:    main_thread:19232] [wlan][19232]asicFillCmdTxdInfo:(INIT DEBUG) TX CMD: ID[0x85] SEQ[236] SET[0] LEN[60]
+[410185.690186] [6:    main_thread:19232] [wlan][19232]asicFillCmdTxdInfo:(INIT DEBUG) TX CMD: ID[0x82] SEQ[237] SET[0] LEN[44]
+[410185.690190] [6:    main_thread:19232] [wlan][19232]wlanLinkQualityMonitor:(SW4 INFO) Link Quality: Tx(rate:865, total:6513225, retry:15279, fail:6788, RTS fail:845, ACK fail:5943), Rx(rate:0, total:213909, dup:680, error:2), PER(0), Congestion(idle slot:1925283667, diff:974, AwakeDur:838)
+[410185.690210] [6:     hif_thread:19233] [wlan][19233]wlanTxCmdDoneCb:(TX DEBUG) Add command: 0000000065ad4ac3, 000000000a8c5077, cmd=0x81, seq=234
+[410185.690219] [6:     hif_thread:19233] [wlan][19233]wlanTxCmdDoneCb:(TX DEBUG) Add command: 000000000f43f0dd, 000000004e185654, cmd=0x85, seq=236
+[410185.690223] [6:     hif_thread:19233] [wlan][19233]wlanTxCmdDoneCb:(TX DEBUG) Add command: 00000000bd700117, 0000000063924e94, cmd=0x82, seq=237
+[410185.690273] [6:     hif_thread:19233] [wlan][19233]halDumpHifStats:(HAL INFO) I[0 / 17775234 0 0 0 0 0 0x0 0x0 0 0] T[1127391 1127391 1127387 / 7483928 7483750 7483750 7483928] PT[178] R[13570208 / 4662892] R2[0 0 13570233 0 0 3055327 1607533 0 0 0 0] H[0 17775233 5177174 593811 469763 258808 0 0 0 0] T_R[7483750 0 0 0 0 0 1127377 14]  R_R[13570208 4662892] Msdu[1024/1024] Tok[0/1536/0] Rfb[2102/0/0/0/0/0/0/0/2102] reg[5734196/15461499] RQCnt[0 0] MsduRpt[1004]
+[410185.690647] [6:       wificond: 1455] [wlan][1455]mtk_cfg80211_get_station:(REQ WARN) last Rx link speed
+[410185.690672] [6:       wificond: 1455] [wlan][1455]mtk_cfg80211_get_station:(REQ INFO) link speed=865/0, bw=0/0, BCN_rssi=-26, Raw_rssi=[BSSDesc(-26,-110)Data(-32,0)Resp(0,0)], mac:[5c:7d:**:**:**:88], idx=0,TxFail=4, TxTimeOut=0, TxOK=144387, RxOK=207966, FcsErr=0
+[410185.691065] [6:       wificond: 1455] [wlan][1455]mtk_cfg80211_get_station:(REQ WARN) last Rx link speed
+[410185.691087] [6:       wificond: 1455] [wlan][1455]mtk_cfg80211_get_station:(REQ INFO) link speed=865/0, bw=0/0, BCN_rssi=-26, Raw_rssi=[BSSDesc(-26,-110)Data(-32,0)Resp(0,0)], mac:[5c:7d:**:**:**:88], idx=0,TxFail=4, TxTimeOut=0, TxOK=144387, RxOK=207966, FcsErr=0
+[410185.816320] [1:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 228 =====
+[410185.816346] [1:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410185.816353] [1:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410185.816362] [1:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410185.816371] [1:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410185.816382] [1:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410185.816392] [1:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410185.816401] [1:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410185.816411] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0x61 thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410185.816427] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410185.816443] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410185.816454] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410185.816464] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410185.816477] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0xfffffffe 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410185.816489] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410185.816497] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410185.816508] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410185.816517] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410185.816526] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410185.816534] [1:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410185.816542] [1:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410185.962755] [1:     hif_thread:19233] [wlan][19233]halSetFWOwn:(HAL INFO) FW OWN:1, IntSta:0x10000003
+[410186.020299] [4:  kworker/u32:4:19886] [cmdq] ===== SW timeout Pre-dump 229 =====
+[410186.020323] [4:  kworker/u32:4:19886] [cmdq] thd:12 Hidden thread info since it's secure
+[410186.020331] [4:  kworker/u32:4:19886] [cmdq] secure tdrv op:0 thread suspend:0 reset:0 invoke:398249871196582/398249871550121
+[410186.020340] [4:  kworker/u32:4:19886] [cmdq] secure shared cookie:0 wait:0 next:0 count:0
+[410186.020348] [4:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] pkt:0x00000000ce95b88a(0x865c4000) size:584/3840 avail size:3256 priority:0
+[410186.020360] [4:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] mbox_enable:0 mbox_disable:18446743801073731456 submit:398198818856999 trigger:398198820064999 wait:398198819012383 irq:0
+[410186.020370] [4:  kworker/u32:4:19886] [VENC]<0>(12)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410186.020380] [4:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410186.020390] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] irq:0xffffff loaded:0x0 cycle:0x17e thd timer:0x0 mask:0x80000000 en:0xffeb bus_gctl:0x3
+[410186.020406] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] id:0 dbg0:0x0 0x0 0x0 dbg2:0x0 0x0 0x0 0x0 0x0 0x0 dbg3:0x0
+[410186.020422] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thd:15 timeout:0xffffffff pc:0x0000000054efc000(000000004ea290c3) inst:0x2000028780008001 end:0x0000000054efc018 cnt:0x0 token:0x80010287
+[410186.020433] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] rst:0x0 en:0x1 suspend:0x0 status:0x2 irq:0 en:0x13 cfg:0x1 prefetch:0x0
+[410186.020444] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] thrd:15 spr:0x0 0x0 0x0 0x0 dbg:0x0 0x0
+[410186.020457] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cmdq:0x0000000010228000 gpr:0xfffffffe 0x0 0x0 0x7d73055d 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+[410186.020469] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] cur pkt:0x00000000c5f17de8 size:24 va:0x000000004ea290c3 pa:0x0000000054efc000 priority:0
+[410186.020478] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] last inst 0x100000010a9df800
+[410186.020488] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] curr inst: 0xc000 0x2000028780008001 [Sync ] wait for event 647 become 1 and clear to 0 value:0
+[410186.020497] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] pkt:0x00000000c5f17de8(0x15501800) size:24/3840 avail size:3816 priority:0 loop
+[410186.020506] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] mbox_enable:398198819276153 mbox_disable:0 submit:398198819276768 trigger:398198819285307 wait:0 irq:0
+[410186.020515] [4:  kworker/u32:4:19886] [CMDQ]<0>(15)[cmdq] append info pc:0x0000000000000000->0x0000000000000000 end:0x0000000000000000 suspend:0 last_inst:0x0000000000000000
+[410186.020522] [4:  kworker/u32:4:19886] [cmdq] cmdq_dump_vcp_reg not support
+[410186.079110] [5:    main_thread:19232] [wlan][19232]asicRxGetRcpiValueFromRxv:(RX ERROR) Invalid ucRcpiValue: 255
+[410186.099269] [4:  kworker/u33:4:15907] 1. mif: RX: 00 00 00 00 29 00 00 00 c1 00 d7 a4 00 00 00 00 19 00 5b ff 07 06 03 4f 63 63 1f 4f 08 5e 01 ff
+[410186.099296] [4:  kworker/u33:4:15907] 2. mif: RX: 19 00 5b ff 07 06 03 4f 63 63 1f 4f 08 5e 01 ff ff 0c 0c ff ff ff ff ff 00 00 2e 4e 46 05 00 00
+[410186.099432] [2:            ICR: 1637] 3. mif: RX: 19 00 5b ff 07 06 03 4f 63 63 1f 4f 08 5e 01 ff ff 0c 0c ff ff ff ff ff 00 00 2e 4e 46 05 00 00
+[410186.159352] [3:BSOHChargingDat:23974] sm5714-charger sm5714-charger: sm5714_chg_get_property: psp=38
+[4   y� LOGM
+Boot info:
+Last boot reason: reboot
+

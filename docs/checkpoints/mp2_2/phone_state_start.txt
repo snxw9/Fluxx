@@ -1,0 +1,9 @@
+recorded Sat Nov 28 18:18:27 WCAST 2026: low_power=1 stay_on_while_plugged_in=0 screen_off_timeout=600000 (originals, restore these)
+SM-A165F
+36
+  AC powered: true
+  level: 62
+  temperature: 364
+  mWakefulness=Awake
+    isKeyguardShowing=false
+session set Sat Nov 28 18:18:31 WCAST 2026: low_power=0 stay_on=15 timeout=600000

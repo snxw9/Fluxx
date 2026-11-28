@@ -1,0 +1,221 @@
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp22RenderTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.fluxx.android.ui.Mp22RenderTest:
+INSTRUMENTATION_STATUS: test=measure
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Mp22RenderTest start: low_power=0 plugged=AC level=80 percent temperature=38.9C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=device: low_power=0 plugged=AC level=80 percent temperature=38.9C screen=Awake keyguard=unlocked; build benchmark (not debuggable); API 36
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=typical: '〈INTERSTELLAR ✨〉My Hero Academia〈AMV⧸EDI' video/avc 1920x1080 30.0 fps 60.0 s
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=surface 1080x2340
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=part: export
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=thermal: battery 38.7 C (charging)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=1 (30 frames) [38.7C]: first frame (fresh export renderer) total 764.68 ms decode 428.19 import 181.76 pipeline 177.20 ms, pipelines 1; export wall 10123 ms; pipeline creation ns (this session, first 16) 177.20 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=1 (30 frames) [38.7C] (frames 2..): 29 frames; p50/p95 ms total=15.98/22.77 decode=4.96/11.36 import=3.09/3.84 pipeline=0.00/0.00 layerCall=3.19/3.96 record=0.09/0.11 submit=0.25/0.31 fence=9.55/11.29 gpu=3.08/3.42 flushes=0.00/0.00 finish=6.67/7.96 present=0.00/0.00 gpuPresent=0.00/0.00 readback=3.18/4.14 yuv=176.08/179.14 encodeWait=2.53/5.86
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=1 (30 frames) [38.7C] (frames 2..): per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=1.00 sameBuffer=0.00 videoDrawn=1.00 rasterDraws=1.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=1.00 decodersOpen=1.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=1 (30 frames) [38.7C] (frames 2..): per-buffer import cache: 29 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 34.5% unbounded 34.5% (needs 19 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export distinct N=1 (30 frames) [38.7C] (frames 2..) frames 0..28 total/decode/import/record/fence/gpu/present/flushes: 15.5/4.4/3.2/0.1/8.3/2.9/0.0/0 16.5/5.5/3.4/0.1/9.8/3.0/0.0/0 14.2/4.4/1.7/0.0/10.3/3.4/0.0/0 13.8/6.5/1.6/0.0/7.1/2.8/0.0/0 15.9/5.0/3.5/0.1/10.1/3.3/0.0/0 14.6/5.0/2.7/0.1/8.5/3.0/0.0/0 13.6/4.0/1.9/0.1/9.6/3.2/0.0/0 17.0/6.4/3.3/0.1/8.9/3.1/0.0/0 20.0/7.7/3.9/0.1/11.0/3.5/0.0/0 17.2/5.0/3.4/0.1/11.2/3.2/0.0/0 14.7/4.2/3.1/0.1/9.1/3.2/0.0/0 26.0/13.4/3.7/0.1/10.6/3.4/0.0/0 16.6/5.8/3.5/0.1/10.1/3.0/0.0/0 17.8/6.5/3.8/0.1/8.9/3.0/0.0/0 19.5/7.2/3.9/0.1/11.2/3.4/0.0/0 16.0/4.8/3.3/0.1/10.1/3.2/0.0/0 10.7/3.9/1.4/0.0/6.9/2.8/0.0/0 9.7/2.4/1.4/0.0/7.2/3.1/0.0/0 17.1/7.4/2.4/0.1/9.3/2.9/0.0/0 22.8/11.4/2.9/0.1/10.8/3.0/0.0/0 8.7/2.1/1.3/0.0/7.2/2.8/0.0/0 9.1/2.2/1.4/0.0/6.9/2.9/0.0/0 11.8/4.0/2.0/0.1/7.7/2.9/0.0/0 18.5/5.8/2.8/0.1/12.2/3.0/0.0/0 13.7/4.4/2.0/0.1/9.3/3.1/0.0/0 16.2/4.7/2.0/0.1/11.6/3.4/0.0/0 14.8/4.6/3.3/0.1/8.7/3.0/0.0/0 23.4/12.2/3.1/0.1/11.3/3.4/0.0/0 17.2/5.7/3.5/0.1/10.0/3.2/0.0/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=thermal: battery 38.7 C (charging)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=2 (30 frames) [38.7C]: first frame (fresh export renderer) total 819.51 ms decode 499.07 import 20.99 pipeline 18.28 ms, pipelines 2; export wall 10218 ms; pipeline creation ns (this session, first 16) 16.96,1.32 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=2 (30 frames) [38.7C] (frames 2..): 29 frames; p50/p95 ms total=32.09/39.33 decode=12.23/18.74 import=6.42/7.16 pipeline=0.00/0.00 layerCall=6.62/7.35 record=0.17/0.24 submit=0.39/0.48 fence=14.64/15.96 gpu=4.70/5.18 flushes=6.06/6.92 finish=5.98/7.03 present=0.00/0.00 gpuPresent=0.00/0.00 readback=3.07/3.79 yuv=177.64/182.83 encodeWait=2.53/3.89
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=2 (30 frames) [38.7C] (frames 2..): per frame (mean) flushes=1.00 videoFlushes=1.00 submits=2.00 imports=2.00 sameBuffer=0.00 videoDrawn=2.00 rasterDraws=2.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=2.00 decodersOpen=2.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=2 (30 frames) [38.7C] (frames 2..): per-buffer import cache: 58 imports, 38 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 34.5% (needs 38 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export distinct N=2 (30 frames) [38.7C] (frames 2..) frames 0..28 total/decode/import/record/fence/gpu/present/flushes: 24.0/7.5/5.9/0.2/11.6/4.5/0.0/1 31.6/11.5/6.8/0.2/14.1/4.7/0.0/1 19.0/7.1/4.1/0.1/9.3/4.1/0.0/1 17.4/4.8/4.2/0.1/9.2/4.3/0.0/1 33.1/16.1/6.5/0.2/11.4/4.4/0.0/1 23.9/11.0/3.1/0.1/11.4/4.8/0.0/1 26.5/12.5/2.9/0.1/13.7/4.6/0.0/1 23.8/9.7/2.7/0.1/12.9/5.2/0.0/1 31.4/12.9/5.4/0.3/14.5/4.8/0.0/1 32.9/11.2/7.2/0.2/15.7/4.8/0.0/1 28.5/9.8/4.8/0.2/16.0/4.7/0.0/1 32.1/12.1/6.5/0.2/14.6/4.6/0.0/1 35.1/17.3/6.0/0.2/12.9/4.4/0.0/1 30.4/12.2/5.6/0.2/13.6/4.5/0.0/1 39.3/19.9/6.6/0.2/13.8/4.6/0.0/1 29.6/10.8/5.7/0.2/14.9/5.2/0.0/1 35.0/14.4/7.2/0.2/15.7/4.6/0.0/1 32.2/11.4/6.9/0.2/15.6/4.9/0.0/1 33.9/12.6/6.6/0.2/15.8/4.7/0.0/1 29.4/10.7/5.6/0.2/15.2/4.7/0.0/1 39.5/18.7/6.4/0.2/15.6/5.0/0.0/1 33.5/14.1/6.3/0.2/14.7/5.2/0.0/1 37.0/18.7/5.2/0.1/15.0/4.5/0.0/1 32.1/12.6/6.4/0.2/14.8/4.4/0.0/1 29.6/10.3/6.9/0.2/14.3/4.6/0.0/1 31.6/11.5/6.7/0.2/14.3/4.9/0.0/1 38.2/18.1/6.5/0.2/14.8/4.7/0.0/1 33.7/12.5/7.4/0.2/16.5/4.8/0.0/1 43.3/20.2/6.6/0.2/17.6/5.0/0.0/1
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=thermal: battery 38.7 C (charging)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=4 (30 frames) [38.7C]: first frame (fresh export renderer) total 1257.49 ms decode 724.70 import 20.79 pipeline 15.23 ms, pipelines 4; export wall 11683 ms; pipeline creation ns (this session, first 16) 13.47,0.52,0.61,0.62 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=4 (30 frames) [38.7C] (frames 2..): 29 frames; p50/p95 ms total=69.59/74.72 decode=27.42/33.99 import=13.26/17.40 pipeline=0.00/0.00 layerCall=13.62/17.83 record=0.36/0.49 submit=0.70/0.89 fence=26.55/29.23 gpu=9.51/10.17 flushes=18.68/20.98 finish=5.63/7.62 present=0.00/0.00 gpuPresent=0.00/0.00 readback=3.04/3.55 yuv=177.18/179.41 encodeWait=2.33/3.80
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=4 (30 frames) [38.7C] (frames 2..): per frame (mean) flushes=3.00 videoFlushes=3.00 submits=4.00 imports=4.00 sameBuffer=0.00 videoDrawn=4.00 rasterDraws=4.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=4.00 decodersOpen=4.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=4 (30 frames) [38.7C] (frames 2..): per-buffer import cache: 116 imports, 76 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 34.5% (needs 76 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export distinct N=4 (30 frames) [38.7C] (frames 2..) frames 0..28 total/decode/import/record/fence/gpu/present/flushes: 44.9/16.1/10.6/0.3/18.3/9.6/0.0/3 38.3/15.6/7.8/0.3/15.3/8.5/0.0/3 31.7/9.5/7.7/0.2/14.7/8.4/0.0/3 33.7/12.8/5.5/0.2/16.2/8.7/0.0/3 50.1/22.4/11.2/0.3/16.6/8.4/0.0/3 71.4/28.4/13.2/0.4/29.5/9.6/0.0/3 72.5/34.0/14.4/0.4/24.1/9.9/0.0/3 68.1/26.7/13.3/0.4/27.9/9.2/0.0/3 71.9/29.3/13.9/0.4/29.0/9.3/0.0/3 69.0/26.8/13.6/0.4/29.0/9.6/0.0/3 76.5/29.1/20.2/0.5/26.7/9.8/0.0/3 43.5/21.2/6.1/0.2/17.2/8.6/0.0/3 68.6/29.8/13.6/0.4/25.2/9.5/0.0/3 69.7/33.4/13.2/0.4/23.5/9.3/0.0/3 66.0/31.4/12.5/0.3/21.7/8.9/0.0/3 74.7/29.2/16.9/0.5/28.6/10.2/0.0/3 70.2/27.9/12.9/0.4/29.6/10.4/0.0/3 64.7/25.4/12.5/0.3/27.6/9.6/0.0/3 71.2/27.4/17.8/0.5/26.8/9.2/0.0/3 74.1/32.2/13.1/0.3/28.9/10.0/0.0/3 75.2/36.4/13.3/0.4/25.4/9.3/0.0/3 74.7/32.9/13.5/0.3/28.3/9.7/0.0/3 73.3/33.5/13.4/0.4/26.6/9.5/0.0/3 71.5/25.9/15.9/0.5/29.2/10.4/0.0/3 68.9/25.5/16.8/0.5/25.3/9.5/0.0/3 69.6/23.6/17.4/0.5/28.4/9.6/0.0/3 69.1/25.5/16.5/0.5/25.9/9.3/0.0/3 73.2/34.0/13.1/0.4/26.8/9.5/0.0/3 49.3/25.9/6.1/0.2/17.9/9.2/0.0/3
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=thermal: battery 38.7 C (charging)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=6 (15 frames) [38.7C]: first frame (fresh export renderer) total 1834.69 ms decode 1004.89 import 29.55 pipeline 18.65 ms, pipelines 6; export wall 19152 ms; pipeline creation ns (this session, first 16) 13.74,1.34,0.51,0.96,1.29,0.81,0.37,0.47,0.34,0.57,0.47,0.28,0.54,0.52,0.46,0.41 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=6 (15 frames) [38.7C] (frames 2..): 14 frames; p50/p95 ms total=715.89/1185.32 decode=333.90/659.33 import=16.07/20.65 pipeline=3.87/5.31 layerCall=25.99/31.76 record=0.44/0.53 submit=0.85/1.64 fence=33.86/37.73 gpu=12.24/13.79 flushes=26.63/29.97 finish=5.18/7.23 present=0.00/0.00 gpuPresent=0.00/0.00 readback=3.04/4.14 yuv=176.05/183.11 encodeWait=2.35/3.94
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=6 (15 frames) [38.7C] (frames 2..): per frame (mean) flushes=5.00 videoFlushes=3.00 submits=6.00 imports=6.00 sameBuffer=0.00 videoDrawn=6.00 rasterDraws=6.00 pipelines=6.00 conversions=6.00 slotEvictions=6.00 transitions=6.00 decodersOpen=4.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=6 (15 frames) [38.7C] (frames 2..): per-buffer import cache: 84 imports, 84 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 0.0% (needs 84 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export distinct N=6 (15 frames) [38.7C] (frames 2..) frames 0..13 total/decode/import/record/fence/gpu/present/flushes: 495.9/218.8/9.4/0.3/21.1/11.5/0.0/5 562.6/258.1/13.3/0.5/26.7/11.7/0.0/5 614.8/282.9/13.9/0.4/30.7/15.5/0.0/5 1120.9/555.6/17.0/0.5/35.4/12.1/0.0/5 1057.5/557.9/17.9/0.4/33.9/13.8/0.0/5 550.4/273.7/11.0/0.4/26.6/12.8/0.0/5 710.1/306.4/18.0/0.5/37.7/12.5/0.0/5 733.9/326.7/18.5/1.4/36.9/12.1/0.0/5 1185.3/641.9/19.5/0.5/36.3/13.0/0.0/5 1183.4/659.3/20.6/0.4/37.6/13.4/0.0/5 715.0/333.9/13.0/0.4/31.8/12.2/0.0/5 715.9/348.5/15.3/0.4/34.6/12.2/0.0/5 779.3/392.3/16.1/0.5/33.5/12.2/0.0/5 1381.8/803.6/21.6/0.5/40.3/12.5/0.0/5
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=thermal: battery 38.7 C (charging)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=8 (15 frames) [38.7C]: first frame (fresh export renderer) total 2723.05 ms decode 1458.42 import 43.83 pipeline 23.66 ms, pipelines 8; export wall 38028 ms; pipeline creation ns (this session, first 16) 17.66,0.92,0.54,2.12,0.42,0.44,0.81,0.76,0.81,0.71,0.62,0.41,0.59,0.39,0.47,0.33 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=8 (15 frames) [38.7C] (frames 2..): 14 frames; p50/p95 ms total=1859.34/3147.18 decode=1004.02/1825.05 import=22.02/43.63 pipeline=5.57/11.84 layerCall=36.40/70.47 record=0.62/1.98 submit=1.28/11.23 fence=41.80/47.30 gpu=15.19/16.04 flushes=36.81/54.59 finish=4.77/6.16 present=0.00/0.00 gpuPresent=0.00/0.00 readback=2.86/3.28 yuv=184.47/219.95 encodeWait=2.95/6.04
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=8 (15 frames) [38.7C] (frames 2..): per frame (mean) flushes=7.00 videoFlushes=3.00 submits=8.00 imports=8.00 sameBuffer=0.00 videoDrawn=8.00 rasterDraws=8.00 pipelines=8.00 conversions=8.00 slotEvictions=8.00 transitions=8.00 decodersOpen=4.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export distinct N=8 (15 frames) [38.7C] (frames 2..): per-buffer import cache: 112 imports, 112 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 0.0% (needs 112 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export distinct N=8 (15 frames) [38.7C] (frames 2..) frames 0..13 total/decode/import/record/fence/gpu/present/flushes: 1184.8/537.2/18.6/0.5/38.9/15.4/0.0/7 1222.1/615.5/25.0/0.6/35.8/15.2/0.0/7 1377.7/637.8/22.0/0.7/44.4/15.9/0.0/7 1885.8/947.7/22.5/0.7/43.8/15.7/0.0/7 1859.3/984.4/19.5/0.6/39.7/15.0/0.0/7 1889.9/1006.4/24.3/2.0/47.3/16.0/0.0/7 1921.0/1018.4/25.6/0.7/44.7/17.1/0.0/7 1401.2/756.9/17.0/0.5/40.2/16.0/0.0/7 1812.5/1004.0/19.7/0.5/40.6/15.3/0.0/7 2936.9/1825.1/43.6/0.7/43.3/15.1/0.0/7 4405.6/2687.9/45.5/7.4/52.5/15.2/0.0/7 3147.2/1742.0/38.1/0.8/45.1/15.2/0.0/7 1682.9/1017.8/17.8/0.5/34.2/14.2/0.0/7 2031.7/1138.0/19.7/0.5/41.8/14.8/0.0/7
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=thermal: battery 38.7 C (charging)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=1 (30 frames) [38.7C]: first frame (fresh export renderer) total 842.41 ms decode 472.07 import 212.08 pipeline 209.74 ms, pipelines 1; export wall 9931 ms; pipeline creation ns (this session, first 16) 209.74 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=1 (30 frames) [38.7C] (frames 2..): 29 frames; p50/p95 ms total=13.79/19.39 decode=4.92/8.21 import=2.25/3.57 pipeline=0.00/0.00 layerCall=2.37/3.65 record=0.06/0.10 submit=0.18/0.50 fence=8.06/10.00 gpu=2.93/3.48 flushes=0.00/0.00 finish=5.66/7.33 present=0.00/0.00 gpuPresent=0.00/0.00 readback=2.97/3.70 yuv=180.96/204.48 encodeWait=1.63/2.86
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=1 (30 frames) [38.7C] (frames 2..): per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=1.00 sameBuffer=0.00 videoDrawn=1.00 rasterDraws=1.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=1.00 decodersOpen=1.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=1 (30 frames) [38.7C] (frames 2..): per-buffer import cache: 29 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 34.5% unbounded 34.5% (needs 19 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export shared N=1 (30 frames) [38.7C] (frames 2..) frames 0..28 total/decode/import/record/fence/gpu/present/flushes: 13.1/4.7/2.6/0.1/7.3/2.9/0.0/0 11.0/3.3/1.8/0.1/8.7/2.9/0.0/0 10.0/2.4/2.0/0.1/8.0/3.0/0.0/0 14.7/4.2/3.4/0.1/9.3/3.0/0.0/0 11.6/4.6/1.2/0.1/9.4/2.8/0.0/0 16.4/8.2/3.2/0.1/7.3/3.0/0.0/0 16.4/5.3/3.4/0.1/9.9/3.3/0.0/0 14.5/8.2/2.4/0.1/5.7/2.8/0.0/0 18.0/6.4/3.6/0.1/10.1/3.0/0.0/0 16.3/6.3/4.0/0.1/7.9/2.8/0.0/0 11.2/3.0/2.0/0.1/7.8/2.9/0.0/0 12.3/4.7/2.0/0.1/8.7/2.9/0.0/0 16.2/7.4/2.0/0.1/8.6/2.9/0.0/0 10.7/3.1/1.8/0.1/7.7/3.0/0.0/0 11.9/2.2/2.4/0.1/7.3/3.0/0.0/0 26.5/7.8/9.5/0.3/9.7/3.5/0.0/0 13.8/5.4/2.1/0.1/8.1/2.9/0.0/0 12.8/4.6/2.1/0.0/7.7/2.9/0.0/0 16.1/5.2/3.4/0.1/10.0/3.6/0.0/0 16.5/5.6/3.5/0.1/9.3/3.0/0.0/0 14.1/5.9/1.8/0.0/8.7/2.9/0.0/0 12.2/3.2/2.0/0.1/9.1/2.9/0.0/0 19.4/7.0/3.6/0.1/10.7/3.0/0.0/0 12.2/3.7/1.6/0.0/8.7/2.9/0.0/0 10.6/3.5/2.3/0.1/6.7/3.5/0.0/0 11.4/5.0/2.0/0.1/7.5/3.0/0.0/0 12.0/4.9/2.1/0.0/6.5/3.9/0.0/0 13.8/4.8/2.7/0.1/7.8/2.9/0.0/0 42.3/32.9/3.0/0.1/7.6/2.8/0.0/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=thermal: battery 38.7 C (charging)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=2 (30 frames) [38.7C]: first frame (fresh export renderer) total 614.08 ms decode 463.23 import 23.29 pipeline 19.27 ms, pipelines 2; export wall 9834 ms; pipeline creation ns (this session, first 16) 18.47,0.80 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=2 (30 frames) [38.7C] (frames 2..): 29 frames; p50/p95 ms total=23.75/27.91 decode=5.63/10.01 import=6.78/7.55 pipeline=0.00/0.00 layerCall=6.96/7.79 record=0.20/0.34 submit=0.42/0.53 fence=12.83/14.59 gpu=4.76/5.63 flushes=6.08/7.20 finish=4.19/5.40 present=0.00/0.00 gpuPresent=0.00/0.00 readback=3.11/4.53 yuv=179.49/199.60 encodeWait=2.09/4.28
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=2 (30 frames) [38.7C] (frames 2..): per frame (mean) flushes=1.00 videoFlushes=1.00 submits=2.00 imports=2.00 sameBuffer=0.00 videoDrawn=2.00 rasterDraws=2.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=2.00 decodersOpen=1.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=2 (30 frames) [38.7C] (frames 2..): per-buffer import cache: 58 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 50.0% LRU8 50.0% LRU16 50.0% LRU32 67.2% unbounded 67.2% (needs 19 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export shared N=2 (30 frames) [38.7C] (frames 2..) frames 0..28 total/decode/import/record/fence/gpu/present/flushes: 20.9/3.7/6.6/0.2/11.5/4.4/0.0/1 23.4/4.8/7.0/0.2/12.8/4.8/0.0/1 23.6/5.1/6.0/0.2/13.9/5.6/0.0/1 27.6/10.0/5.1/0.1/14.3/5.8/0.0/1 22.1/4.2/6.8/0.2/12.9/5.1/0.0/1 24.2/5.4/7.5/0.2/11.9/4.9/0.0/1 24.3/5.9/6.4/0.2/13.2/5.2/0.0/1 13.8/2.7/3.6/0.1/8.6/4.1/0.0/1 13.4/2.7/3.3/0.1/8.5/4.1/0.0/1 19.6/3.1/8.0/0.4/8.9/4.1/0.0/1 19.1/4.7/5.0/0.1/10.3/4.3/0.0/1 21.9/9.5/3.0/0.1/11.1/4.5/0.0/1 25.2/5.8/7.2/0.2/14.1/5.0/0.0/1 23.7/5.2/7.7/0.3/11.7/6.3/0.0/1 23.1/7.4/3.7/0.1/14.2/4.5/0.0/1 23.6/6.3/6.2/0.2/13.2/4.6/0.0/1 22.2/2.9/6.9/0.2/15.1/5.3/0.0/1 25.0/6.8/6.9/0.2/12.8/4.6/0.0/1 26.3/7.0/7.4/0.2/12.7/4.3/0.0/1 30.7/11.8/6.8/0.2/14.6/4.5/0.0/1 27.9/6.1/7.2/0.2/11.8/4.5/0.0/1 24.5/5.3/6.7/0.2/14.0/5.2/0.0/1 25.2/5.9/6.9/0.2/14.3/4.8/0.0/1 16.0/4.2/2.6/0.1/11.2/4.5/0.0/1 24.1/5.8/6.9/0.2/12.5/4.9/0.0/1 24.5/5.6/6.0/0.2/14.5/4.7/0.0/1 25.1/5.3/7.1/0.3/14.0/5.6/0.0/1 31.9/11.2/6.9/0.2/17.0/4.8/0.0/1 19.9/5.9/4.6/0.1/12.5/4.9/0.0/1
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=thermal: battery 38.7 C (charging)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=4 (30 frames) [38.7C]: first frame (fresh export renderer) total 669.82 ms decode 480.54 import 28.95 pipeline 20.73 ms, pipelines 4; export wall 10270 ms; pipeline creation ns (this session, first 16) 18.17,0.85,0.89,0.82 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=4 (30 frames) [38.7C] (frames 2..): 29 frames; p50/p95 ms total=40.31/45.15 decode=5.97/12.12 import=13.87/14.82 pipeline=0.00/0.00 layerCall=14.34/15.25 record=0.43/0.46 submit=0.75/0.81 fence=20.91/22.46 gpu=9.86/10.38 flushes=14.85/16.08 finish=4.21/4.65 present=0.00/0.00 gpuPresent=0.00/0.00 readback=3.54/4.05 yuv=177.02/178.84 encodeWait=2.87/4.56
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=4 (30 frames) [38.7C] (frames 2..): per frame (mean) flushes=3.00 videoFlushes=3.00 submits=4.00 imports=4.00 sameBuffer=0.00 videoDrawn=4.00 rasterDraws=4.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=4.00 decodersOpen=1.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=4 (30 frames) [38.7C] (frames 2..): per-buffer import cache: 116 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 75.0% LRU8 75.0% LRU16 75.0% LRU32 83.6% unbounded 83.6% (needs 19 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export shared N=4 (30 frames) [38.7C] (frames 2..) frames 0..28 total/decode/import/record/fence/gpu/present/flushes: 39.6/7.5/13.8/0.2/17.5/8.8/0.0/3 37.9/4.4/14.1/0.4/19.6/9.2/0.0/3 40.9/5.7/14.1/0.5/21.3/9.7/0.0/3 45.2/12.1/13.9/0.4/20.2/9.7/0.0/3 39.2/5.7/13.7/0.4/20.5/9.8/0.0/3 40.3/5.0/14.3/0.4/22.0/9.9/0.0/3 39.3/4.7/14.0/0.4/20.9/9.4/0.0/3 41.5/6.0/14.6/0.5/21.5/9.9/0.0/3 42.1/6.0/14.8/0.4/21.6/9.9/0.0/3 40.3/6.7/13.7/0.4/19.7/9.4/0.0/3 35.3/5.4/11.4/0.4/19.4/9.4/0.0/3 45.1/12.6/12.2/0.5/20.7/10.0/0.0/3 39.2/7.2/12.2/0.4/20.3/9.9/0.0/3 40.6/6.7/13.8/0.4/20.1/9.8/0.0/3 42.4/8.3/13.8/0.4/22.1/10.4/0.0/3 43.4/5.5/13.5/0.4/24.5/10.5/0.0/3 38.7/4.7/13.9/0.4/20.9/9.9/0.0/3 39.9/5.2/13.7/0.4/22.0/10.3/0.0/3 39.0/5.3/13.1/0.4/21.7/9.6/0.0/3 35.7/5.9/9.9/0.3/20.8/9.2/0.0/3 40.9/6.0/14.2/0.4/20.8/10.0/0.0/3 40.2/4.4/14.1/0.4/22.1/10.4/0.0/3 40.1/4.8/13.4/0.4/22.5/9.9/0.0/3 37.4/5.0/12.5/0.4/20.8/9.5/0.0/3 42.7/7.2/13.9/0.5/21.6/10.2/0.0/3 43.3/6.9/14.8/0.4/21.6/10.3/0.0/3 41.4/6.0/14.9/0.4/20.3/10.0/0.0/3 50.8/13.9/14.5/0.4/23.3/9.4/0.0/3 40.4/6.2/13.9/0.5/20.7/10.0/0.0/3
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=thermal: battery 38.7 C (charging)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=6 (30 frames) [38.7C]: first frame (fresh export renderer) total 674.42 ms decode 493.02 import 31.46 pipeline 20.08 ms, pipelines 6; export wall 10903 ms; pipeline creation ns (this session, first 16) 16.35,0.45,0.91,0.88,0.75,0.74,0.73,0.67,0.76,0.64,0.64,0.56,0.63,0.82,0.71,0.67 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=6 (30 frames) [38.7C] (frames 2..): 29 frames; p50/p95 ms total=58.51/67.44 decode=6.25/12.76 import=16.79/17.72 pipeline=4.21/4.55 layerCall=26.12/27.42 record=0.62/0.69 submit=1.04/1.16 fence=26.73/29.19 gpu=13.00/13.99 flushes=21.58/24.48 finish=3.69/4.41 present=0.00/0.00 gpuPresent=0.00/0.00 readback=2.99/3.83 yuv=176.64/179.12 encodeWait=2.62/4.61
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=6 (30 frames) [38.7C] (frames 2..): per frame (mean) flushes=5.00 videoFlushes=5.00 submits=6.00 imports=6.00 sameBuffer=0.00 videoDrawn=6.00 rasterDraws=6.00 pipelines=6.00 conversions=6.00 slotEvictions=6.00 transitions=6.00 decodersOpen=1.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=6 (30 frames) [38.7C] (frames 2..): per-buffer import cache: 174 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 83.3% LRU8 83.3% LRU16 83.3% LRU32 89.1% unbounded 89.1% (needs 19 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export shared N=6 (30 frames) [38.7C] (frames 2..) frames 0..28 total/decode/import/record/fence/gpu/present/flushes: 55.7/6.2/15.7/0.6/24.6/12.6/0.0/5 59.7/4.5/17.3/0.6/27.1/13.1/0.0/5 39.4/4.1/10.6/0.5/18.2/10.9/0.0/5 59.9/4.6/18.0/0.6/27.5/14.3/0.0/5 45.7/8.0/10.1/0.4/21.9/11.9/0.0/5 54.3/4.2/15.2/0.5/26.7/13.5/0.0/5 55.9/6.1/15.1/0.6/25.4/13.2/0.0/5 57.5/5.3/16.4/0.7/26.0/12.5/0.0/5 62.7/8.0/16.9/0.6/29.0/12.5/0.0/5 62.4/6.6/17.0/0.6/29.1/13.7/0.0/5 56.9/5.7/15.6/0.7/25.7/13.3/0.0/5 56.8/5.8/16.0/0.6/26.9/12.4/0.0/5 52.4/13.1/9.3/0.4/22.8/11.7/0.0/5 61.8/7.5/17.1/0.6/28.0/13.3/0.0/5 56.6/5.2/16.6/0.7/24.5/12.0/0.0/5 57.1/6.4/16.4/0.6/26.6/12.7/0.0/5 58.2/6.9/16.9/0.6/24.7/12.3/0.0/5 60.8/6.1/17.1/0.6/27.6/13.7/0.0/5 58.5/5.8/16.6/0.6/27.3/14.0/0.0/5 61.2/7.1/17.2/0.7/26.7/12.9/0.0/5 67.4/12.8/16.8/0.6/26.7/13.3/0.0/5 57.4/6.1/16.8/0.6/25.8/12.2/0.0/5 60.0/6.1/17.2/0.6/26.4/12.7/0.0/5 63.1/6.3/17.1/0.6/29.6/13.3/0.0/5 68.1/8.0/18.9/0.6/30.5/14.4/0.0/5 61.5/7.7/17.7/0.6/27.3/13.0/0.0/5 57.7/8.4/14.7/0.5/26.9/12.7/0.0/5 62.1/5.5/17.6/0.7/29.2/13.3/0.0/5 67.8/13.4/16.2/0.8/26.1/13.5/0.0/5
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=thermal: battery 38.7 C (charging)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=8 (30 frames) [38.7C]: first frame (fresh export renderer) total 702.54 ms decode 511.87 import 41.39 pipeline 23.97 ms, pipelines 8; export wall 11415 ms; pipeline creation ns (this session, first 16) 18.64,0.91,0.87,0.97,0.63,0.67,0.64,0.64,0.66,0.76,0.72,0.82,0.62,0.61,0.62,0.63 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=8 (30 frames) [38.7C] (frames 2..): 29 frames; p50/p95 ms total=76.05/79.54 decode=6.45/9.46 import=22.09/23.25 pipeline=5.61/6.44 layerCall=34.35/35.67 record=0.81/0.86 submit=1.35/1.44 fence=33.76/36.10 gpu=16.79/17.47 flushes=29.27/31.27 finish=3.81/4.41 present=0.00/0.00 gpuPresent=0.00/0.00 readback=3.45/3.99 yuv=177.36/178.95 encodeWait=2.78/3.99
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=8 (30 frames) [38.7C] (frames 2..): per frame (mean) flushes=7.00 videoFlushes=7.00 submits=8.00 imports=8.00 sameBuffer=0.00 videoDrawn=8.00 rasterDraws=8.00 pipelines=8.00 conversions=8.00 slotEvictions=8.00 transitions=8.00 decodersOpen=1.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export shared N=8 (30 frames) [38.7C] (frames 2..): per-buffer import cache: 232 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 87.5% LRU8 87.5% LRU16 87.5% LRU32 91.8% unbounded 91.8% (needs 19 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export shared N=8 (30 frames) [38.7C] (frames 2..) frames 0..28 total/decode/import/record/fence/gpu/present/flushes: 74.2/7.2/21.5/0.8/32.2/15.9/0.0/7 52.1/2.7/15.3/0.6/24.9/14.4/0.0/7 45.6/2.0/10.7/0.4/26.8/14.8/0.0/7 73.7/5.7/22.5/0.8/31.7/16.3/0.0/7 83.4/12.9/22.3/0.8/36.1/17.6/0.0/7 76.3/6.4/23.3/0.8/33.7/16.6/0.0/7 76.1/6.7/23.5/0.8/32.3/15.7/0.0/7 77.9/7.6/21.9/0.8/35.1/17.1/0.0/7 78.9/6.5/22.4/0.8/36.1/17.0/0.0/7 74.7/6.9/22.3/0.8/32.1/16.1/0.0/7 71.3/6.3/18.5/0.8/35.3/17.2/0.0/7 73.2/5.9/22.1/0.8/33.1/17.0/0.0/7 78.1/8.7/22.2/0.8/34.7/17.1/0.0/7 75.1/4.7/23.2/0.8/33.8/16.9/0.0/7 76.1/5.9/23.3/0.8/34.1/15.9/0.0/7 72.6/5.5/21.0/0.9/32.6/16.9/0.0/7 79.5/6.4/22.9/1.0/35.7/16.6/0.0/7 76.5/6.2/22.1/0.8/35.6/18.3/0.0/7 75.1/5.9/22.5/0.8/34.0/16.6/0.0/7 76.5/7.7/21.9/0.8/32.7/17.3/0.0/7 71.1/9.5/18.0/0.6/33.0/15.8/0.0/7 74.4/6.4/21.5/0.8/32.5/16.3/0.0/7 78.6/7.4/22.0/0.8/36.1/17.3/0.0/7 77.0/6.3/22.7/0.8/34.7/16.8/0.0/7 75.9/7.3/21.8/0.9/32.9/16.7/0.0/7 80.2/8.3/22.2/0.8/36.5/17.5/0.0/7 75.4/5.7/21.9/0.8/35.1/17.3/0.0/7 77.2/6.6/22.4/0.8/35.0/16.8/0.0/7 76.3/12.3/18.7/0.8/33.4/16.1/0.0/7
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=thermal: battery 38.7 C (charging)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=1 per-video flush ON (as today) [no encoder]: 30 frames; p50/p95 ms total=12.35/15.06 decode=4.16/7.60 import=1.23/2.76 pipeline=0.00/0.00 layerCall=1.29/2.90 record=0.05/0.06 submit=0.14/0.21 fence=8.72/10.90 gpu=2.97/3.24 flushes=0.00/0.00 finish=5.96/7.60 present=0.00/0.00 gpuPresent=0.00/0.00 readback=2.84/4.15 yuv=171.66/182.21 encodeWait=0.00/0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=1 per-video flush ON (as today) [no encoder]: per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=1.00 sameBuffer=0.00 videoDrawn=1.00 rasterDraws=1.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=1.00 decodersOpen=1.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=1 per-video flush ON (as today) [no encoder]: per-buffer import cache: 30 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 50.0% unbounded 50.0% (needs 19 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export-renderer flush-bound N=1 per-video flush ON (as today) [no encoder] frames 0..29 total/decode/import/record/fence/gpu/present/flushes: 11.2/3.8/1.3/0.0/8.3/2.9/0.0/0 13.0/5.0/1.3/0.1/9.1/3.2/0.0/0 12.8/4.9/1.3/0.0/8.7/3.1/0.0/0 144.9/135.1/3.3/0.1/8.8/3.0/0.0/0 13.4/4.8/1.2/0.0/10.5/3.3/0.0/0 11.3/4.2/1.2/0.0/8.2/2.9/0.0/0 10.1/2.7/1.3/0.0/9.2/3.1/0.0/0 9.3/2.2/1.0/0.0/7.8/2.9/0.0/0 8.1/2.1/0.8/0.0/6.9/2.9/0.0/0 7.6/1.6/1.0/0.0/6.9/2.8/0.0/0 9.7/2.5/2.0/0.0/7.0/2.8/0.0/0 14.7/7.6/1.0/0.0/8.0/3.0/0.0/0 10.7/4.0/1.0/0.0/7.4/2.9/0.0/0 10.5/3.9/1.0/0.0/7.9/2.8/0.0/0 11.1/3.8/1.0/0.0/8.7/3.0/0.0/0 11.1/4.2/1.0/0.1/8.0/2.9/0.0/0 12.5/4.2/1.2/0.1/9.1/3.2/0.0/0 14.5/4.6/1.1/0.1/13.0/3.0/0.0/0 13.0/4.0/1.2/0.0/10.9/3.0/0.0/0 10.0/3.3/1.0/0.0/8.4/3.1/0.0/0 158.1/148.6/3.1/0.1/8.8/2.9/0.0/0 13.2/4.8/1.3/0.1/10.5/3.2/0.0/0 14.4/5.7/1.8/0.1/10.7/3.0/0.0/0 13.4/3.9/1.3/0.0/11.4/3.0/0.0/0 15.0/5.2/2.8/0.0/9.1/3.2/0.0/0 13.0/5.7/1.9/0.1/7.6/2.8/0.0/0 9.3/2.6/1.5/0.0/7.0/2.8/0.0/0 11.3/3.4/1.2/0.0/8.8/3.0/0.0/0 15.1/6.7/1.3/0.0/9.4/2.9/0.0/0 12.3/4.2/1.5/0.1/9.1/3.1/0.0/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=1 per-video flush SKIPPED [no encoder]: 30 frames; p50/p95 ms total=12.06/15.07 decode=4.01/6.78 import=1.26/3.64 pipeline=0.00/0.00 layerCall=1.31/3.78 record=0.05/0.11 submit=0.13/0.23 fence=7.90/10.28 gpu=2.97/3.31 flushes=0.00/0.00 finish=5.42/7.31 present=0.00/0.00 gpuPresent=0.00/0.00 readback=2.83/3.68 yuv=171.97/188.80 encodeWait=0.00/0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=1 per-video flush SKIPPED [no encoder]: per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=1.00 sameBuffer=0.00 videoDrawn=1.00 rasterDraws=1.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=1.00 decodersOpen=1.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=1 per-video flush SKIPPED [no encoder]: per-buffer import cache: 30 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 86.7% unbounded 86.7% (needs 19 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export-renderer flush-bound N=1 per-video flush SKIPPED [no encoder] frames 0..29 total/decode/import/record/fence/gpu/present/flushes: 9.9/2.0/1.7/0.0/8.3/2.9/0.0/0 10.2/3.4/1.2/0.0/7.2/2.9/0.0/0 8.6/2.4/1.1/0.0/7.1/2.8/0.0/0 8.9/3.0/1.8/0.0/5.8/3.0/0.0/0 12.9/6.4/1.2/0.0/7.1/3.0/0.0/0 12.7/3.4/3.6/0.2/7.2/2.9/0.0/0 12.5/3.0/3.4/0.1/7.4/3.1/0.0/0 9.9/4.0/1.3/0.0/8.8/3.1/0.0/0 12.1/4.0/4.0/0.0/7.0/3.0/0.0/0 15.1/6.5/3.6/0.1/7.8/3.0/0.0/0 12.1/4.7/1.2/0.1/8.8/2.9/0.0/0 11.0/3.2/1.1/0.1/10.0/3.1/0.0/0 18.3/10.4/1.2/0.0/9.1/3.1/0.0/0 9.4/3.3/1.0/0.0/6.9/2.9/0.0/0 12.2/5.7/0.8/0.1/7.9/2.9/0.0/0 11.9/4.5/1.4/0.0/8.5/2.9/0.0/0 11.6/3.8/1.1/0.0/9.2/3.2/0.0/0 12.3/4.3/0.9/0.1/9.5/3.1/0.0/0 14.9/5.7/1.5/0.1/10.5/3.4/0.0/0 10.6/3.7/0.9/0.0/8.3/2.9/0.0/0 8.9/1.7/0.8/0.0/8.4/2.9/0.0/0 14.5/6.8/0.9/0.0/9.1/3.2/0.0/0 14.2/5.2/1.2/0.0/10.3/3.8/0.0/0 11.2/4.2/1.3/0.0/7.6/2.9/0.0/0 9.6/2.7/1.4/0.1/7.4/2.9/0.0/0 10.8/3.7/2.0/0.0/6.9/2.8/0.0/0 26.5/7.1/14.6/0.3/6.2/3.3/0.0/0 12.6/3.6/1.3/0.0/10.3/3.3/0.0/0 13.8/5.1/1.5/0.1/9.7/3.1/0.0/0 12.9/5.6/2.1/0.0/7.2/2.8/0.0/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export flush-bound N=1: render p50 12.35 -> 12.06 ms (0.29 ms, 2.4%), p95 15.06 -> 15.07; flushes/frame 0.00 -> 0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=flush-bound identity N=1: 20 of 20 frames byte-identical (640x360 export-renderer readback, flush on vs skipped)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=thermal: battery 38.7 C (charging)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=2 per-video flush ON (as today) [no encoder]: 30 frames; p50/p95 ms total=23.77/32.00 decode=10.07/17.39 import=3.16/4.75 pipeline=0.00/0.00 layerCall=3.26/4.89 record=0.13/0.15 submit=0.27/0.36 fence=12.23/15.04 gpu=4.55/5.04 flushes=5.35/6.16 finish=4.07/6.55 present=0.00/0.00 gpuPresent=0.00/0.00 readback=2.91/4.03 yuv=176.38/183.22 encodeWait=0.00/0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=2 per-video flush ON (as today) [no encoder]: per frame (mean) flushes=1.00 videoFlushes=1.00 submits=2.00 imports=1.67 sameBuffer=0.33 videoDrawn=2.00 rasterDraws=2.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=1.67 decodersOpen=2.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=2 per-video flush ON (as today) [no encoder]: per-buffer import cache: 50 imports, 37 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 40.0% unbounded 46.0% (needs 37 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export-renderer flush-bound N=2 per-video flush ON (as today) [no encoder] frames 0..29 total/decode/import/record/fence/gpu/present/flushes: 19.5/8.7/1.2/0.1/12.0/4.5/0.0/1 24.9/9.2/4.5/0.1/12.8/4.8/0.0/1 23.2/9.8/4.2/0.1/11.2/4.4/0.0/1 27.9/16.3/1.3/0.2/12.2/4.8/0.0/1 29.7/11.3/4.7/0.1/15.4/4.8/0.0/1 23.8/9.2/4.6/0.1/12.3/4.7/0.0/1 34.1/19.6/1.6/0.2/14.9/5.0/0.0/1 22.5/8.6/4.1/0.1/12.8/4.6/0.0/1 24.0/10.1/4.3/0.1/11.4/4.7/0.0/1 23.2/10.9/0.8/0.1/14.7/5.3/0.0/1 26.6/10.2/4.5/0.2/13.7/4.5/0.0/1 27.6/14.6/2.8/0.1/12.6/4.4/0.0/1 20.9/9.3/1.4/0.1/11.9/4.9/0.0/1 26.4/10.3/4.8/0.1/13.5/4.7/0.0/1 28.8/14.1/3.1/0.1/13.6/4.5/0.0/1 38.0/23.1/3.9/0.1/12.3/4.3/0.0/1 20.7/7.5/4.3/0.1/11.0/4.2/0.0/1 23.8/9.9/2.9/0.1/13.0/5.0/0.0/1 19.2/9.0/1.2/0.1/10.8/4.5/0.0/1 30.0/12.1/4.8/0.1/15.0/4.9/0.0/1 30.4/13.5/4.5/0.1/14.3/4.6/0.0/1 17.6/7.8/1.2/0.1/10.6/4.4/0.0/1 14.4/4.0/3.0/0.1/9.2/4.5/0.0/1 25.9/12.3/3.2/0.1/12.1/4.5/0.0/1 22.0/11.2/1.3/0.1/11.4/4.5/0.0/1 20.1/8.9/2.7/0.1/10.7/4.3/0.0/1 21.8/9.4/3.5/0.1/10.7/4.7/0.0/1 17.1/6.6/0.9/0.1/11.2/4.5/0.0/1 31.1/17.4/4.1/0.1/11.8/4.4/0.0/1 32.0/11.8/4.8/0.1/18.5/5.4/0.0/1
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=2 per-video flush SKIPPED [no encoder]: 30 frames; p50/p95 ms total=19.09/25.76 decode=8.89/13.77 import=2.66/4.31 pipeline=0.00/0.00 layerCall=2.77/4.44 record=0.06/0.10 submit=0.18/0.25 fence=10.18/11.70 gpu=3.83/4.08 flushes=0.00/0.00 finish=7.53/8.52 present=0.00/0.00 gpuPresent=0.00/0.00 readback=2.93/3.94 yuv=174.47/189.77 encodeWait=0.00/0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=2 per-video flush SKIPPED [no encoder]: per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=1.67 sameBuffer=0.33 videoDrawn=2.00 rasterDraws=2.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=1.67 decodersOpen=2.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=2 per-video flush SKIPPED [no encoder]: per-buffer import cache: 50 imports, 37 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 74.0% unbounded 80.0% (needs 37 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export-renderer flush-bound N=2 per-video flush SKIPPED [no encoder] frames 0..29 total/decode/import/record/fence/gpu/present/flushes: 20.5/10.8/1.3/0.1/10.4/4.1/0.0/0 22.2/10.2/3.0/0.1/11.5/4.1/0.0/0 12.6/3.4/3.1/0.1/8.6/3.6/0.0/0 14.5/5.9/1.3/0.1/9.1/3.7/0.0/0 23.4/12.3/3.3/0.1/13.2/3.8/0.0/0 17.8/5.8/5.3/0.1/7.8/3.6/0.0/0 18.1/8.9/1.3/0.1/10.0/3.8/0.0/0 25.8/13.8/4.3/0.1/9.7/3.8/0.0/0 19.6/8.7/3.0/0.1/10.2/4.0/0.0/0 18.7/10.1/1.0/0.1/9.7/3.8/0.0/0 18.7/8.1/2.4/0.1/10.2/4.0/0.0/0 16.9/6.8/2.6/0.1/9.4/3.8/0.0/0 15.3/7.4/1.0/0.1/8.5/4.0/0.0/0 19.5/9.8/2.7/0.1/9.0/3.6/0.0/0 17.9/6.4/3.3/0.1/9.4/3.8/0.0/0 16.0/7.4/1.0/0.1/9.5/3.9/0.0/0 26.9/14.8/3.2/0.1/12.1/3.8/0.0/0 17.2/6.5/2.3/0.1/10.6/3.9/0.0/0 18.5/8.6/1.1/0.1/10.9/4.0/0.0/0 20.8/9.4/3.5/0.1/10.5/4.0/0.0/0 21.7/9.8/3.0/0.1/10.8/4.2/0.0/0 19.1/10.5/1.2/0.1/10.1/3.8/0.0/0 23.1/11.0/3.0/0.1/11.7/3.9/0.0/0 20.0/8.6/3.0/0.1/11.6/3.8/0.0/0 20.3/10.8/1.3/0.1/10.5/4.0/0.0/0 22.7/10.5/3.2/0.1/11.3/3.8/0.0/0 18.8/7.6/2.7/0.1/10.6/3.8/0.0/0 20.0/10.7/1.3/0.1/10.1/3.9/0.0/0 16.2/6.1/2.6/0.1/9.7/3.9/0.0/0 28.3/15.5/4.4/0.1/10.3/4.1/0.0/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export flush-bound N=2: render p50 23.77 -> 19.09 ms (4.68 ms, 19.7%), p95 32.00 -> 25.76; flushes/frame 1.00 -> 0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=flush-bound identity N=2: 20 of 20 frames byte-identical (640x360 export-renderer readback, flush on vs skipped)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=thermal: battery 38.7 C (charging)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=4 per-video flush ON (as today) [no encoder]: 30 frames; p50/p95 ms total=56.60/70.94 decode=25.44/32.66 import=6.41/11.75 pipeline=0.00/0.00 layerCall=6.62/12.09 record=0.32/0.46 submit=0.59/0.76 fence=23.46/27.89 gpu=9.54/10.34 flushes=15.49/18.90 finish=4.92/7.42 present=0.00/0.00 gpuPresent=0.00/0.00 readback=3.09/3.67 yuv=177.93/190.39 encodeWait=0.00/0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=4 per-video flush ON (as today) [no encoder]: per frame (mean) flushes=3.00 videoFlushes=3.00 submits=4.00 imports=3.33 sameBuffer=0.67 videoDrawn=4.00 rasterDraws=4.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=3.33 decodersOpen=4.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=4 per-video flush ON (as today) [no encoder]: per-buffer import cache: 100 imports, 73 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 45.0% (needs 73 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export-renderer flush-bound N=4 per-video flush ON (as today) [no encoder] frames 0..29 total/decode/import/record/fence/gpu/present/flushes: 59.2/31.0/5.2/0.3/24.9/9.5/0.0/3 54.8/21.6/11.0/0.3/23.8/9.2/0.0/3 43.3/19.4/5.7/0.2/19.7/9.5/0.0/3 48.4/25.4/2.8/0.3/21.1/10.0/0.0/3 62.6/25.0/11.8/0.3/27.0/9.6/0.0/3 66.5/24.8/11.6/0.3/31.3/10.1/0.0/3 57.1/31.4/4.7/0.5/22.0/9.6/0.0/3 60.4/25.7/10.3/0.2/26.4/9.6/0.0/3 62.0/30.8/10.2/0.3/21.7/9.0/0.0/3 50.0/25.7/4.5/0.3/20.6/9.7/0.0/3 45.7/21.9/6.3/0.2/19.3/9.2/0.0/3 60.4/26.8/9.2/0.3/25.3/9.8/0.0/3 50.8/23.8/4.5/0.3/23.5/9.6/0.0/3 43.9/21.6/5.4/0.2/19.0/9.8/0.0/3 70.9/32.7/11.4/0.3/28.2/10.1/0.0/3 89.5/64.4/4.2/0.4/21.3/9.3/0.0/3 63.6/26.1/10.7/0.3/27.9/10.1/0.0/3 62.9/28.4/11.1/0.4/24.4/9.4/0.0/3 52.9/24.6/4.9/0.4/24.4/10.6/0.0/3 60.4/25.9/11.5/0.4/24.2/9.4/0.0/3 62.2/26.3/11.7/0.3/25.4/10.0/0.0/3 50.7/25.0/4.9/0.3/21.9/10.3/0.0/3 56.6/23.1/11.5/0.3/23.9/9.1/0.0/3 70.3/32.7/11.0/0.3/27.5/9.4/0.0/3 52.1/28.1/3.8/0.3/21.8/10.7/0.0/3 44.0/20.4/8.3/0.2/16.1/8.4/0.0/3 28.6/9.9/5.5/0.2/15.4/8.4/0.0/3 34.3/14.9/4.9/0.5/14.2/8.4/0.0/3 38.3/16.2/6.4/0.2/17.1/8.9/0.0/3 71.4/32.0/14.5/0.5/25.3/9.5/0.0/3
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=4 per-video flush SKIPPED [no encoder]: 30 frames; p50/p95 ms total=43.72/51.01 decode=22.31/30.20 import=7.37/10.17 pipeline=0.00/0.00 layerCall=7.62/10.49 record=0.11/0.12 submit=0.26/0.31 fence=14.10/15.55 gpu=7.23/7.81 flushes=0.00/0.00 finish=11.31/12.96 present=0.00/0.00 gpuPresent=0.00/0.00 readback=3.05/3.82 yuv=177.47/185.15 encodeWait=0.00/0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=4 per-video flush SKIPPED [no encoder]: per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=3.33 sameBuffer=0.67 videoDrawn=4.00 rasterDraws=4.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=3.33 decodersOpen=4.00 withoutDecoder=0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export-renderer flush-bound N=4 per-video flush SKIPPED [no encoder]: per-buffer import cache: 100 imports, 75 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 80.0% (needs 75 entries)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22RAW=export-renderer flush-bound N=4 per-video flush SKIPPED [no encoder] frames 0..29 total/decode/import/record/fence/gpu/present/flushes: 38.4/20.9/2.8/0.1/16.8/8.7/0.0/0 51.9/29.0/11.0/0.2/13.5/7.1/0.0/0 44.3/22.0/10.2/0.1/13.7/7.1/0.0/0 20.1/7.9/2.5/0.1/11.2/6.8/0.0/0 31.1/15.2/5.9/0.1/11.3/6.8/0.0/0 25.4/8.5/7.6/0.1/10.8/6.8/0.0/0 28.3/12.9/3.3/0.1/15.0/7.1/0.0/0 50.4/26.9/9.8/0.1/15.4/7.2/0.0/0 51.4/34.0/6.1/0.1/13.3/7.2/0.0/0 44.0/27.3/4.4/0.1/13.9/8.1/0.0/0 38.0/16.7/8.5/0.1/14.7/7.1/0.0/0 50.9/28.1/9.7/0.1/14.9/7.3/0.0/0 42.3/25.1/5.0/0.1/14.3/7.1/0.0/0 45.6/21.1/11.3/0.1/14.8/7.1/0.0/0 46.7/24.0/9.9/0.1/14.5/7.2/0.0/0 36.4/19.7/4.6/0.2/14.1/7.3/0.0/0 50.3/29.2/7.4/0.1/16.1/7.5/0.0/0 42.4/25.1/5.7/0.1/15.0/7.3/0.0/0 43.8/26.9/4.4/0.1/14.1/7.8/0.0/0 43.7/22.2/9.7/0.1/13.7/7.3/0.0/0 37.6/16.8/7.0/0.1/15.1/7.5/0.0/0 44.9/30.2/2.9/0.1/13.6/7.8/0.0/0 34.7/15.2/7.8/0.1/13.4/7.4/0.0/0 45.7/22.8/9.9/0.1/15.4/7.2/0.0/0 43.7/28.1/3.7/0.1/13.5/7.3/0.0/0 41.4/22.3/7.4/0.1/14.1/7.2/0.0/0 51.0/30.2/9.1/0.1/13.0/7.0/0.0/0 32.9/16.5/3.3/0.1/15.5/7.2/0.0/0 41.7/19.9/9.4/0.1/14.8/7.6/0.0/0 45.6/26.0/7.6/0.1/13.8/7.3/0.0/0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export flush-bound N=4: render p50 56.60 -> 43.72 ms (12.88 ms, 22.8%), p95 70.94 -> 51.01; flushes/frame 3.00 -> 0.00
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=flush-bound identity N=4: 20 of 20 frames byte-identical (640x360 export-renderer readback, flush on vs skipped)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: MP22=export part wall 203 s; end temperature 38.7C
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Mp22RenderTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=measure
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 205.229
+
+OK (1 test)
+
+
+INSTRUMENTATION_CODE: -1

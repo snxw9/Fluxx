@@ -1,0 +1,100 @@
+STATE=Mp22RenderTest start: low_power=0 plugged=AC level=76 percent temperature=38.2C screen=Awake keyguard=unlocked
+MP22=device: low_power=0 plugged=AC level=76 percent temperature=38.2C screen=Awake keyguard=unlocked; build benchmark (not debuggable); API 36
+MP22=typical: '〈INTERSTELLAR ✨〉My Hero Academia〈AMV⧸EDI' video/avc 1920x1080 30.0 fps 60.0 s
+MP22=surface 1080x2340
+MP22=cold start (fresh process, first preview renderer): first 5 frames total ms 840.63,11.11,10.21,7.95,12.01; pipeline ms 45.02,0.00,0.00,0.00,0.00; pipelines 1; pipeline creation times 45.02 ms
+MP22=temperature 38.1C
+MP22=thermal: battery 38.1 C (charging)
+MP22=preview distinct N=1 [38.1C]: 150 frames; p50/p95 ms total=17.29/26.57 decode=5.90/13.25 import=3.29/5.01 pipeline=0.00/0.00 layerCall=3.40/5.10 record=0.09/0.13 submit=0.14/0.20 fence=4.69/7.65 gpu=3.01/3.54 flushes=0.00/0.00 finish=6.97/10.29 present=1.59/2.66 gpuPresent=2.45/7.77
+MP22=preview distinct N=1 [38.1C]: per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=1.00 sameBuffer=0.00 videoDrawn=1.00 rasterDraws=1.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=1.00 decodersOpen=1.00 withoutDecoder=0.00
+MP22=preview distinct N=1 [38.1C]: per-buffer import cache: 150 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 87.3% unbounded 87.3% (needs 19 entries)
+MP22=thermal: battery 38.1 C (charging)
+MP22=preview distinct N=2 [38.1C]: 150 frames; p50/p95 ms total=31.18/40.63 decode=12.47/19.72 import=6.44/7.59 pipeline=0.00/0.00 layerCall=6.64/7.77 record=0.17/0.18 submit=0.27/0.35 fence=8.34/12.95 gpu=4.59/5.20 flushes=3.99/7.01 finish=6.47/9.14 present=1.54/2.40 gpuPresent=2.23/2.70
+MP22=preview distinct N=2 [38.1C]: per frame (mean) flushes=1.00 videoFlushes=1.00 submits=2.00 imports=2.00 sameBuffer=0.00 videoDrawn=2.00 rasterDraws=2.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=2.00 decodersOpen=2.00 withoutDecoder=0.00
+MP22=preview distinct N=2 [38.1C]: per-buffer import cache: 300 imports, 38 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 87.3% (needs 38 entries)
+MP22=thermal: battery 38.1 C (charging)
+MP22=preview distinct N=4 [38.1C]: 150 frames; p50/p95 ms total=32.79/71.84 decode=13.18/36.58 import=6.57/13.82 pipeline=0.00/0.00 layerCall=6.92/14.16 record=0.23/0.46 submit=0.30/1.05 fence=11.19/17.78 gpu=8.47/9.60 flushes=8.90/13.97 finish=4.08/7.66 present=0.89/2.10 gpuPresent=2.05/2.78
+MP22=preview distinct N=4 [38.1C]: per frame (mean) flushes=3.00 videoFlushes=3.00 submits=4.00 imports=3.67 sameBuffer=0.33 videoDrawn=4.00 rasterDraws=4.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=3.67 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview distinct N=4 [38.1C]: per-buffer import cache: 550 imports, 76 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 86.2% (needs 76 entries)
+MP22=thermal: battery 38.1 C (charging)
+MP22=preview distinct N=6 [38.1C]: 150 frames; p50/p95 ms total=53.99/77.04 decode=22.96/35.00 import=12.50/17.39 pipeline=0.00/0.00 layerCall=12.83/17.82 record=0.34/0.47 submit=0.57/1.31 fence=14.32/22.05 gpu=7.77/8.97 flushes=11.83/17.38 finish=5.53/9.02 present=1.43/2.34 gpuPresent=2.15/2.84
+MP22=preview distinct N=6 [38.1C]: per frame (mean) flushes=3.00 videoFlushes=3.00 submits=4.00 imports=3.67 sameBuffer=0.33 videoDrawn=4.00 rasterDraws=4.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=3.67 decodersOpen=4.00 withoutDecoder=2.00
+MP22=preview distinct N=6 [38.1C]: per-buffer import cache: 550 imports, 76 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 86.2% (needs 76 entries)
+MP22=thermal: battery 38.1 C (charging)
+MP22=preview distinct N=8 [38.1C]: 150 frames; p50/p95 ms total=51.11/69.65 decode=22.30/34.63 import=12.81/17.37 pipeline=0.00/0.00 layerCall=13.15/17.91 record=0.35/0.56 submit=0.58/1.19 fence=13.03/20.70 gpu=7.40/8.61 flushes=10.60/16.91 finish=4.87/8.66 present=1.34/2.25 gpuPresent=2.09/2.77
+MP22=preview distinct N=8 [38.1C]: per frame (mean) flushes=3.00 videoFlushes=3.00 submits=4.00 imports=3.67 sameBuffer=0.33 videoDrawn=4.00 rasterDraws=4.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=3.67 decodersOpen=4.00 withoutDecoder=4.00
+MP22=preview distinct N=8 [38.1C]: per-buffer import cache: 550 imports, 76 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 86.2% (needs 76 entries)
+MP22=thermal: battery 38.2 C (charging)
+MP22=preview shared N=1 [38.2C]: 150 frames; p50/p95 ms total=16.57/17.27 decode=2.48/5.51 import=1.59/2.25 pipeline=0.00/0.00 layerCall=1.64/2.31 record=0.05/0.07 submit=0.07/0.11 fence=10.95/12.51 gpu=2.79/2.99 flushes=0.00/0.00 finish=11.88/13.37 present=0.70/0.93 gpuPresent=13.08/13.74
+MP22=preview shared N=1 [38.2C]: per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=1.00 sameBuffer=0.00 videoDrawn=1.00 rasterDraws=1.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=1.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview shared N=1 [38.2C]: per-buffer import cache: 150 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 87.3% unbounded 87.3% (needs 19 entries)
+MP22=thermal: battery 38.2 C (charging)
+MP22=preview shared N=2 [38.2C]: 150 frames; p50/p95 ms total=22.01/30.94 decode=5.52/12.38 import=6.40/8.11 pipeline=0.00/0.00 layerCall=6.58/8.30 record=0.17/0.19 submit=0.27/0.59 fence=7.02/10.23 gpu=4.40/5.15 flushes=3.71/6.68 finish=4.93/6.59 present=1.34/1.95 gpuPresent=2.11/2.76
+MP22=preview shared N=2 [38.2C]: per frame (mean) flushes=1.00 videoFlushes=1.00 submits=2.00 imports=2.00 sameBuffer=0.00 videoDrawn=2.00 rasterDraws=2.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=2.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview shared N=2 [38.2C]: per-buffer import cache: 300 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 50.0% LRU8 50.0% LRU16 50.0% LRU32 93.7% unbounded 93.7% (needs 19 entries)
+MP22=thermal: battery 38.2 C (charging)
+MP22=preview shared N=4 [38.2C]: 150 frames; p50/p95 ms total=38.11/47.54 decode=5.99/12.52 import=12.76/13.85 pipeline=0.00/0.00 layerCall=13.11/14.18 record=0.35/0.41 submit=0.55/0.69 fence=15.44/18.75 gpu=9.54/10.39 flushes=12.39/15.70 finish=5.77/6.50 present=1.57/1.84 gpuPresent=2.36/2.86
+MP22=preview shared N=4 [38.2C]: per frame (mean) flushes=3.00 videoFlushes=3.00 submits=4.00 imports=4.00 sameBuffer=0.00 videoDrawn=4.00 rasterDraws=4.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=4.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview shared N=4 [38.2C]: per-buffer import cache: 600 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 75.0% LRU8 75.0% LRU16 75.0% LRU32 96.8% unbounded 96.8% (needs 19 entries)
+MP22=thermal: battery 38.2 C (charging)
+MP22=preview shared N=6 [38.2C]: 150 frames; p50/p95 ms total=56.06/65.67 decode=5.91/12.80 import=15.23/16.17 pipeline=3.67/4.15 layerCall=23.66/24.81 record=0.53/0.60 submit=0.82/0.95 fence=21.96/24.88 gpu=12.77/13.80 flushes=19.71/22.61 finish=5.59/6.25 present=1.61/1.91 gpuPresent=2.39/2.95
+MP22=preview shared N=6 [38.2C]: per frame (mean) flushes=5.00 videoFlushes=5.00 submits=6.00 imports=6.00 sameBuffer=0.00 videoDrawn=6.00 rasterDraws=6.00 pipelines=6.00 conversions=6.00 slotEvictions=6.00 transitions=6.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview shared N=6 [38.2C]: per-buffer import cache: 900 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 83.3% LRU8 83.3% LRU16 83.3% LRU32 97.9% unbounded 97.9% (needs 19 entries)
+MP22=thermal: battery 38.2 C (charging)
+MP22=preview shared N=8 [38.2C]: 150 frames; p50/p95 ms total=64.93/76.23 decode=5.51/12.31 import=19.38/20.69 pipeline=4.64/5.06 layerCall=30.34/31.87 record=0.68/0.76 submit=1.06/1.39 fence=25.58/30.93 gpu=15.27/17.46 flushes=23.77/28.96 finish=4.91/5.99 present=1.43/1.85 gpuPresent=2.26/2.76
+MP22=preview shared N=8 [38.2C]: per frame (mean) flushes=7.00 videoFlushes=7.00 submits=8.00 imports=8.00 sameBuffer=0.00 videoDrawn=8.00 rasterDraws=8.00 pipelines=8.00 conversions=8.00 slotEvictions=8.00 transitions=8.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview shared N=8 [38.2C]: per-buffer import cache: 1200 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 87.5% LRU8 87.5% LRU16 87.5% LRU32 98.4% unbounded 98.4% (needs 19 entries)
+MP22=thermal: battery 38.2 C (charging)
+MP22=preview flush-bound N=1 per-video flush ON (as today): 150 frames; p50/p95 ms total=16.73/24.59 decode=5.93/12.62 import=3.18/4.78 pipeline=0.00/0.00 layerCall=3.27/4.84 record=0.08/0.13 submit=0.13/0.26 fence=4.84/9.34 gpu=3.04/3.66 flushes=0.00/0.00 finish=7.06/10.97 present=1.59/2.29 gpuPresent=2.44/12.82
+MP22=preview flush-bound N=1 per-video flush ON (as today): per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=1.00 sameBuffer=0.00 videoDrawn=1.00 rasterDraws=1.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=1.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview flush-bound N=1 per-video flush ON (as today): per-buffer import cache: 150 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 74.7% unbounded 74.7% (needs 19 entries)
+MP22=preview flush-bound N=1 per-video flush SKIPPED: 150 frames; p50/p95 ms total=16.17/26.02 decode=5.95/13.16 import=3.19/3.57 pipeline=0.00/0.00 layerCall=3.28/3.72 record=0.08/0.09 submit=0.13/0.17 fence=4.59/7.54 gpu=3.06/3.45 flushes=0.00/0.00 finish=6.67/9.74 present=1.59/2.45 gpuPresent=2.32/2.94
+MP22=preview flush-bound N=1 per-video flush SKIPPED: per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=1.00 sameBuffer=0.00 videoDrawn=1.00 rasterDraws=1.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=1.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview flush-bound N=1 per-video flush SKIPPED: per-buffer import cache: 150 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 74.7% unbounded 74.7% (needs 19 entries)
+MP22=preview flush-bound N=1: total p50 16.73 -> 16.17 ms (0.56 ms, 3.4%), p95 24.59 -> 26.02 ms; blocks p50 on 17.07 skip 15.61 on 16.61 skip 16.50; [38.2C]
+MP22=thermal: battery 38.2 C (charging)
+MP22=preview flush-bound N=2 per-video flush ON (as today): 150 frames; p50/p95 ms total=33.33/42.56 decode=13.49/20.67 import=6.53/8.19 pipeline=0.00/0.00 layerCall=6.69/8.33 record=0.17/0.25 submit=0.29/0.39 fence=9.83/13.00 gpu=4.69/5.50 flushes=4.40/7.18 finish=7.91/9.71 present=1.74/2.47 gpuPresent=2.33/2.96
+MP22=preview flush-bound N=2 per-video flush ON (as today): per frame (mean) flushes=1.00 videoFlushes=1.00 submits=2.00 imports=2.00 sameBuffer=0.00 videoDrawn=2.00 rasterDraws=2.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=2.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview flush-bound N=2 per-video flush ON (as today): per-buffer import cache: 300 imports, 38 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 74.7% (needs 38 entries)
+MP22=preview flush-bound N=2 per-video flush SKIPPED: 150 frames; p50/p95 ms total=27.79/37.13 decode=11.57/20.15 import=6.37/8.95 pipeline=0.00/0.00 layerCall=6.53/9.11 record=0.09/0.12 submit=0.14/0.19 fence=7.11/8.65 gpu=3.83/4.35 flushes=0.00/0.00 finish=9.24/11.19 present=1.63/2.65 gpuPresent=2.27/3.00
+MP22=preview flush-bound N=2 per-video flush SKIPPED: per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=2.00 sameBuffer=0.00 videoDrawn=2.00 rasterDraws=2.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=2.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview flush-bound N=2 per-video flush SKIPPED: per-buffer import cache: 300 imports, 38 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 74.7% (needs 38 entries)
+MP22=preview flush-bound N=2: total p50 33.33 -> 27.79 ms (5.54 ms, 16.6%), p95 42.56 -> 37.13 ms; blocks p50 on 33.13 skip 21.34 on 33.82 skip 29.94; [38.2C]
+MP22=thermal: battery 38.2 C (charging)
+MP22=preview flush-bound N=4 per-video flush ON (as today): 150 frames; p50/p95 ms total=67.16/93.31 decode=26.71/38.52 import=13.28/28.17 pipeline=0.00/0.00 layerCall=13.62/28.77 record=0.36/0.72 submit=0.58/1.04 fence=20.21/25.24 gpu=9.37/10.47 flushes=15.70/20.20 finish=7.78/9.92 present=1.68/3.03 gpuPresent=2.37/2.95
+MP22=preview flush-bound N=4 per-video flush ON (as today): per frame (mean) flushes=3.00 videoFlushes=3.00 submits=4.00 imports=4.00 sameBuffer=0.00 videoDrawn=4.00 rasterDraws=4.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=4.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview flush-bound N=4 per-video flush ON (as today): per-buffer import cache: 600 imports, 76 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 74.7% (needs 76 entries)
+MP22=preview flush-bound N=4 per-video flush SKIPPED: 150 frames; p50/p95 ms total=39.63/55.41 decode=17.66/30.95 import=9.10/15.60 pipeline=0.00/0.00 layerCall=9.47/16.08 record=0.07/0.15 submit=0.08/0.22 fence=9.58/11.41 gpu=6.92/7.40 flushes=0.00/0.00 finish=11.17/13.37 present=1.19/2.31 gpuPresent=2.14/2.64
+MP22=preview flush-bound N=4 per-video flush SKIPPED: per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=4.00 sameBuffer=0.00 videoDrawn=4.00 rasterDraws=4.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=4.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview flush-bound N=4 per-video flush SKIPPED: per-buffer import cache: 600 imports, 76 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 74.7% (needs 76 entries)
+MP22=preview flush-bound N=4: total p50 67.16 -> 39.63 ms (27.53 ms, 41.0%), p95 93.31 -> 55.41 ms; blocks p50 on 63.95 skip 38.89 on 69.07 skip 40.04; [38.2C]
+MP22=thermal: battery 38.2 C (charging)
+MP22=preview cut sequence (all frames): 239 frames; p50/p95 ms total=18.44/34.02 decode=5.34/18.54 import=3.67/8.38 pipeline=0.00/0.00 layerCall=3.78/8.57 record=0.08/0.23 submit=0.14/0.39 fence=5.31/7.23 gpu=2.95/3.43 flushes=0.00/0.00 finish=7.55/11.15 present=1.70/3.30 gpuPresent=2.20/2.82
+MP22=preview cut sequence (all frames): per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=1.00 sameBuffer=0.00 videoDrawn=1.00 rasterDraws=1.00 pipelines=0.03 conversions=0.03 slotEvictions=0.03 transitions=1.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview cut sequence (all frames): per-buffer import cache: 238 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 1.7% LRU8 2.9% LRU16 31.9% LRU32 92.0% unbounded 92.0% (needs 19 entries)
+MP22=preview cut sequence: the 7 cut frames: 7 frames; p50/p95 ms total=226.85/284.85 decode=211.01/273.39 import=3.95/4.90 pipeline=0.80/0.97 layerCall=5.79/6.47 record=0.09/0.19 submit=0.14/0.25 fence=6.19/6.86 gpu=2.96/3.03 flushes=0.00/0.00 finish=8.62/9.44 present=1.88/2.45 gpuPresent=2.61/2.77
+MP22=preview cut sequence: the 7 cut frames: per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=1.00 sameBuffer=0.00 videoDrawn=1.00 rasterDraws=1.00 pipelines=1.00 conversions=1.00 slotEvictions=1.00 transitions=1.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview cut sequence: the 7 cut frames: per-buffer import cache: 7 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 14.3% LRU8 28.6% LRU16 100.0% LRU32 100.0% unbounded 100.0% (needs 19 entries)
+MP22=preview cut sequence: the frame after each cut: 7 frames; p50/p95 ms total=14.91/18.65 decode=4.33/6.61 import=3.88/5.44 pipeline=0.00/0.00 layerCall=3.97/5.61 record=0.08/0.08 submit=0.19/0.45 fence=4.57/5.31 gpu=2.93/3.43 flushes=0.00/0.00 finish=7.05/8.17 present=1.24/1.79 gpuPresent=2.43/2.58
+MP22=preview cut sequence: the frame after each cut: per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=1.00 sameBuffer=0.00 videoDrawn=1.00 rasterDraws=1.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=1.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview cut sequence: the frame after each cut: per-buffer import cache: 7 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 14.3% LRU8 28.6% LRU16 85.7% LRU32 100.0% unbounded 100.0% (needs 19 entries)
+MP22=preview cut sequence: other frames: 225 frames; p50/p95 ms total=18.29/29.70 decode=5.26/14.17 import=3.62/8.38 pipeline=0.00/0.00 layerCall=3.69/8.55 record=0.08/0.23 submit=0.14/0.38 fence=5.28/7.23 gpu=2.95/3.40 flushes=0.00/0.00 finish=7.50/11.15 present=1.70/3.30 gpuPresent=2.20/2.81
+MP22=preview cut sequence: other frames: per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=1.00 sameBuffer=0.00 videoDrawn=1.00 rasterDraws=1.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=1.00 decodersOpen=4.00 withoutDecoder=0.00
+MP22=preview cut sequence: other frames: per-buffer import cache: 224 imports, 19 distinct AHardwareBuffer ids; hit rate LRU4 0.9% LRU8 1.3% LRU16 28.1% LRU32 91.5% unbounded 91.5% (needs 19 entries)
+MP22=preview cut sequence: warm counts (started, ready, used, released unused, failed, blocked budget, blocked cap, waits) 0,0,0,0,0,0,0,0 -> 0,0,0,0,0,0,7,0
+MP22=vp9: 'Calc - Is There Someone Else？.mkv' video/x-vnd.on2.vp9 1920x1440 122.764 s
+MP22=thermal: battery 38.2 C (charging)
+MP22=preview VP9-worst distinct N=1 [38.2C]: 150 frames; p50/p95 ms total=16.61/20.57 decode=4.83/7.48 import=4.14/6.23 pipeline=0.00/0.00 layerCall=4.23/6.31 record=0.09/0.11 submit=0.14/0.44 fence=5.10/13.86 gpu=2.97/3.53 flushes=0.00/0.00 finish=7.18/16.07 present=1.22/2.67 gpuPresent=11.34/14.74
+MP22=preview VP9-worst distinct N=1 [38.2C]: per frame (mean) flushes=0.00 videoFlushes=0.00 submits=1.00 imports=0.67 sameBuffer=0.33 videoDrawn=1.00 rasterDraws=1.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=0.67 decodersOpen=1.00 withoutDecoder=0.00
+MP22=preview VP9-worst distinct N=1 [38.2C]: per-buffer import cache: 100 imports, 31 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 69.0% unbounded 69.0% (needs 31 entries)
+MP22=thermal: battery 38.2 C (charging)
+MP22=preview VP9-worst distinct N=2 [38.2C]: 150 frames; p50/p95 ms total=21.51/39.41 decode=8.36/16.51 import=4.94/9.49 pipeline=0.00/0.00 layerCall=5.07/9.65 record=0.16/0.21 submit=0.26/0.53 fence=7.08/12.08 gpu=4.94/5.71 flushes=3.68/6.37 finish=5.43/8.56 present=1.32/2.00 gpuPresent=2.06/2.74
+MP22=preview VP9-worst distinct N=2 [38.2C]: per frame (mean) flushes=1.00 videoFlushes=1.00 submits=2.00 imports=1.33 sameBuffer=0.67 videoDrawn=2.00 rasterDraws=2.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=1.33 decodersOpen=2.00 withoutDecoder=0.00
+MP22=preview VP9-worst distinct N=2 [38.2C]: per-buffer import cache: 200 imports, 62 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 69.0% (needs 62 entries)
+MP22=thermal: battery 38.2 C (charging)
+MP22=preview VP9-worst distinct N=4 [38.2C]: 150 frames; p50/p95 ms total=25.59/39.85 decode=8.48/18.21 import=5.78/8.69 pipeline=0.00/0.00 layerCall=5.94/8.85 record=0.16/0.22 submit=0.22/0.63 fence=9.23/11.54 gpu=7.30/7.65 flushes=6.59/8.51 finish=4.08/6.15 present=0.78/1.77 gpuPresent=1.97/2.49
+MP22=preview VP9-worst distinct N=4 [38.2C]: per frame (mean) flushes=2.00 videoFlushes=2.00 submits=3.00 imports=2.00 sameBuffer=1.00 videoDrawn=3.00 rasterDraws=3.00 pipelines=0.00 conversions=0.00 slotEvictions=0.00 transitions=2.00 decodersOpen=3.00 withoutDecoder=1.00
+MP22=preview VP9-worst distinct N=4 [38.2C]: per-buffer import cache: 300 imports, 92 distinct AHardwareBuffer ids; hit rate LRU4 0.0% LRU8 0.0% LRU16 0.0% LRU32 0.0% unbounded 69.3% (needs 92 entries)
+MP22=preview renderer pipeline creation times over the run (first 16) 45.02,0.65,0.73,0.99,7.70,0.58,0.81,1.10,0.75,0.42,0.81,2.02,0.60,0.87,0.67,0.64 ms
+MP22=preview part wall 202 s
+MP22=thermal: battery 38.2 C (charging)

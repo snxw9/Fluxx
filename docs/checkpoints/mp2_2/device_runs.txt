@@ -1,0 +1,22 @@
+== a-Mp12Project1 com.fluxx.android.ui.Mp12Project1Test#project1Playthrough Sat Nov 28 18:21:41 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 63 temperature: 368 
+== end a-Mp12Project1 rc=0 wall=4s fluxx-crash-lines=0 Sat Nov 28 18:21:46 WCAST 2026 | 
+(the run above never started: a runner-script argument bug passed stray arguments to am instrument; fixed and re-run below)
+== a-Mp12Project1 com.fluxx.android.ui.Mp12Project1Test#project1Playthrough Sat Nov 28 18:22:16 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 63 temperature: 369 
+== end a-Mp12Project1 rc=0 wall=1110s fluxx-crash-lines=0 Sat Nov 28 18:40:52 WCAST 2026 | OK (1 test) 
+== b3r1-Mp22RenderTest com.fluxx.android.ui.Mp22RenderTest Sat Nov 28 19:00:03 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 75 temperature: 381 
+== end b3r1-Mp22RenderTest rc=0 wall=6s fluxx-crash-lines=0 Sat Nov 28 19:00:10 WCAST 2026 | OK (1 test) 
+(b3r1 on the benchmark variant: SKIPPED by assumption, MediaStore returned 0 rows to com.fluxx.android.bench (no READ_MEDIA_VIDEO; pm grant is not allowed this pass). Fallback: debug variant.)
+Sat Nov 28 19:02:10 WCAST 2026: Snxw approved in session: pm grant com.fluxx.android.bench android.permission.READ_MEDIA_VIDEO (benchmark package only); measure class back on the benchmark variant
+== b3r1-Mp22RenderTest com.fluxx.android.ui.Mp22RenderTest Sat Nov 28 19:02:30 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 76 temperature: 381 
+== b3r1 INTERRUPTED: the phone restarted (Snxw reported it) during the export part, after 'preview part wall 202 s' and the first export case's thermal line (battery 38.2 C, on AC); adb lost the device at about 19:06-19:08. No device commands run since. Cause not known yet.
+== end b3r1-Mp22RenderTest rc=255 wall=242s fluxx-crash-lines=0 Sat Nov 28 19:10:36 WCAST 2026 | 
+== b3r1x-Mp22RenderTest-export com.fluxx.android.ui.Mp22RenderTest Sat Nov 28 19:22:32 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 78 temperature: 389 
+== end b3r1x-Mp22RenderTest-export rc=0 wall=283s fluxx-crash-lines=0 Sat Nov 28 19:27:18 WCAST 2026 | OK (1 test) 
+== b3r2-Mp22RenderTest-preview com.fluxx.android.ui.Mp22RenderTest Sat Nov 28 19:27:36 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 79 temperature: 387 
+== end b3r2-Mp22RenderTest-preview rc=0 wall=212s fluxx-crash-lines=0 Sat Nov 28 19:31:09 WCAST 2026 | OK (1 test) 
+== b3r2x-Mp22RenderTest-export com.fluxx.android.ui.Mp22RenderTest Sat Nov 28 19:31:23 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 389 
+== end b3r2x-Mp22RenderTest-export rc=0 wall=208s fluxx-crash-lines=0 Sat Nov 28 19:34:53 WCAST 2026 | OK (1 test) 
+== g-Mp1CullGoldenTest com.fluxx.android.ui.Mp1CullGoldenTest Sat Nov 28 19:36:09 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 386 
+== end g-Mp1CullGoldenTest rc=0 wall=39s fluxx-crash-lines=0 Sat Nov 28 19:36:48 WCAST 2026 | OK (1 test) 
+== g-Mp21Test-a7 com.fluxx.android.ui.Mp21Test#a7ExportIdentity Sat Nov 28 19:36:58 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false AC powered: true level: 80 temperature: 385 
+== end g-Mp21Test-a7 rc=0 wall=201s fluxx-crash-lines=0 Sat Nov 28 19:40:20 WCAST 2026 | OK (1 test) 

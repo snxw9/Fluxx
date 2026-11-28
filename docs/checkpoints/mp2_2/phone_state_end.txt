@@ -1,0 +1,4 @@
+restored Sat Nov 28 19:40:39 WCAST 2026: low_power=1 stay_on=0 timeout=600000
+  AC powered: true
+  level: 80
+  temperature: 394

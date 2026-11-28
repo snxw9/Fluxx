@@ -1,0 +1,17 @@
+Phone restart during b3r1 (2026-11-28 ~19:06:30), read with Snxw's approval (dumpsys dropbox, getprop boot reason).
+- Boot reason: "reboot" (sys.boot.reason, ro.boot.bootreason); history "reboot,1795889235" = 19:07:15. Not a cold power-key boot.
+- Dropbox 19:09:16: SYSTEM_LAST_KMSG_1_20261128_190916_KP (Samsung tag KP), SYSTEM_BOOT, SYSTEM_AUDIT. Saved: restart_last_kmsg.txt.
+- The last kernel log (kernel time 410183-410186 s, the last ~3 s before the reset) is the MTK command queue reporting a stuck
+  hardware VIDEO ENCODER job: "[cmdq] ===== SW timeout Pre-dump 215 =====" ... "221" every ~204 ms, each dumping
+  "[VENC] pkt ... irq:0" (the same packet, same submit / trigger times) and thread 15 "wait for event 647 become 1" that
+  never fires. Pre-dump 215 at ~204 ms intervals: stuck for at least ~44 s, i.e. about from the start of the export part.
+  The log ends with no panic text; then the reboot. The VENC thread 12 is a secure thread ("Hidden thread info").
+- The stuck packet's submit time (398198.8 s on the cmdq clock) is ~12 000 s before the dump if that clock is the kernel
+  clock: possibly an encoder job stuck since ~15:50, before this session (not verified: the cmdq clock may differ).
+- No exit-info for com.fluxx.android.bench after 18:58 (persisted before the reset); crash buffer after boot: boot noise
+  only; no system_server watchdog / tombstone entry in dropbox before the reset (entries may be lost on a hard reset).
+- What the app was doing: the first export case (CompositionExporter: AudioMixer, then MediaCodec video/avc ENCODER +
+  1 video decoder, 1920x1080), right after the preview renderer (Vulkan device, 4 decoders) was closed.
+Reading: the phone's hardware H.264 encoder (MTK VENC) hung, and the system restarted itself. A driver/firmware hang,
+triggered while our export used the encoder. Not caused by the render-path counters (they are CPU-side only).
+After the restart: on battery (AC powered: false), 38.3 C, low_power 0, stay_on 15 (settings persisted).
