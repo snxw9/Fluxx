@@ -173,7 +173,8 @@ class Tl31UiTest {
         val moved = posTimes(1).first { it > f(36) && it != f(60) }
         val fingerOnly = f(48) + ((target.dp.value * context.resources.displayMetrics.density - start) / pxPerUs()).toLong()
         assertTrue("the content scrolled under the still finger: key at $moved > finger-only $fingerOnly", moved > fingerOnly + f(10))
-        assertEquals("no seek", f(45), editor.state.playheadUs)
+        // TLV1.1 A1 (decided by Snxw): the drag auto-scrolled, so the playhead seeks to the key's new time on release.
+        assertEquals("seeks to the key it auto-scrolled with", moved, editor.state.playheadUs)
     }
 
     // ---- B4 / B5 ----------------------------------------------------------------------------------------------------

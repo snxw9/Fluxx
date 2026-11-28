@@ -56,7 +56,9 @@ internal sealed interface TwirlPopover {
 }
 
 /** The timeline's gesture protocol for twirl rows (begin / preview / commit / cancel: unchanged). */
-internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) -> Unit, val commit: () -> Unit, val cancel: () -> Unit)
+internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) -> Unit, val commit: () -> Unit, val cancel: () -> Unit,
+    /** TLV1.1 A1: commits a KEY DRAG; the argument is the dragged key's new composition time (the view may seek there). */
+    val commitKeyDrag: (Long?) -> Unit = { commit() })
 
 /**
  * TL3 B3: a keyed property row with its key gestures (REPLACING the double-tap rules):
@@ -65,7 +67,8 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
  * - in key mode: a TAP toggles the key at once; a HOLD released without moving opens the value popover (on an unselected
  *   key: for that key alone); a HOLD and DRAG on a selected key moves the whole selection (every track, every layer).
  * Drags snap ([DragSnap], per-class [SnapZones]; every moving key is a candidate, in composition time) and report the
- * readouts. Nothing seeks.
+ * readouts. Nothing seeks, except (TLV1.1 A1) a committed drag that auto-scrolled the timeline: the playhead then seeks to the
+ * dragged key's new time ([KeyDragLanding]).
  */
 @Composable internal fun TwirlKeyRow(project: ProjectDocument, layer: CompositionLayer, row: TwirlRow.Property, axis: TimelineAxis, playhead: () -> Long,
     scrollOffset: () -> Double, onEdge: (Float?) -> Unit,
@@ -111,6 +114,7 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
         var last: MultiKeyEdits.Moved? = null
         var locked: SnapTarget? = null
         var groupDrag = false
+        var dragged: Long? = null
         var downRootX = 0f; var lastDx = 0f; var scrollAtDown = 0.0
         /** The drag at [dx] content px (snapping, clamps, readouts). */
         fun dragTo(dx: Float) {
@@ -166,6 +170,7 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
                 // A selected key in key mode carries the whole selection; any other key moves alone, inside its clip.
                 val group = sel != null && sel.contains(row.layerId, row.target, t)
                 groupDrag = group
+                dragged = t
                 base = p0 to (if (group) sel!! else KeySelectionSet(listOf(KeyframeSelection(row.layerId, row.target, listOf(t)))))
                 clip = if (group) null else l0.timing.startUs..(l0.timing.endUs ?: l0.timing.startUs)
                 last = null; locked = null
@@ -184,7 +189,11 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
                 if (moved != null) {
                     // The selection follows its keys (a group); a lone key keeps the selection as it is.
                     if (groupDrag) latestHost.onMoved(moved.selection)
-                    latestGestures.commit()
+                    // TLV1.1 A1: the dragged (primary) key's new composition time, for the seek after an auto-scroll.
+                    val (p0, sel0) = base!!
+                    val landed = dragged?.let { KeyDragLanding.movedTime(sel0, moved.selection, row.layerId, row.target, it) }
+                    val anchor = p0.layer(row.layerId)?.resolvedKeyframeAnchorUs
+                    latestGestures.commitKeyDrag(if (landed != null && anchor != null) Math.addExact(anchor, landed) else null)
                 } else latestGestures.cancel()
                 base = null; last = null; locked = null; latestDragInfo(null)
                 moved != null

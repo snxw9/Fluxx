@@ -364,8 +364,11 @@ fun TimelineView(
     var viewportLeft by remember { mutableFloatStateOf(0f) }
     var viewportTop by remember { mutableFloatStateOf(0f) }
     var editScrollOrigin by remember { mutableStateOf(0L) }
+    // TLV1.1 A1: did the edge scroll actually move the view during this drag (a key drag then seeks to the key).
+    val keyLanding = remember { com.fluxx.android.editor.KeyDragLanding.Tracker() }
     val beginEdit = {
         editScrollOrigin = hScroll.centreUs
+        keyLanding.begin()
         editing = true
         onBeginGesture()
     }
@@ -382,7 +385,7 @@ fun TimelineView(
     LaunchedEffect(edgeScroll) {
         // The same screen speed (px per frame) at the same zoom as before: the state turns px into time.
         if (edgeScroll != 0f) while (true) {
-            hScroll.scrollBy(edgeScroll)
+            keyLanding.onEdgeStep(hScroll.scrollBy(edgeScroll))
             delay(16)
         }
     }
@@ -448,24 +451,32 @@ fun TimelineView(
             val setDragInfo = remember { { d: com.fluxx.android.editor.TimelineDragInfo? -> dragInfo = d; reportDrag(d) } }
             val latestBegin by rememberUpdatedState(beginEdit); val latestPreviewG by rememberUpdatedState(onPreviewGesture)
             val latestCommit by rememberUpdatedState(commitEdit); val latestCancel by rememberUpdatedState(cancelEdit)
-            // TL3.1 B1: key drags auto-scroll near the edges (ramped); their commit / cancel never seek: the view eases back to
-            // the (unchanged) playhead afterwards.
+            // TL3.1 B1: key drags auto-scroll near the edges (ramped). TLV1.1 A1: a committed drag that AUTO-SCROLLED seeks the
+            // playhead to the dragged key's new time and the view settles there; any other end (no auto-scroll, a cancel)
+            // never seeks: the view eases back to the (unchanged) playhead.
             val viewportW by rememberUpdatedState(totalViewportWidthPx)
             val edgeZonePx = with(density) { com.fluxx.android.editor.EdgeScroll.ZONE_DP.dp.toPx() }
             val edgeMaxPx = with(density) { com.fluxx.android.editor.EdgeScroll.MAX_DP_PER_FRAME.dp.toPx() }
             val keyEdgeFn = remember { { x: Float? -> edgeScroll = if (x == null) 0f else com.fluxx.android.editor.EdgeScroll.speed(x - viewportLeft, viewportW, edgeZonePx, edgeMaxPx) } }
             val keyScope = androidx.compose.runtime.rememberCoroutineScope()
             val latestCommitG by rememberUpdatedState(onCommitGesture); val latestCancelG by rememberUpdatedState(onCancelGesture)
-            val keyFinish = remember { { commitIt: Boolean ->
+            val keySeek by rememberUpdatedState(onSeek)
+            val keyDuration by rememberUpdatedState(durationUs)
+            val keyFinish = remember { { commitIt: Boolean, keyCompositionUs: Long? ->
+                val seekUs = com.fluxx.android.editor.KeyDragLanding.seekTo(commitIt, keyLanding.autoScrolled, keyCompositionUs)
                 if (commitIt) latestCommitG() else latestCancelG()
                 edgeScroll = 0f; editing = false
-                // Easing back to the (unchanged) playhead is not a scrub: no seek while it runs.
-                keyScope.launch { returning = true; try { hScroll.animateTo(playheadState.value.coerceIn(0L, durationUs)) } finally { returning = false } }
+                // The normal seek (frame-snapped by the reducer), after the commit: the key move stays one undo step.
+                if (seekUs != null) keySeek(seekUs.coerceIn(0L, keyDuration), true)
+                // Easing to the playhead (back to the unchanged one, or on to the key's new time) is not a scrub: no seek
+                // while it runs; the follow then settles exactly on the playhead's frame.
+                val to = seekUs ?: playheadState.value
+                keyScope.launch { returning = true; try { hScroll.animateTo(to.coerceIn(0L, keyDuration)) } finally { returning = false } }
                 Unit
             } }
-            val keyCommitFn = remember { { keyFinish(true) } }
-            val keyCancelFn = remember { { keyFinish(false) } }
-            val twirlGestures = remember { TwirlGestures({ latestBegin() }, { latestPreviewG(it) }, keyCommitFn, keyCancelFn) }
+            val keyCommitFn = remember { { keyCompositionUs: Long? -> keyFinish(true, keyCompositionUs) } }
+            val keyCancelFn = remember { { keyFinish(false, null) } }
+            val twirlGestures = remember { TwirlGestures({ latestBegin() }, { latestPreviewG(it) }, { keyCommitFn(null) }, keyCancelFn, keyCommitFn) }
             val hostState = rememberUpdatedState(twirlHost)
             val stableTwirlHost = remember { TwirlKeyHost(
                 onEffect = { a, b, c, d -> hostState.value?.onEffect?.invoke(a, b, c, d) },
@@ -964,7 +975,8 @@ private fun TimelineClipRow(
     onDragInfo: (com.fluxx.android.editor.TimelineDragInfo?) -> Unit = {},
     /** TL3.1 B1: a key drag's finger (root x, null at the end) for the edge auto-scroll, and its commit / cancel (no seek). */
     onKeyEdge: (Float?) -> Unit = {},
-    onKeyCommit: () -> Unit = onCommitGesture,
+    /** TLV1.1 A1: commits a key drag; the argument is the dragged key's new composition time (null: unknown). */
+    onKeyCommit: (Long?) -> Unit = { onCommitGesture() },
     onKeyCancel: () -> Unit = onCancelGesture,
     modifier: Modifier = Modifier
 ) {
@@ -1055,6 +1067,9 @@ private fun TimelineClipRow(
     val widthPx = (right - left).coerceAtLeast(0.0).toFloat()
     /** How far the clip's real start lies before the box (px, >= 0): thumbnails and the label start there. */
     val hiddenLeadPx = (left - fullStart).coerceIn(0.0, 4.0 * axis.widthPx)
+    /** TLV1.1 A2: the same lead UNCAPPED (Double), for the tile grid: the cap above shifted the tiles of a clip starting
+     *  more than 4 windows earlier, so the tile at its real end was cut at an arbitrary x (and jumped with the origin). */
+    val tileLeadPx = (left - fullStart).coerceAtLeast(0.0)
     val clipShape = RoundedCornerShape(topStart = if (clippedLeft) 0.dp else 6.dp, bottomStart = if (clippedLeft) 0.dp else 6.dp,
         topEnd = if (clippedRight) 0.dp else 6.dp, bottomEnd = if (clippedRight) 0.dp else 6.dp)
 
@@ -1125,18 +1140,22 @@ private fun TimelineClipRow(
                         if (image.width <= 0 || image.height <= 0 || h <= 0f) return@Canvas
                         val scale = maxOf(tileW / image.width, h / image.height)
                         val srcW = (tileW / scale).toInt().coerceIn(1, image.width); val srcH = (h / scale).toInt().coerceIn(1, image.height)
-                        val src = androidx.compose.ui.unit.IntOffset((image.width - srcW) / 2, (image.height - srcH) / 2)
+                        val srcY = (image.height - srcH) / 2
                         // TLV1: tiles from the clip's real start (hiddenLeadPx before the box), only those in the box.
-                        val tiles = (fullWidth / tileW).toInt().coerceAtLeast(1)
-                        val lead = hiddenLeadPx.toFloat()
-                        for (i in (lead / tileW).toInt() until tiles) {
-                            val x = i * tileW - lead
-                            if (x >= size.width) break
-                            drawImage(image, src, androidx.compose.ui.unit.IntSize(srcW, srcH), androidx.compose.ui.unit.IntOffset(x.toInt(), 0),
-                                androidx.compose.ui.unit.IntSize(kotlin.math.ceil(tileW).toInt(), kotlin.math.ceil(h).toInt()))
-                            drawRect(ClipVideoBorder, androidx.compose.ui.geometry.Offset(x + stroke / 2, stroke / 2),
-                                androidx.compose.ui.geometry.Size(tileW - stroke, h - stroke), style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
+                        // TLV1.1 A2: up to the clip's real end: the last tile is partial (centre-cropped to its width).
+                        val tiles = ThumbnailTiles.layout(fullWidth, tileLeadPx, size.width, tileW)
+                        val boxEnd = kotlin.math.ceil(size.width).toInt()
+                        for (tile in tiles) {
+                            val full = tile.width >= tileW
+                            val sw = if (full) srcW else (tile.width / scale).toInt().coerceIn(1, image.width)
+                            val dstX = kotlin.math.floor(tile.x).toInt()
+                            val dstW = (minOf(kotlin.math.ceil(tile.x + tile.width).toInt(), boxEnd) - dstX).coerceAtLeast(1)
+                            drawImage(image, androidx.compose.ui.unit.IntOffset((image.width - sw) / 2, srcY), androidx.compose.ui.unit.IntSize(sw, srcH),
+                                androidx.compose.ui.unit.IntOffset(dstX, 0), androidx.compose.ui.unit.IntSize(dstW, kotlin.math.ceil(h).toInt()))
+                            drawRect(ClipVideoBorder, androidx.compose.ui.geometry.Offset(tile.x + stroke / 2, stroke / 2),
+                                androidx.compose.ui.geometry.Size(tile.width - stroke, h - stroke), style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
                         }
+                        TimelineProbe.tiles?.invoke(layer.id, tiles, size.width, tileW)
                     }
                 }
             }
@@ -1385,7 +1404,9 @@ private fun TimelineClipRow(
                                             val moved = groupMap?.any { (from, to) -> from != to } ?: (movingTo != null && movingTo != initialKfTime)
                                             if (moved) {
                                                 groupMap?.let { m -> keysMoved(m.entries.associate { (from, to) -> (from - anchorOffsetUs) to (to - anchorOffsetUs) }) }
-                                                keyCommit()
+                                                // TLV1.1 A1: the dragged key's new composition time (its bar time from the clip's start).
+                                                val landed = groupMap?.get(initialKfTime) ?: movingTo
+                                                keyCommit(landed?.let { Math.addExact(startUs, it) })
                                             } else keyCancel()
                                             dragTimes = null; movingFrom = null; movingTo = null; groupMap = null; groupBase = null; endMoveIndicators()
                                             moved

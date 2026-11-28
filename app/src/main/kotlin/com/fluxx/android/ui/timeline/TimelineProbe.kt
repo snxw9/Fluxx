@@ -29,5 +29,8 @@ object TimelineProbe {
     /** TLV1 (after the virtualisation): (window start us, window end us, visible start us, visible end us) per drawn frame. */
     @Volatile var coverage: ((Long, Long, Long, Long) -> Unit)? = null
 
+    /** TLV1.1 A2: a clip's thumbnail tiles as drawn (layer id, tiles in box x, box width px, tile width px), per draw. */
+    @Volatile var tiles: ((Long, List<ThumbnailTiles.Tile>, Float, Float) -> Unit)? = null
+
     fun reset() { viewCompositions.set(0); rowCompositions.set(0) }
 }
