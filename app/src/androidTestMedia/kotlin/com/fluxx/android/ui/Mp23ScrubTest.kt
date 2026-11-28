@@ -175,10 +175,12 @@ class Mp23ScrubTest : Mp12Base() {
     private fun sweep(fromUs: Long, x: Double, ms: Long): Run = run(fromUs, if (x < 0) -1 else 1) { _, el ->
         if (el > ms) null else (fromUs + (x * el * 1000).toLong()).coerceIn(0, s.useUs - frameUs) to 16L }
 
-    /** Seeks from [plan] (step index -> composition time and the wait after it, null: done), then 1.2 s to settle. */
-    private fun run(fromUs: Long, dir: Int, plan: (Int, Long) -> Pair<Long, Long>?): Run {
-        seek(fromUs); pump(1500)
-        clearAll()
+    /**
+     * Seeks from [plan] (step index and elapsed ms -> composition time and the wait after it, null: done), then waits
+     * until the exact frame of the last target is presented (at most 8 s; long-GOP backward decodes take seconds).
+     */
+    private fun run(fromUs: Long, dir: Int, settled: Boolean = true, plan: (Int, Long) -> Pair<Long, Long>?): Run {
+        if (settled) { seek(fromUs); pump(1500); clearAll() }
         val steps = ArrayList<LongArray>()
         val t0 = System.nanoTime()
         var i = 0
@@ -189,8 +191,12 @@ class Mp23ScrubTest : Mp12Base() {
             while (System.nanoTime() < end) frame()
         }
         val lastMove = steps.last()[0]
-        pump(1200)
-        return Run(t0, lastMove, steps, shown(t0), dir)
+        val finalUs = steps.last()[1]
+        val until = System.nanoTime() + 8_000_000_000L
+        while (System.nanoTime() < until && shown(lastMove).none { it.frameUs == finalUs && it.kind == "exact" }) pump(100)
+        pump(300)
+        // The first step repeats the start position (the redraw of the frame already on screen): not a new frame.
+        return Run(t0, lastMove, steps, shown(t0).dropWhile { it.frameUs == steps.first()[1] && steps.size > 1 }, dir)
     }
 
     /** Every presented frame since [t0] with the frame the layer showed (decoder `shown=` or strip `shown=`). */
@@ -239,35 +245,37 @@ class Mp23ScrubTest : Mp12Base() {
     }
 
     // ---- the first backward step after a pause --------------------------------------------------------------------------
+    /**
+     * Play 2 s, pause (the app's toggle: rest on the floor frame), wait 1 s; step one frame back (the exact frame's time);
+     * then a short backward sweep at 1x for 1 s from there: the first new frame after its first move and the next 5.
+     */
     private fun pauseStep(atUs: Long) {
         seek(atUs); pump(1500)
         main.runOnMainSync { editor.dispatch(EditorAction.SelectMarker(null)); c.play() }
         pump(2000)
+        clearAll()
         main.runOnMainSync {
             if (c.state.value.playing) c.pause()
             val shownUs = rate.frameTimeUs(rate.floorFrame(editor.state.playheadUs))
             if (shownUs != editor.state.playheadUs) { editor.dispatch(EditorAction.Seek(shownUs)); c.seek(editor.state.playheadUs) }
         }
         pump(1000)
+        val behind = rec.decoder.toList().filter { it.second.startsWith("behind") }
         var paused = 0L; main.runOnMainSync { paused = editor.state.playheadUs }
         clearAll()
-        val t0 = System.nanoTime()
-        val steps = ArrayList<LongArray>()
-        seek(paused - frameUs); steps += longArrayOf(System.nanoTime(), paused - frameUs)
-        val wait = System.nanoTime() + 600_000_000L
-        while (System.nanoTime() < wait) frame()
-        for (k in 2..6) { seek(paused - k * frameUs); steps += longArrayOf(System.nanoTime(), paused - k * frameUs); val e = System.nanoTime() + 40_000_000L; while (System.nanoTime() < e) frame() }
-        pump(1200)
-        val fr = shown(t0)
-        val behind = rec.decoder.toList().filter { it.second.startsWith("behind $key ") }
-        val per = steps.map { st ->
-            val f = fr.firstOrNull { it.frameUs == st[1] && it.presentNs >= st[0] }
-            if (f == null) "-" else "${f0((f.presentNs - st[0]) / 1e6)} ms ${f.kind}${if (f.shown > f.target) " AHEAD" else ""}"
-        }
-        val exactFirst = fr.firstOrNull { it.frameUs == steps[0][1] && it.kind == "exact" }?.let { (it.presentNs - steps[0][0]) / 1e6 } ?: Double.NaN
-        out("${s.label} | first backward step after a pause at ${paused / 1000} ms: one frame back -> exact frame ${f0(exactFirst)} ms (first shown ${per[0]}); next 5 frames (40 ms apart): ${per.drop(1).joinToString(", ")}; " +
-            "decode-behind before the step: ${behind.size} (${behind.joinToString(" | ") { it.second.substringAfter(' ').substringAfter(' ') }})")
-        val dec = rec.decoder.toList().filter { it.second.startsWith("frame $key ") && it.first >= t0 }.take(8)
-        raw("${s.label} | pause step D " + dec.joinToString(" | ") { "${"%.1f".format((it.first - t0) / 1e6)} ${it.second.substringAfter(' ').substringAfter(' ')}" })
+        val stepAt = System.nanoTime(); val stepUs = paused - frameUs
+        seek(stepUs)
+        val until = System.nanoTime() + 3_000_000_000L
+        while (System.nanoTime() < until && shown(stepAt).none { it.frameUs == stepUs && it.kind == "exact" }) frame()
+        val step = shown(stepAt).firstOrNull { it.frameUs == stepUs }
+        val exactMs = shown(stepAt).firstOrNull { it.frameUs == stepUs && it.kind == "exact" }?.let { (it.presentNs - stepAt) / 1e6 } ?: Double.NaN
+        out("${s.label} | first backward step after a pause at ${paused / 1000} ms: one frame back -> exact frame ${f0(exactMs)} ms (first shown ${step?.kind ?: "-"}); " +
+            "decode-behind at the pause: ${behind.size}${behind.joinToString("") { " [" + it.second.substringAfter(' ').substringAfter(' ') + "]" }}")
+        pump(400)
+        clearAll()
+        val r = run(stepUs, -1, settled = false) { _, el -> if (el > 1000) null else (stepUs - el * 1000).coerceAtLeast(0) to 16L }
+        report("short backward sweep 1x (1 s) after the pause at ${paused / 1000} ms", r)
+        out("${s.label} | short sweep after the pause: first 6 new frames (ms after the first move / kind / lag behind target ms): " +
+            r.frames.take(6).joinToString(", ") { "${f0((it.presentNs - r.t0) / 1e6)}/${it.kind}/${f0((it.target - it.shown) / 1000.0)}" })
     }
 }
