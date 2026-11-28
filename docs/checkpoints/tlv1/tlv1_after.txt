@@ -1,0 +1,36 @@
+STATE=Tlv1Test start: low_power=0 plugged=AC level=80 percent temperature=37.3C screen=Awake keyguard=unlocked
+short 30 x 2 s: 30 layers, 60.0 s; default zoom 120.0 dp/s; layout nodes 180, widest node 2160 px; content width 2160 px
+short 30 x 2 s FOLLOW 5 s: timeline recompositions 59, clip-row recompositions 638; UI frames 118 p50 64.7 p95 108.8 p99 127.5 max 136.9 ms; main thread 4274 ms busy, worst message 117.2 ms; centre now 4.82 s
+short 30 x 2 s FLING 8000 px/s: moved 9.94 s; timeline recompositions 68, clip-row recompositions 748; UI frames 148 p50 49.6 p95 70.6 p99 83.5 max 87.9 ms; main thread 3384 ms busy, worst 63.9 ms
+short 30 x 2 s (timeline recompositions so far 69)
+short 30 x 2 s HIGHEST ZOOM asked 2400 dp/s: got 2400.0 dp/s = 225.00 px per frame (80.00 dp per frame); content width 2160 px; layout nodes 190, widest node 2160 px
+STATE=Tlv1Test start: low_power=0 plugged=AC level=80 percent temperature=37.7C screen=Awake keyguard=unlocked
+Project 1: 30 layers, 1078.7 s; default zoom 120.0 dp/s; layout nodes 180, widest node 2160 px; content width 2160 px
+Project 1 FOLLOW 5 s: timeline recompositions 80, clip-row recompositions 869; UI frames 160 p50 38.2 p95 51.4 p99 63.9 max 64.0 ms; main thread 3160 ms busy, worst message 53.0 ms; centre now 4.35 s
+Project 1 FLING 8000 px/s: moved 9.94 s; timeline recompositions 61, clip-row recompositions 671; UI frames 148 p50 35.7 p95 60.2 p99 68.5 max 75.8 ms; main thread 2563 ms busy, worst 64.8 ms
+Project 1 (timeline recompositions so far 62)
+Project 1 HIGHEST ZOOM asked 2400 dp/s: got 2400.0 dp/s = 337.50 px per frame (120.00 dp per frame); content width 2160 px; layout nodes 180, widest node 2160 px
+Project 1 stat: before 9256/1795809411123, after 9256/1795809411123 -> UNCHANGED
+STATE=Tlv1Test start: low_power=0 plugged=AC level=80 percent temperature=37.3C screen=Awake keyguard=unlocked
+3 h (180 x 60 s): 180 layers, 10800.0 s; default zoom 120.0 dp/s; layout nodes 180, widest node 2160 px; content width 2160 px
+3 h (180 x 60 s) FOLLOW 5 s: timeline recompositions 98, clip-row recompositions 1067; UI frames 196 p50 33.4 p95 47.9 p99 58.1 max 115.6 ms; main thread 3378 ms busy, worst message 89.1 ms; centre now 4.85 s
+3 h (180 x 60 s) FLING 8000 px/s: moved 9.94 s; timeline recompositions 69, clip-row recompositions 759; UI frames 148 p50 35.6 p95 43.9 p99 45.1 max 48.9 ms; main thread 2235 ms busy, worst 41.2 ms
+3 h (180 x 60 s) (timeline recompositions so far 70)
+3 h (180 x 60 s) HIGHEST ZOOM asked 2400 dp/s: got 2400.0 dp/s = 225.00 px per frame (80.00 dp per frame); content width 2160 px; layout nodes 180, widest node 2160 px
+STATE=Tlv1Test start: low_power=0 plugged=AC level=80 percent temperature=37.6C screen=Awake keyguard=unlocked
+b1 3 h TOP ZOOM: 2400.0 dp/s = 225.00 px per frame; layout nodes 180, widest node 2160 px (viewport 1080, window 2160)
+b1 3 h at the start: centre 0.000 s (asked 0.000 s); layout nodes 180, widest 2160 px
+b1 3 h at the middle: centre 5400.000 s (asked 5400.000 s); layout nodes 180, widest 2160 px
+b1 3 h at the end: centre 10800.000 s (asked 10800.000 s); layout nodes 185, widest 2160 px
+STATE=Tlv1Test start: low_power=0 plugged=AC level=80 percent temperature=37.1C screen=Awake keyguard=unlocked
+b2 the 50-minute import: composition 3018.3 s
+b2 50 min TOP ZOOM: 2400.0 dp/s = 225.00 px per frame; layout nodes 92, widest node 2160 px (viewport 1080, window 2160)
+b2 at the middle: layout nodes 92, widest 2160 px
+STATE=Tlv1Test start: low_power=0 plugged=AC level=80 percent temperature=37.1C screen=Awake keyguard=unlocked
+b3 Sequence of 30 x 60 s: composition 1800.0 s, 30 layers
+b3 Sequence TOP ZOOM: 2400.0 dp/s = 225.00 px per frame; layout nodes 177, widest node 2160 px (viewport 1080, window 2160)
+b3 at 0.0 s: layout nodes 177, widest 2160 px
+b3 at 900.0 s: layout nodes 177, widest 2160 px
+b3 at 1800.0 s: layout nodes 182, widest 2160 px
+STATE=Tlv1Test start: low_power=0 plugged=AC level=80 percent temperature=37.6C screen=Awake keyguard=unlocked
+b5 FLING across 3 h: 60 flings in 33.2 s wall, reached 10783.1 s; 831 drawn frames, frames whose window did not cover the screen: 0; UI frames 1538 p50 33.0 p95 43.9 p99 55.4 max 110.2 ms

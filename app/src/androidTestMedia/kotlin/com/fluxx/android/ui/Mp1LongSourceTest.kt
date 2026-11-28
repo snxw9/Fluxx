@@ -121,7 +121,7 @@ class Mp1LongSourceTest : Aud2Base() {
         val t0 = System.nanoTime(); val cpu0 = Mp1Bench.cpuMs()
         compose.runOnIdle { provider.request(uri, inUs, durUs) }
         val limit = 40_000_000_000L
-        while (System.nanoTime() - t0 < limit && compose.runOnIdle { provider.states[uri] is AudioPeakProvider.Peaks.Loading }) Thread.sleep(200)
+        while (System.nanoTime() - t0 < limit && compose.runOnIdle { provider.states[uri].let { s -> s is AudioPeakProvider.Peaks.Loading || (s as? AudioPeakProvider.Peaks.Ready)?.complete == false } }) Thread.sleep(200)
         val state = compose.runOnIdle { provider.states[uri] }
         val still = compose.runOnIdle { provider.decoding(uri) }
         val done = probe.events.toList().firstOrNull { it.second.startsWith("peaks-done") || it.second.startsWith("peaks-cached") }?.second

@@ -1,0 +1,51 @@
+chain.out:== before3 com.fluxx.android.ui.Tlv1Test Fri Nov 27 22:51:44 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 78  temperature: 358 
+chain.out:== end before3 rc=0 wall=174s fluxx-crashes=0 Fri Nov 27 22:54:39 WCAST 2026
+chain.out:OK (3 tests)
+chain.out:== after com.fluxx.android.ui.Tlv1Test Fri Nov 27 22:55:22 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 79  temperature: 363 
+chain.out:== end after rc=0 wall=2025s fluxx-crashes=0 Fri Nov 27 23:29:09 WCAST 2026
+chain.out:FAILURES!!!
+chain.out:Tests run: 7,  Failures: 3
+chain.out:== ui-TimeAuditTest com.fluxx.android.ui.TimeAuditTest Fri Nov 27 23:29:12 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 80  temperature: 359 
+chain.out:== end ui-TimeAuditTest rc=0 wall=143s fluxx-crashes=0 Fri Nov 27 23:31:35 WCAST 2026
+chain.out:OK (7 tests)
+chain.out:== ui-Tl3UiTest com.fluxx.android.ui.Tl3UiTest Fri Nov 27 23:31:37 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 80  temperature: 360 
+chain.out:== end ui-Tl3UiTest rc=0 wall=31s fluxx-crashes=0 Fri Nov 27 23:32:09 WCAST 2026
+chain.out:FAILURES!!!
+chain.out:Tests run: 7,  Failures: 3
+chain.out:== ui-Tl31UiTest com.fluxx.android.ui.Tl31UiTest Fri Nov 27 23:32:11 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 80  temperature: 360 
+chain.out:== end ui-Tl31UiTest rc=0 wall=49s fluxx-crashes=0 Fri Nov 27 23:33:02 WCAST 2026
+chain.out:FAILURES!!!
+chain.out:Tests run: 10,  Failures: 4
+chain.out:== ui-TlpUiTest com.fluxx.android.ui.TlpUiTest Fri Nov 27 23:33:04 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 80  temperature: 363 
+chain.out:== end ui-TlpUiTest rc=0 wall=22s fluxx-crashes=0 Fri Nov 27 23:33:27 WCAST 2026
+chain.out:OK (3 tests)
+chain.out:== ui-TlpOneUiTest com.fluxx.android.ui.TlpOneUiTest Fri Nov 27 23:33:29 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 80  temperature: 368 
+chain.out:== end ui-TlpOneUiTest rc=0 wall=37s fluxx-crashes=0 Fri Nov 27 23:34:07 WCAST 2026
+chain.out:OK (4 tests)
+chain.out:== ui-TlpTwoUiTest com.fluxx.android.ui.TlpTwoUiTest Fri Nov 27 23:34:09 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 80  temperature: 364 
+chain.out:== end ui-TlpTwoUiTest rc=0 wall=20s fluxx-crashes=0 Fri Nov 27 23:34:30 WCAST 2026
+chain.out:OK (4 tests)
+chain.out:== ui-GraphPlayheadTest com.fluxx.android.ui.GraphPlayheadTest Fri Nov 27 23:34:32 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 80  temperature: 365 
+chain.out:== end ui-GraphPlayheadTest rc=0 wall=94s fluxx-crashes=0 Fri Nov 27 23:36:06 WCAST 2026
+chain.out:OK (8 tests)
+chain2.out:== before4 com.fluxx.android.ui.Tlv1Test#a1Short30Clips,com.fluxx.android.ui.Tlv1Test#a2Project1,com.fluxx.android.ui.Tlv1Test#a3ThreeHours Fri Nov 27 23:44:48 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 80  temperature: 372 
+chain2.out:== end before4 rc=0 wall=89s fluxx-crashes=0 Fri Nov 27 23:46:18 WCAST 2026
+chain2.out:OK (3 tests)
+chain2.out:== after2 com.fluxx.android.ui.Tlv1Test Fri Nov 27 23:46:56 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 80  temperature: 370 
+chain2.out:== end after2 rc=0 wall=176s fluxx-crashes=0 Fri Nov 27 23:49:52 WCAST 2026
+chain2.out:FAILURES!!!
+chain2.out:Tests run: 7,  Failures: 1
+chain2.out:== ui2-Tl3UiTest com.fluxx.android.ui.Tl3UiTest Fri Nov 27 23:49:54 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 80  temperature: 373 
+chain2.out:== end ui2-Tl3UiTest rc=0 wall=33s fluxx-crashes=0 Fri Nov 27 23:50:29 WCAST 2026
+chain2.out:FAILURES!!!
+chain2.out:Tests run: 7,  Failures: 3
+chain2.out:== ui2-Tl31UiTest com.fluxx.android.ui.Tl31UiTest Fri Nov 27 23:50:31 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 80  temperature: 372 
+chain2.out:== end ui2-Tl31UiTest rc=0 wall=53s fluxx-crashes=0 Fri Nov 27 23:51:24 WCAST 2026
+chain2.out:FAILURES!!!
+chain2.out:Tests run: 10,  Failures: 4
+== ui4-Tl3UiTest com.fluxx.android.ui.Tl3UiTest Sat Nov 28 00:06:31 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 80  temperature: 373 
+OK (7 tests)
+== end ui4-Tl3UiTest rc=0 wall=44s fluxx-crashes=0 Sat Nov 28 00:07:17 WCAST 2026
+== ui4-Tl31UiTest com.fluxx.android.ui.Tl31UiTest Sat Nov 28 00:07:19 WCAST 2026 | low_power=0 mWakefulness=Awake isKeyguardShowing=false |  AC powered: true  USB powered: false  level: 80  temperature: 380 
+OK (10 tests)
+== end ui4-Tl31UiTest rc=0 wall=65s fluxx-crashes=0 Sat Nov 28 00:08:24 WCAST 2026

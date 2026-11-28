@@ -1,0 +1,275 @@
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv1WaveformTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=7
+INSTRUMENTATION_STATUS: stream=
+com.fluxx.android.ui.Tlv1WaveformTest:
+INSTRUMENTATION_STATUS: test=a1TimingProject1AndTypical
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Tlv1WaveformTest start: low_power=0 plugged=AC level=80 percent temperature=36.7C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 P1 clip 1 AAC-LC MKV: stored peak files [] (none of this version)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] PCM fill 7290b717 0.0..60.0 s: complete in 10073 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 P1 clip 1 AAC-LC MKV stored: no peaks
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 P1 clip 1 AAC-LC MKV fresh (2 onsets, frame 50.00 ms): source (level 0, bucket 5.80 ms): n 2 median +2.57 worst +2.57 (min -2.02 max +2.57) ms; drawn at 120 dp/s (level 0, 2.96 ms/px): n 2 median -1.82 worst -6.41 (min -6.41 max -1.82) ms = -0.61 px = -0.036 frame; drawn at 2400 dp/s (level 0, 0.15 ms/px): n 2 median -0.41 worst -5.00 (min -5.00 max -0.41) ms = -2.76 px = -0.008 frame
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 P1 clip 15 Opus: stored peak files [ffffffffffffffff-v4.peaks] (readable, rate 48000)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] PCM fill 6d492d74 0.0..30.2 s: complete in 4836 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 P1 clip 15 Opus stored (1 onsets, frame 50.00 ms): source (level 0, bucket 5.33 ms): n 1 median +0.06 worst +0.06 (min +0.06 max +0.06) ms; drawn at 120 dp/s (level 0, 2.96 ms/px): n 1 median -4.09 worst -4.09 (min -4.09 max -4.09) ms = -1.38 px = -0.082 frame; drawn at 2400 dp/s (level 0, 0.15 ms/px): n 1 median -2.68 worst -2.68 (min -2.68 max -2.68) ms = -18.08 px = -0.054 frame
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 P1 clip 15 Opus fresh (1 onsets, frame 50.00 ms): source (level 0, bucket 5.33 ms): n 1 median +0.06 worst +0.06 (min +0.06 max +0.06) ms; drawn at 120 dp/s (level 0, 2.96 ms/px): n 1 median -4.09 worst -4.09 (min -4.09 max -4.09) ms = -1.38 px = -0.082 frame; drawn at 2400 dp/s (level 0, 0.15 ms/px): n 1 median -2.68 worst -2.68 (min -2.68 max -2.68) ms = -18.08 px = -0.054 frame
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 P1 clip 17 HE-AAC 24k MKV: stored peak files [ffffffffffffffff-v4.peaks] (readable, rate 48000)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] PCM fill 6d3ba14e 0.0..8.7 s: complete in 804 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 P1 clip 17 HE-AAC 24k MKV stored (1 onsets, frame 50.00 ms): source (level 0, bucket 5.33 ms): n 1 median -2.67 worst -2.67 (min -2.67 max -2.67) ms; drawn at 120 dp/s (level 0, 2.96 ms/px): n 1 median -6.81 worst -6.81 (min -6.81 max -6.81) ms = -2.30 px = -0.136 frame; drawn at 2400 dp/s (level 0, 0.15 ms/px): n 1 median -5.41 worst -5.41 (min -5.41 max -5.41) ms = -36.50 px = -0.108 frame
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 P1 clip 17 HE-AAC 24k MKV fresh (1 onsets, frame 50.00 ms): source (level 0, bucket 5.33 ms): n 1 median -2.67 worst -2.67 (min -2.67 max -2.67) ms; drawn at 120 dp/s (level 0, 2.96 ms/px): n 1 median -6.81 worst -6.81 (min -6.81 max -6.81) ms = -2.30 px = -0.136 frame; drawn at 2400 dp/s (level 0, 0.15 ms/px): n 1 median -5.41 worst -5.41 (min -5.41 max -5.41) ms = -36.50 px = -0.108 frame
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 P1 clip 14 MP4 edit list: stored peak files [ffffffffffffffff-v4.peaks] (readable, rate 44100)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] PCM fill 6d66ba28 0.0..22.4 s: complete in 1606 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 P1 clip 14 MP4 edit list stored (7 onsets, frame 50.00 ms): source (level 0, bucket 5.80 ms): n 5 median +20.53 worst +22.13 (min +20.19 max +22.13) ms; drawn at 120 dp/s (level 0, 2.96 ms/px): n 5 median +16.14 worst +17.75 (min +15.81 max +17.75) ms = +5.45 px = +0.323 frame; drawn at 2400 dp/s (level 0, 0.15 ms/px): n 5 median +17.55 worst +19.16 (min +17.22 max +19.16) ms = +118.46 px = +0.351 frame
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 P1 clip 14 MP4 edit list fresh (7 onsets, frame 50.00 ms): source (level 0, bucket 5.80 ms): n 5 median +20.53 worst +22.13 (min +20.19 max +22.13) ms; drawn at 120 dp/s (level 0, 2.96 ms/px): n 5 median +16.14 worst +17.75 (min +15.81 max +17.75) ms = +5.45 px = +0.323 frame; drawn at 2400 dp/s (level 0, 0.15 ms/px): n 5 median +17.55 worst +19.16 (min +17.22 max +19.16) ms = +118.46 px = +0.351 frame
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 typical H.264: stored peak files [] (none of this version)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] PCM fill 681d0bb8 0.0..60.0 s: complete in 6834 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 typical H.264 stored: no peaks
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 typical H.264 fresh (0 onsets, frame 33.33 ms): source (level 0, bucket 5.80 ms): n 0 ms; drawn at 120 dp/s (level 0, 2.96 ms/px): n 0 ms = NaN px = NaN frame; drawn at 2400 dp/s (level 0, 0.15 ms/px): n 0 ms = NaN px = NaN frame
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 Seal MP4 (edit list): stored peak files [] (none of this version)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] PCM fill a0fbc726 0.0..12.7 s: complete in 704 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 Seal MP4 (edit list) stored: no peaks
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C3 Seal MP4 (edit list) fresh (8 onsets, frame 33.33 ms): source (level 0, bucket 5.80 ms): n 4 median +21.53 worst +21.85 (min +19.66 max +21.85) ms; drawn at 120 dp/s (level 0, 2.96 ms/px): n 4 median +17.15 worst +17.47 (min +15.28 max +17.47) ms = +5.79 px = +0.514 frame; drawn at 2400 dp/s (level 0, 0.15 ms/px): n 4 median +18.56 worst +18.87 (min +16.68 max +18.87) ms = +125.25 px = +0.557 frame
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] Project 1 stat: before 9256/1795823617987, now 9256/1795823617987 -> UNCHANGED
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv1WaveformTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=7
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=a1TimingProject1AndTypical
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv1WaveformTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=7
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=b1TypicalH264
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Tlv1WaveformTest start: low_power=0 plugged=AC level=80 percent temperature=36.7C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 typical H.264 60 s [COLD]: used 60.0 s; first pixels 12196 ms; complete window 12196 ms; window clip columns 2160, drawn 2160; +74ms peaks-request # in=0 dur=60000000 | +91ms peaks-start # want=0..70000000 | +12045ms peaks-done # ms=11953 sourceUs=60070022 buckets=10348 covered=0..4611686018427387903 openMs=20 computeMs=3377
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 typical H.264 60 s [WARM peaks only]: used 60.0 s; first pixels 134 ms; complete window 134 ms; window clip columns 2160, drawn 2160; 
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] PCM fill 681d0bb8 0.0..60.0 s: complete in 8561 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 typical H.264 60 s [WARM PCM only]: used 60.0 s; first pixels 12899 ms; complete window 12899 ms; window clip columns 2160, drawn 2160; +66ms peaks-request # in=0 dur=60000000 | +80ms peaks-start # want=0..70000000 | +12795ms peaks-done # ms=12715 sourceUs=60070022 buckets=10348 covered=0..4611686018427387903 openMs=25 computeMs=3456
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 typical H.264 60 s [WARM both]: used 60.0 s; first pixels 110 ms; complete window 110 ms; window clip columns 2160, drawn 2160; 
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv1WaveformTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=7
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=b1TypicalH264
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv1WaveformTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=7
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=b2Vp9
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Tlv1WaveformTest start: low_power=0 plugged=AC level=80 percent temperature=36.6C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 VP9 122.8 s [COLD]: used 122.8 s; first pixels 27220 ms; complete window 27220 ms; window clip columns 2160, drawn 2160; +41ms peaks-request # in=0 dur=122764000 | +57ms peaks-start # want=0..132764000 | +27035ms peaks-done # ms=26974 sourceUs=122717777 buckets=21141 covered=0..4611686018427387903 openMs=42 computeMs=7023
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 VP9 122.8 s [WARM peaks only]: used 122.8 s; first pixels 112 ms; complete window 112 ms; window clip columns 2160, drawn 2160; 
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] PCM fill 7290b717 0.0..122.8 s: complete in 14633 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 VP9 122.8 s [WARM PCM only]: used 122.8 s; first pixels 22042 ms; complete window 22042 ms; window clip columns 2160, drawn 2160; +68ms peaks-request # in=0 dur=122764000 | +80ms peaks-start # want=0..132764000 | +21955ms peaks-done # ms=21875 sourceUs=122717777 buckets=21141 covered=0..4611686018427387903 openMs=20 computeMs=6743
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 VP9 122.8 s [WARM both]: used 122.8 s; first pixels 81 ms; complete window 81 ms; window clip columns 2160, drawn 2160; 
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv1WaveformTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=7
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=b2Vp9
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv1WaveformTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=7
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=b3Hevc10Minutes
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Tlv1WaveformTest start: low_power=0 plugged=AC level=80 percent temperature=36.8C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 HEVC 10 min used (20:00-30:00) [COLD]: used 600.0 s; first pixels 110659 ms; complete window 110659 ms; window clip columns 2160, drawn 2160; +61ms peaks-request # in=1200000000 dur=600000000 | +82ms peaks-start # want=1190000000..1810000000 | +110439ms peaks-done # ms=110351 sourceUs=1810000020 buckets=339376 covered=1190000000..1810000000 openMs=72 computeMs=32212
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 HEVC 10 min used (20:00-30:00) [WARM peaks only]: used 600.0 s; first pixels 79 ms; complete window 79 ms; window clip columns 2160, drawn 2160; 
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] PCM fill 72675d16 1190.0..1810.0 s: complete in 66299 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 HEVC 10 min used (20:00-30:00) [WARM PCM only]: used 600.0 s; first pixels 118900 ms; complete window 118900 ms; window clip columns 2160, drawn 2160; +47ms peaks-request # in=1200000000 dur=600000000 | +69ms peaks-start # want=1190000000..1810000000 | +118805ms peaks-done # ms=118735 sourceUs=1810000020 buckets=339376 covered=1190000000..1810000000 openMs=127 computeMs=36137
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 HEVC 10 min used (20:00-30:00) [WARM both]: used 600.0 s; first pixels 100 ms; complete window 100 ms; window clip columns 2160, drawn 2160; 
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv1WaveformTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=7
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=b3Hevc10Minutes
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv1WaveformTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=7
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=b4Hevc50Minutes
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Tlv1WaveformTest start: low_power=0 plugged=AC level=80 percent temperature=37.2C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 HEVC 50 min used (whole) [COLD]: used 3018.3 s; first pixels 541321 ms; complete window 541321 ms; window clip columns 2160, drawn 2160; +52ms peaks-request # in=0 dur=3018333300 | +82ms peaks-start # want=0..3028333300 | +540851ms peaks-done # ms=540765 sourceUs=3018325333 buckets=565936 covered=0..4611686018427387903 openMs=88 computeMs=164159
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 HEVC 50 min used (whole) [WARM peaks only]: used 3018.3 s; first pixels 102 ms; complete window 102 ms; window clip columns 2160, drawn 2160; 
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 HEVC 50 min used (whole): PCM modes skipped: the used range (3018 s) exceeds the PCM cache cap (256 MB = 1398 s)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv1WaveformTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=7
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=b4Hevc50Minutes
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv1WaveformTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=7
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=b5Project1Clips
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Tlv1WaveformTest start: low_power=0 plugged=AC level=80 percent temperature=36.8C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 P1 clip 17 HE-AAC 24k MKV [COLD]: used 8.7 s; first pixels 1255 ms; complete window 1255 ms; window clip columns 2160, drawn 2160; +49ms peaks-request # in=0 dur=8746000 | +72ms peaks-start # want=0..18746000 | +1184ms peaks-done # ms=1111 sourceUs=8704000 buckets=1632 covered=0..4611686018427387903 openMs=13 computeMs=421
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 P1 clip 17 HE-AAC 24k MKV [WARM peaks only]: used 8.7 s; first pixels 69 ms; complete window 69 ms; window clip columns 2160, drawn 2160; 
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] PCM fill 6d3ba14e 0.0..8.7 s: complete in 502 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 P1 clip 17 HE-AAC 24k MKV [WARM PCM only]: used 8.7 s; first pixels 1093 ms; complete window 1093 ms; window clip columns 2160, drawn 2160; +69ms peaks-request # in=0 dur=8746000 | +85ms peaks-start # want=0..18746000 | +1014ms peaks-done # ms=928 sourceUs=8704000 buckets=1632 covered=0..4611686018427387903 openMs=22 computeMs=350
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 P1 clip 17 HE-AAC 24k MKV [WARM both]: used 8.7 s; first pixels 95 ms; complete window 95 ms; window clip columns 2160, drawn 2160; 
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 P1 clip 14 MP4 edit list [COLD]: used 22.4 s; first pixels 3526 ms; complete window 3526 ms; window clip columns 2160, drawn 2160; +33ms peaks-request # in=0 dur=22400000 | +46ms peaks-start # want=0..32400000 | +3432ms peaks-done # ms=3386 sourceUs=22362222 buckets=3853 covered=0..4611686018427387903 openMs=21 computeMs=1165
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 P1 clip 14 MP4 edit list [WARM peaks only]: used 22.4 s; first pixels 79 ms; complete window 79 ms; window clip columns 2160, drawn 2160; 
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] PCM fill 6d66ba28 0.0..22.4 s: complete in 1503 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 P1 clip 14 MP4 edit list [WARM PCM only]: used 22.4 s; first pixels 3054 ms; complete window 3054 ms; window clip columns 2160, drawn 2160; +58ms peaks-request # in=0 dur=22400000 | +72ms peaks-start # want=0..32400000 | +2945ms peaks-done # ms=2872 sourceUs=22362222 buckets=3853 covered=0..4611686018427387903 openMs=21 computeMs=1025
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 P1 clip 14 MP4 edit list [WARM both]: used 22.4 s; first pixels 91 ms; complete window 91 ms; window clip columns 2160, drawn 2160; 
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] Project 1 stat: before 9256/1795823617987, now 9256/1795823617987 -> UNCHANGED
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv1WaveformTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=7
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=b5Project1Clips
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv1WaveformTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=7
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=b9Table
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: STATE=Tlv1WaveformTest start: low_power=0 plugged=AC level=80 percent temperature=37.2C screen=Awake keyguard=unlocked
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 TABLE (this invocation's classes run in name order; this line lists what the b* tests above recorded in this process)
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | typical H.264 60 s | 60.0 s | COLD | first 12196 ms | complete 12196 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | typical H.264 60 s | 60.0 s | WARM peaks only | first 134 ms | complete 134 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | typical H.264 60 s | 60.0 s | WARM PCM only | first 12899 ms | complete 12899 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | typical H.264 60 s | 60.0 s | WARM both | first 110 ms | complete 110 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | VP9 122.8 s | 122.8 s | COLD | first 27220 ms | complete 27220 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | VP9 122.8 s | 122.8 s | WARM peaks only | first 112 ms | complete 112 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | VP9 122.8 s | 122.8 s | WARM PCM only | first 22042 ms | complete 22042 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | VP9 122.8 s | 122.8 s | WARM both | first 81 ms | complete 81 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | HEVC 10 min used (20:00-30:00) | 600.0 s | COLD | first 110659 ms | complete 110659 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | HEVC 10 min used (20:00-30:00) | 600.0 s | WARM peaks only | first 79 ms | complete 79 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | HEVC 10 min used (20:00-30:00) | 600.0 s | WARM PCM only | first 118900 ms | complete 118900 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | HEVC 10 min used (20:00-30:00) | 600.0 s | WARM both | first 100 ms | complete 100 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | HEVC 50 min used (whole) | 3018.3 s | COLD | first 541321 ms | complete 541321 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | HEVC 50 min used (whole) | 3018.3 s | WARM peaks only | first 102 ms | complete 102 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | P1 clip 17 HE-AAC 24k MKV | 8.7 s | COLD | first 1255 ms | complete 1255 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | P1 clip 17 HE-AAC 24k MKV | 8.7 s | WARM peaks only | first 69 ms | complete 69 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | P1 clip 17 HE-AAC 24k MKV | 8.7 s | WARM PCM only | first 1093 ms | complete 1093 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | P1 clip 17 HE-AAC 24k MKV | 8.7 s | WARM both | first 95 ms | complete 95 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | P1 clip 14 MP4 edit list | 22.4 s | COLD | first 3526 ms | complete 3526 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | P1 clip 14 MP4 edit list | 22.4 s | WARM peaks only | first 79 ms | complete 79 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | P1 clip 14 MP4 edit list | 22.4 s | WARM PCM only | first 3054 ms | complete 3054 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TLV11W=[before] C1 ROW | P1 clip 14 MP4 edit list | 22.4 s | WARM both | first 91 ms | complete 91 ms
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.fluxx.android.ui.Tlv1WaveformTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=7
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=b9Table
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 1,152.06
+
+OK (7 tests)
+
+
+INSTRUMENTATION_CODE: -1

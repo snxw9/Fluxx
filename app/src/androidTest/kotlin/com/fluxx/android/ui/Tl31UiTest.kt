@@ -42,6 +42,17 @@ class Tl31UiTest {
     private fun count(tag: String) = compose.onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes().size
     private fun layer(id: Long) = editor.state.project.composition.layers.first { it.id == id }
     private fun pxPerUs() = compose.onNodeWithTag("timeline-ruler").fetchSemanticsNode().config[TimelineZoomKey]
+    /**
+     * TLV1: a time's x inside [row]'s VISIBLE bounds (what performTouchInput measures from): the row node is a window wider
+     * than the screen, clipped at the screen's left, so its local 0 is not the visible left. Root x from the scroll semantics
+     * (content px under the playhead), exactly as TimeAuditTest does.
+     */
+    private fun xIn(row: String, t: Long): Float {
+        val s = compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)).fetchSemanticsNodes().first()
+        val scroll = s.config[SemanticsProperties.HorizontalScrollAxisRange].value()
+        val rootX = s.boundsInRoot.left + Math.round(s.boundsInRoot.width / 2f) + (t * pxPerUs() - scroll).toFloat()
+        return rootX - node(row).fetchSemanticsNode().boundsInRoot.left
+    }
     private fun rowKey(id: Long, p: AnimPropertyType) = TwirlRow.Property(id, GraphTarget(p), "", "", TwirlValueKind.SCALAR).key
     private fun rowTag(id: Long, p: AnimPropertyType = AnimPropertyType.POSITION) = "twirl-row-" + rowKey(id, p)
     private fun posTimes(id: Long) = layer(id).animTransform.position.keyframes.map { it.timeUs }
@@ -70,9 +81,9 @@ class Tl31UiTest {
         settle()
     }
     private fun expand(vararg ids: Long) { compose.runOnIdle { editor.setExpanded(ids.toSet()) }; settle() }
-    private fun x(t: Long) = (t * pxPerUs()).toFloat()
-    private fun tapKey(row: String, t: Long) { val xx = x(t); node(row).performTouchInput { click(Offset(xx, centerY)) }; settle() }
-    private fun holdKey(row: String, t: Long) { val xx = x(t); node(row).performTouchInput { longClick(Offset(xx, centerY)) }; settle() }
+    private fun x(t: Long, row: String = rowTag(1)) = xIn(row, t)
+    private fun tapKey(row: String, t: Long) { val xx = x(t, row); node(row).performTouchInput { click(Offset(xx, centerY)) }; settle() }
+    private fun holdKey(row: String, t: Long) { val xx = x(t, row); node(row).performTouchInput { longClick(Offset(xx, centerY)) }; settle() }
 
     // ---- A1 ---------------------------------------------------------------------------------------------------------
     @Test fun a1AHoldDragBackToItsFrameNeverOpensThePopoverAndAHoldSelectThenTapDeselects() {
@@ -162,7 +173,8 @@ class Tl31UiTest {
         val moved = posTimes(1).first { it > f(36) && it != f(60) }
         val fingerOnly = f(48) + ((target.dp.value * context.resources.displayMetrics.density - start) / pxPerUs()).toLong()
         assertTrue("the content scrolled under the still finger: key at $moved > finger-only $fingerOnly", moved > fingerOnly + f(10))
-        assertEquals("no seek", f(45), editor.state.playheadUs)
+        // TLV1.1 A1 (decided by Snxw): the drag auto-scrolled, so the playhead seeks to the key's new time on release.
+        assertEquals("seeks to the key it auto-scrolled with", moved, editor.state.playheadUs)
     }
 
     // ---- B4 / B5 ----------------------------------------------------------------------------------------------------

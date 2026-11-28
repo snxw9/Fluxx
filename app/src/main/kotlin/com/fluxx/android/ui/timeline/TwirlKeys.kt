@@ -56,7 +56,9 @@ internal sealed interface TwirlPopover {
 }
 
 /** The timeline's gesture protocol for twirl rows (begin / preview / commit / cancel: unchanged). */
-internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) -> Unit, val commit: () -> Unit, val cancel: () -> Unit)
+internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) -> Unit, val commit: () -> Unit, val cancel: () -> Unit,
+    /** TLV1.1 A1: commits a KEY DRAG; the argument is the dragged key's new composition time (the view may seek there). */
+    val commitKeyDrag: (Long?) -> Unit = { commit() })
 
 /**
  * TL3 B3: a keyed property row with its key gestures (REPLACING the double-tap rules):
@@ -65,14 +67,19 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
  * - in key mode: a TAP toggles the key at once; a HOLD released without moving opens the value popover (on an unselected
  *   key: for that key alone); a HOLD and DRAG on a selected key moves the whole selection (every track, every layer).
  * Drags snap ([DragSnap], per-class [SnapZones]; every moving key is a candidate, in composition time) and report the
- * readouts. Nothing seeks.
+ * readouts. Nothing seeks, except (TLV1.1 A1) a committed drag that auto-scrolled the timeline: the playhead then seeks to the
+ * dragged key's new time ([KeyDragLanding]).
  */
-@Composable internal fun TwirlKeyRow(project: ProjectDocument, layer: CompositionLayer, row: TwirlRow.Property, pxPerUs: Double, playhead: () -> Long,
-    scrollOffset: () -> Int, onEdge: (Float?) -> Unit,
-    selection: KeySelectionSet?, visible: VisibleRange, popover: TwirlPopover?, onPopover: (TwirlPopover?) -> Unit,
+@Composable internal fun TwirlKeyRow(project: ProjectDocument, layer: CompositionLayer, row: TwirlRow.Property, axis: TimelineAxis, playhead: () -> Long,
+    scrollOffset: () -> Double, onEdge: (Float?) -> Unit,
+    selection: KeySelectionSet?, popover: TwirlPopover?, onPopover: (TwirlPopover?) -> Unit,
     host: TwirlKeyHost, gestures: TwirlGestures, snapLevel: RulerLevel?, snapStartFrame: Long,
     onDragInfo: (TimelineDragInfo?) -> Unit, modifier: Modifier = Modifier) {
     val density = LocalDensity.current
+    val pxPerUs = axis.pxPerUs
+    // TLV1: the gesture below outlives compositions; it hit-tests through the LATEST axis (a new one comes with the first
+    // real viewport width and with each zoom), never the one it started with.
+    val latestAxis by rememberUpdatedState(axis)
     val view = LocalView.current
     val haptic = LocalHapticFeedback.current
     val latest by rememberUpdatedState(Triple(project, layer, selection))
@@ -91,13 +98,13 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
     val barHeightPx = with(density) { TwirlStyle.COLOUR_BAR_DP.dp.toPx() }
     val checkerPx = with(density) { 4.dp.toPx() }
     val underlay: (androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit)? = colourTrack?.let { track -> {
-        drawColourBar(track, layer, pxPerUs, visible, barCache, barHeightPx, checkerPx)
+        drawColourBar(track, layer, axis, barCache, barHeightPx, checkerPx)
     } }
     // TL3.1 B1: the row's root x (it scrolls with the content), for the finger's position against the timeline's edges.
     var rowRootX by remember { mutableFloatStateOf(0f) }
     val latestScroll by rememberUpdatedState(scrollOffset)
     val latestEdge by rememberUpdatedState(onEdge)
-    TwirlTrackRow(layer, row, pxPerUs, playhead, selectedTimes, visible, modifier
+    TwirlTrackRow(layer, row, axis, playhead, selectedTimes, modifier
         .onGloballyPositioned { rowRootX = it.positionInRoot().x }
         .pointerInput(row.key, pxPerUs) { kotlinx.coroutines.coroutineScope {
         var hit: Long? = null
@@ -107,7 +114,8 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
         var last: MultiKeyEdits.Moved? = null
         var locked: SnapTarget? = null
         var groupDrag = false
-        var downRootX = 0f; var lastDx = 0f; var scrollAtDown = 0
+        var dragged: Long? = null
+        var downRootX = 0f; var lastDx = 0f; var scrollAtDown = 0.0
         /** The drag at [dx] content px (snapping, clamps, readouts). */
         fun dragTo(dx: Float) {
             val (p0, sel0) = base ?: return
@@ -131,12 +139,12 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
         fun keyMode() = latest.third != null
         fun selected(t: Long) = latest.third?.contains(row.layerId, row.target, t) == true
         detectKeyGestures(
-            onDown = { p -> downRootX = rowRootX + p.x; scrollAtDown = latestScroll(); val (_, l, _) = latest; hit = nearestKey(TwirlRows.keyTimes(l, row.target), l, pxPerUs, p.x, halfHit)
+            onDown = { p -> downRootX = rowRootX + p.x; scrollAtDown = latestScroll(); val (_, l, _) = latest; hit = nearestKey(TwirlRows.keyTimes(l, row.target), l, latestAxis, p.x, halfHit)
                 barTime = null
                 if (hit == null && row.kind == TwirlValueKind.COLOUR) {
                     // B4: a tap on the bar between keys (not on a diamond) opens the bar popover.
                     val keys = TwirlRows.keyTimes(l, row.target); val anchor = l.resolvedKeyframeAnchorUs
-                    val comp = (p.x / pxPerUs).roundToLong()
+                    val comp = kotlin.math.round(latestAxis.timeAt(p.x)).toLong()
                     val inBar = kotlin.math.abs(p.y - size.height / 2f) <= barHeightPx / 2f
                     if (keys.size >= 2 && inBar && comp > anchor + keys.first() && comp < anchor + keys.last() &&
                         comp in l.timing.startUs..(l.timing.endUs ?: l.timing.startUs)) barTime = comp
@@ -162,6 +170,7 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
                 // A selected key in key mode carries the whole selection; any other key moves alone, inside its clip.
                 val group = sel != null && sel.contains(row.layerId, row.target, t)
                 groupDrag = group
+                dragged = t
                 base = p0 to (if (group) sel!! else KeySelectionSet(listOf(KeyframeSelection(row.layerId, row.target, listOf(t)))))
                 clip = if (group) null else l0.timing.startUs..(l0.timing.endUs ?: l0.timing.startUs)
                 last = null; locked = null
@@ -180,7 +189,11 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
                 if (moved != null) {
                     // The selection follows its keys (a group); a lone key keeps the selection as it is.
                     if (groupDrag) latestHost.onMoved(moved.selection)
-                    latestGestures.commit()
+                    // TLV1.1 A1: the dragged (primary) key's new composition time, for the seek after an auto-scroll.
+                    val (p0, sel0) = base!!
+                    val landed = dragged?.let { KeyDragLanding.movedTime(sel0, moved.selection, row.layerId, row.target, it) }
+                    val anchor = p0.layer(row.layerId)?.resolvedKeyframeAnchorUs
+                    latestGestures.commitKeyDrag(if (landed != null && anchor != null) Math.addExact(anchor, landed) else null)
                 } else latestGestures.cancel()
                 base = null; last = null; locked = null; latestDragInfo(null)
                 moved != null
@@ -189,14 +202,14 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
             rootX = { rowRootX })
     } }, underlay = underlay) {
         (popover as? TwirlPopover.Bar)?.takeIf { it.layerId == row.layerId && it.target == row.target }?.let { bar ->
-            val x = with(density) { (bar.compositionUs * pxPerUs).toFloat().toDp() }
+            val x = with(density) { axis.x(bar.compositionUs).toDp() }
             Box(Modifier.offset(x = x).size(1.dp, row.heightDp.dp)) { ColourBarPopover(project, layer, row, bar, host, onDismiss = { onPopover(null) }) }
         }
         val open = popover as? TwirlPopover.Value
         if (open != null && open.layerId == row.layerId && open.target == row.target) {
             // The key went away (moved, deleted, undone): the popover closes.
             if (open.time !in TwirlRows.keyTimes(layer, row.target)) LaunchedEffect(open) { onPopover(null) }
-            val x = with(density) { ((layer.resolvedKeyframeAnchorUs + open.time) * pxPerUs).toFloat().toDp() }
+            val x = with(density) { axis.x(layer.resolvedKeyframeAnchorUs + open.time).toDp() }
             Box(Modifier.offset(x = x).size(1.dp, row.heightDp.dp)) {
                 KeyValuePopover(project, layer, row, open, selection, host, gestures, onDismiss = { onPopover(null) })
             }
@@ -252,18 +265,18 @@ internal class TwirlGestures(val begin: () -> Unit, val preview: (EditorAction) 
 
 
 /** TL3 B4: draws [track]'s bar (visible segments only) from the cached gradients; alpha over a faint checkerboard. */
-internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawColourBar(track: AnimatableColour, layer: CompositionLayer, pxPerUs: Double,
-    visible: VisibleRange, cache: ColourBar.Cache<Pair<androidx.compose.ui.graphics.Brush, Boolean>>, barHeightPx: Float, checkerPx: Float) {
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawColourBar(track: AnimatableColour, layer: CompositionLayer, axis: TimelineAxis,
+    cache: ColourBar.Cache<Pair<androidx.compose.ui.graphics.Brush, Boolean>>, barHeightPx: Float, checkerPx: Float) {
     val k = track.keyframes
     if (!track.isAnimated || k.size < 2) return
-    val range = visible.px()
+    val range = 0f..axis.widthPx.toFloat()   // TLV1: the window
     val anchor = layer.resolvedKeyframeAnchorUs
-    val clipL = (layer.timing.startUs * pxPerUs).toFloat(); val clipR = ((layer.timing.endUs ?: layer.timing.startUs) * pxPerUs).toFloat()
+    val clipL = axis.x(layer.timing.startUs); val clipR = axis.x(layer.timing.endUs ?: layer.timing.startUs)
     val top = (size.height - barHeightPx) / 2f
     val faint = androidx.compose.ui.graphics.Color.White.copy(alpha = .12f)
     clipRect(left = maxOf(clipL, range.start), right = minOf(clipR, range.endInclusive)) {
         for (i in 0 until k.size - 1) {
-            val x0 = ((anchor + k[i].timeUs) * pxPerUs).toFloat(); val x1 = ((anchor + k[i + 1].timeUs) * pxPerUs).toFloat()
+            val x0 = axis.x(anchor + k[i].timeUs); val x1 = axis.x(anchor + k[i + 1].timeUs)
             if (x1 < range.start || x0 > range.endInclusive || x1 <= x0) continue
             val w = x1 - x0
             val entry = cache.get(track, i, ColourBar.stops(w)) { seg ->
