@@ -244,7 +244,7 @@ class Tl31MeasureTest {
     private fun peaksOf(uri: String): PeakPyramid {
         val provider = com.fluxx.android.media.AudioPeakProvider.get(context)
         compose.runOnIdle { provider.states.remove(uri); provider.request(uri) }
-        compose.waitUntil(60_000) { compose.runOnIdle { provider.states[uri] !is com.fluxx.android.media.AudioPeakProvider.Peaks.Loading && provider.states[uri] != null } }
+        compose.waitUntil(60_000) { compose.runOnIdle { provider.states[uri].let { s -> (s as? com.fluxx.android.media.AudioPeakProvider.Peaks.Ready)?.complete == true || s is com.fluxx.android.media.AudioPeakProvider.Peaks.NoAudio || s is com.fluxx.android.media.AudioPeakProvider.Peaks.Failed } } }
         return (compose.runOnIdle { provider.states[uri] } as com.fluxx.android.media.AudioPeakProvider.Peaks.Ready).pyramid
     }
 

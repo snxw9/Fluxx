@@ -12,6 +12,9 @@ import java.io.File
 class PeakPyramid(val sampleRate: Int, val durationUs: Long, val levels: List<Pair<FloatArray, FloatArray>>,
     /** MP1 B2: the source µs ranges actually decoded (the used range plus margin); buckets elsewhere are silent. */
     val coveredUs: List<LongRange> = listOf(0L..durationUs)) {
+    /** TLV1.1 C2: [sourceUs] lies in a covered (built) range; elsewhere nothing is drawn (a progressive build is filling in). */
+    fun covers(sourceUs: Long): Boolean = coveredUs.any { sourceUs >= it.first && sourceUs <= it.last }
+
     /** Source microseconds covered by one bucket of [level]. */
     fun bucketUs(level: Int): Double = BASE.toDouble() * Math.pow(FACTOR.toDouble(), level.toDouble()) * 1_000_000.0 / sampleRate
 
@@ -55,7 +58,9 @@ class PeakPyramid(val sampleRate: Int, val durationUs: Long, val levels: List<Pa
         /** TL3.1 C: 2 = peaks placed by presentation time from the decoder's real output format (stale v1 peaks rebuild). */
         /** AUD1: 3 = the priming trimmed like playback (stale peaks rebuild). */
         /** MP1 B2: 4 = partial coverage (the used range plus margin), only covered buckets stored. */
-        const val FORMAT_VERSION = 4
+        /** TLV1.1 C2: 5 = always on the 48 kHz PCM-cache timeline (built from the PCM cache or decoded and mapped to it),
+         *  progressive (partial coverage while filling in); also retires v4 peaks stored before AUD3's edit-list priming fix. */
+        const val FORMAT_VERSION = 5
 
         fun read(file: File): PeakPyramid? = runCatching {
             DataInputStream(file.inputStream().buffered()).use { inp ->
@@ -102,7 +107,7 @@ class PeakBuilder(private val sampleRate: Int) {
         if (sample > maxs[b]) maxs[b] = sample
         if (index + 1 > samples) samples = index + 1
     }
-    private fun flush() { for (i in 0 until used) if (mins[i] == Float.MAX_VALUE) { mins[i] = 0f; maxs[i] = 0f } }
+
 
     /** MP1 B2: starts from an earlier pyramid's level 0 (a widened used range decodes only what is missing). */
     fun seed(previous: PeakPyramid) {
@@ -114,9 +119,11 @@ class PeakBuilder(private val sampleRate: Int) {
     }
 
     fun build(covered: List<LongRange>? = null): PeakPyramid {
-        flush()
+        // TLV1.1 C2: on copies (a progressive build publishes many times while it keeps adding samples).
+        val mn = mins.copyOf(used); val mx = maxs.copyOf(used)
+        for (i in 0 until used) if (mn[i] == Float.MAX_VALUE) { mn[i] = 0f; mx[i] = 0f }
         val duration = samples * 1_000_000L / sampleRate
-        return PeakPyramid(sampleRate, duration, levels(mins.copyOf(used), maxs.copyOf(used)), covered ?: listOf(0L..duration))
+        return PeakPyramid(sampleRate, duration, levels(mn, mx), covered ?: listOf(0L..duration))
     }
 
     companion object {
@@ -148,6 +155,9 @@ object PeakCachePolicy {
         "%s-%x-%x-v%d.peaks".format(java.security.MessageDigest.getInstance("SHA-1").digest(uri.toByteArray()).take(8)
             .joinToString("") { "%02x".format(it) }, size, lastModified, PeakPyramid.FORMAT_VERSION)
 
+    /** TLV1.1 C2: a peak file of another format version (it is never read again, so it is deleted). */
+    fun stale(name: String) = name.endsWith(".peaks") && !name.endsWith("-v${PeakPyramid.FORMAT_VERSION}.peaks")
+
     /** Files to delete (least recently used first) so the rest fit in [cap]; [files] are (name, bytes, lastUsed). */
     fun evict(files: List<Triple<String, Long, Long>>, cap: Long = CAP_BYTES): List<String> {
         var total = files.sumOf { it.second }
@@ -172,4 +182,49 @@ object WaveformMapping {
     fun envelope(min: Float, max: Float): Float = maxOf(kotlin.math.abs(min), kotlin.math.abs(max)).coerceIn(0f, 1f)
     /** Dimmed when the layer cannot be heard (muted or volume 0). */
     fun dimmed(layer: CompositionLayer) = layer.muted || layer.audioGain <= 0f
+}
+
+/**
+ * TLV1.1 C2: the order the peaks of a used range are built in (pure, JVM tested). The range is cut into [CHUNK_US] source
+ * chunks on a grid from 0; the chunks the row SHOWS ([focus], source µs) come first, from the one under the playhead (its centre) rightward (one sequential decode), then the nearest left,
+ * then the rest outward by distance from the focus, preferring the chunk right after the one just built (it continues the
+ * same decode without a seek). Nothing outside the wanted ranges (the used range plus its margin) is ever a chunk.
+ */
+object PeakChunks {
+    /** TLV1.1: 2 s (5 s chunks took 1.4 s to decode cold on the A16: the first pixels missed 1.5 s on the typical clip). */
+    const val CHUNK_US = 2_000_000L
+
+    fun rangeOf(k: Int): LongRange = k * CHUNK_US until (k + 1) * CHUNK_US
+
+    /** Every chunk that meets [wants] (finite ranges), ascending. */
+    fun chunksOf(wants: List<LongRange>): List<Int> = wants.filter { !it.isEmpty() }
+        .flatMap { (it.first / CHUNK_US).toInt()..(it.last / CHUNK_US).toInt() }.distinct().sorted()
+
+    private fun meets(k: Int, r: LongRange) = rangeOf(k).let { it.first <= r.last && r.first <= it.last }
+    private fun distance(k: Int, us: Long) = rangeOf(k).let { if (us < it.first) it.first - us else if (us > it.last) us - it.last else 0L }
+
+    /** The next chunk to build, or null when none is missing. [after]: the chunk just built (a decode positioned past it). */
+    fun next(missing: Collection<Int>, focus: LongRange?, after: Int?): Int? {
+        if (missing.isEmpty()) return null
+        if (focus != null && !focus.isEmpty()) {
+            val inFocus = missing.filter { meets(it, focus) }
+            // From the chunk under the playhead (the focus centre), continuing right without a seek, then the nearest left.
+            if (inFocus.isNotEmpty()) { val mid = focus.first / 2 + focus.last / 2
+                return if (after != null && after + 1 in inFocus) after + 1 else inFocus.minWith(compareBy<Int> { distance(it, mid) }.thenBy { it }) }
+        }
+        val centre = focus?.let { it.first / 2 + it.last / 2 } ?: 0L
+        val best = missing.minWith(compareBy<Int> { distance(it, centre) }.thenByDescending { it })
+        val cont = after?.plus(1)
+        if (cont != null && cont in missing && distance(cont, centre) <= distance(best, centre) + CHUNK_US) return cont
+        return best
+    }
+
+    /** The source µs the built chunks cover inside [wants] (merged, ascending). */
+    fun covered(done: Collection<Int>, wants: List<LongRange>): List<LongRange> {
+        val parts = done.sorted().flatMap { k -> wants.mapNotNull { w -> val r = rangeOf(k)
+            (maxOf(r.first, w.first)..minOf(r.last, w.last)).takeIf { !it.isEmpty() } } }.sortedBy { it.first }
+        val out = ArrayList<LongRange>()
+        for (p in parts) { val last = out.lastOrNull(); if (last != null && p.first <= last.last + 1) out[out.size - 1] = last.first..maxOf(last.last, p.last) else out += p }
+        return out
+    }
 }

@@ -174,6 +174,8 @@ object WaveformProbe {
     @Volatile var placed: ((Long, Float) -> Unit)? = null
     /** (ns, the scrolled timeline content's left edge in root px after layout (the position that frame is drawn at), pxPerUs). */
     @Volatile var scroll: ((Long, Int, Double) -> Unit)? = null
+    /** TLV1.1 C1: (ns, layer id, columns drawn with peak data, the clip's columns in the window) per audio-row draw. */
+    @Volatile var columns: ((Long, Long, Int, Int) -> Unit)? = null
 }
 
 /**
@@ -322,7 +324,20 @@ internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectK
     val pxPerUs = axis.pxPerUs
     // MP1 B2: the peaks of the clip's used range (plus a margin), extended when the trim widens or the clip moves.
     val sourceIn = layer.timing.sourceInUs; val clipUs = layer.timing.durationUs ?: Long.MAX_VALUE / 4
-    if (uri != null && layer.visible) DisposableEffect(uri, sourceIn, clipUs) { provider.request(uri, sourceIn, clipUs); onDispose { provider.cancel(uri) } }
+    // TLV1.1 C2: the source range the row shows (its part of the laid-out window): those chunks are built first. The asset
+    // length is the one playback opens the PCM cache with, so chunks it already decoded are read, not decoded again.
+    val assetUs = layer.asset?.durationUs
+    fun shownSource(): LongRange? {
+        val a = maxOf(axis.startUs, layer.timing.startUs); val b = minOf(axis.endUs, layer.timing.endUs ?: layer.timing.startUs)
+        return if (b <= a) null else (sourceIn + (a - layer.timing.startUs))..(sourceIn + (b - layer.timing.startUs))
+    }
+    if (uri != null && layer.visible) {
+        DisposableEffect(uri, sourceIn, clipUs) {
+            provider.focus(uri, shownSource()); provider.request(uri, sourceIn, clipUs, assetUs)
+            onDispose { provider.cancel(uri); provider.focus(uri, null) }
+        }
+        LaunchedEffect(uri, axis, layer.timing) { androidx.compose.runtime.snapshotFlow { shownSource() }.collect { provider.focus(uri, it) } }
+    }
     val peaks = uri?.let { provider.states[it] } as? com.fluxx.android.media.AudioPeakProvider.Peaks.Ready
     val ink = MaterialTheme.colorScheme.onSurfaceVariant
     val dim = com.fluxx.android.model.WaveformMapping.dimmed(layer)
@@ -340,29 +355,41 @@ internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectK
             // TL3.1 B6: the upper half only: the rectified peak envelope max(|min|, |max|) rises from the bottom baseline.
             val base = size.height - 1.dp.toPx(); val amp = size.height - 3.dp.toPx()
             val pyramid = peaks?.pyramid
+            val columnsProbe = WaveformProbe.columns
             if (pyramid == null) {
                 // Static placeholder: a faint band and the centre line.
                 drawRect(ink.copy(alpha = .06f), Offset(x0, base - amp / 3f), Size(x1 - x0, amp / 3f))
                 drawLine(ink.copy(alpha = .2f), Offset(x0, base), Offset(x1, base), 1f)
+                columnsProbe?.invoke(System.nanoTime(), layer.id, 0, kotlin.math.ceil(x1 - kotlin.math.floor(x0)).toInt())
                 return@drawBehind
             }
+            var drawnColumns = 0; var clipColumns = 0
             val colour = ink.copy(alpha = if (dim) .3f else .8f)
             val usPerPx = 1.0 / pxPerUs
             val level = pyramid.levelFor(usPerPx)
             val (mins, maxs) = pyramid.levels[level]
             var x = kotlin.math.floor(x0)
+            // TLV1.1 C2: runs of not-yet-built columns get the placeholder band.
+            var gapFrom = Float.NaN
+            fun gapEnd(at: Float) { if (!gapFrom.isNaN()) { drawRect(ink.copy(alpha = .06f), Offset(gapFrom, base - amp / 3f), Size(at - gapFrom, amp / 3f)); gapFrom = Float.NaN } }
             while (x < x1) {
                 val src = com.fluxx.android.model.WaveformMapping.sourceUs(layer, axis.timeAt(x).toLong())
                 if (src != null) {
+                    clipColumns++
                     val b0 = pyramid.bucketAt(level, src); val b1 = pyramid.bucketAt(level, src + usPerPx.toLong()).let { if (it < 0) b0 else it }
-                    if (b0 >= 0) {
+                    // TLV1.1 C2: only built (covered) columns: a progressive build shows the placeholder elsewhere.
+                    if (b0 >= 0 && pyramid.covers(src)) {
                         var lo = mins[b0]; var hi = maxs[b0]
                         for (b in b0 + 1..b1) { if (mins[b] < lo) lo = mins[b]; if (maxs[b] > hi) hi = maxs[b] }
                         val env = com.fluxx.android.model.WaveformMapping.envelope(lo, hi)
                         drawLine(colour, Offset(x, base), Offset(x, base - env * amp - 1f), 1f)
-                    }
+                        drawnColumns++
+                        gapEnd(x)
+                    } else if (gapFrom.isNaN()) gapFrom = x
                 }
                 x += 1f
             }
+            gapEnd(x)
+            columnsProbe?.invoke(System.nanoTime(), layer.id, drawnColumns, clipColumns)
         })
 }
